@@ -70,7 +70,7 @@ type alertRuleCreateRequest struct {
 type alertRuleUpdateRequest = alertRuleCreateRequest
 
 type alertRuleEnabledRequest struct {
-	Enabled bool `json:"enabled"`
+	Enabled *bool `json:"enabled"`
 }
 
 type alertRuleResponse struct {
@@ -585,7 +585,7 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			return
 		}
 		var input alertRuleEnabledRequest
-		if err := decodeIncidentJSON(w, r, &input); err != nil {
+		if err := decodeIncidentJSON(w, r, &input); err != nil || input.Enabled == nil {
 			writeError(w, r, http.StatusBadRequest, "invalid_alert_rule_state", "enabled must be provided in a single valid JSON object")
 			return
 		}
@@ -594,7 +594,7 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 		rule, err := alertRuleRepository.SetWorkspaceAlertRuleEnabled(ctx, store.SetWorkspaceAlertRuleEnabledInput{
 			WorkspaceID: r.PathValue("workspaceID"),
 			RuleID: r.PathValue("ruleID"),
-			Enabled: input.Enabled,
+			Enabled: *input.Enabled,
 			ActorIssuer: principal.Issuer,
 			ActorSubject: principal.Subject,
 			RequestID: r.Header.Get("X-Request-ID"),
