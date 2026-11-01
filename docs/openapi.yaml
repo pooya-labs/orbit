@@ -516,6 +516,291 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/alert-rules:
+    get:
+      tags: [Incidents]
+      operationId: listWorkspaceAlertRules
+      summary: List workspace alert rule definitions
+      description: Returns alert rule definitions for a workspace member. Rules are definitions only in this API slice; periodic evaluation and notification delivery are not yet implemented.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            enum: [10, 25, 50, 100]
+            default: 50
+      responses:
+        "200":
+          description: Workspace alert rule definitions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRuleListResponse"
+        "400":
+          description: Invalid workspace identifier or page size.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Alert rule storage is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags: [Incidents]
+      operationId: createWorkspaceAlertRule
+      summary: Create a workspace alert rule definition
+      description: Creates an enabled rule definition. Only request_rate is currently supported because it is the only metric emitted by the instrumented demo workload. No PromQL/LogQL is accepted. Owner, administrator, or operator membership is required. Creation and workspace audit are committed in one transaction. This endpoint does not start an evaluator or send notifications.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertRuleCreateRequest"
+      responses:
+        "201":
+          description: Alert rule definition created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRuleResponse"
+        "400":
+          description: Invalid JSON or unsupported alert rule fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Workspace role cannot manage alert rules.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: A rule with the same case-insensitive name already exists in this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Alert rule storage or transactional audit is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}:
+    put:
+      tags: [Incidents]
+      operationId: updateWorkspaceAlertRule
+      summary: Replace a workspace alert rule definition
+      description: Replaces all configurable fields of a rule. Owner, administrator, or operator membership is required. Rule changes and the corresponding immutable workspace audit event are written atomically. Updating a rule does not imply that an evaluator or notification adapter is running.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: ruleID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertRuleUpdateRequest"
+      responses:
+        "200":
+          description: Updated alert rule definition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRuleResponse"
+        "400":
+          description: Invalid JSON, identifiers, or rule fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Workspace role cannot manage alert rules.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership or alert rule was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Another rule already uses the requested name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Alert rule storage or transactional audit is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags: [Incidents]
+      operationId: deleteWorkspaceAlertRule
+      summary: Delete a workspace alert rule definition
+      description: Deletes a rule and appends a workspace audit event in the same transaction. The audit record remains after the rule is deleted. Owner, administrator, or operator membership is required.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: ruleID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Alert rule deleted.
+        "400":
+          description: Invalid workspace or rule identifier.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Workspace role cannot manage alert rules.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership or alert rule was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Alert rule storage or transactional audit is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}/enabled:
+    patch:
+      tags: [Incidents]
+      operationId: setWorkspaceAlertRuleEnabled
+      summary: Enable or disable a workspace alert rule definition
+      description: Changes the enabled flag and appends a workspace audit event atomically. This controls stored rule configuration only; scheduled evaluation is not part of this API slice.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: ruleID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated enabled state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRuleResponse"
+        "400":
+          description: Invalid JSON, workspace, or rule identifier.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Workspace role cannot manage alert rules.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership or alert rule was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The rule already has the requested enabled state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Alert rule storage or transactional audit is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/v1/telemetry/services:
     get:
       tags: [Telemetry]
@@ -842,6 +1127,105 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/IncidentTimelineEvent"
+    AlertRuleCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, metric, operator, threshold, window_seconds, pending_seconds, severity]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 4000
+          default: ""
+        service_name:
+          type: string
+          maxLength: 128
+          description: Optional service filter. Empty means all services in the workspace.
+        metric:
+          type: string
+          const: request_rate
+          description: The only metric supported by the current instrumented workload.
+        operator:
+          type: string
+          enum: [gt, gte, lt, lte]
+        threshold:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000000000
+          description: Request rate threshold in requests per second.
+        window_seconds:
+          type: integer
+          enum: [60, 300, 900]
+        pending_seconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+          description: Intended sustained-breach duration before firing; it is stored as configuration and is not evaluated by this API slice.
+        severity:
+          type: string
+          enum: [critical, high, medium, low]
+    AlertRuleUpdateRequest:
+      allOf:
+        - $ref: "#/components/schemas/AlertRuleCreateRequest"
+    AlertRule:
+      type: object
+      required: [id, workspace_id, name, description, metric, operator, threshold, window_seconds, pending_seconds, severity, enabled, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        service_name:
+          type: string
+        metric:
+          type: string
+          const: request_rate
+        operator:
+          type: string
+          enum: [gt, gte, lt, lte]
+        threshold:
+          type: number
+        window_seconds:
+          type: integer
+          enum: [60, 300, 900]
+        pending_seconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+        severity:
+          type: string
+          enum: [critical, high, medium, low]
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AlertRuleResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/AlertRule"
+    AlertRuleListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertRule"
     TelemetryQueryMeta:
       type: object
       required: [window, queried_at]
