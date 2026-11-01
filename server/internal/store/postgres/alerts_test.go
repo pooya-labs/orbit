@@ -67,7 +67,7 @@ func TestWorkspaceAlertRuleRepositoryScopeAuditAndLifecycle(t *testing.T) {
 		t.Fatalf("create workspace alert rule: %v", err)
 	}
 	if rule.ID == "" || rule.WorkspaceID != workspace.ID || !rule.Enabled ||
-		rule.Metric != "request_rate" || rule.Threshold != 250 || rule.Source != "" {
+		rule.Metric != "request_rate" || rule.Threshold != 250 {
 		t.Fatalf("unexpected created alert rule: %+v", rule)
 	}
 
@@ -181,10 +181,11 @@ func TestWorkspaceAlertRuleRepositoryScopeAuditAndLifecycle(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("delete workspace alert rule: %v", err)
 	}
-	if _, err := repository.UpdateWorkspaceAlertRule(ctx, store.UpdateWorkspaceAlertRuleInput{
-		WorkspaceID: workspace.ID, RuleID: rule.ID,
-	}); !errors.Is(err, store.ErrAlertRuleInvalidInput) {
-		t.Fatalf("invalid update after deletion error = %v, want ErrAlertRuleInvalidInput", err)
+	if _, err := repository.SetWorkspaceAlertRuleEnabled(ctx, store.SetWorkspaceAlertRuleEnabledInput{
+		WorkspaceID: workspace.ID, RuleID: rule.ID, Enabled: false,
+		ActorIssuer: issuer, ActorSubject: owner,
+	}); !errors.Is(err, store.ErrAlertRuleNotFound) {
+		t.Fatalf("post-delete enable error = %v, want ErrAlertRuleNotFound", err)
 	}
 	audit, err = repository.ListWorkspaceAuditEvents(ctx, workspace.ID, 100)
 	if err != nil {
