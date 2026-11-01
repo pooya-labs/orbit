@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"slices"
 )
 
@@ -20,7 +21,7 @@ type Principal struct {
 
 // ActorID is a stable, issuer-scoped identity; email and display names are deliberately excluded.
 func (p Principal) ActorID() string {
-	return p.Issuer + "\x00" + p.Subject
+	return base64.RawURLEncoding.EncodeToString([]byte(p.Issuer)) + "." + base64.RawURLEncoding.EncodeToString([]byte(p.Subject))
 }
 
 // HasRole applies the role hierarchy used by ORBIT: operators and administrators inherit viewer access.
