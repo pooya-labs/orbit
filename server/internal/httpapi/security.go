@@ -84,7 +84,9 @@ func withBodyLimit(maxBytes int64, next http.Handler) http.Handler {
 		maxBytes = 1 << 20
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Body != nil {
+		// The authenticated OTLP gateway applies its own 4 MiB bounded reader.
+		// Keep the API's smaller JSON body limit from truncating valid OTLP.
+		if !strings.HasPrefix(r.URL.Path, "/v1/workspaces/") && r.Body != nil {
 			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 		}
 		next.ServeHTTP(w, r)
