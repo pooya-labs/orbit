@@ -221,7 +221,7 @@ func (r *Repository) ListTelemetryServices(ctx context.Context, limit int) ([]st
 			services.name,
 			COALESCE(
 				array_agg(sources.source ORDER BY sources.source)
-					FILTER (WHERE sources.source IS NOT NULL),
+					FILTER (WHERE sources.source IS NOT NULL AND sources.last_seen_at >= NOW() - INTERVAL '7 days'),
 				ARRAY[]::text[]
 			),
 			services.first_seen_at,
