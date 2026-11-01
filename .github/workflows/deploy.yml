@@ -34,6 +34,24 @@ jobs:
         with:
           enablement: true
 
+      # The repository must use the Actions publishing source. When Pages is
+      # configured for branch publishing, GitHub starts a second Jekyll
+      # deployment from README.md and can overwrite the Next.js export.
+      - name: Verify GitHub Pages publishing source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          response="$(curl --fail --silent --show-error \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/pages")"
+          build_type="$(jq --raw-output '.build_type // "unknown"' <<< "$response")"
+          if [[ "$build_type" != "workflow" ]]; then
+            echo "::error title=GitHub Pages source mismatch::Set Settings > Pages > Build and deployment > Source to GitHub Actions, then rerun this workflow. Current build_type: $build_type"
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
