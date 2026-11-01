@@ -14,6 +14,7 @@ import {
   listTelemetryLogs,
   listTelemetryTraces,
   listTelemetryServices,
+  getTelemetryServiceAttributes,
 } from "../../lib/orbit/client";
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../../lib/orbit/i18n";
 import type {
@@ -22,6 +23,7 @@ import type {
   TelemetryTracesResponse,
   TelemetryWindow,
   DiscoveredTelemetryService,
+  TelemetryResourceAttributesResponse,
 } from "../../lib/orbit/contracts";
 
 export type TelemetryView = "Metrics" | "Logs" | "Traces";
@@ -99,6 +101,9 @@ export default function TelemetryWorkspace({
   const [serviceWarnings, setServiceWarnings] = useState<string[]>([]);
   const [serviceError, setServiceError] = useState("");
   const [serviceLoading, setServiceLoading] = useState(true);
+  const [resourceAttributes, setResourceAttributes] = useState<TelemetryResourceAttributesResponse | null>(null);
+  const [resourceLoading, setResourceLoading] = useState(true);
+  const [resourceError, setResourceError] = useState("");
   const [metrics, setMetrics] = useState<TelemetryMetricsResponse | null>(null);
   const [logs, setLogs] = useState<TelemetryLogsResponse | null>(null);
   const [traces, setTraces] = useState<TelemetryTracesResponse | null>(null);
@@ -147,6 +152,41 @@ export default function TelemetryWorkspace({
       window.clearInterval(interval);
     };
   }, [windowRange, apiBaseUrl, reloadKey, language]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let mounted = true;
+
+    const loadAttributes = async () => {
+      setResourceLoading(true);
+      setResourceError("");
+      try {
+        const response = await getTelemetryServiceAttributes(
+          selectedService,
+          windowRange,
+          controller.signal,
+          apiBaseUrl,
+        );
+        if (mounted) setResourceAttributes(response);
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        if (mounted) {
+          setResourceAttributes(null);
+          setResourceError(cause instanceof Error ? cause.message : tr("resourceAttributeUnavailable"));
+        }
+      } finally {
+        if (mounted) setResourceLoading(false);
+      }
+    };
+
+    void loadAttributes();
+    const interval = window.setInterval(() => void loadAttributes(), 60_000);
+    return () => {
+      mounted = false;
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [selectedService, windowRange, apiBaseUrl, reloadKey, language]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -299,6 +339,31 @@ export default function TelemetryWorkspace({
         <span>{count} {view === "Metrics" ? tr("points") : view === "Logs" ? tr("logEntries") : tr("tracesCount")}</span>
         <span><Clock3 size={12} /> {queriedAt ? `${tr("queried")} ${formatClock(queriedAt, language)}` : tr("waitingFirstQuery")}</span>
       </div>
+      <details className="telemetry-attributes-panel">
+        <summary>
+          <span>{tr("resourceAttributes")}</span>
+          <small>{resourceLoading ? tr("loadingResourceAttributes") : Object.keys(resourceAttributes?.attributes ?? {}).length}</small>
+        </summary>
+        {resourceError ? (
+          <p className="telemetry-attributes-empty" role="status">{resourceError}</p>
+        ) : resourceLoading && !resourceAttributes ? (
+          <p className="telemetry-attributes-empty">{tr("loadingResourceAttributes")}</p>
+        ) : Object.keys(resourceAttributes?.attributes ?? {}).length === 0 ? (
+          <p className="telemetry-attributes-empty">{tr("noResourceAttributes")}</p>
+        ) : (
+          <div className="telemetry-attributes-grid">
+            {Object.entries(resourceAttributes?.attributes ?? {}).sort(([a], [b]) => a.localeCompare(b)).slice(0, 16).map(([key, value]) => (
+              <div className="telemetry-attribute-item" key={key}>
+                <div><code>{key}</code><strong>{typeof value === "string" ? value : JSON.stringify(value)}</strong></div>
+                <small>{(resourceAttributes?.attribute_sources[key] ?? []).join(", ")}</small>
+              </div>
+            ))}
+          </div>
+        )}
+        {resourceAttributes?.warnings && resourceAttributes.warnings.length > 0 ? (
+          <p className="telemetry-attributes-warning">{resourceAttributes.warnings.join(" · ")}</p>
+        ) : null}
+      </details>
 
       {(serviceError || serviceWarnings.length > 0) && (
         <div className="telemetry-service-warning" role="status">
