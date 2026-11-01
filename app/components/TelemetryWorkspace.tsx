@@ -15,6 +15,7 @@ import {
   listTelemetryTraces,
   listTelemetryServices,
 } from "../../lib/orbit/client";
+import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../../lib/orbit/i18n";
 import type {
   TelemetryLogsResponse,
   TelemetryMetricsResponse,
@@ -32,7 +33,7 @@ const windows: { value: TelemetryWindow; label: string }[] = [
   { value: "24h", label: "24 hours" },
 ];
 
-function formatClock(timestamp: number | string): string {
+function formatClock(timestamp: number | string, language: Language): string {
   const numericTimestamp = typeof timestamp === "string" ? Number(timestamp) : timestamp;
   const value = typeof timestamp === "number"
     ? timestamp
@@ -42,7 +43,7 @@ function formatClock(timestamp: number | string): string {
   if (!Number.isFinite(value)) return "Time unavailable";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Time unavailable";
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(formatLocale(language), {
     month: "short",
     day: "2-digit",
     hour: "2-digit",
@@ -51,10 +52,11 @@ function formatClock(timestamp: number | string): string {
   }).format(date);
 }
 
-function formatRate(value: number): string {
+function formatRate(value: number, language: Language): string {
   if (!Number.isFinite(value)) return "—";
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)}k`;
-  return value.toFixed(value >= 10 ? 1 : 2);
+  const formatter = new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: value >= 10 ? 1 : 2, minimumFractionDigits: value >= 10 ? 1 : 2 });
+  if (Math.abs(value) >= 1000) return `${formatter.format(value / 1000)}k`;
+  return formatter.format(value);
 }
 
 function nanoTimestamp(value: string): number {
@@ -72,11 +74,11 @@ function TelemetryEmpty({ title, message }: { title: string; message: string }) 
   );
 }
 
-function TelemetryLoading() {
+function TelemetryLoading({ language }: { language: Language }) {
   return (
     <div className="telemetry-loading" role="status" aria-live="polite">
       <span className="telemetry-spinner" />
-      <span>Querying telemetry backends…</span>
+      <span>{t(language, "liveQuery")} {language === "fa" ? "از زیرساخت‌های تله‌متری…" : "telemetry backends…"}</span>
     </div>
   );
 }
@@ -84,10 +86,13 @@ function TelemetryLoading() {
 export default function TelemetryWorkspace({
   view,
   apiBaseUrl,
+  language,
 }: {
   view: TelemetryView;
   apiBaseUrl: string;
+  language: Language;
 }) {
+  const tr = (key: TranslationKey) => t(language, key);
   const [windowRange, setWindowRange] = useState<TelemetryWindow>("1h");
   const [selectedService, setSelectedService] = useState("orbit-telemetry-demo");
   const [discoveredServices, setDiscoveredServices] = useState<DiscoveredTelemetryService[]>([]);
@@ -101,6 +106,7 @@ export default function TelemetryWorkspace({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const windowOptions = windows.map((item) => ({ ...item, label: language === "fa" ? ({ "15 min": "۱۵ دقیقه", "1 hour": "۱ ساعت", "6 hours": "۶ ساعت", "24 hours": "۲۴ ساعت" }[item.label] ?? item.label) : item.label }));
 
 
   useEffect(() => {
@@ -249,17 +255,17 @@ export default function TelemetryWorkspace({
             {view === "Metrics" ? <Activity size={18} /> : view === "Logs" ? <FileText size={18} /> : <Workflow size={18} />}
           </span>
           <div>
-            <h2 id="telemetry-title">{view}</h2>
-            <p>Live query · {backend} · {selectedService}</p>
+            <h2 id="telemetry-title">{navLabel(language, view)}</h2>
+            <p>{tr("liveQuery")} · {backend} · {selectedService}</p>
           </div>
         </div>
         <label className="telemetry-service-select">
-          <span>SERVICE</span>
+          <span>{tr("service")}</span>
           <select
             value={selectedService}
             onChange={(event) => setSelectedService(event.target.value)}
             disabled={serviceLoading || discoveredServices.length === 0}
-            aria-label="Select telemetry service"
+            aria-label={tr("selectService")}
           >
             {discoveredServices.length > 0
               ? discoveredServices.map((service) => (
@@ -270,13 +276,13 @@ export default function TelemetryWorkspace({
               : <option value={selectedService}>{selectedService} · default</option>}
           </select>
           <small>
-            {serviceLoading ? "Discovering services…" :
-              discoveredServices.length > 0 ? `${discoveredServices.length} discovered` : "No discovered services"}
+            {serviceLoading ? tr("discoveringServices") :
+              discoveredServices.length > 0 ? `${discoveredServices.length} ${tr("discovered")}` : tr("noDiscoveredServices")}
           </small>
         </label>
         <div className="telemetry-controls">
           <div className="range-switcher" role="group" aria-label="Telemetry time range">
-            {windows.map((item) => (
+            {windowOptions.map((item) => (
               <button key={item.value} className={windowRange === item.value ? "selected" : ""} aria-pressed={windowRange === item.value} onClick={() => setWindowRange(item.value)}>
                 {item.label}
               </button>
