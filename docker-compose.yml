@@ -90,7 +90,6 @@ services:
     volumes:
       - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - orbit-prometheus-data:/prometheus
-    ports:
     networks:
       - telemetry-internal
     depends_on:
@@ -105,7 +104,6 @@ services:
     volumes:
       - ./deploy/observability/loki.yaml:/etc/loki/local-config.yaml:ro
       - orbit-loki-data:/loki
-    ports:
     networks:
       - telemetry-internal
 
@@ -117,7 +115,6 @@ services:
     volumes:
       - ./deploy/observability/tempo.yaml:/etc/tempo.yaml:ro
       - orbit-tempo-data:/var/tempo
-    ports:
     networks:
       - telemetry-internal
 
@@ -129,7 +126,6 @@ services:
     restart: unless-stopped
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-    ports:
     networks:
       - telemetry-internal
     depends_on:
