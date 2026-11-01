@@ -48,7 +48,7 @@ func TestLoadReadsOptionalTelemetryEndpoints(t *testing.T) {
 func TestProductionAndStagingRequireOIDC(t *testing.T) {
 	for _, environment := range []string{"production", "staging"} {
 		t.Run(environment, func(t *testing.T) {
-			cfg := Config{Environment: environment, RateLimitPerMinute: 120, OIDCRolesClaim: "roles", DatabaseURL: "postgres://orbit:test@localhost:5432/orbit"}
+			cfg := Config{Environment: environment, RateLimitPerMinute: 120, OIDCRolesClaim: "roles", DatabaseURL: "postgres://orbit:test@localhost:5432/orbit", IngestionHTTPAddr: "127.0.0.1:4319", IngestionGRPCAddr: "127.0.0.1:4320"}
 			if err := cfg.Validate(); err == nil {
 				t.Fatal("Validate() accepted a protected environment without OIDC settings")
 			}
@@ -131,6 +131,8 @@ func TestProductionAndStagingRequirePostgresForSharedRateLimits(t *testing.T) {
 				WorkloadOIDCAudience: "orbit-ingestion",
 				CollectorOTLPHTTPURL: "http://otel-collector:4318",
 				CollectorOTLPGRPCEndpoint: "otel-collector:4317",
+				IngestionHTTPAddr: "127.0.0.1:4319",
+				IngestionGRPCAddr: "127.0.0.1:4320",
 			}
 			if err := cfg.Validate(); err == nil {
 				t.Fatal("Validate() accepted a protected environment without PostgreSQL")
@@ -175,6 +177,8 @@ func TestWorkloadIngestionRequiresDistinctAudiencesDatabaseAndCollectorEndpoints
 		DatabaseURL: "postgres://orbit:test@localhost:5432/orbit",
 		CollectorOTLPHTTPURL: "http://otel-collector:4318",
 		CollectorOTLPGRPCEndpoint: "otel-collector:4317",
+		IngestionHTTPAddr: "127.0.0.1:4319",
+		IngestionGRPCAddr: "127.0.0.1:4320",
 	}
 	if err := base.Validate(); err != nil {
 		t.Fatalf("valid workload ingestion config rejected: %v", err)
