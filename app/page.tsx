@@ -73,7 +73,7 @@ type IncidentRow = {
 
 const serviceTones = ["blue", "violet", "amber", "teal", "rose"];
 
-function mapApiService(item: ServiceSummary, index: number): Service {
+function mapApiService(item: ServiceSummary, index: number, language: Language): Service {
   const state: ServiceState =
     item.status === "operational" ? "Operational" :
     item.status === "degraded" ? "Degraded" :
@@ -84,8 +84,8 @@ function mapApiService(item: ServiceSummary, index: number): Service {
     name: item.name,
     description: item.description || item.environment,
     region: item.region || "—",
-    latency: item.latency_p95_ms === null ? "—" : `${Math.round(item.latency_p95_ms)} ms`,
-    errorRate: item.error_rate === null ? "—" : `${(item.error_rate * 100).toFixed(2)}%`,
+    latency: item.latency_p95_ms === null ? "—" : `${new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 0 }).format(Math.round(item.latency_p95_ms))} ms`,
+    errorRate: item.error_rate === null ? "—" : `${new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(item.error_rate * 100)}%`,
     state,
     initials: initials || "SV",
     tone: serviceTones[index % serviceTones.length],
@@ -115,9 +115,9 @@ function toIncidentRow(
     title: item.title,
     serviceName: item.service_name,
     region: service?.region ?? t(language, "regionUnavailable"),
-    severityLabel: item.severity.toUpperCase(),
+    severityLabel: t(language, item.severity),
     severityTone: item.severity === "critical" || item.severity === "high" ? "critical" : "warning",
-    statusLabel: item.status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    statusLabel: t(language, item.status),
     timeAgo: formatAge(item.started_at, language),
     source: item.source,
   };
@@ -129,9 +129,9 @@ function toDemoIncidentRow(item: (typeof demoIncidents)[number], language: Langu
     title: item.title,
     serviceName: item.serviceName,
     region: item.region,
-    severityLabel: item.severity.toUpperCase(),
+    severityLabel: t(language, item.severity),
     severityTone: item.severity === "critical" ? "critical" : "warning",
-    statusLabel: item.status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    statusLabel: t(language, item.status),
     timeAgo: formatAge(item.startedAt, language),
     source: item.source,
   };
@@ -168,8 +168,13 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-function StatusDot({ state }: { state: ServiceState }) {
-  return <span className={`status-dot ${state.toLowerCase()}`} role="img" aria-label={state} />;
+function serviceStateLabel(state: ServiceState, language: Language): string {
+  const key: Record<ServiceState, TranslationKey> = { Operational: "operational", Degraded: "degraded", Incident: "incident", Unknown: "unknownStatus" };
+  return t(language, key[state]);
+}
+
+function StatusDot({ state, language }: { state: ServiceState; language: Language }) {
+  return <span className={`status-dot ${state.toLowerCase()}`} role="img" aria-label={serviceStateLabel(state, language)} />;
 }
 
 function MetricCard({
@@ -303,7 +308,7 @@ export default function Home() {
     }
   };
 
-  const sourceServices = sourceMode === "api" ? apiServices.map(mapApiService) : demoServices;
+  const sourceServices = sourceMode === "api" ? apiServices.map((item, index) => mapApiService(item, index, language)) : demoServices;
   const filteredServices = useMemo(() => {
     const query = search.trim().toLowerCase();
     const matching = sourceServices.filter((service) =>
@@ -348,7 +353,7 @@ export default function Home() {
         </div>
 
         <button className="workspace-switcher">
-          <div className="workspace-avatar">N</div>
+          <div className="workspace-avatar">O</div>
           <div className="workspace-copy"><strong>ORBIT</strong><span>{language === "fa" ? "فضای کاری شخصی" : "Personal workspace"}</span></div>
           <ChevronDown size={15} className="muted-icon" />
         </button>
@@ -377,7 +382,7 @@ export default function Home() {
           <button className="nav-item"><Settings2 size={17} /><span>{tr("settings")}</span></button>
           <button className="nav-item"><CircleHelp size={17} /><span>{tr("helpSupport")}</span><ExternalLink size={12} className="nav-external" /></button>
           <div className="profile-row">
-            <div className="profile-avatar">PG</div>
+            <div className="profile-avatar">P</div>
             <div className="profile-copy"><strong>Pooya</strong><a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a></div>
             <MoreHorizontal size={18} className="muted-icon" />
           </div>
@@ -432,9 +437,9 @@ export default function Home() {
           <div className="notice-strip">
             <div className="notice-icon"><Radio size={16} /></div>
             {sourceMode === "demo" ? (
-              <div><strong>در حال مشاهدهٔ یک محیط نمونه هستی.</strong><span> شاخص‌ها، سرویس‌ها و رخدادها داده‌های نمایشی هستند و به هیچ سامانهٔ عملیاتی متصل نیستند.</span></div>
+              <div><strong>{tr("sampleEnvironmentTitle")}</strong><span>{tr("sampleEnvironmentBody")}</span></div>
             ) : (
-              <div><strong>{tr("connectedTo")} {apiMetadata?.name ?? "ORBIT API"}.</strong><span> {language === "fa" ? "سرویس‌ها و رخدادها از" : "Services and incidents are read from"} {apiMetadata?.environment ?? (language === "fa" ? "API انتخاب‌شده" : "the selected API")} {language === "fa" ? "خوانده می‌شوند؛ منبع هر رکورد جداگانه مشخص است." : "; each record keeps its own data-source label."}</span></div>
+              <div><strong>{tr("connectedTo")} {apiMetadata?.name ?? "ORBIT API"}.</strong><span>{tr("connectedInventory").replace("{environment}", apiMetadata?.environment ?? (language === "fa" ? "API انتخاب‌شده" : "the selected API"))}</span></div>
             )}
             <button onClick={() => setSourcePanelOpen(!sourcePanelOpen)}>{sourceMode === "api" ? tr("manageSource") : tr("connectSource")} <ArrowUpRight size={14} /></button>
           </div>
@@ -443,7 +448,7 @@ export default function Home() {
             <section className="panel source-setup" aria-labelledby="source-setup-title">
               <div className="source-setup-copy">
                 <h2 id="source-setup-title">{tr("connectApiTitle")}</h2>
-                <p>از یک نشانی فقط‌خواندنی API استفاده کن. برای اجرای محلی، Docker Compose را اجرا و http://localhost:8080 را وارد کن.</p>
+                <p>{tr("apiHelp")}</p>
               </div>
               <form className="source-setup-form" onSubmit={(event) => { event.preventDefault(); void connectSource(); }}>
                 <label htmlFor="orbit-api-url">{tr("apiBaseUrl")}</label>
@@ -466,7 +471,7 @@ export default function Home() {
                 <div className="source-placeholder-icon"><Activity size={18} /></div>
                 <div>
                   <h2>{tr("connectTelemetryTitle")}</h2>
-                  <p>پس از اتصال به ORBIT API متصل به زیرساخت پایش محلی، امکان دریافت زندهٔ {navLabel(language, telemetryView).toLowerCase()} فراهم می‌شود. داده‌های نمونه هرگز به‌عنوان دادهٔ زنده نمایش داده نمی‌شوند.</p>
+                  <p>{tr("connectTelemetryBody").replace("{view}", navLabel(language, telemetryView).toLowerCase())}</p>
                 </div>
                 <button className="button-primary" onClick={() => setSourcePanelOpen(true)}>{tr("connectApiSource")} <ArrowUpRight size={14} /></button>
               </section>
@@ -486,7 +491,7 @@ export default function Home() {
           <section className="panel traffic-panel">
             <div className="panel-header">
               <div><div className="panel-title-line"><h2>{tr("trafficPerformance")}</h2><span className="live-indicator"><i /> {tr("sample")}</span></div><p>{tr("incomingRequests")}</p></div>
-              <div className="range-switcher" role="group" aria-label="Chart time range">
+              <div className="range-switcher" role="group" aria-label={tr("last24Hours")}>
                 {["1 hour", "6 hours", "24 hours"].map((item) => <button key={item} className={range === item ? "selected" : ""} onClick={() => setRange(item)}>{language === "fa" ? (item === "1 hour" ? "۱ ساعت" : item === "6 hours" ? "۶ ساعت" : "۲۴ ساعت") : item}</button>)}
               </div>
             </div>
@@ -524,7 +529,7 @@ export default function Home() {
                     <div className="service-name-cell"><div className={`service-avatar ${service.tone}`}>{service.initials}</div><div><strong>{service.name}</strong><span>{service.description}</span></div></div>
                     <span className="service-metric">{service.latency}</span>
                     <span className={`service-metric ${service.state === "Degraded" || service.state === "Incident" ? "metric-warning" : ""}`}>{service.errorRate}</span>
-                    <span className="service-status"><StatusDot state={service.state} />{service.state === "Operational" ? tr("operational") : service.state === "Degraded" ? tr("degraded") : service.state === "Incident" ? tr("incident") : tr("unknownStatus")}</span>
+                    <span className="service-status"><StatusDot state={service.state} language={language} />{serviceStateLabel(service.state, language)}</span>
                   </div>
                 ))}
                 {filteredServices.length === 0 && <div className="empty-state">{tr("noServicesMatch")} “{search}”.</div>}
