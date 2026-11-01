@@ -238,3 +238,26 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+
+func withLegacyGlobalReadGate(environment string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if environment != "production" && environment != "staging" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		path := r.URL.Path
+		legacyRead := path == "/api/v1/services" ||
+			path == "/api/v1/incidents" ||
+			path == "/api/v1/telemetry/services" ||
+			strings.HasPrefix(path, "/api/v1/telemetry/services/") ||
+			path == "/api/v1/telemetry/metrics" ||
+			path == "/api/v1/telemetry/logs" ||
+			path == "/api/v1/telemetry/traces"
+		if legacyRead {
+			writeError(w, r, http.StatusNotFound, "legacy_route_disabled", "This unscoped data endpoint is disabled in staging and production")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
