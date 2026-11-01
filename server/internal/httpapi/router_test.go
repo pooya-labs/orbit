@@ -52,6 +52,34 @@ func (f *fakeRepository) UpsertTelemetryServices(_ context.Context, services []s
 	return f.catalog, nil
 }
 
+func (f *fakeRepository) ListTelemetryServicesPage(_ context.Context, limit int, cursor *store.TelemetryServiceCursor) (store.TelemetryServicePage, error) {
+	if f.catalogErr != nil {
+		return store.TelemetryServicePage{}, f.catalogErr
+	}
+	items := append([]store.TelemetryService(nil), f.catalog...)
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Name == items[j].Name {
+			return items[i].ID < items[j].ID
+		}
+		return items[i].Name < items[j].Name
+	})
+	filtered := make([]store.TelemetryService, 0, len(items))
+	for _, item := range items {
+		if cursor != nil && (item.Name < cursor.Name || (item.Name == cursor.Name && item.ID <= cursor.ID)) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	page := store.TelemetryServicePage{Items: filtered}
+	if limit > 0 && len(page.Items) > limit {
+		page.HasMore = true
+		page.Items = page.Items[:limit]
+		last := page.Items[len(page.Items)-1]
+		page.Next = &store.TelemetryServiceCursor{Name: last.Name, ID: last.ID}
+	}
+	return page, nil
+}
+
 func (f *fakeRepository) UpdateTelemetryServiceResourceAttributes(_ context.Context, name string, attributes map[string]any, sources map[string][]string) error {
 	if f.catalogErr != nil {
 		return f.catalogErr
