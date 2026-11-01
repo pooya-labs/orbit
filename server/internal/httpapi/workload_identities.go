@@ -227,7 +227,7 @@ func registerWorkloadIdentityRoutes(mux *http.ServeMux, repository store.Reposit
 		}
 		items, err := workloadRepository.ListWorkspaceWorkloadGrants(ctx, r.PathValue("workspaceID"))
 		if err != nil {
-			if strings.Contains(err.Error(), "UUID") {
+			if strings.Contains(strings.ToLower(err.Error()), "uuid") {
 				writeError(w, r, http.StatusBadRequest, "invalid_workspace_id", "Workspace identifier is invalid")
 				return
 			}
