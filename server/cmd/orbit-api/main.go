@@ -26,11 +26,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	var authVerifier *auth.Verifier
+	var authVerifier httpapi.TokenVerifier
 	if cfg.OIDCIssuer != "" {
 		authCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		var authErr error
-		authVerifier, authErr = auth.NewVerifier(authCtx, auth.Config{
+		verifier, authErr := auth.NewVerifier(authCtx, auth.Config{
 			Issuer: cfg.OIDCIssuer, Audience: cfg.OIDCAudience,
 			RolesClaim: cfg.OIDCRolesClaim, AllowInsecureHTTP: cfg.Environment == "development",
 		})
@@ -39,6 +39,8 @@ func main() {
 			logger.Error("OIDC authentication initialization failed", "error", authErr)
 			os.Exit(1)
 		}
+		authVerifier = verifier
+		defer verifier.Close()
 	}
 
 	telemetryClient, err := telemetry.NewClient(cfg.PrometheusURL, cfg.LokiURL, cfg.TempoURL)
