@@ -55,6 +55,73 @@ type incidentTimelineResponse struct {
 	Data []store.IncidentTimelineEvent `json:"data"`
 }
 
+type alertRuleCreateRequest struct {
+	Name string `json:"name"`
+	Description string `json:"description"`
+	ServiceName string `json:"service_name"`
+	Metric string `json:"metric"`
+	Operator string `json:"operator"`
+	Threshold float64 `json:"threshold"`
+	WindowSeconds int `json:"window_seconds"`
+	PendingSeconds int `json:"pending_seconds"`
+	Severity string `json:"severity"`
+}
+
+type alertRuleUpdateRequest = alertRuleCreateRequest
+
+type alertRuleEnabledRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+type alertRuleResponse struct {
+	Data store.AlertRule `json:"data"`
+}
+
+type alertRuleListResponse struct {
+	Data []store.AlertRule `json:"data"`
+}
+
+func alertRuleError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, operation string, err error) {
+	switch {
+	case errors.Is(err, store.ErrWorkspaceMembershipNotFound),
+		errors.Is(err, store.ErrAlertRuleNotFound):
+		writeError(w, r, http.StatusNotFound, "alert_rule_not_found", "The workspace or alert rule was not found")
+	case errors.Is(err, store.ErrAlertRuleForbidden):
+		writeError(w, r, http.StatusForbidden, "alert_rule_forbidden", "Your workspace role cannot manage alert rules")
+	case errors.Is(err, store.ErrAlertRuleNameConflict):
+		writeError(w, r, http.StatusConflict, "alert_rule_name_conflict", "An alert rule with that name already exists in this workspace")
+	case errors.Is(err, store.ErrAlertRuleNoChange):
+		writeError(w, r, http.StatusConflict, "alert_rule_no_change", "The alert rule already has the requested state")
+	case errors.Is(err, store.ErrAlertRuleInvalidInput),
+		strings.Contains(err.Error(), "UUID"),
+		strings.Contains(err.Error(), "principal"):
+		writeError(w, r, http.StatusBadRequest, "invalid_alert_rule", "Alert rule fields or identifiers are invalid")
+	default:
+		logger.Error(operation, "error", err, "request_id", r.Header.Get("X-Request-ID"))
+		writeError(w, r, http.StatusServiceUnavailable, "alert_rule_operation_unavailable", "The alert rule operation is temporarily unavailable")
+	}
+}
+
+func parseAlertRuleLimit(r *http.Request) (int, error) {
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		switch raw {
+		case "10":
+			limit = 10
+		case "25":
+			limit = 25
+		case "50":
+			limit = 50
+		case "100":
+			limit = 100
+		default:
+			return 0, errors.New("limit must be 10, 25, 50, or 100")
+		}
+	}
+	return limit, nil
+}
+
+
 func decodeIncidentJSON(w http.ResponseWriter, r *http.Request, destination any) error {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16*1024))
 	decoder.DisallowUnknownFields()
@@ -391,6 +458,178 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			events = []store.IncidentTimelineEvent{}
 		}
 		writeJSON(w, http.StatusOK, incidentTimelineResponse{Data: events})
+	})
+
+	// Alert rules are workspace-owned definitions. Their evaluator and notification
+	// adapters are separate components; these routes only manage persisted rules.
+	alertRuleRepository, alertRuleRepositoryAvailable := repository.(store.AlertRuleRepository)
+	alertRuleUnavailable := func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, r, http.StatusServiceUnavailable, "alert_rule_store_unavailable", "Alert rule storage is not available")
+	}
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-rules", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !alertRuleRepositoryAvailable || alertRuleRepository == nil {
+			alertRuleUnavailable(w, r)
+			return
+		}
+		limit, err := parseAlertRuleLimit(r)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_limit", err.Error())
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		items, err := alertRuleRepository.ListWorkspaceAlertRules(ctx,
+			r.PathValue("workspaceID"), principal.Issuer, principal.Subject, limit)
+		if err != nil {
+			alertRuleError(w, r, logger, "list workspace alert rules failed", err)
+			return
+		}
+		if items == nil {
+			items = []store.AlertRule{}
+		}
+		writeJSON(w, http.StatusOK, alertRuleListResponse{Data: items})
+	})
+
+	mux.HandleFunc("POST /api/v1/workspaces/{workspaceID}/alert-rules", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !alertRuleRepositoryAvailable || alertRuleRepository == nil {
+			alertRuleUnavailable(w, r)
+			return
+		}
+		var input alertRuleCreateRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_alert_rule", "Alert rule fields must be a single valid JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		rule, err := alertRuleRepository.CreateWorkspaceAlertRule(ctx, store.CreateWorkspaceAlertRuleInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			Name: input.Name,
+			Description: input.Description,
+			ServiceName: input.ServiceName,
+			Metric: input.Metric,
+			Operator: input.Operator,
+			Threshold: input.Threshold,
+			WindowSeconds: input.WindowSeconds,
+			PendingSeconds: input.PendingSeconds,
+			Severity: input.Severity,
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil {
+			alertRuleError(w, r, logger, "create workspace alert rule failed", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, alertRuleResponse{Data: rule})
+	})
+
+	mux.HandleFunc("PUT /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !alertRuleRepositoryAvailable || alertRuleRepository == nil {
+			alertRuleUnavailable(w, r)
+			return
+		}
+		var input alertRuleUpdateRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_alert_rule", "Alert rule fields must be a single valid JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		rule, err := alertRuleRepository.UpdateWorkspaceAlertRule(ctx, store.UpdateWorkspaceAlertRuleInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			RuleID: r.PathValue("ruleID"),
+			Name: input.Name,
+			Description: input.Description,
+			ServiceName: input.ServiceName,
+			Metric: input.Metric,
+			Operator: input.Operator,
+			Threshold: input.Threshold,
+			WindowSeconds: input.WindowSeconds,
+			PendingSeconds: input.PendingSeconds,
+			Severity: input.Severity,
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil {
+			alertRuleError(w, r, logger, "update workspace alert rule failed", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, alertRuleResponse{Data: rule})
+	})
+
+	mux.HandleFunc("PATCH /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}/enabled", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !alertRuleRepositoryAvailable || alertRuleRepository == nil {
+			alertRuleUnavailable(w, r)
+			return
+		}
+		var input alertRuleEnabledRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_alert_rule_state", "enabled must be provided in a single valid JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		rule, err := alertRuleRepository.SetWorkspaceAlertRuleEnabled(ctx, store.SetWorkspaceAlertRuleEnabledInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			RuleID: r.PathValue("ruleID"),
+			Enabled: input.Enabled,
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil {
+			alertRuleError(w, r, logger, "change workspace alert rule enabled state failed", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, alertRuleResponse{Data: rule})
+	})
+
+	mux.HandleFunc("DELETE /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !alertRuleRepositoryAvailable || alertRuleRepository == nil {
+			alertRuleUnavailable(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		err := alertRuleRepository.DeleteWorkspaceAlertRule(ctx, store.DeleteWorkspaceAlertRuleInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			RuleID: r.PathValue("ruleID"),
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil {
+			alertRuleError(w, r, logger, "delete workspace alert rule failed", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/services", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
