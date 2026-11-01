@@ -862,3 +862,88 @@ func TestInFlightExportMayFinishButPostCommitRequestsAreDenied(t *testing.T) {
 		if got := forwarder.calls.Load(); got != 1 { t.Fatalf("gRPC forwarder calls = %d, want 1", got) }
 	})
 }
+
+
+// These tests exercise the bounded admission slots with real PostgreSQL-backed
+// workload authorization and a deliberately blocked Collector forwarder.
+func TestHTTPGatewayRejectsRequestsWhenAdmissionCapacityIsExhausted(t *testing.T) {
+	repository, workspace, _, _, verifier := openGatewayIntegrationRepository(t)
+	authorizer, err := NewAuthorizer(verifier, repository)
+	if err != nil { t.Fatal(err) }
+
+	forwarder := &blockingHTTPForwarder{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	gateway := &HTTPGateway{
+		authorizer: authorizer,
+		forwarder: forwarder,
+		limiter: newWorkspaceRateLimiter(100),
+		sharedLimiter: repository,
+		timeout: 10 * time.Second,
+		concurrency: make(chan struct{}, 1),
+	}
+	payload, err := proto.Marshal(integrationOTLPRequest(t, "metrics"))
+	if err != nil { t.Fatal(err) }
+	send := func() *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+workspace.ID+"/v1/metrics", bytes.NewReader(payload))
+		request.Header.Set("Authorization", "Bearer integration-workload-token")
+		request.Header.Set("Content-Type", "application/x-protobuf")
+		response := httptest.NewRecorder()
+		gateway.serveHTTP(response, request)
+		return response
+	}
+	first := make(chan *httptest.ResponseRecorder, 1)
+	go func() { first <- send() }()
+	select {
+	case <-forwarder.entered:
+	case <-time.After(5 * time.Second): t.Fatal("first HTTP request did not reach the forwarder")
+	}
+
+	if response := send(); response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("request at exhausted HTTP capacity = %d, want 503", response.Code)
+	}
+	if got := forwarder.calls.Load(); got != 1 {
+		t.Fatalf("HTTP forwarder calls while saturated = %d, want 1", got)
+	}
+	close(forwarder.release)
+	select {
+	case response := <-first:
+		if response.Code != http.StatusOK { t.Fatalf("first HTTP request = %d, want 200", response.Code) }
+	case <-time.After(5 * time.Second): t.Fatal("first HTTP request did not finish after release")
+	}
+	if got := forwarder.calls.Load(); got != 1 { t.Fatalf("HTTP forwarder calls = %d, want 1", got) }
+}
+
+func TestGRPCGatewayRejectsRequestsWhenAdmissionCapacityIsExhausted(t *testing.T) {
+	repository, workspace, _, _, verifier := openGatewayIntegrationRepository(t)
+	authorizer, err := NewAuthorizer(verifier, repository)
+	if err != nil { t.Fatal(err) }
+
+	forwarder := &blockingGRPCForwarder{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	gateway := &GRPCGateway{
+		authorizer: authorizer,
+		forwarder: forwarder,
+		limiter: newWorkspaceRateLimiter(100),
+		sharedLimiter: repository,
+		timeout: 10 * time.Second,
+		concurrency: make(chan struct{}, 1),
+	}
+	first := make(chan error, 1)
+	go func() { first <- callIntegrationGRPCExport(gateway, workspace.ID, "metrics") }()
+	select {
+	case <-forwarder.entered:
+	case <-time.After(5 * time.Second): t.Fatal("first gRPC request did not reach the forwarder")
+	}
+
+	if err := callIntegrationGRPCExport(gateway, workspace.ID, "metrics"); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("request at exhausted gRPC capacity = %s, want ResourceExhausted; err=%v", status.Code(err), err)
+	}
+	if got := forwarder.calls.Load(); got != 1 {
+		t.Fatalf("gRPC forwarder calls while saturated = %d, want 1", got)
+	}
+	close(forwarder.release)
+	select {
+	case err := <-first:
+		if err != nil { t.Fatalf("first gRPC request failed after release: %v", err) }
+	case <-time.After(5 * time.Second): t.Fatal("first gRPC request did not finish after release")
+	}
+	if got := forwarder.calls.Load(); got != 1 { t.Fatalf("gRPC forwarder calls = %d, want 1", got) }
+}
