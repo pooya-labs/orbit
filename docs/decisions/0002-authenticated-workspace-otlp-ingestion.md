@@ -144,3 +144,10 @@ This establishes the reviewed Compose topology and Caddy configuration; it does 
 PR #58 is merged into `main` (squash merge commit `fd7c7d23d952bdb6f08250c2dcd699c2816620d3`). CI run `41355041031` passed all three jobs. HTTP and gRPC tests inject transient errors from the workload grant repository, shared rate-limit store, and Collector forwarder. Database dependency failures fail closed and are not forwarded; a later request succeeds through the same gateway instance after the dependency error is cleared.
 
 This provides deterministic recovery-contract coverage, not real process/network fault testing. PostgreSQL/Collector restart behavior, network partitions, recovery under sustained load, and explicit backpressure remain open before production tenant ingestion can be enabled.
+
+
+## ADR 0002 — PR #60 default burst-capacity verification
+
+PR #60 is merged into `main` (squash merge commit `cb85c0afea6647ecc59b9fe59e499ce8383fc526`). CI run `41355534531` passed Go race tests/build, web typecheck/build, and the local telemetry pipeline smoke test. Tests fill all 64 default HTTP/gRPC admission slots using blocking Collector forwarders, verify additional requests fail with the transport-specific capacity status before forwarding, then release all admitted requests and verify they complete with no capacity leak.
+
+The tests prove the configured in-process cap and deterministic rejection behavior, not sustained throughput, real infrastructure fault recovery, or backpressure behavior at production load.
