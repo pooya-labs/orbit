@@ -115,6 +115,8 @@ type ServiceDiscoveryResult struct {
 	QueriedAt     time.Time           `json:"queried_at"`
 	SourcesQueried []string           `json:"sources_queried"`
 	Warnings      []string            `json:"warnings,omitempty"`
+	NextCursor   string              `json:"next_cursor,omitempty"`
+	HasMore      bool                `json:"has_more"`
 	Data          []DiscoveredService `json:"data"`
 }
 
