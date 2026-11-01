@@ -203,14 +203,22 @@ func normalizeEndpoint(name, value string) (string, error) {
 	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
-func (c *Client) Metrics(ctx context.Context, window QueryWindow, service string) (QueryResult, error) {
+func (c *Client) Metrics(ctx context.Context, window QueryWindow, service string, groupBy []string) (QueryResult, error) {
 	if c == nil || c.prometheusURL == "" {
 		return QueryResult{}, ErrNotConfigured
 	}
 	if err := ValidateServiceName(service); err != nil {
 		return QueryResult{}, err
 	}
-	query := fmt.Sprintf("sum(rate(%s{service_name=%q}[5m]))", metricName, service)
+	groupLabels := []string{"service_name"}
+	for _, label := range groupBy {
+		if _, ok := allowedMetricGroupLabels[label]; !ok {
+			return QueryResult{}, fmt.Errorf("unsupported metric grouping dimension")
+		}
+		groupLabels = append(groupLabels, label)
+	}
+	sort.Strings(groupLabels)
+	query := fmt.Sprintf("sum by (%s) (rate(%s{service_name=%q}[5m]))", strings.Join(groupLabels, ", "), metricName, service)
 	now := c.now().UTC()
 	values := url.Values{}
 	values.Set("query", query)
@@ -240,6 +248,7 @@ func (c *Client) Metrics(ctx context.Context, window QueryWindow, service string
 		Query:     query,
 		Step:      window.Step,
 		Service:   service,
+		GroupBy:   append([]string(nil), groupBy...),
 		Data:      nonEmptyJSON(result.Result),
 	}, nil
 }
