@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"math/big"
 	"regexp"
 	"strings"
 	"sync"
@@ -57,12 +58,10 @@ type Verifier struct {
 	algorithms map[string]struct{}
 	jwksURL    string
 	client     *http.Client
-	development bool
 
-	mu          sync.Mutex
-	keys        jwk.Set
-	expiresAt   time.Time
-	lastRefresh time.Time
+	mu                 sync.Mutex
+	keys               jwk.Set
+	expiresAt          time.Time
 	lastUnknownRefresh time.Time
 }
 
@@ -149,7 +148,6 @@ func NewVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
 		algorithms: algorithms,
 		jwksURL: jwksURL.String(),
 		client: client,
-		development: cfg.Development,
 	}
 	if err := verifier.refresh(ctx); err != nil {
 		return nil, fmt.Errorf("initial OIDC JWKS fetch failed: %w", err)
@@ -200,7 +198,7 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (Principal, erro
 		return Principal{}, ErrInvalidToken
 	}
 
-	keySet, key, err := v.lookupKey(ctx, keyID)
+	key, err := v.lookupKey(ctx, keyID)
 	if err != nil {
 		return Principal{}, ErrInvalidToken
 	}
@@ -216,7 +214,6 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (Principal, erro
 	if err := singleKeySet.AddKey(keyCopy); err != nil {
 		return Principal{}, ErrInvalidToken
 	}
-	_ = keySet // lookupKey returns the trusted set as a freshness guard; the token is verified against exactly one selected key.
 	_, err = jwt.Parse(
 		[]byte(rawToken),
 		jwt.WithKeySet(singleKeySet, jws.WithRequireKid(true), jws.WithInferAlgorithmFromKey(true)),
@@ -262,17 +259,17 @@ func (v *Verifier) Close() {
 	}
 }
 
-func (v *Verifier) lookupKey(ctx context.Context, keyID string) (jwk.Set, jwk.Key, error) {
+func (v *Verifier) lookupKey(ctx context.Context, keyID string) (jwk.Key, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
 	now := time.Now()
 	if v.keys != nil && now.Before(v.expiresAt) {
 		if key, ok := v.keys.LookupKeyID(keyID); ok {
-			return v.keys, key, nil
+			return key, nil
 		}
 		if !v.lastUnknownRefresh.IsZero() && now.Sub(v.lastUnknownRefresh) < minForcedRefresh {
-			return nil, nil, ErrMissingKey
+			return nil, ErrMissingKey
 		}
 		v.lastUnknownRefresh = now
 	}
@@ -280,15 +277,15 @@ func (v *Verifier) lookupKey(ctx context.Context, keyID string) (jwk.Set, jwk.Ke
 	if err := v.refreshLocked(ctx); err != nil {
 		if oldKeys != nil {
 			if key, ok := oldKeys.LookupKeyID(keyID); ok {
-				return oldKeys, key, nil
+				return key, nil
 			}
 		}
-		return nil, nil, err
+		return nil, err
 	}
 	if key, ok := v.keys.LookupKeyID(keyID); ok {
-		return v.keys, key, nil
+		return key, nil
 	}
-	return nil, nil, ErrMissingKey
+	return nil, ErrMissingKey
 }
 
 func (v *Verifier) refresh(ctx context.Context) error {
@@ -325,14 +322,25 @@ func (v *Verifier) refreshLocked(ctx context.Context) error {
 		seen[kid] = struct{}{}
 	}
 	v.keys = set
-	v.lastRefresh = time.Now()
-	v.expiresAt = v.lastRefresh.Add(jwksCacheTTL)
+	v.expiresAt = time.Now().Add(jwksCacheTTL)
 	return nil
 }
 
 func validateSigningKey(key jwk.Key, algorithm string) error {
 	if use, ok := key.KeyUsage(); ok && use != "sig" {
 		return errors.New("JWK is not designated for signatures")
+	}
+	if operations, ok := key.KeyOps(); ok {
+		canVerify := false
+		for _, operation := range operations {
+			if operation == jwk.KeyOpVerify {
+				canVerify = true
+				break
+			}
+		}
+		if !canVerify {
+			return errors.New("JWK key_ops does not permit signature verification")
+		}
 	}
 	if keyAlgorithm, ok := key.Algorithm(); ok && fmt.Sprint(keyAlgorithm) != algorithm {
 		return errors.New("JWK algorithm does not match protected header")
@@ -341,6 +349,14 @@ func validateSigningKey(key jwk.Key, algorithm string) error {
 	case "RS256":
 		if fmt.Sprint(key.KeyType()) != "RSA" {
 			return errors.New("RS256 requires an RSA JWK")
+		}
+		var modulus string
+		if err := key.Get("n", &modulus); err != nil {
+			return errors.New("RSA JWK is missing its modulus")
+		}
+		decoded, err := base64.RawURLEncoding.DecodeString(modulus)
+		if err != nil || len(decoded) == 0 || new(big.Int).SetBytes(decoded).BitLen() < 2048 {
+			return errors.New("RS256 requires an RSA modulus of at least 2048 bits")
 		}
 	case "ES256":
 		if fmt.Sprint(key.KeyType()) != "EC" {
