@@ -410,7 +410,7 @@ func (v *Verifier) Verify(ctx context.Context, serialized string) (Principal, er
 		return Principal{}, errors.New("access token issued-at claim is missing or invalid")
 	}
 	expiresAt, err := claims.GetExpirationTime()
-	if err != nil || expiresAt == nil || !expiresAt.After(issuedAt.Time) {
+	if err != nil || expiresAt == nil || !expiresAt.Time.After(issuedAt.Time) {
 		return Principal{}, errors.New("access token expiration is missing or not later than issued-at")
 	}
 	issuer, err := claims.GetIssuer()
