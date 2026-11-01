@@ -299,7 +299,8 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewHandler(Config{Telemetry: client}, &fakeRepository{}, testLogger())
+	repository := &fakeRepository{}
+	handler := NewHandler(Config{Telemetry: client}, repository, testLogger())
 
 	for _, path := range []string{
 		"/api/v1/telemetry/metrics?window=1h&service=orbit-telemetry-demo",
