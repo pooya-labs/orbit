@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ORBIT — Systems Observatory",
   description:
-    "An engineering-first observability workspace for distributed systems.",
+    "An engineering-first observability workspace for distributed systems, available in English and Persian with right-to-left layout support.",
   applicationName: "ORBIT",
 };
 
