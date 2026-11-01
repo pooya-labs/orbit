@@ -287,6 +287,49 @@ func TestServicesMergesSourcesAndRejectsInvalidLabels(t *testing.T) {
 	}
 }
 
+func TestResourceAttributeProvenanceOnlyIncludesBackendsThatObservedService(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/series" {
+			t.Fatalf("unexpected Prometheus path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":[]}`))
+	}))
+	defer prometheus.Close()
+
+	loki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loki/api/v1/series" {
+			t.Fatalf("unexpected Loki path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":[{"service_name":"api-gateway","service_version":"2.1"}]}`))
+	}))
+	defer loki.Close()
+
+	client, err := NewClient(prometheus.URL, loki.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.DiscoverResourceAttributes(context.Background(), QueryWindow{
+		Name: "1h", Duration: time.Hour, Step: "1m",
+	}, "api-gateway")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.SourcesQueried) != 2 || result.SourcesQueried[0] != "loki" || result.SourcesQueried[1] != "prometheus" {
+		t.Fatalf("expected both configured backends to be queried, got %v", result.SourcesQueried)
+	}
+	if result.Attributes["service.name"] != "api-gateway" {
+		t.Fatalf("service.name = %#v, want api-gateway", result.Attributes["service.name"])
+	}
+	if got := result.AttributeSources["service.name"]; len(got) != 1 || got[0] != "loki" {
+		t.Fatalf("empty Prometheus result must not claim service.name provenance, got %v", got)
+	}
+	if got := result.AttributeSources["service.version"]; len(got) != 1 || got[0] != "loki" {
+		t.Fatalf("unexpected service.version provenance: %v", got)
+	}
+}
+
 func TestServicesReturnsPartialResultsAndWarnings(t *testing.T) {
 	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
