@@ -204,7 +204,7 @@ export default function TelemetryWorkspace({
         <div className="telemetry-controls">
           <div className="range-switcher" role="group" aria-label="Telemetry time range">
             {windows.map((item) => (
-              <button key={item.value} className={windowRange === item.value ? "selected" : ""} onClick={() => setWindowRange(item.value)}>
+              <button key={item.value} className={windowRange === item.value ? "selected" : ""} aria-pressed={windowRange === item.value} onClick={() => setWindowRange(item.value)}>
                 {item.label}
               </button>
             ))}
