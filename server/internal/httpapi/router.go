@@ -275,7 +275,8 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 
 		if repository == nil {
 			result.Warnings = append(result.Warnings, "PostgreSQL catalog persistence unavailable")
-			result.Data, next, hasMore := paginateDiscoveredServices(result.Data, limit, cursor)
+			data, next, hasMore := paginateDiscoveredServices(result.Data, limit, cursor)
+			result.Data = data
 			result.NextCursor = encodeTelemetryServiceCursor(next)
 			result.HasMore = hasMore
 		} else {
