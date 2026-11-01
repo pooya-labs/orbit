@@ -98,7 +98,7 @@ go vet ./...
 go build ./cmd/orbit-api
 ```
 
-GitHub Actions runs the web checks and Go tests against a real PostgreSQL service container.
+GitHub Actions runs web typecheck/build, Go tests against a real PostgreSQL service container, and a Docker Compose smoke test for the optional local telemetry backends.
 
 ## Repository map
 
@@ -118,7 +118,7 @@ See [docs/roadmap.md](docs/roadmap.md), [docs/architecture.md](docs/architecture
 
 ## Release status
 
-The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview adds a verified browser source switch between demo fixtures and a configured ORBIT API. Live telemetry ingestion, authentication, and hosted backend deployment are not yet implemented.
+The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview added a verified browser source switch between demo fixtures and a configured ORBIT API. The v0.4.0 preview adds an optional local OTLP pipeline backed by Prometheus, Loki, and Tempo. The Go API is not instrumented yet, the dashboard does not query the telemetry stores, and authentication/hosted backend deployment remain future milestones.
 
 ## License
 
