@@ -71,8 +71,8 @@ func (r *Repository) CreateWorkspace(ctx context.Context, input store.CreateWork
 		INSERT INTO workspace_audit_events (
 			workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, details
 		)
-		VALUES ($1::uuid, $2, $3, 'workspace.created', 'workspace', $1, '{}'::jsonb)
-	`, workspace.ID, input.OwnerIssuer, input.OwnerSubject); err != nil {
+		VALUES ($1::uuid, $2, $3, 'workspace.created', 'workspace', $4, '{}'::jsonb)
+	`, workspace.ID, input.OwnerIssuer, input.OwnerSubject, workspace.ID); err != nil {
 		return store.Workspace{}, fmt.Errorf("record workspace creation audit event: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
