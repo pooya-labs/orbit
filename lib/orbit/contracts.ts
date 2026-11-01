@@ -105,6 +105,8 @@ export interface TelemetryServicesResponse {
   queried_at: string;
   sources_queried: TelemetryBackend[];
   warnings?: string[];
+  next_cursor?: string;
+  has_more: boolean;
   data: DiscoveredTelemetryService[];
 }
 
