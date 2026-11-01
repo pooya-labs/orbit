@@ -37,7 +37,7 @@ CREATE TABLE workload_identity_audit_events (
     actor_issuer TEXT NOT NULL CHECK (length(actor_issuer) BETWEEN 1 AND 512),
     actor_subject TEXT NOT NULL CHECK (length(actor_subject) BETWEEN 1 AND 512),
     action TEXT NOT NULL CHECK (action IN (
-        'workload.created', 'workload.disabled', 'workload.revoked',
+        'workload.created', 'workload.enabled', 'workload.disabled', 'workload.revoked',
         'workload.grant.created', 'workload.grant.revoked'
     )),
     details JSONB NOT NULL DEFAULT '{}'::jsonb
