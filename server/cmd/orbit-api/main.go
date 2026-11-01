@@ -14,11 +14,18 @@ import (
 	"github.com/pooya16pg-spec/orbit/server/internal/httpapi"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/store/postgres"
+	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 )
 
 func main() {
 	cfg := config.Load()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	telemetryClient, err := telemetry.NewClient(cfg.PrometheusURL, cfg.LokiURL, cfg.TempoURL)
+	if err != nil {
+		logger.Error("telemetry backend configuration is invalid", "error", err)
+		os.Exit(1)
+	}
 
 	var repository store.Repository
 	if cfg.DatabaseURL != "" {
@@ -37,7 +44,10 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewHandler(httpapi.Config{Version: cfg.Version, Environment: cfg.Environment, AllowedOrigins: cfg.AllowedOrigins}, repository, logger),
+		Handler: httpapi.NewHandler(httpapi.Config{
+			Version: cfg.Version, Environment: cfg.Environment, AllowedOrigins: cfg.AllowedOrigins,
+			Telemetry: telemetryClient,
+		}, repository, logger),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
