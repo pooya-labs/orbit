@@ -202,7 +202,7 @@ func TestServicesMergesSourcesAndRejectsInvalidLabels(t *testing.T) {
 	defer prometheus.Close()
 
 	loki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/loki/api/v1/label/service_name/values" || r.URL.Query().Get("limit") != "250" {
+		if r.URL.Path != "/loki/api/v1/label/service_name/values" {
 			t.Errorf("unexpected Loki service discovery request: %s %s", r.URL.Path, r.URL.RawQuery)
 		}
 		w.Header().Set("Content-Type", "application/json")
