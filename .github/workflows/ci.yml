@@ -41,8 +41,10 @@ jobs:
         with:
           go-version: "1.24.x"
 
-      - name: Resolve and lock Go modules
-        run: go mod tidy
+      - name: Verify committed Go module lock
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
 
       - name: Test
         run: go test -race ./...
@@ -52,14 +54,6 @@ jobs:
 
       - name: Build
         run: go build -trimpath -o /tmp/orbit-api ./cmd/orbit-api
-
-      - name: Print resolved module lock for repository bootstrap
-        if: always()
-        run: |
-          echo '--- GO.MOD ---'
-          cat go.mod
-          echo '--- GO.SUM ---'
-          cat go.sum
 
   web:
     name: Web typecheck and production build
