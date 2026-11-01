@@ -79,7 +79,7 @@ jobs:
               && curl -fsS http://127.0.0.1:3100/ready >/dev/null \
               && curl -fsS http://127.0.0.1:3200/ready >/dev/null \
               && curl -fsS http://127.0.0.1:13133/ >/dev/null \
-              && curl -fsS http://127.0.0.1:8081/healthz >/dev/null \\
+              && curl -fsS http://127.0.0.1:8081/healthz >/dev/null  \
               && curl -fsS http://127.0.0.1:8080/health/ready >/dev/null; then
               ready=1
               break
