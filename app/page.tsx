@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getMetadata, listIncidents, listServices } from "../lib/orbit/client";
+import type { ApiMetadata, IncidentSummary, ServiceSummary } from "../lib/orbit/contracts";
+import { chartArea, chartPoints, demoIncidents, demoServices } from "../lib/orbit/demo";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -39,7 +42,7 @@ import {
   Zap,
 } from "lucide-react";
 
-type ServiceState = "Operational" | "Degraded" | "Incident";
+type ServiceState = "Operational" | "Degraded" | "Incident" | "Unknown";
 
 type Service = {
   name: string;
@@ -52,13 +55,83 @@ type Service = {
   tone: string;
 };
 
-const services: Service[] = [
-  { name: "api-gateway", description: "Edge request router", region: "eu-central-1", latency: "42 ms", errorRate: "0.03%", state: "Operational", initials: "AG", tone: "blue" },
-  { name: "identity-core", description: "Authentication service", region: "eu-central-1", latency: "68 ms", errorRate: "0.08%", state: "Operational", initials: "ID", tone: "violet" },
-  { name: "billing-engine", description: "Payments & invoicing", region: "eu-west-1", latency: "184 ms", errorRate: "1.42%", state: "Degraded", initials: "BE", tone: "amber" },
-  { name: "event-stream", description: "Async event processing", region: "eu-central-1", latency: "31 ms", errorRate: "0.01%", state: "Operational", initials: "ES", tone: "teal" },
-  { name: "search-indexer", description: "Search infrastructure", region: "us-east-1", latency: "—", errorRate: "—", state: "Incident", initials: "SI", tone: "rose" },
-];
+
+type SourceMode = "demo" | "api";
+type IncidentRow = {
+  id: string;
+  title: string;
+  serviceName: string;
+  region: string;
+  severityLabel: string;
+  severityTone: "critical" | "warning";
+  statusLabel: string;
+  timeAgo: string;
+  source: string;
+};
+
+const serviceTones = ["blue", "violet", "amber", "teal", "rose"];
+
+function mapApiService(item: ServiceSummary, index: number): Service {
+  const state: ServiceState =
+    item.status === "operational" ? "Operational" :
+    item.status === "degraded" ? "Degraded" :
+    item.status === "incident" ? "Incident" : "Unknown";
+  const initials = item.name.split(/[-_ ]+/).slice(0, 2)
+    .map((part) => part.slice(0, 1).toUpperCase()).join("");
+  return {
+    name: item.name,
+    description: item.description || item.environment,
+    region: item.region || "—",
+    latency: item.latency_p95_ms === null ? "—" : `${Math.round(item.latency_p95_ms)} ms`,
+    errorRate: item.error_rate === null ? "—" : `${(item.error_rate * 100).toFixed(2)}%`,
+    state,
+    initials: initials || "SV",
+    tone: serviceTones[index % serviceTones.length],
+  };
+}
+
+function formatAge(timestamp: string): string {
+  const elapsed = Math.max(0, Date.now() - new Date(timestamp).getTime());
+  if (!Number.isFinite(elapsed)) return "time unavailable";
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  return `${Math.floor(hours / 24)} d ago`;
+}
+
+function toIncidentRow(
+  item: IncidentSummary,
+  services: ServiceSummary[],
+): IncidentRow {
+  const service = services.find((candidate) => candidate.id === item.service_id);
+  return {
+    id: item.id,
+    title: item.title,
+    serviceName: item.service_name,
+    region: service?.region ?? "region unavailable",
+    severityLabel: item.severity.toUpperCase(),
+    severityTone: item.severity === "critical" || item.severity === "high" ? "critical" : "warning",
+    statusLabel: item.status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    timeAgo: formatAge(item.started_at),
+    source: item.source,
+  };
+}
+
+function toDemoIncidentRow(item: (typeof demoIncidents)[number]): IncidentRow {
+  return {
+    id: item.id,
+    title: item.title,
+    serviceName: item.serviceName,
+    region: item.region,
+    severityLabel: item.severity.toUpperCase(),
+    severityTone: item.severity === "critical" ? "critical" : "warning",
+    statusLabel: item.status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    timeAgo: formatAge(item.startedAt),
+    source: item.source,
+  };
+}
 
 type NavItem = { label: string; icon: LucideIcon; count?: string; alert?: boolean };
 type NavGroup = { label: string; items: NavItem[] };
@@ -69,7 +142,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Overview", icon: Gauge },
       { label: "Service map", icon: Network },
-      { label: "Services", icon: Boxes, count: "12" },
+      { label: "Services", icon: Boxes },
       { label: "Infrastructure", icon: Server },
     ],
   },
@@ -79,7 +152,7 @@ const navGroups: NavGroup[] = [
       { label: "Metrics", icon: Activity },
       { label: "Traces", icon: Workflow },
       { label: "Logs", icon: TerminalSquare },
-      { label: "Incidents", icon: AlertTriangle, count: "2", alert: true },
+      { label: "Incidents", icon: AlertTriangle },
     ],
   },
   {
@@ -91,11 +164,8 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-const chartPoints = "0,118 26,110 52,114 78,92 104,99 130,77 156,84 182,72 208,88 234,62 260,70 286,55 312,68 338,45 364,51 390,37 416,48 442,31 468,39 494,20 520,34 546,23 572,29 598,12";
-const chartArea = `0,136 ${chartPoints} 598,136`;
-
 function StatusDot({ state }: { state: ServiceState }) {
-  return <span className={`status-dot ${state.toLowerCase()}`} aria-label={state} />;
+  return <span className={`status-dot ${state.toLowerCase()}`} role="img" aria-label={state} />;
 }
 
 function MetricCard({
@@ -145,14 +215,90 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [showAllServices, setShowAllServices] = useState(false);
+  const [sourceMode, setSourceMode] = useState<SourceMode>("demo");
+  const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
+  const [apiUrlInput, setApiUrlInput] = useState(
+    process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "http://localhost:8080",
+  );
+  const [apiStatus, setApiStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
+  const [apiError, setApiError] = useState("");
+  const [apiMetadata, setApiMetadata] = useState<ApiMetadata | null>(null);
+  const [apiServices, setApiServices] = useState<ServiceSummary[]>([]);
+  const [apiIncidents, setApiIncidents] = useState<IncidentSummary[]>([]);
 
+  useEffect(() => {
+    try {
+      const savedUrl = window.localStorage.getItem("orbit.apiBaseUrl");
+      if (savedUrl) setApiUrlInput(savedUrl);
+    } catch {
+      // Storage may be unavailable in a restricted browser context.
+    }
+  }, []);
+
+  const connectSource = async () => {
+    let endpoint: string;
+    try {
+      const parsed = new URL(apiUrlInput.trim());
+      if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password ||
+          parsed.search || parsed.hash || (parsed.pathname !== "/" && parsed.pathname !== "")) {
+        throw new Error("Enter an API base URL such as http://localhost:8080.");
+      }
+      endpoint = parsed.origin;
+    } catch (error) {
+      setApiStatus("error");
+      setApiError(error instanceof Error ? error.message : "Enter a valid API URL.");
+      return;
+    }
+
+    setApiStatus("connecting");
+    setApiError("");
+    try {
+      const [metadata, serviceItems, incidentItems] = await Promise.all([
+        getMetadata(undefined, endpoint),
+        listServices(undefined, endpoint),
+        listIncidents(undefined, undefined, endpoint),
+      ]);
+      setApiMetadata(metadata);
+      setApiServices(serviceItems);
+      setApiIncidents(incidentItems);
+      setApiUrlInput(endpoint);
+      setSourceMode("api");
+      setApiStatus("connected");
+      try {
+        window.localStorage.setItem("orbit.apiBaseUrl", endpoint);
+      } catch {
+        // A working connection should not depend on local storage support.
+      }
+      setSourcePanelOpen(false);
+    } catch (error) {
+      setApiStatus("error");
+      setApiError(error instanceof Error ? error.message : "Unable to connect to the ORBIT API.");
+    }
+  };
+
+  const sourceServices = sourceMode === "api" ? apiServices.map(mapApiService) : demoServices;
   const filteredServices = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const matching = services.filter((service) =>
+    const matching = sourceServices.filter((service) =>
       `${service.name} ${service.description} ${service.region}`.toLowerCase().includes(query),
     );
     return showAllServices ? matching : matching.slice(0, 4);
-  }, [search, showAllServices]);
+  }, [search, showAllServices, sourceServices]);
+
+  const incidentRows = useMemo(() => {
+    if (sourceMode === "api") {
+      return apiIncidents
+        .filter((incident) => incident.status !== "resolved")
+        .map((incident) => toIncidentRow(incident, apiServices));
+    }
+    return demoIncidents.map(toDemoIncidentRow);
+  }, [sourceMode, apiIncidents, apiServices]);
+
+  const disconnectSource = () => {
+    setSourceMode("demo");
+    setApiStatus("idle");
+    setApiError("");
+  };
 
   const chooseNav = (label: string) => {
     setActiveNav(label);
@@ -219,8 +365,13 @@ export default function Home() {
               <input aria-label="Search services" placeholder="Search services..." value={search} onChange={(event) => setSearch(event.target.value)} />
               <kbd>/</kbd>
             </label>
-            <button className={`icon-button refresh-button ${refreshing ? "is-on" : ""}`} aria-label={refreshing ? "Pause auto refresh" : "Resume auto refresh"} title={refreshing ? "Pause auto refresh" : "Resume auto refresh"} onClick={() => setRefreshing(!refreshing)}>
-              {refreshing ? <Pause size={16} /> : <Play size={16} />}
+            <button
+              className={`icon-button refresh-button ${sourceMode === "api" ? "is-on" : refreshing ? "is-on" : ""}`}
+              aria-label={sourceMode === "api" ? "Refresh API data" : refreshing ? "Pause demo refresh" : "Resume demo refresh"}
+              title={sourceMode === "api" ? "Refresh API data" : refreshing ? "Pause demo refresh" : "Resume demo refresh"}
+              onClick={() => sourceMode === "api" ? void connectSource() : setRefreshing(!refreshing)}
+            >
+              {sourceMode === "api" ? <RefreshCw size={16} /> : refreshing ? <Pause size={16} /> : <Play size={16} />}
             </button>
             <button className="icon-button notification-button" aria-label="Notifications"><Bell size={17} /><i /></button>
             <div className="topbar-divider" />
@@ -231,12 +382,12 @@ export default function Home() {
         <div className="content-wrap">
           <div className="page-heading">
             <div>
-              <div className="eyebrow"><span className="eyebrow-line" /> SYSTEM OVERVIEW <span className="demo-tag">DEMO ENVIRONMENT</span></div>
+              <div className="eyebrow"><span className="eyebrow-line" /> SYSTEM OVERVIEW <span className="demo-tag">{sourceMode === "api" ? "API CONNECTED" : "DEMO ENVIRONMENT"}</span></div>
               <h1>{activeNav === "Overview" ? "Good morning, team." : activeNav}</h1>
               <p className="page-subtitle">Here&apos;s what&apos;s happening across your infrastructure.</p>
             </div>
             <div className="heading-actions">
-              <div className="last-updated"><span className={refreshing ? "pulse-dot" : "idle-dot"} /> {refreshing ? "Auto-refresh paused in demo" : "Manual refresh mode"}</div>
+              <div className="last-updated"><span className={refreshing ? "pulse-dot" : "idle-dot"} /> {sourceMode === "api" ? `Connected · ${apiMetadata?.environment ?? "API"}` : refreshing ? "Auto-refresh paused in demo" : "Manual refresh mode"}</div>
               <button className="button-secondary" onClick={() => setRange("24 hours")}><Clock3 size={15} /> Last 24 hours <ChevronDown size={14} /></button>
               <button className="button-primary" onClick={() => chooseNav("Service map")}><Network size={15} /> Explore topology</button>
             </div>
@@ -244,17 +395,43 @@ export default function Home() {
 
           <div className="notice-strip">
             <div className="notice-icon"><Radio size={16} /></div>
-            <div><strong>You're viewing a sample environment.</strong><span> Metrics, services, and incidents below are illustrative demo data — no production systems are connected.</span></div>
-            <button onClick={() => chooseNav("Settings")}>Connect a source <ArrowUpRight size={14} /></button>
+            {sourceMode === "demo" ? (
+              <div><strong>You're viewing a sample environment.</strong><span> Metrics, services, and incidents are illustrative demo data — no production systems are connected.</span></div>
+            ) : (
+              <div><strong>Connected to {apiMetadata?.name ?? "ORBIT API"}.</strong><span> Services and incidents are read from {apiMetadata?.environment ?? "the selected API"}; each record keeps its own data-source label.</span></div>
+            )}
+            <button onClick={() => setSourcePanelOpen(!sourcePanelOpen)}>{sourceMode === "api" ? "Manage source" : "Connect a source"} <ArrowUpRight size={14} /></button>
           </div>
 
+          {sourcePanelOpen && (
+            <section className="panel source-setup" aria-labelledby="source-setup-title">
+              <div className="source-setup-copy">
+                <h2 id="source-setup-title">Connect an ORBIT API</h2>
+                <p>Use a read-only API endpoint. For local development, start Docker Compose and use http://localhost:8080.</p>
+              </div>
+              <form className="source-setup-form" onSubmit={(event) => { event.preventDefault(); void connectSource(); }}>
+                <label htmlFor="orbit-api-url">API base URL</label>
+                <input id="orbit-api-url" type="url" autoComplete="url" spellCheck={false} value={apiUrlInput} onChange={(event) => setApiUrlInput(event.target.value)} placeholder="http://localhost:8080" />
+                <div className="source-setup-actions">
+                  <button className="button-primary" type="submit" disabled={apiStatus === "connecting"}>{apiStatus === "connecting" ? "Connecting…" : "Test and connect"}</button>
+                  {sourceMode === "api" && <button className="button-secondary" type="button" onClick={disconnectSource}>Switch to demo</button>}
+                </div>
+              </form>
+              {apiError && <p className="source-error" role="alert">{apiError}</p>}
+              {apiStatus === "connected" && <p className="source-success" role="status">Connection verified. {apiServices.length} services and {apiIncidents.length} incidents loaded.</p>}
+            </section>
+          )}
+
+{sourceMode === "demo" ? (
           <section className="metrics-grid" aria-label="Key metrics">
             <MetricCard label="REQUESTS / MIN" value="24.8k" change="12.6%" direction="down" detail="vs. previous period" icon={Activity} accent="cyan" />
             <MetricCard label="P95 LATENCY" value={<>142<span>ms</span></>} change="8.2%" direction="down" detail="vs. previous period" icon={Zap} accent="violet" />
             <MetricCard label="ERROR RATE" value={<>0.24<span>%</span></>} change="0.04%" direction="up" detail="vs. previous period" icon={AlertTriangle} accent="amber" />
             <MetricCard label="ACTIVE SERVICES" value={<>12<span>/ 14</span></>} change="2 degraded" direction="up" detail="across 3 regions" icon={Boxes} accent="green" />
           </section>
+          ) : null}
 
+{sourceMode === "demo" ? (
           <section className="panel traffic-panel">
             <div className="panel-header">
               <div><div className="panel-title-line"><h2>Traffic & performance</h2><span className="live-indicator"><i /> SAMPLE</span></div><p>Incoming request volume across all services</p></div>
@@ -281,11 +458,17 @@ export default function Home() {
             </div>
             <div className="chart-legend"><span><i className="legend-line" /> Requests / min</span><span><i className="legend-dash" /> Previous period</span><span className="chart-footnote">Illustrative telemetry · {range}</span></div>
           </section>
+          ) : (
+            <section className="panel source-placeholder" aria-labelledby="metrics-unavailable-title">
+              <div className="source-placeholder-icon"><Activity size={18} /></div>
+              <div><h2 id="metrics-unavailable-title">Metrics are the next data pipeline milestone</h2><p>The API currently exposes service and incident inventories. Request-rate charts, latency time series, and metric freshness will appear after telemetry ingestion is implemented.</p></div>
+            </section>
+          )}
 
           <div className="lower-grid">
             <section className="panel services-panel">
               <div className="panel-header compact">
-                <div><div className="panel-title-line"><h2>Service health</h2><span className="subtle-count">12 monitored</span></div><p>Health across your distributed services</p></div>
+                <div><div className="panel-title-line"><h2>Service health</h2><span className="subtle-count">{sourceServices.length} monitored</span></div><p>Health across your distributed services</p></div>
                 <button className="text-action" onClick={() => setShowAllServices(!showAllServices)}>{showAllServices ? "Show less" : "View all"} <ArrowUpRight size={14} /></button>
               </div>
               <div className="service-table">
@@ -300,33 +483,37 @@ export default function Home() {
                 ))}
                 {filteredServices.length === 0 && <div className="empty-state">No services match “{search}”.</div>}
               </div>
-              <div className="panel-footer"><span>Showing {filteredServices.length} of 12 services</span><span className="demo-footnote">DEMO DATA</span></div>
+              <div className="panel-footer"><span>Showing {filteredServices.length} of {sourceServices.length} services</span><span className="demo-footnote">{sourceMode === "api" ? "API DATA" : "DEMO DATA"}</span></div>
             </section>
 
             <section className="panel incidents-panel">
               <div className="panel-header compact">
-                <div><div className="panel-title-line"><h2>Active incidents</h2><span className="incident-count">2</span></div><p>Issues that may need attention</p></div>
+                <div><div className="panel-title-line"><h2>Active incidents</h2><span className="incident-count">{incidentRows.length}</span></div><p>Issues that may need attention</p></div>
                 <button className="icon-button subtle-more" aria-label="Incident options"><MoreHorizontal size={18} /></button>
               </div>
               <div className="incident-list">
-                <article className="incident-item">
-                  <div className="incident-severity critical"><AlertTriangle size={15} /></div>
-                  <div className="incident-copy"><div className="incident-title-row"><strong>Search indexing stalled</strong><span className="severity-label critical-text">CRITICAL</span></div><p>search-indexer · us-east-1</p><div className="incident-meta"><Clock3 size={12} /> 14 min ago <span>·</span> <span className="incident-open">Investigating</span></div></div>
-                </article>
-                <article className="incident-item">
-                  <div className="incident-severity warning"><AlertTriangle size={15} /></div>
-                  <div className="incident-copy"><div className="incident-title-row"><strong>Elevated payment latency</strong><span className="severity-label warning-text">WARNING</span></div><p>billing-engine · eu-west-1</p><div className="incident-meta"><Clock3 size={12} /> 38 min ago <span>·</span> <span className="incident-open">Monitoring</span></div></div>
-                </article>
+                {incidentRows.length > 0 ? incidentRows.map((incident) => (
+                  <article className="incident-item" key={incident.id}>
+                    <div className={`incident-severity ${incident.severityTone}`}><AlertTriangle size={15} /></div>
+                    <div className="incident-copy">
+                      <div className="incident-title-row"><strong>{incident.title}</strong><span className={`severity-label ${incident.severityTone === "critical" ? "critical-text" : "warning-text"}`}>{incident.severityLabel}</span></div>
+                      <p>{incident.serviceName} · {incident.region}</p>
+                      <div className="incident-meta"><Clock3 size={12} /> {incident.timeAgo} <span>·</span> <span className="incident-open">{incident.statusLabel}</span></div>
+                    </div>
+                  </article>
+                )) : <div className="empty-state">No active incidents reported by this source.</div>}
               </div>
               <button className="incident-link" onClick={() => chooseNav("Incidents")}>View incident timeline <ArrowUpRight size={14} /></button>
             </section>
           </div>
 
+{sourceMode === "demo" ? (
           <section className="bottom-grid">
             <div className="bottom-stat"><div className="bottom-icon green"><ShieldCheck size={17} /></div><div><span>AVAILABILITY SLO</span><strong>99.94%</strong></div><span className="bottom-note good"><Check size={13} /> Within target</span></div>
             <div className="bottom-stat"><div className="bottom-icon violet"><GitBranch size={17} /></div><div><span>DEPLOYMENTS TODAY</span><strong>08</strong></div><span className="bottom-note">Across 4 services</span></div>
             <div className="bottom-stat"><div className="bottom-icon blue"><Database size={17} /></div><div><span>DATA INGESTION</span><strong>2.4 MB/s</strong></div><span className="bottom-note"><Signal size={13} /> Sample stream</span></div>
           </section>
+          ) : null}
 
           <footer className="page-footer"><span>ORBIT <b>·</b> SYSTEMS OBSERVATORY</span><span><Globe2 size={12} /> All systems are illustrative <i /> <span className="footer-version">v0.2.0</span></span></footer>
         </div>
