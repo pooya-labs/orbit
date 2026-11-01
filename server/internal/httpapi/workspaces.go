@@ -81,6 +81,14 @@ type alertRuleListResponse struct {
 	Data []store.AlertRule `json:"data"`
 }
 
+type alertRuleStateResponse struct {
+	Data store.AlertRuleState `json:"data"`
+}
+
+type alertRuleEventsResponse struct {
+	Data []store.AlertRuleEvent `json:"data"`
+}
+
 func alertRuleError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, operation string, err error) {
 	switch {
 	case errors.Is(err, store.ErrWorkspaceMembershipNotFound),
@@ -463,6 +471,7 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 	// Alert rules are workspace-owned definitions. Their evaluator and notification
 	// adapters are separate components; these routes only manage persisted rules.
 	alertRuleRepository, alertRuleRepositoryAvailable := repository.(store.AlertRuleRepository)
+	alertRuleStateRepository, alertRuleStateRepositoryAvailable := repository.(store.AlertRuleStateRepository)
 	alertRuleUnavailable := func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusServiceUnavailable, "alert_rule_store_unavailable", "Alert rule storage is not available")
 	}
@@ -630,6 +639,56 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	})
+
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}/state", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !alertRuleStateRepositoryAvailable || alertRuleStateRepository == nil {
+			alertRuleUnavailable(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		state, err := alertRuleStateRepository.GetWorkspaceAlertRuleState(ctx,
+			r.PathValue("workspaceID"), r.PathValue("ruleID"), principal.Issuer, principal.Subject)
+		if err != nil {
+			alertRuleError(w, r, logger, "read workspace alert rule state failed", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, alertRuleStateResponse{Data: state})
+	})
+
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}/events", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !alertRuleStateRepositoryAvailable || alertRuleStateRepository == nil {
+			alertRuleUnavailable(w, r)
+			return
+		}
+		limit, err := parseAlertRuleLimit(r)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_limit", err.Error())
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		events, err := alertRuleStateRepository.ListWorkspaceAlertRuleEvents(ctx,
+			r.PathValue("workspaceID"), r.PathValue("ruleID"), principal.Issuer, principal.Subject, limit)
+		if err != nil {
+			alertRuleError(w, r, logger, "list workspace alert rule events failed", err)
+			return
+		}
+		if events == nil {
+			events = []store.AlertRuleEvent{}
+		}
+		writeJSON(w, http.StatusOK, alertRuleEventsResponse{Data: events})
 	})
 
 	registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/services", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
