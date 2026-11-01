@@ -53,6 +53,14 @@ jobs:
       - name: Build
         run: go build -trimpath -o /tmp/orbit-api ./cmd/orbit-api
 
+      - name: Print resolved module lock for repository bootstrap
+        if: always()
+        run: |
+          echo '--- GO.MOD ---'
+          cat go.mod
+          echo '--- GO.SUM ---'
+          cat go.sum
+
   web:
     name: Web typecheck and production build
     runs-on: ubuntu-latest
