@@ -56,8 +56,9 @@ jobs:
         run: go build -trimpath -o /tmp/orbit-api ./cmd/orbit-api
 
   observability:
-    name: Local telemetry stack smoke test
+    name: Local telemetry pipeline end-to-end smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,8 +66,8 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose --profile observability config --quiet
 
-      - name: Start telemetry backends
-        run: docker compose --profile observability up -d prometheus loki tempo otel-collector
+      - name: Start telemetry stack and instrumented demo
+        run: docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo
 
       - name: Wait for telemetry services
         shell: bash
@@ -77,7 +78,8 @@ jobs:
             if curl -fsS http://127.0.0.1:9090/-/ready >/dev/null \
               && curl -fsS http://127.0.0.1:3100/ready >/dev/null \
               && curl -fsS http://127.0.0.1:3200/ready >/dev/null \
-              && curl -fsS http://127.0.0.1:13133/ >/dev/null; then
+              && curl -fsS http://127.0.0.1:13133/ >/dev/null \\
+              && curl -fsS http://127.0.0.1:8081/healthz >/dev/null; then
               ready=1
               break
             fi
@@ -87,6 +89,9 @@ jobs:
             docker compose --profile observability logs --no-color
             exit 1
           fi
+
+      - name: Verify OTLP metrics, logs, and traces end to end
+        run: python3 scripts/observability_smoke.py
 
       - name: Verify Prometheus scrapes the ORBIT Collector
         shell: bash
@@ -105,7 +110,7 @@ jobs:
           docker compose --profile observability logs --no-color
           exit 1
 
-      - name: Stop telemetry backends
+      - name: Stop telemetry stack and demo
         if: always()
         run: docker compose --profile observability down -v --remove-orphans
 
