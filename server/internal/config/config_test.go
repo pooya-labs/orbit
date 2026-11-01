@@ -86,6 +86,7 @@ func TestValidateRejectsUnsafeRateLimitsAndRoleClaimNames(t *testing.T) {
 		{name: "zero rate limit", edit: func(c *Config) { c.RateLimitPerMinute = 0 }},
 		{name: "excessive rate limit", edit: func(c *Config) { c.RateLimitPerMinute = 10001 }},
 		{name: "invalid role claim", edit: func(c *Config) { c.OIDCRolesClaim = "roles[]" }},
+		{name: "nested role path is unsupported", edit: func(c *Config) { c.OIDCRolesClaim = "realm_access.roles" }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := base
