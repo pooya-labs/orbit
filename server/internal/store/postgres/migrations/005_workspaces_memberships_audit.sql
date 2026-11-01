@@ -52,3 +52,14 @@ $$;
 CREATE TRIGGER workspace_audit_events_append_only
     BEFORE UPDATE OR DELETE ON workspace_audit_events
     FOR EACH ROW EXECUTE FUNCTION prevent_workspace_audit_mutation();
+
+CREATE FUNCTION prevent_workspace_audit_truncate() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'workspace audit events are append-only';
+END;
+$$;
+
+CREATE TRIGGER workspace_audit_events_no_truncate
+    BEFORE TRUNCATE ON workspace_audit_events
+    FOR EACH STATEMENT EXECUTE FUNCTION prevent_workspace_audit_truncate();
