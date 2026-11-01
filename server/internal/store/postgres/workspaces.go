@@ -21,10 +21,10 @@ var (
 )
 
 func validateWorkspacePrincipal(issuer, subject string) error {
-	if strings.TrimSpace(issuer) == "" || len(issuer) > 512 {
+	if strings.TrimSpace(issuer) == "" || strings.TrimSpace(issuer) != issuer || len(issuer) > 512 {
 		return fmt.Errorf("workspace principal issuer must contain between 1 and 512 characters")
 	}
-	if strings.TrimSpace(subject) == "" || len(subject) > 512 {
+	if strings.TrimSpace(subject) == "" || strings.TrimSpace(subject) != subject || len(subject) > 512 {
 		return fmt.Errorf("workspace principal subject must contain between 1 and 512 characters")
 	}
 	return nil
