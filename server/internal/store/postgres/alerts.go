@@ -304,14 +304,15 @@ func (r *Repository) UpdateWorkspaceAlertRule(ctx context.Context, input store.U
 	if err := requireAlertRuleMutationRole(ctx, tx, input.WorkspaceID, input.ActorIssuer, input.ActorSubject); err != nil {
 		return store.AlertRule{}, err
 	}
-	var exists bool
+	var lockedID string
 	if err := tx.QueryRow(ctx, `
-		SELECT EXISTS(SELECT 1 FROM alert_rules WHERE id = $1::uuid AND workspace_id = $2::uuid FOR UPDATE)
-	`, input.RuleID, input.WorkspaceID).Scan(&exists); err != nil {
-		return store.AlertRule{}, fmt.Errorf("lock alert rule for update: %w", err)
-	}
-	if !exists {
+		SELECT id::text FROM alert_rules
+		WHERE id = $1::uuid AND workspace_id = $2::uuid
+		FOR UPDATE
+	`, input.RuleID, input.WorkspaceID).Scan(&lockedID); errors.Is(err, pgx.ErrNoRows) {
 		return store.AlertRule{}, store.ErrAlertRuleNotFound
+	} else if err != nil {
+		return store.AlertRule{}, fmt.Errorf("lock alert rule for update: %w", err)
 	}
 	rule, err := scanAlertRule(tx.QueryRow(ctx, `
 		UPDATE alert_rules
