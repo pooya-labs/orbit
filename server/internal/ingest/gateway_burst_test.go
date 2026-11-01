@@ -1,7 +1,8 @@
 package ingest
 
 import (
-	"bytes"\n\t"context"
+	"bytes"
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
