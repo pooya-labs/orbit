@@ -20,11 +20,36 @@ import (
 type fakeRepository struct {
 	services  []store.Service
 	incidents []store.Incident
+	catalog   []store.TelemetryService
 	pingErr   error
 	listErr   error
+	catalogErr error
 }
 
 func (f *fakeRepository) Ping(context.Context) error { return f.pingErr }
+
+func (f *fakeRepository) UpsertTelemetryServices(_ context.Context, services []store.TelemetryService) ([]store.TelemetryService, error) {
+	if f.catalogErr != nil {
+		return nil, f.catalogErr
+	}
+	now := time.Now().UTC()
+	f.catalog = append([]store.TelemetryService(nil), services...)
+	for index := range f.catalog {
+		item := &f.catalog[index]
+		if item.ID == "" {
+			item.ID = "catalog-" + item.Name
+		}
+		if item.FirstSeenAt.IsZero() {
+			item.FirstSeenAt = now
+		}
+		item.LastSeenAt = now
+		item.LastDiscoveredAt = now
+		if item.ResourceAttributes == nil {
+			item.ResourceAttributes = map[string]any{}
+		}
+	}
+	return f.catalog, nil
+}
 func (f *fakeRepository) ListServices(context.Context) ([]store.Service, error) {
 	return f.services, f.listErr
 }
@@ -294,6 +319,12 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	}
 	if len(catalog.Data) != 1 || catalog.Data[0].Name != "orbit-telemetry-demo" || len(catalog.Data[0].Sources) != 3 {
 		t.Fatalf("unexpected merged service catalog: %+v", catalog)
+	}
+	if len(repository.catalog) != 1 || repository.catalog[0].Name != "orbit-telemetry-demo" || len(repository.catalog[0].Sources) != 3 {
+		t.Fatalf("expected service discovery to persist merged backend observations, got %+v", repository.catalog)
+	}
+	if catalog.Data[0].ID == "" || catalog.Data[0].FirstSeenAt.IsZero() || catalog.Data[0].LastDiscoveredAt.IsZero() {
+		t.Fatalf("expected persisted catalog metadata in response, got %+v", catalog.Data[0])
 	}
 }
 
