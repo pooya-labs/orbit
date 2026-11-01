@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -64,6 +65,16 @@ func decodeTelemetryServiceCursor(value string) (*store.TelemetryServiceCursor, 
 		return nil, fmt.Errorf("cursor identifier is invalid")
 	}
 	return &store.TelemetryServiceCursor{Name: parts[0], ID: parts[1]}, nil
+}
+
+func mapStoredTelemetryService(item store.TelemetryService) telemetry.DiscoveredService {
+	return telemetry.DiscoveredService{
+		ID: item.ID, Name: item.Name, Sources: item.Sources,
+		FirstSeenAt: item.FirstSeenAt, LastSeenAt: item.LastSeenAt,
+		LastDiscoveredAt: item.LastDiscoveredAt,
+		ResourceAttributes: item.ResourceAttributes,
+		ResourceAttributeSources: item.ResourceAttributeSources,
+	}
 }
 
 func paginateDiscoveredServices(
