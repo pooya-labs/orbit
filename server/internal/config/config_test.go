@@ -96,3 +96,15 @@ func TestValidateRejectsUnsafeRateLimitsAndRoleClaimNames(t *testing.T) {
 		})
 	}
 }
+
+
+func TestValidateRequiresExplicitEnvironment(t *testing.T) {
+	cfg := Config{RateLimitPerMinute: 120, OIDCRolesClaim: "roles"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() accepted an implicit runtime environment")
+	}
+	cfg.Environment = "development"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() rejected explicit development mode: %v", err)
+	}
+}
