@@ -461,4 +461,14 @@ func TestWorkloadIdentityWorkspaceGrantAuthorization(t *testing.T) {
  if err:=repository.SetWorkloadIdentityStatus(ctx,identity.ID,actorIssuer,actorSubject,"revoked");err!=nil{t.Fatalf("revoke workload identity: %v",err)}
  if _,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceA.ID,"metrics");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("revoked identity should be denied, got %v",err)}
  if err:=repository.SetWorkloadIdentityStatus(ctx,identity.ID,actorIssuer,actorSubject,"active");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("revoked identity must not be re-enabled, got %v",err)}
+ var denialCount int
+ if err:=repository.pool.QueryRow(ctx,`
+  SELECT COUNT(*) FROM workload_identity_audit_events
+  WHERE actor_issuer=$1 AND actor_subject=$2
+    AND action='workload.authorization.denied'
+    AND workspace_id IN ($3::uuid,$4::uuid)
+ `,identity.Issuer,identity.Subject,workspaceA.ID,workspaceB.ID).Scan(&denialCount);err!=nil{
+  t.Fatalf("count workload authorization denial audit events: %v",err)
+ }
+ if denialCount != 4 { t.Fatalf("denial audit events = %d, want 4",denialCount) }
 }
