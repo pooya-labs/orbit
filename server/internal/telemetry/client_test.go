@@ -75,7 +75,7 @@ func TestMetricsQueriesOnlyFixedPromQLAndReturnsFreshness(t *testing.T) {
 		}
 		query := r.URL.Query()
 		if query.Get("query") != `sum(rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
-			t.Fatalf("query = %q, want fixed service query, got %q", query.Get("query"))
+			t.Fatalf("unexpected service-scoped PromQL: %q", query.Get("query"))
 		}
 		if query.Get("step") != "1m" || query.Get("timeout") != "5s" || query.Get("limit") != "10" {
 			t.Fatalf("unexpected bounded query parameters: %v", query)
@@ -93,7 +93,7 @@ func TestMetricsQueriesOnlyFixedPromQLAndReturnsFreshness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Source != "prometheus" || result.Window != "1h" || result.Step != "1m" || result.Query != metricsQuery {
+	if result.Source != "prometheus" || result.Window != "1h" || result.Step != "1m" || result.Query != `sum(rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
 		t.Fatalf("unexpected query metadata: %+v", result)
 	}
 	var data []map[string]json.RawMessage
