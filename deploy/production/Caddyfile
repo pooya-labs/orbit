@@ -1,0 +1,19 @@
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$ORBIT_OTLP_HTTP_DOMAIN} {
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	reverse_proxy api:4319
+}
+
+{$ORBIT_OTLP_GRPC_DOMAIN} {
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	reverse_proxy h2c://api:4320
+}
