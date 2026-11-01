@@ -1,6 +1,35 @@
 export type ServiceStatus = "operational" | "degraded" | "incident" | "unknown";
 export type IncidentSeverity = "critical" | "high" | "medium" | "low";
 export type IncidentStatus = "open" | "investigating" | "monitoring" | "resolved";
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceMembershipSummary {
+  workspace_id: string;
+  role: "owner" | "administrator" | "operator" | "viewer" | string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IncidentTimelineEvent {
+  id: string;
+  workspace_id: string;
+  incident_id: string;
+  event_type: string;
+  from_status?: IncidentStatus;
+  to_status?: IncidentStatus;
+  comment?: string;
+  request_id?: string;
+  details?: Record<string, unknown>;
+  created_at: string;
+}
+
 export type DataSource = "demo_seed" | "live";
 
 export interface ServiceSummary {
