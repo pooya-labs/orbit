@@ -167,6 +167,42 @@ func TestRepositoryFailureIsSafe(t *testing.T) {
 	}
 }
 
+func TestCORSPreflightAllowsConfiguredOrigin(t *testing.T) {
+	handler := NewHandler(Config{AllowedOrigins: []string{"https://example.com"}}, nil, testLogger())
+	request := httptest.NewRequest(http.MethodOptions, "/api/v1/services", nil)
+	request.Header.Set("Origin", "https://example.com")
+	request.Header.Set("Access-Control-Request-Method", "GET")
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNoContent)
+	}
+	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+		t.Fatalf("allow origin = %q, want configured origin", got)
+	}
+	if !strings.Contains(recorder.Header().Get("Access-Control-Allow-Methods"), "GET") {
+		t.Fatal("expected GET to be allowed")
+	}
+}
+
+func TestCORSPreflightRejectsUnknownOrigin(t *testing.T) {
+	handler := NewHandler(Config{AllowedOrigins: []string{"https://example.com"}}, nil, testLogger())
+	request := httptest.NewRequest(http.MethodOptions, "/api/v1/services", nil)
+	request.Header.Set("Origin", "https://attacker.example")
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("unexpected allow origin header %q", got)
+	}
+}
+
 func TestUnknownRouteIsNotFound(t *testing.T) {
 	handler := NewHandler(Config{}, nil, testLogger())
 	recorder := httptest.NewRecorder()
