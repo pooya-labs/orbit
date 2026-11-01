@@ -388,9 +388,9 @@ export default function Home() {
         <div className="content-wrap">
           <div className="page-heading">
             <div>
-              <div className="eyebrow"><span className="eyebrow-line" /> SYSTEM OVERVIEW <span className="demo-tag">{sourceMode === "api" ? "API CONNECTED" : "DEMO ENVIRONMENT"}</span></div>
+              <div className="eyebrow"><span className="eyebrow-line" /> {telemetryView ? `LIVE ${telemetryView.toUpperCase()}` : "SYSTEM OVERVIEW"} <span className="demo-tag">{sourceMode === "api" ? "API CONNECTED" : "DEMO ENVIRONMENT"}</span></div>
               <h1>{activeNav === "Overview" ? "Good morning, team." : activeNav}</h1>
-              <p className="page-subtitle">Here&apos;s what&apos;s happening across your infrastructure.</p>
+              <p className="page-subtitle">{telemetryView ? `Query ${telemetryView.toLowerCase()} from the connected observability pipeline.` : "Here&apos;s what&apos;s happening across your infrastructure."}</p>
             </div>
             <div className="heading-actions">
               <div className="last-updated"><span className={refreshing ? "pulse-dot" : "idle-dot"} /> {sourceMode === "api" ? `Connected · ${apiMetadata?.environment ?? "API"}` : refreshing ? "Auto-refresh paused in demo" : "Manual refresh mode"}</div>
@@ -534,7 +534,7 @@ export default function Home() {
             </>
           )}
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> SYSTEMS OBSERVATORY</span><span><Globe2 size={12} /> {sourceMode === "api" ? "Service and incident inventory from connected API" : "All systems are illustrative"} <i /> <span className="footer-version">v0.6.0</span></span></footer>
+          <footer className="page-footer"><span>ORBIT <b>·</b> SYSTEMS OBSERVATORY</span><span><Globe2 size={12} /> {sourceMode === "api" ? "Service and incident inventory from connected API" : "All systems are illustrative"} <i /> <span className="footer-version">v0.7.0</span></span></footer>
         </div>
       </section>
     </main>
