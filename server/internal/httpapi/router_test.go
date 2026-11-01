@@ -50,6 +50,17 @@ func (f *fakeRepository) UpsertTelemetryServices(_ context.Context, services []s
 	}
 	return f.catalog, nil
 }
+
+func (f *fakeRepository) ListTelemetryServices(_ context.Context, limit int) ([]store.TelemetryService, error) {
+	if f.catalogErr != nil {
+		return nil, f.catalogErr
+	}
+	if limit > 0 && len(f.catalog) > limit {
+		return append([]store.TelemetryService(nil), f.catalog[:limit]...), nil
+	}
+	return append([]store.TelemetryService(nil), f.catalog...), nil
+}
+
 func (f *fakeRepository) ListServices(context.Context) ([]store.Service, error) {
 	return f.services, f.listErr
 }
