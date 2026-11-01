@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
   group: github-pages
-  cancel-in-progress: true
+  # Never cancel a deployment after it has been accepted by GitHub Pages.
+  # New pushes wait behind the active publish instead of orphaning its status.
+  cancel-in-progress: false
 
 jobs:
   build:
