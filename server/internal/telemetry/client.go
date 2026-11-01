@@ -147,6 +147,7 @@ type DiscoveredService struct {
 	LastSeenAt         time.Time      `json:"last_seen_at,omitempty"`
 	LastDiscoveredAt   time.Time      `json:"last_discovered_at,omitempty"`
 	ResourceAttributes map[string]any `json:"resource_attributes,omitempty"`
+	ResourceAttributeSources map[string][]string `json:"resource_attribute_sources,omitempty"`
 }
 
 type ServiceDiscoveryResult struct {
@@ -472,9 +473,9 @@ func (c *Client) Services(ctx context.Context, window QueryWindow) (ServiceDisco
 
 
 const (
-	maxResourceAttributeCount  = 32
+	maxResourceAttributeCount  = 16
 	maxResourceAttributeValues = 8
-	maxTempoAttributeWorkers   = 4
+	maxTempoAttributeWorkers   = 8
 )
 
 type ResourceAttributesResult struct {
@@ -684,7 +685,7 @@ func (c *Client) tempoResourceAttributes(ctx context.Context, window QueryWindow
 	}
 	sort.Strings(tagNames)
 	if len(tagNames) == maxResourceAttributeCount {
-		result.warnings = append(result.warnings, "tempo resource attributes capped at 32 keys")
+		result.warnings = append(result.warnings, "tempo resource attributes capped at 16 keys")
 	}
 	if len(tagNames) == 0 {
 		return result
