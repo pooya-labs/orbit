@@ -65,6 +65,11 @@ func TestBearerTokenRequiresOneUnambiguousCredential(t *testing.T) {
 		{name: "missing token", values: []string{"Bearer"}},
 		{name: "extra token", values: []string{"Bearer one two"}},
 		{name: "comma ambiguity", values: []string{"Bearer one,two"}},
+		{name: "multiple spaces", values: []string{"Bearer  token"}},
+		{name: "tab separator", values: []string{"Bearer\ttoken"}},
+		{name: "newline separator", values: []string{"Bearer\ntoken"}},
+		{name: "leading whitespace", values: []string{" Bearer token"}},
+		{name: "trailing whitespace", values: []string{"Bearer token "}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			got, err := BearerToken(test.values)
