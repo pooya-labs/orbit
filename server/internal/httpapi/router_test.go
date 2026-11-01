@@ -340,6 +340,45 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	}
 }
 
+func TestTelemetryServiceDiscoveryFallsBackToPersistedCatalog(t *testing.T) {
+	failingBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "backend unavailable", http.StatusBadGateway)
+	}))
+	defer failingBackend.Close()
+
+	client, err := telemetry.NewClient(failingBackend.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	repository := &fakeRepository{catalog: []store.TelemetryService{{
+		ID:               "catalog-orbit-demo",
+		Name:             "orbit-telemetry-demo",
+		Sources:          []string{"prometheus", "loki", "tempo"},
+		FirstSeenAt:      now.Add(-time.Hour),
+		LastSeenAt:       now.Add(-time.Minute),
+		LastDiscoveredAt: now.Add(-time.Minute),
+		ResourceAttributes: map[string]any{"deployment.environment.name": "test"},
+	}}}
+	handler := NewHandler(Config{Telemetry: client}, repository, testLogger())
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/telemetry/services?window=1h", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("fallback status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var result telemetry.ServiceDiscoveryResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode persisted fallback: %v", err)
+	}
+	if result.Source != "postgres_catalog" || len(result.Data) != 1 || result.Data[0].Name != "orbit-telemetry-demo" {
+		t.Fatalf("unexpected persisted fallback response: %+v", result)
+	}
+	if len(result.Warnings) == 0 || result.Data[0].ID != "catalog-orbit-demo" || len(result.Data[0].Sources) != 3 {
+		t.Fatalf("fallback response omitted warning or persisted metadata: %+v", result)
+	}
+}
+
 func TestTelemetryQueryValidationAndUnavailableResponses(t *testing.T) {
 	handler := NewHandler(Config{}, &fakeRepository{}, testLogger())
 
