@@ -1,6 +1,6 @@
 # ADR 0001 — OIDC access-token validation and API authorization
 
-- **Status:** Accepted; initial API implementation in progress on `feature/m06-oidc-auth-security-gate`
+- **Status:** Accepted; initial server-side resource-server gate merged in `main` as `977ce49`.
 - **Date:** 2026-11-01
 - **Scope:** ORBIT Go API, future browser client, and M05 state-changing workflows
 
