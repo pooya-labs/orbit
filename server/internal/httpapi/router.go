@@ -131,6 +131,7 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 
 	mux := http.NewServeMux()
 	registerWorkspaceRoutes(mux, repository, cfg.Telemetry, logger)
+	registerWorkloadIdentityRoutes(mux, repository, logger)
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, statusResponse{Status: "ok"})
 	})
@@ -467,7 +468,7 @@ func withCORS(origins []string, next http.Handler) http.Handler {
 			}
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Request-ID")
 			w.Header().Set("Access-Control-Max-Age", "600")
 			w.WriteHeader(http.StatusNoContent)
