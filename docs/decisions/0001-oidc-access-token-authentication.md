@@ -1,6 +1,6 @@
 # ADR 0001 — OIDC access-token validation and API authorization
 
-- **Status:** Proposed; implementation not yet enabled
+- **Status:** Accepted; initial API implementation in progress on `feature/m06-oidc-auth-security-gate`
 - **Date:** 2026-11-01
 - **Scope:** ORBIT Go API, future browser client, and M05 state-changing workflows
 
@@ -38,7 +38,7 @@ Reject `alg=none`, symmetric MAC algorithms, unsupported algorithms, missing/unk
 
 Limit the bearer token size (initial target: 16 KiB) before parsing. Accept credentials only from the Authorization header, not query parameters or arbitrary cookies. Do not log bearer tokens or complete authorization headers.
 
-Use a maintained JOSE/JWT implementation with explicit signature and claim validation. The repository currently targets Go 1.24. The reviewed candidate is `github.com/lestrrat-go/jwx/v3` pinned to a Go-1.24-compatible release (v3.0.1); later v3 releases reviewed in November 2026 require Go 1.25 and must not be adopted without an intentional toolchain upgrade. Reuse a long-lived JWKS cache with controlled refresh and key-rotation behavior; do not fetch remote keys for every request.
+Use the maintained `github.com/golang-jwt/jwt/v5` parser (pinned to v5.3.1) for compact-JWT parsing, signature verification, and registered-claim validation. Only RS256 and ES256 are accepted through an explicit valid-method allowlist. The API validates issuer and audience, requires `exp` and `iat`, validates optional `nbf`, and requires a non-empty subject. JWK documents are fetched only from the configured issuer's discovered `jwks_uri`; the verifier converts only supported RSA (at least 2048-bit) and P-256 EC signing keys, uses an in-memory bounded-TTL cache, and performs a throttled refresh for unknown key IDs. The remote HTTP client rejects redirects and caps discovery/JWKS documents at one MiB.
 
 ### 3. Identity and role mapping
 
@@ -51,7 +51,7 @@ The authenticated principal contains:
 
 The stable actor identity is the issuer + subject pair. Email, display name, username, and request-body fields must never be used as the authorization identity.
 
-The initial role model is:
+The implemented initial role model is:
 - `viewer`: read service inventory and telemetry;
 - `operator`: viewer permissions plus incident acknowledgement/transition, alert acknowledgement/silence, and deployment annotations;
 - `administrator`: operator permissions plus workspace membership, role assignment, alert-rule administration, and security configuration.
@@ -83,7 +83,7 @@ No provider-specific callback URLs, secrets, client IDs, or tenant settings are 
 
 - Local development may run without authentication only when `ORBIT_ENVIRONMENT=development` is explicit.
 - If issuer/audience configuration is provided in development, authentication is enabled and invalid tokens must fail closed.
-- Staging/production must refuse to start unless issuer, audience, and the required validation/role configuration are present and validated.
+- `ORBIT_ENVIRONMENT` must be set explicitly. Staging/production refuse to start unless issuer and audience are present and OIDC discovery/JWKS initialize successfully.
 - There is no general-purpose `AUTH_DISABLED=true` production bypass.
 - The local Compose stack remains loopback-bound and explicitly non-production.
 
@@ -100,13 +100,14 @@ No mutation handler may accept an actor identity, role, or workspace ID as autho
 
 ## Implementation sequence
 
-1. Add validated auth configuration and a startup validation test matrix.
-2. Add an OIDC discovery/JWKS-backed access-token verifier with a bounded key cache and explicit algorithm allowlist.
-3. Add principal context and centralized route policies; protect read APIs with viewer permissions.
-4. Add tests for missing/malformed bearer tokens, signature tampering, issuer/audience mismatch, expiry, not-before, future-issued tokens, unknown key IDs, key rotation, malformed roles, and insufficient permissions.
-5. Extend exact-origin CORS to preflight Authorization requests and test disallowed origins/methods.
+1. Add validated auth configuration and a startup validation test matrix. (Current branch)
+2. Add an OIDC discovery/JWKS-backed access-token verifier with a bounded key cache and explicit algorithm allowlist. (Current branch)
+3. Add principal context and centralized route policies; protect read APIs with viewer permissions. (Current branch)
+4. Add tests for missing/malformed bearer tokens, signature tampering, issuer/audience mismatch, expiry, not-before, future-issued tokens, unknown key IDs, key rotation, malformed roles, and insufficient permissions. (Current branch; CI pending)
+5. Extend exact-origin CORS to preflight Authorization requests and test disallowed origins/methods. (Current branch)
 6. Add workspace membership and scoping only alongside an explicit tenant data model.
-7. Implement M05 mutation routes only after steps 1–5 and audit identity are merged and green in CI.
+7. Implement browser Authorization Code + PKCE and token lifecycle before connecting the static workspace to protected API mode.
+8. Implement M05 mutation routes only after steps 1–7 and audit identity are merged and green in CI.
 
 ## Consequences
 

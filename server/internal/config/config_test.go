@@ -43,3 +43,69 @@ func TestLoadReadsOptionalTelemetryEndpoints(t *testing.T) {
 		t.Fatalf("unexpected telemetry URLs: %+v", got)
 	}
 }
+
+
+func TestProductionAndStagingRequireOIDC(t *testing.T) {
+	for _, environment := range []string{"production", "staging"} {
+		t.Run(environment, func(t *testing.T) {
+			cfg := Config{Environment: environment, RateLimitPerMinute: 120, OIDCRolesClaim: "roles"}
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() accepted a protected environment without OIDC settings")
+			}
+			cfg.OIDCIssuer = "https://identity.example"
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() accepted an incomplete OIDC configuration")
+			}
+			cfg.OIDCAudience = "orbit-api"
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("Validate() rejected complete OIDC configuration: %v", err)
+			}
+		})
+	}
+}
+
+func TestDevelopmentMayOmitOIDCButCannotPartiallyConfigureIt(t *testing.T) {
+	cfg := Config{
+		Environment: "development", RateLimitPerMinute: 120, OIDCRolesClaim: "roles",
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("development without OIDC should remain available: %v", err)
+	}
+	cfg.OIDCIssuer = "https://identity.example"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() accepted only one half of OIDC configuration")
+	}
+}
+
+func TestValidateRejectsUnsafeRateLimitsAndRoleClaimNames(t *testing.T) {
+	base := Config{Environment: "development", RateLimitPerMinute: 120, OIDCRolesClaim: "roles"}
+	for _, test := range []struct {
+		name string
+		edit func(*Config)
+	}{
+		{name: "zero rate limit", edit: func(c *Config) { c.RateLimitPerMinute = 0 }},
+		{name: "excessive rate limit", edit: func(c *Config) { c.RateLimitPerMinute = 10001 }},
+		{name: "invalid role claim", edit: func(c *Config) { c.OIDCRolesClaim = "roles[]" }},
+		{name: "nested role path is unsupported", edit: func(c *Config) { c.OIDCRolesClaim = "realm_access.roles" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := base
+			test.edit(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() accepted invalid security configuration")
+			}
+		})
+	}
+}
+
+
+func TestValidateRequiresExplicitEnvironment(t *testing.T) {
+	cfg := Config{RateLimitPerMinute: 120, OIDCRolesClaim: "roles"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() accepted an implicit runtime environment")
+	}
+	cfg.Environment = "development"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() rejected explicit development mode: %v", err)
+	}
+}

@@ -54,6 +54,9 @@ OpenTelemetry Collector
 - `GET /api/v1/telemetry/services` discovers names from Prometheus, Loki, and Tempo, upserts normalized service/source observations in PostgreSQL, and returns the persisted active catalog through validated cursor-based pages with discovery timestamps and partial-backend warnings. The companion service-attributes endpoint exposes a bounded allowlist of observed attributes with per-key backend provenance; this is not yet a full workload-side OpenTelemetry resource ingestion pipeline. If every telemetry backend is unavailable, it serves the last known PostgreSQL catalog when available.
 - `GET /api/v1/telemetry/metrics`, `/logs`, and `/traces` expose bounded, service-scoped queries against Prometheus, Loki, and Tempo. Metrics supports allow-listed dimensions for the demo request-rate series; it does not accept arbitrary PromQL or arbitrary metric names.
 - Data endpoints use explicit JSON envelopes and return safe errors without leaking database details.
+- Protected `/api/v1/*` data routes validate OAuth access tokens through OIDC discovery and the issuer's JWKS. The verifier pins the allowed algorithms to RS256/ES256, validates issuer, audience, `exp`, `iat`, optional `nbf`, and `sub`, and caches signing keys with bounded refresh and rotation handling.
+- Centralized route policy requires `viewer` for reads, `operator` for future operational mutations, and `administrator` for future administrative routes. Unknown role values never grant privileges. `/health/live` and `/api/v1/meta` remain public; readiness reveals only a minimal status.
+- Development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is explicitly set. Staging and production require both `ORBIT_OIDC_ISSUER` and `ORBIT_OIDC_AUDIENCE`; startup validates discovery and JWKS before serving requests.
 
 ### PostgreSQL
 
@@ -110,14 +113,16 @@ OpenTelemetry Collector
 - Authentication and authorization are mandatory before multi-user deployment.
 - Secrets stay in environment variables or a dedicated secret manager, never in source control.
 - Avoid logging tokens, credentials, or sensitive payload bodies.
-- Enforce query timeouts, payload limits, and per-workspace rate limits.
+- Enforce query timeouts, a 1 MiB request-body cap, a 16 KiB bearer-token cap, and fixed-window per-IP/per-subject request limits. The current limiter is process-local; it is not a distributed quota or tenant boundary.
 - Readiness must verify required dependencies; liveness must remain a process-level check.
 - Every asynchronous operation should carry correlation context.
 - Retention and cardinality limits must be explicit to prevent uncontrolled telemetry cost.
 
 ## Current limitations
 
-- No authentication, workspace isolation, or user management.
+- The OIDC resource-server and API role-enforcement slice is implemented on the current security feature branch; browser Authorization Code + PKCE, workspace membership/isolation, and user management are not yet implemented.
+- Rate limits are process-local and need a shared limiter for multi-instance production deployments.
+- M05 mutation routes, transactional audit records, and operator workflows remain disabled/not implemented until the security gate is merged and the corresponding audit/data model is delivered.
 - The local OTLP pipeline and a dedicated instrumented demo workload are available; the production Go API is not instrumented yet.
 - ORBIT's API now performs fixed, bounded read queries against Prometheus, Tempo, and Loki (15m–24h windows, capped results, 6-second backend timeout, 2 MiB response cap).
 - The dashboard has separate Metrics, Logs, and Traces views that call the typed query methods, display backend provenance and query timestamps, and support 15m/1h/6h/24h windows with 30-second refresh.
