@@ -8,8 +8,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"strings"
 	"time"
 
+	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/config"
 	"github.com/pooya16pg-spec/orbit/server/internal/httpapi"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
@@ -20,6 +22,27 @@ import (
 func main() {
 	cfg := config.Load()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	if err := cfg.Validate(); err != nil {
+		logger.Error("configuration validation failed", "error", err)
+		os.Exit(1)
+	}
+
+	var tokenVerifier *auth.Verifier
+	if cfg.AuthenticationEnabled() {
+		startupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		verifier, err := auth.NewVerifier(startupCtx, auth.Config{
+			Issuer: cfg.AuthIssuer, Audience: cfg.AuthAudience,
+			RolesClaim: cfg.AuthRolesClaim, Algorithms: cfg.AuthAlgorithms,
+			Development: strings.EqualFold(cfg.Environment, "development"),
+		})
+		cancel()
+		if err != nil {
+			logger.Error("OIDC verifier initialization failed", "error", err)
+			os.Exit(1)
+		}
+		tokenVerifier = verifier
+		defer tokenVerifier.Close()
+	}
 
 	telemetryClient, err := telemetry.NewClient(cfg.PrometheusURL, cfg.LokiURL, cfg.TempoURL)
 	if err != nil {
@@ -47,6 +70,8 @@ func main() {
 		Handler: httpapi.NewHandler(httpapi.Config{
 			Version: cfg.Version, Environment: cfg.Environment, AllowedOrigins: cfg.AllowedOrigins,
 			Telemetry: telemetryClient,
+			Authenticator: tokenVerifier,
+			RequireAuthentication: !strings.EqualFold(cfg.Environment, "development") || cfg.AuthenticationEnabled(),
 		}, repository, logger),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
