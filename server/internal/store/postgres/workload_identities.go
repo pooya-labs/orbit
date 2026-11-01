@@ -101,7 +101,7 @@ func (r *Repository) SetWorkloadIdentityStatus(ctx context.Context,id,actorIssue
  WHERE id=$1::uuid RETURNING id::text
  \`,id,status).Scan(&found)
  if errors.Is(err,pgx.ErrNoRows){return store.ErrWorkloadIdentityNotFound};if err!=nil{return fmt.Errorf("update workload status: %w",err)}
- action:="workload.disabled";if status=="revoked"{action="workload.revoked"}
+ action:="workload.disabled";if status=="revoked"{action="workload.revoked"} else if status=="active"{action="workload.enabled"}
  if _,err=tx.Exec(ctx,\`
  INSERT INTO workload_identity_audit_events(workload_identity_id,actor_issuer,actor_subject,action,details)
  VALUES($1::uuid,$2,$3,$4,jsonb_build_object('status',$5))
