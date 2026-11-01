@@ -604,6 +604,7 @@ func TestTelemetryQueryValidationAndUnavailableResponses(t *testing.T) {
 		wantCode   string
 	}{
 		{path: "/api/v1/telemetry/metrics?window=7d", wantStatus: http.StatusBadRequest, wantCode: "invalid_window"},
+		{path: "/api/v1/telemetry/metrics?group_by=__name__", wantStatus: http.StatusBadRequest, wantCode: "invalid_group_by"},
 		{path: "/api/v1/telemetry/metrics?service=bad%20service", wantStatus: http.StatusBadRequest, wantCode: "invalid_service"},
 		{path: "/api/v1/telemetry/logs?service=bad%20service", wantStatus: http.StatusBadRequest, wantCode: "invalid_service"},
 		{path: "/api/v1/telemetry/traces?limit=101", wantStatus: http.StatusBadRequest, wantCode: "invalid_limit"},
