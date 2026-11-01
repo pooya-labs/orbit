@@ -141,24 +141,46 @@ func (l *requestRateLimiter) allow(keys []string, now time.Time) bool {
 	return true
 }
 
-func withRateLimit(limit int, next http.Handler) http.Handler {
+func requestIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || host == "" {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+func withIPRateLimit(limit int, next http.Handler) http.Handler {
 	limiter := newRequestRateLimiter(limit)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/api/v1/meta" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil || host == "" {
-			host = r.RemoteAddr
-		}
-		keys := []string{"ip:" + host}
-		if principal, ok := principalFromContext(r.Context()); ok {
-			keys = append(keys, "subject:"+principal.Issuer+"|"+principal.Subject)
-		}
-		if !limiter.allow(keys, time.Now()) {
+		if !limiter.allow([]string{"ip:" + requestIP(r)}, time.Now()) {
 			w.Header().Set("Retry-After", "60")
 			writeError(w, r, http.StatusTooManyRequests, "rate_limit_exceeded", "The API request limit has been reached; retry shortly")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func withSubjectRateLimit(limit int, next http.Handler) http.Handler {
+	limiter := newRequestRateLimiter(limit)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/api/v1/meta" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		key := "subject:" + principal.Issuer + "|" + principal.Subject
+		if !limiter.allow([]string{key}, time.Now()) {
+			w.Header().Set("Retry-After", "60")
+			writeError(w, r, http.StatusTooManyRequests, "rate_limit_exceeded", "The authenticated subject request limit has been reached; retry shortly")
 			return
 		}
 		next.ServeHTTP(w, r)
