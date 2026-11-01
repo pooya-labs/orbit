@@ -1,0 +1,175 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/pooya16pg-spec/orbit/server/internal/auth"
+	"github.com/pooya16pg-spec/orbit/server/internal/store"
+)
+
+type workspaceListResponse struct {
+	Data []store.Workspace `json:"data"`
+}
+
+type workspaceCreateRequest struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+type workspaceCreateResponse struct {
+	Data store.Workspace `json:"data"`
+}
+
+type workspaceMembershipResponse struct {
+	Data store.WorkspaceMembership `json:"data"`
+}
+
+type workspaceAuditResponse struct {
+	Data []store.WorkspaceAuditEvent `json:"data"`
+}
+
+func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, logger *slog.Logger) {
+	workspaceRepository, ok := repository.(store.WorkspaceRepository)
+	if !ok || workspaceRepository == nil {
+		unavailable := func(w http.ResponseWriter, r *http.Request) {
+			writeError(w, r, http.StatusServiceUnavailable, "workspace_store_unavailable", "Workspace management is not available")
+		}
+		mux.HandleFunc("GET /api/v1/workspaces", unavailable)
+		mux.HandleFunc("POST /api/v1/workspaces", unavailable)
+		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/membership", unavailable)
+		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/audit-events", unavailable)
+		return
+	}
+
+	mux.HandleFunc("GET /api/v1/workspaces", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		items, err := workspaceRepository.ListWorkspacesForPrincipal(ctx, principal.Issuer, principal.Subject)
+		if err != nil {
+			logger.Error("list principal workspaces failed", "error", err, "request_id", r.Header.Get("X-Request-ID"))
+			writeError(w, r, http.StatusServiceUnavailable, "workspace_query_failed", "Workspace list is temporarily unavailable")
+			return
+		}
+		if items == nil {
+			items = []store.Workspace{}
+		}
+		writeJSON(w, http.StatusOK, workspaceListResponse{Data: items})
+	})
+
+	mux.HandleFunc("POST /api/v1/workspaces", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		var input workspaceCreateRequest
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8*1024))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_workspace", "Workspace name and slug must be valid JSON fields")
+			return
+		}
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			writeError(w, r, http.StatusBadRequest, "invalid_workspace", "Request body must contain exactly one JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		workspace, err := workspaceRepository.CreateWorkspace(ctx, store.CreateWorkspaceInput{
+			Name: input.Name, Slug: input.Slug,
+			OwnerIssuer: principal.Issuer, OwnerSubject: principal.Subject,
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
+				writeError(w, r, http.StatusConflict, "workspace_slug_conflict", "That workspace slug is already in use")
+				return
+			}
+			if strings.Contains(err.Error(), "must contain") || strings.Contains(err.Error(), "slug") {
+				writeError(w, r, http.StatusBadRequest, "invalid_workspace", "Workspace name or slug is invalid")
+				return
+			}
+			logger.Error("create workspace failed", "error", err, "request_id", r.Header.Get("X-Request-ID"))
+			writeError(w, r, http.StatusServiceUnavailable, "workspace_create_failed", "Workspace could not be created")
+			return
+		}
+		writeJSON(w, http.StatusCreated, workspaceCreateResponse{Data: workspace})
+	})
+
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/membership", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		membership, err := workspaceRepository.GetWorkspaceMembership(ctx, r.PathValue("workspaceID"), principal.Issuer, principal.Subject)
+		if errors.Is(err, store.ErrWorkspaceMembershipNotFound) {
+			writeError(w, r, http.StatusNotFound, "workspace_not_found", "Workspace was not found")
+			return
+		}
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_workspace_id", "Workspace identifier is invalid")
+			return
+		}
+		writeJSON(w, http.StatusOK, workspaceMembershipResponse{Data: membership})
+	})
+
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/audit-events", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		if _, err := workspaceRepository.GetWorkspaceMembership(ctx, r.PathValue("workspaceID"), principal.Issuer, principal.Subject); err != nil {
+			if errors.Is(err, store.ErrWorkspaceMembershipNotFound) {
+				writeError(w, r, http.StatusNotFound, "workspace_not_found", "Workspace was not found")
+			} else {
+				writeError(w, r, http.StatusBadRequest, "invalid_workspace_id", "Workspace identifier is invalid")
+			}
+			return
+		}
+		limit := 50
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			switch raw {
+			case "10":
+				limit = 10
+			case "25":
+				limit = 25
+			case "50":
+				limit = 50
+			case "100":
+				limit = 100
+			default:
+				writeError(w, r, http.StatusBadRequest, "invalid_limit", "limit must be 10, 25, 50, or 100")
+				return
+			}
+		}
+		events, err := workspaceRepository.ListWorkspaceAuditEvents(ctx, r.PathValue("workspaceID"), limit)
+		if err != nil {
+			logger.Error("list workspace audit events failed", "error", err, "request_id", r.Header.Get("X-Request-ID"))
+			writeError(w, r, http.StatusServiceUnavailable, "workspace_audit_unavailable", "Workspace audit history is temporarily unavailable")
+			return
+		}
+		if events == nil {
+			events = []store.WorkspaceAuditEvent{}
+		}
+		writeJSON(w, http.StatusOK, workspaceAuditResponse{Data: events})
+	})
+}
+
+var _ = auth.Principal{}
