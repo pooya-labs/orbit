@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -49,6 +50,44 @@ func (f *fakeRepository) UpsertTelemetryServices(_ context.Context, services []s
 		}
 	}
 	return f.catalog, nil
+}
+
+func (f *fakeRepository) UpdateTelemetryServiceResourceAttributes(_ context.Context, name string, attributes map[string]any, sources map[string][]string) error {
+	if f.catalogErr != nil {
+		return f.catalogErr
+	}
+	for index := range f.catalog {
+		item := &f.catalog[index]
+		if item.Name != name {
+			continue
+		}
+		if item.ResourceAttributes == nil {
+			item.ResourceAttributes = map[string]any{}
+		}
+		for key, value := range attributes {
+			item.ResourceAttributes[key] = value
+		}
+		if item.ResourceAttributeSources == nil {
+			item.ResourceAttributeSources = map[string][]string{}
+		}
+		for key, values := range sources {
+			seen := make(map[string]struct{})
+			for _, existing := range item.ResourceAttributeSources[key] {
+				seen[existing] = struct{}{}
+			}
+			for _, source := range values {
+				seen[source] = struct{}{}
+			}
+			merged := make([]string, 0, len(seen))
+			for source := range seen {
+				merged = append(merged, source)
+			}
+			sort.Strings(merged)
+			item.ResourceAttributeSources[key] = merged
+		}
+		return nil
+	}
+	return errors.New("telemetry service not found")
 }
 
 func (f *fakeRepository) ListTelemetryServices(_ context.Context, limit int) ([]store.TelemetryService, error) {
