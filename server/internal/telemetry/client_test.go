@@ -367,3 +367,43 @@ func TestServicesRequiresAtLeastOneConfiguredBackend(t *testing.T) {
 		t.Fatalf("error = %v, want ErrNotConfigured", err)
 	}
 }
+
+
+func TestWorkspaceQueriesAlwaysConstrainBackendTenant(t *testing.T) {
+	const workspaceID = "00000000-0000-4000-8000-000000000001"
+	t.Run("prometheus",func(t *testing.T){
+		server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+			query:=r.URL.Query().Get("query")
+			if !strings.Contains(query,`orbit_workspace_id="00000000-0000-4000-8000-000000000001"`) { t.Errorf("PromQL missing workspace matcher: %s",query) }
+			w.Header().Set("Content-Type","application/json"); _,_=w.Write([]byte(`{"status":"success","data":{"result":[]}}`))
+		})); defer server.Close()
+		client,_:=NewClient(server.URL,"","")
+		if _,err:=client.WorkspaceMetrics(context.Background(),workspaceID,QueryWindow{Name:"1h",Duration:time.Hour,Step:"1m"},"api-gateway",nil);err!=nil{t.Fatal(err)}
+	})
+	t.Run("loki",func(t *testing.T){
+		server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+			query:=r.URL.Query().Get("query")
+			if query!=`{orbit_workspace_id="00000000-0000-4000-8000-000000000001",service_name="api-gateway"}` { t.Errorf("LogQL missing exact workspace selector: %s",query) }
+			w.Header().Set("Content-Type","application/json"); _,_=w.Write([]byte(`{"status":"success","data":{"result":[]}}`))
+		})); defer server.Close()
+		client,_:=NewClient("",server.URL,"")
+		if _,err:=client.WorkspaceLogs(context.Background(),workspaceID,QueryWindow{Name:"1h",Duration:time.Hour},"api-gateway",10);err!=nil{t.Fatal(err)}
+	})
+	t.Run("tempo",func(t *testing.T){
+		server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+			query:=r.URL.Query().Get("q")
+			if !strings.Contains(query,`resource.orbit.workspace.id = "00000000-0000-4000-8000-000000000001"`) { t.Errorf("TraceQL missing workspace matcher: %s",query) }
+			w.Header().Set("Content-Type","application/json"); _,_=w.Write([]byte(`{"traces":[]}`))
+		})); defer server.Close()
+		client,_:=NewClient("","",server.URL)
+		if _,err:=client.WorkspaceTraces(context.Background(),workspaceID,QueryWindow{Name:"1h",Duration:time.Hour},"api-gateway",10);err!=nil{t.Fatal(err)}
+	})
+}
+
+func TestWorkspaceQueriesRejectMalformedWorkspaceIDBeforeBackendCall(t *testing.T) {
+	client,_:=NewClient("http://127.0.0.1:1","http://127.0.0.1:1","http://127.0.0.1:1")
+	window:=QueryWindow{Name:"1h",Duration:time.Hour,Step:"1m"}
+	if _,err:=client.WorkspaceMetrics(context.Background(),"not-a-uuid",window,"api-gateway",nil);err==nil{t.Fatal("expected invalid workspace ID")}
+	if _,err:=client.WorkspaceLogs(context.Background(),"not-a-uuid",window,"api-gateway",10);err==nil{t.Fatal("expected invalid workspace ID")}
+	if _,err:=client.WorkspaceTraces(context.Background(),"not-a-uuid",window,"api-gateway",10);err==nil{t.Fatal("expected invalid workspace ID")}
+}

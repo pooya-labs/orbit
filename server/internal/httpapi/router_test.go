@@ -965,3 +965,58 @@ func TestLegacyGlobalReadRoutesRemainAvailableInDevelopment(t *testing.T) {
 		t.Fatalf("development legacy services status/body = %d %s; want 200", recorder.Code, recorder.Body.String())
 	}
 }
+
+
+func TestWorkspaceTelemetryQueriesRequireMembershipAndBackendTenantMatcher(t *testing.T) {
+	const workspaceID = "00000000-0000-4000-8000-000000000001"
+	var prometheusCalls, lokiCalls, tempoCalls int
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		prometheusCalls++
+		if !strings.Contains(r.URL.Query().Get("query"), "orbit_workspace_id=\""+workspaceID+"\"") { t.Errorf("Prometheus query lacks workspace matcher: %s", r.URL.Query().Get("query")) }
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{\"status\":\"success\",\"data\":{\"result\":[]}}"))
+	}))
+	defer prometheus.Close()
+	loki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lokiCalls++
+		if !strings.Contains(r.URL.Query().Get("query"), "orbit_workspace_id=\""+workspaceID+"\"") { t.Errorf("Loki query lacks workspace matcher: %s", r.URL.Query().Get("query")) }
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{\"status\":\"success\",\"data\":{\"result\":[]}}"))
+	}))
+	defer loki.Close()
+	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tempoCalls++
+		if !strings.Contains(r.URL.Query().Get("q"), "resource.orbit.workspace.id = \""+workspaceID+"\"") { t.Errorf("Tempo query lacks workspace matcher: %s", r.URL.Query().Get("q")) }
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{\"traces\":[]}"))
+	}))
+	defer tempo.Close()
+	client, err := telemetry.NewClient(prometheus.URL, loki.URL, tempo.URL)
+	if err != nil { t.Fatal(err) }
+	viewer := fixedTokenVerifier{principal: auth.Principal{Issuer: "https://identity.example", Subject: "member-1", Roles: []string{"viewer"}}}
+	handler := NewHandler(Config{Environment: "production", AuthVerifier: viewer, Telemetry: client}, &fakeRepository{}, testLogger())
+	paths := []string{
+		"/api/v1/workspaces/" + workspaceID + "/telemetry/metrics?service=api-gateway",
+		"/api/v1/workspaces/" + workspaceID + "/telemetry/logs?service=api-gateway",
+		"/api/v1/workspaces/" + workspaceID + "/telemetry/traces?service=api-gateway",
+	}
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK { t.Fatalf("%s status/body=%d %s", path, rec.Code, rec.Body.String()) }
+	}
+	if prometheusCalls != 1 || lokiCalls != 1 || tempoCalls != 1 { t.Fatalf("backend calls = prom:%d loki:%d tempo:%d", prometheusCalls, lokiCalls, tempoCalls) }
+	for _, path := range paths {
+		parts := strings.SplitN(path, "?", 2)
+		nonmemberPath := strings.Replace(parts[0], workspaceID, "00000000-0000-4000-8000-000000000099", 1)
+		if len(parts) == 2 { nonmemberPath += "?" + parts[1] }
+		req := httptest.NewRequest(http.MethodGet, nonmemberPath, nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound { t.Fatalf("nonmember %s status=%d want 404", path, rec.Code) }
+	}
+	if prometheusCalls != 1 || lokiCalls != 1 || tempoCalls != 1 { t.Fatal("non-member request reached a telemetry backend") }
+}

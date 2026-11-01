@@ -136,3 +136,8 @@ OpenTelemetry Collector
 ### Legacy route deployment boundary
 
 Unscoped inventory and telemetry read endpoints are development-only. Staging and production must return a non-disclosing 404 for legacy global reads; workspace-scoped reads require verified membership. This gate does not partition Prometheus, Loki, or Tempo data and does not make telemetry ingestion tenant-aware.
+
+
+### Workspace-scoped telemetry query contract
+
+The workspace API exposes separate metrics, logs, and traces query routes under `/api/v1/workspaces/{workspaceID}/telemetry/*`. Every request verifies the caller's workspace membership before contacting a backend. Prometheus and Loki selectors and Tempo TraceQL include the workspace UUID as `orbit_workspace_id` / `resource.orbit.workspace.id`; there is deliberately no fallback to unscoped queries. Telemetry producers must attach the canonical workspace resource attribute, and ingestion must authenticate/authorize the producer's workspace assignment. Until that ingestion trust boundary is implemented and tested, these query routes return only data that carries the workspace label and must not be treated as proof that the ingestion path is tenant-safe.

@@ -130,7 +130,7 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 	}
 
 	mux := http.NewServeMux()
-	registerWorkspaceRoutes(mux, repository, logger)
+	registerWorkspaceRoutes(mux, repository, cfg.Telemetry, logger)
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, statusResponse{Status: "ok"})
 	})

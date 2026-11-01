@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
+	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 )
 
 type workspaceListResponse struct {
@@ -34,7 +35,7 @@ type workspaceAuditResponse struct {
 	Data []store.WorkspaceAuditEvent `json:"data"`
 }
 
-func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, logger *slog.Logger) {
+func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, telemetryClient *telemetry.Client, logger *slog.Logger) {
 	workspaceRepository, ok := repository.(store.WorkspaceRepository)
 	if !ok || workspaceRepository == nil {
 		unavailable := func(w http.ResponseWriter, r *http.Request) {
@@ -246,6 +247,55 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, lo
 		}
 		writeJSON(w, http.StatusOK, struct { Data []store.TelemetryService `json:"data"` }{Data: items})
 	})
+
+
+	// Keep the routes registered when telemetry is unavailable so authorized
+	// workspace members receive a dependency error rather than a misleading 404.
+		registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/metrics", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+		if telemetryClient == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Workspace telemetry backends are not configured")
+			return
+		}
+			window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
+			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_window",err.Error()); return }
+			service := r.URL.Query().Get("service")
+			if err := telemetry.ValidateServiceName(service); err != nil { writeError(w,r,http.StatusBadRequest,"invalid_service",err.Error()); return }
+			groupBy, err := telemetry.ParseMetricGroupBy(r.URL.Query().Get("group_by"))
+			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_group_by",err.Error()); return }
+			result, err := telemetryClient.WorkspaceMetrics(ctx,workspaceID,window,service,groupBy)
+			if err != nil { writeTelemetryError(w,r,logger,"Workspace Prometheus",err); return }
+			writeJSON(w,http.StatusOK,result)
+		})
+		registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/logs", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+		if telemetryClient == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Workspace telemetry backends are not configured")
+			return
+		}
+			window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
+			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_window",err.Error()); return }
+			service := r.URL.Query().Get("service")
+			if err := telemetry.ValidateServiceName(service); err != nil { writeError(w,r,http.StatusBadRequest,"invalid_service",err.Error()); return }
+			limit, err := telemetry.ParseLimit(r.URL.Query().Get("limit"),50)
+			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_limit",err.Error()); return }
+			result, err := telemetryClient.WorkspaceLogs(ctx,workspaceID,window,service,limit)
+			if err != nil { writeTelemetryError(w,r,logger,"Workspace Loki",err); return }
+			writeJSON(w,http.StatusOK,result)
+		})
+		registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/traces", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+		if telemetryClient == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Workspace telemetry backends are not configured")
+			return
+		}
+			window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
+			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_window",err.Error()); return }
+			service := r.URL.Query().Get("service")
+			if err := telemetry.ValidateServiceName(service); err != nil { writeError(w,r,http.StatusBadRequest,"invalid_service",err.Error()); return }
+			limit, err := telemetry.ParseLimit(r.URL.Query().Get("limit"),20)
+			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_limit",err.Error()); return }
+			result, err := telemetryClient.WorkspaceTraces(ctx,workspaceID,window,service,limit)
+			if err != nil { writeTelemetryError(w,r,logger,"Workspace Tempo",err); return }
+			writeJSON(w,http.StatusOK,result)
+		})
 
 }
 

@@ -332,6 +332,81 @@ func (c *Client) Traces(ctx context.Context, window QueryWindow, service string,
 }
 
 
+
+var workspaceIDPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
+
+func validateWorkspaceID(workspaceID string) error {
+	if !workspaceIDPattern.MatchString(workspaceID) {
+		return errors.New("workspace identifier is invalid")
+	}
+	return nil
+}
+
+func (c *Client) WorkspaceMetrics(ctx context.Context, workspaceID string, window QueryWindow, service string, groupBy []string) (QueryResult, error) {
+	if err := validateWorkspaceID(workspaceID); err != nil { return QueryResult{}, err }
+	if c == nil || c.prometheusURL == "" { return QueryResult{}, ErrNotConfigured }
+	if err := ValidateServiceName(service); err != nil { return QueryResult{}, err }
+	groupLabels := []string{"service_name", "orbit_workspace_id"}
+	for _, label := range groupBy {
+		if _, ok := allowedMetricGroupLabels[label]; !ok { return QueryResult{}, errors.New("unsupported metric grouping dimension") }
+		groupLabels = append(groupLabels, label)
+	}
+	sort.Strings(groupLabels)
+	query := fmt.Sprintf("sum by (%s) (rate(%s{service_name=%q,orbit_workspace_id=%q}[5m]))", strings.Join(groupLabels, ", "), metricName, service, workspaceID)
+	now := c.now().UTC()
+	values := url.Values{}
+	values.Set("query", query)
+	values.Set("start", now.Add(-window.Duration).Format(time.RFC3339Nano))
+	values.Set("end", now.Format(time.RFC3339Nano))
+	values.Set("step", window.Step)
+	values.Set("timeout", "5s")
+	values.Set("limit", "10")
+	payload, err := c.get(ctx, c.prometheusURL, "/api/v1/query_range", values)
+	if err != nil { return QueryResult{}, fmt.Errorf("query workspace Prometheus: %w", err) }
+	if payload.Status != "success" { return QueryResult{}, errors.New("Prometheus returned an unsuccessful query status") }
+	var result map[string]json.RawMessage
+	if err := json.Unmarshal(payload.Data, &result); err != nil { return QueryResult{}, fmt.Errorf("decode Prometheus range result: %w", err) }
+	return QueryResult{Source:"prometheus", Window:window.Name, QueriedAt:now, Query:query, Step:window.Step, Service:service, GroupBy:append([]string(nil),groupBy...), Data:nonEmptyJSON(result["result"])}, nil
+}
+
+func (c *Client) WorkspaceLogs(ctx context.Context, workspaceID string, window QueryWindow, service string, limit int) (QueryResult, error) {
+	if err := validateWorkspaceID(workspaceID); err != nil { return QueryResult{}, err }
+	if c == nil || c.lokiURL == "" { return QueryResult{}, ErrNotConfigured }
+	if err := ValidateServiceName(service); err != nil { return QueryResult{}, err }
+	if limit < 1 || limit > maxResultLimit { return QueryResult{}, fmt.Errorf("limit must be between 1 and %d", maxResultLimit) }
+	now := c.now().UTC()
+	query := fmt.Sprintf("{orbit_workspace_id=%q,service_name=%q}", workspaceID, service)
+	values := url.Values{}
+	values.Set("query", query)
+	values.Set("start", strconv.FormatInt(now.Add(-window.Duration).UnixNano(),10))
+	values.Set("end", strconv.FormatInt(now.UnixNano(),10))
+	values.Set("limit",strconv.Itoa(limit))
+	values.Set("direction","backward")
+	payload,err:=c.get(ctx,c.lokiURL,"/loki/api/v1/query_range",values)
+	if err!=nil{return QueryResult{},fmt.Errorf("query workspace Loki: %w",err)}
+	if payload.Status!="success"{return QueryResult{},errors.New("Loki returned an unsuccessful query status")}
+	var result map[string]json.RawMessage
+	if err:=json.Unmarshal(payload.Data,&result);err!=nil{return QueryResult{},fmt.Errorf("decode Loki range result: %w",err)}
+	return QueryResult{Source:"loki",Window:window.Name,QueriedAt:now,Query:query,Service:service,Limit:limit,Data:nonEmptyJSON(result["result"])},nil
+}
+
+func (c *Client) WorkspaceTraces(ctx context.Context, workspaceID string, window QueryWindow, service string, limit int) (QueryResult, error) {
+	if err:=validateWorkspaceID(workspaceID);err!=nil{return QueryResult{},err}
+	if c==nil||c.tempoURL==""{return QueryResult{},ErrNotConfigured}
+	if err:=ValidateServiceName(service);err!=nil{return QueryResult{},err}
+	if limit<1||limit>maxResultLimit{return QueryResult{},fmt.Errorf("limit must be between 1 and %d",maxResultLimit)}
+	now:=c.now().UTC()
+	traceQL:=fmt.Sprintf("{ resource.service.name = %q && resource.orbit.workspace.id = %q }",service,workspaceID)
+	values:=url.Values{}
+	values.Set("q",traceQL)
+	values.Set("start",strconv.FormatInt(now.Add(-window.Duration).Unix(),10))
+	values.Set("end",strconv.FormatInt(now.Unix(),10))
+	values.Set("limit",strconv.Itoa(limit))
+	payload,err:=c.get(ctx,c.tempoURL,"/api/search",values)
+	if err!=nil{return QueryResult{},fmt.Errorf("query workspace Tempo: %w",err)}
+	return QueryResult{Source:"tempo",Window:window.Name,QueriedAt:now,Query:traceQL,Service:service,Limit:limit,Data:nonEmptyJSON(payload.Traces)},nil
+}
+
 func (c *Client) Services(ctx context.Context, window QueryWindow) (ServiceDiscoveryResult, error) {
 	if c == nil || (c.prometheusURL == "" && c.lokiURL == "" && c.tempoURL == "") {
 		return ServiceDiscoveryResult{}, ErrNotConfigured
