@@ -29,6 +29,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 - [Roadmap](docs/roadmap.md) — milestones, remaining work, and dependency gates.
 - [Architecture](docs/architecture.md) — current system shape and runtime boundaries.
 - [Project context & handoff](docs/project-context.md) — implementation history, decisions, and the continuity notes for future work.
+- [OIDC security decision](docs/decisions/0001-oidc-access-token-authentication.md) — access-token validation, roles, route policy, and the M05 security gate.
 
 ## Technology
 
