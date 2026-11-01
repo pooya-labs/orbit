@@ -437,6 +437,14 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 
 
 /* M04 — telemetry service discovery selector */
+.telemetry-grouping-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
+.telemetry-grouping-panel > span { margin-right: 4px; }
+.telemetry-grouping-panel button { min-height: 27px; padding: 0 9px; border: 1px solid #2a3a42; border-radius: 5px; color: #91a0a8; background: #10191f; font-size: 9px; }
+.telemetry-grouping-panel button.selected { color: #c6e9df; border-color: rgba(101,217,193,.42); background: rgba(101,217,193,.1); }
+.telemetry-grouping-panel button:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+.telemetry-series-legend { display: flex; flex-wrap: wrap; gap: 7px 15px; padding: 0 2px 8px; color: #82919a; font-size: 9px; }
+.telemetry-series-legend span { min-width: 0; display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.telemetry-series-legend i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
 .telemetry-service-select { min-width: 195px; max-width: 255px; display: grid; gap: 4px; }
 .telemetry-service-select > span { color: #71818b; font: 8px "DM Mono", monospace; letter-spacing: .08em; }
 .telemetry-service-select select { width: 100%; min-width: 0; height: 34px; padding: 0 27px 0 10px; border: 1px solid #2a3a42; border-radius: 6px; outline-offset: 2px; color: #d4e0e4; background: #10191f; font: 10px "DM Mono", monospace; }
@@ -447,6 +455,8 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 .telemetry-service-warning .text-action { flex: 0 0 auto; }
 @media (max-width: 700px) {
   .telemetry-service-select { width: 100%; max-width: none; }
+  .telemetry-grouping-panel { gap: 5px; }
+  .telemetry-grouping-panel button { min-height: 34px; }
   .telemetry-service-select select { height: 38px; }
 }
 
@@ -493,7 +503,8 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 .app-shell[dir="rtl"] .telemetry-log-row time,
 .app-shell[dir="rtl"] .telemetry-log-row code,
 .app-shell[dir="rtl"] .telemetry-trace-main code { font-family: "DM Mono", monospace; }
-.app-shell[dir="rtl"] .telemetry-service-select > span { letter-spacing: 0; font-family: "Vazirmatn", Tahoma, sans-serif; }
+.app-shell[dir="rtl"] .telemetry-service-select > span,
+.app-shell[dir="rtl"] .telemetry-grouping-panel > span { letter-spacing: 0; font-family: "Vazirmatn", Tahoma, sans-serif; }
 .app-shell[dir="rtl"] .telemetry-service-select select { direction: rtl; font-family: "DM Mono", "Vazirmatn", monospace; }
 @media (max-width: 1050px) {
   .app-shell[dir="rtl"] .main-panel { margin-right: 220px; }
