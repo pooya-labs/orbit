@@ -337,13 +337,18 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 			writeError(w, r, http.StatusBadRequest, "invalid_service", err.Error())
 			return
 		}
+		groupBy, err := telemetry.ParseMetricGroupBy(r.URL.Query().Get("group_by"))
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_group_by", err.Error())
+			return
+		}
 		if cfg.Telemetry == nil {
 			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Prometheus is not configured")
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 7*time.Second)
 		defer cancel()
-		result, err := cfg.Telemetry.Metrics(ctx, window, service)
+		result, err := cfg.Telemetry.Metrics(ctx, window, service, groupBy)
 		if err != nil {
 			writeTelemetryError(w, r, logger, "Prometheus", err)
 			return
