@@ -138,7 +138,7 @@ func TestVerifierAcceptsValidAccessTokenAndExtractsPrincipal(t *testing.T) {
 		!reflect.DeepEqual(principal.Roles, []string{RoleViewer}) {
 		t.Fatalf("unexpected principal: %+v", principal)
 	}
-	if principal.ActorID() != issuer.issuer+"\x00user-123" {
+	if principal.ActorID() != base64.RawURLEncoding.EncodeToString([]byte(issuer.issuer))+".dXNlci0xMjM=" {
 		t.Fatalf("unexpected actor ID: %q", principal.ActorID())
 	}
 }
