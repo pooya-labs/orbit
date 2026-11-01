@@ -431,3 +431,86 @@ func TestAuthenticatedOTLPGatewaysRejectMixedWorkspaceResourceBatches(t *testing
 		})
 	}
 }
+
+
+func addOversizedResourceAttribute(t *testing.T, message proto.Message) {
+	t.Helper()
+	attribute := &commonv1.KeyValue{
+		Key: "integration.oversized.payload",
+		Value: &commonv1.AnyValue{
+			Value: &commonv1.AnyValue_StringValue{StringValue: strings.Repeat("x", maxOTLPRequestBytes+1)},
+		},
+	}
+	switch request := message.(type) {
+	case *metricsv1.ExportMetricsServiceRequest:
+		request.ResourceMetrics[0].Resource.Attributes = append(request.ResourceMetrics[0].Resource.Attributes, attribute)
+	case *logsv1.ExportLogsServiceRequest:
+		request.ResourceLogs[0].Resource.Attributes = append(request.ResourceLogs[0].Resource.Attributes, attribute)
+	case *tracesv1.ExportTraceServiceRequest:
+		request.ResourceSpans[0].Resource.Attributes = append(request.ResourceSpans[0].Resource.Attributes, attribute)
+	default:
+		t.Fatalf("unsupported OTLP request type %T", message)
+	}
+}
+
+func TestAuthenticatedOTLPGatewaysRejectOversizedRequestsForEverySignal(t *testing.T) {
+	repository, workspaceA, _, _, verifier := openGatewayIntegrationRepository(t)
+	authorizer, err := NewAuthorizer(verifier, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpForwarder := &forwarderStub{}
+	httpHandler, err := NewHTTPGateway(authorizer, httpForwarder, HTTPGatewayConfig{
+		RequestsPerMinute: 100,
+		ForwardTimeout: 2 * time.Second,
+		RateLimitStore: repository,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grpcForwarder := &grpcForwarderStub{}
+	grpcGateway := &GRPCGateway{
+		authorizer: authorizer,
+		forwarder: grpcForwarder,
+		limiter: newWorkspaceRateLimiter(100),
+		sharedLimiter: repository,
+		timeout: 2 * time.Second,
+		concurrency: make(chan struct{}, maxConcurrentGRPCExports),
+	}
+
+	for _, signal := range []string{"metrics", "logs", "traces"} {
+		t.Run(signal, func(t *testing.T) {
+			message := integrationOTLPRequest(t, signal)
+			addOversizedResourceAttribute(t, message)
+			payload, err := proto.Marshal(message)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(payload) <= maxOTLPRequestBytes || proto.Size(message) <= maxOTLPRequestBytes {
+				t.Fatalf("test payload is not oversized: HTTP bytes=%d gRPC proto size=%d limit=%d", len(payload), proto.Size(message), maxOTLPRequestBytes)
+			}
+
+			request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+workspaceA.ID+"/v1/"+signal, bytes.NewReader(payload))
+			request.Header.Set("Authorization", "Bearer integration-workload-token")
+			request.Header.Set("Content-Type", "application/x-protobuf")
+			response := httptest.NewRecorder()
+			httpHandler.ServeHTTP(response, request)
+			if response.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("HTTP oversized export status = %d, want 413; body=%s", response.Code, response.Body.String())
+			}
+			if httpForwarder.calls != 0 {
+				t.Fatalf("oversized %s payload reached HTTP Collector forwarder", signal)
+			}
+
+			grpcErr := callIntegrationGRPCMessage(grpcGateway, workspaceA.ID, signal, message)
+			if status.Code(grpcErr) != codes.ResourceExhausted {
+				t.Fatalf("gRPC oversized export code = %s, want ResourceExhausted; err=%v", status.Code(grpcErr), grpcErr)
+			}
+			if grpcForwarder.metricsCalls != 0 || grpcForwarder.logsCalls != 0 || grpcForwarder.tracesCalls != 0 {
+				t.Fatalf("oversized %s payload reached gRPC Collector forwarder: metrics=%d logs=%d traces=%d",
+					grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
+			}
+		})
+	}
+}
