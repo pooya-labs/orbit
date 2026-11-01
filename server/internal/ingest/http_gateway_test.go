@@ -500,3 +500,65 @@ func TestHTTPGatewayMapsCollectorForwardTimeoutToGatewayTimeout(t *testing.T) {
 		t.Fatalf("HTTP status = %d, want %d; body=%s", response.Code, http.StatusGatewayTimeout, response.Body.String())
 	}
 }
+
+
+// TestHTTPGatewayRecoversAfterDatabaseAndCollectorFailures verifies that
+// transient authorization, shared-rate-limit, and Collector failures do not
+// poison a long-lived gateway after the dependencies recover.
+func TestHTTPGatewayRecoversAfterDatabaseAndCollectorFailures(t *testing.T) {
+	verifier, grants := validStubs()
+	authorizer, err := NewAuthorizer(verifier, grants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared := &rateLimitStoreStub{}
+	forwarder := &forwarderStub{}
+	handler, err := NewHTTPGateway(authorizer, forwarder, HTTPGatewayConfig{
+		RequestsPerMinute: 10,
+		ForwardTimeout: 2 * time.Second,
+		RateLimitStore: shared,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := proto.Marshal(metricRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	send := func() *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+testWorkspace+"/v1/metrics", bytes.NewReader(payload))
+		request.Header.Set("Authorization", "Bearer signed-token")
+		request.Header.Set("Content-Type", "application/x-protobuf")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+
+	grants.err = errors.New("postgres temporarily unavailable")
+	if response := send(); response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("authorization outage status = %d, want 503", response.Code)
+	}
+	grants.err = nil
+
+	shared.err = errors.New("shared rate-limit store temporarily unavailable")
+	if response := send(); response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("rate-limit store outage status = %d, want 503", response.Code)
+	}
+	if forwarder.calls != 0 {
+		t.Fatalf("database failures reached Collector %d times", forwarder.calls)
+	}
+	shared.err = nil
+
+	forwarder.err = errors.New("Collector temporarily unavailable")
+	if response := send(); response.Code != http.StatusBadGateway {
+		t.Fatalf("Collector outage status = %d, want 502", response.Code)
+	}
+	forwarder.err = nil
+
+	if response := send(); response.Code != http.StatusOK {
+		t.Fatalf("request after dependency recovery status = %d, body=%s", response.Code, response.Body.String())
+	}
+	if forwarder.calls != 2 {
+		t.Fatalf("Collector calls = %d, want 2 (failed attempt and recovered request)", forwarder.calls)
+	}
+}
