@@ -5,7 +5,7 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"net/httptest"
+	"net/http/httptest"
 	"testing"
 	"time"
 
