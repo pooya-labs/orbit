@@ -55,11 +55,8 @@ function formatRate(value: number): string {
 }
 
 function nanoTimestamp(value: string): number {
-  try {
-    return Number(BigInt(value) / 1_000_000n);
-  } catch {
-    return Number.NaN;
-  }
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) ? timestamp / 1_000_000 : Number.NaN;
 }
 
 function TelemetryEmpty({ title, message }: { title: string; message: string }) {
