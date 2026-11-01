@@ -133,6 +133,37 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 			writeTelemetryError(w, r, logger, "Telemetry service discovery", err)
 			return
 		}
+		if repository == nil {
+			result.Warnings = append(result.Warnings, "PostgreSQL catalog persistence unavailable")
+		} else if len(result.Data) > 0 {
+			observations := make([]store.TelemetryService, 0, len(result.Data))
+			for _, discovered := range result.Data {
+				observations = append(observations, store.TelemetryService{
+					Name:               discovered.Name,
+					Sources:            discovered.Sources,
+					ResourceAttributes: discovered.ResourceAttributes,
+				})
+			}
+			persisted, persistErr := repository.UpsertTelemetryServices(ctx, observations)
+			if persistErr != nil {
+				logger.Error("persist telemetry service catalog failed", "error", persistErr, "request_id", r.Header.Get("X-Request-ID"))
+				writeError(w, r, http.StatusServiceUnavailable, "catalog_persistence_failed", "Telemetry service catalog is temporarily unavailable")
+				return
+			}
+			persistedByName := make(map[string]store.TelemetryService, len(persisted))
+			for _, item := range persisted {
+				persistedByName[item.Name] = item
+			}
+			for index := range result.Data {
+				if item, ok := persistedByName[result.Data[index].Name]; ok {
+					result.Data[index].ID = item.ID
+					result.Data[index].FirstSeenAt = item.FirstSeenAt
+					result.Data[index].LastSeenAt = item.LastSeenAt
+					result.Data[index].LastDiscoveredAt = item.LastDiscoveredAt
+					result.Data[index].ResourceAttributes = item.ResourceAttributes
+				}
+			}
+		}
 		writeJSON(w, http.StatusOK, result)
 	})
 
