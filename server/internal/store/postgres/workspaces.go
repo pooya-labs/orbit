@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	workspaceSlugPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$`)
+	workspaceSlugPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])$`)
 	workspaceIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	workspaceAuditActionPattern = regexp.MustCompile(`^[a-z][a-z0-9_.:-]{0,95}$`)
 	workspaceAuditResourcePattern = regexp.MustCompile(`^[a-z][a-z0-9_.:-]{0,63}$`)
