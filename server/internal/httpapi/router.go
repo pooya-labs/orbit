@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 )
@@ -93,7 +92,7 @@ type Config struct {
 	Environment      string
 	AllowedOrigins   []string
 	Telemetry        *telemetry.Client
-	AuthVerifier     *auth.Verifier
+	AuthVerifier       TokenVerifier
 	RateLimitPerMinute int
 }
 
