@@ -15,6 +15,7 @@ tags:
   - name: Metadata
   - name: Services
   - name: Incidents
+  - name: Alerting
   - name: Telemetry
 paths:
   /health/live:
@@ -518,7 +519,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
   /api/v1/workspaces/{workspaceID}/alert-rules:
     get:
-      tags: [Incidents]
+      tags: [Alerting]
       operationId: listWorkspaceAlertRules
       summary: List workspace alert rule definitions
       description: Returns alert rule definitions for a workspace member. Rules are definitions only in this API slice; periodic evaluation and notification delivery are not yet implemented.
@@ -564,7 +565,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     post:
-      tags: [Incidents]
+      tags: [Alerting]
       operationId: createWorkspaceAlertRule
       summary: Create a workspace alert rule definition
       description: Creates an enabled rule definition. Only request_rate is currently supported because it is the only metric emitted by the instrumented demo workload. No PromQL/LogQL is accepted. Owner, administrator, or operator membership is required. Creation and workspace audit are committed in one transaction. This endpoint does not start an evaluator or send notifications.
@@ -622,7 +623,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
   /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}:
     put:
-      tags: [Incidents]
+      tags: [Alerting]
       operationId: updateWorkspaceAlertRule
       summary: Replace a workspace alert rule definition
       description: Replaces all configurable fields of a rule. Owner, administrator, or operator membership is required. Rule changes and the corresponding immutable workspace audit event are written atomically. Updating a rule does not imply that an evaluator or notification adapter is running.
@@ -685,7 +686,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     delete:
-      tags: [Incidents]
+      tags: [Alerting]
       operationId: deleteWorkspaceAlertRule
       summary: Delete a workspace alert rule definition
       description: Deletes a rule and appends a workspace audit event in the same transaction. The audit record remains after the rule is deleted. Owner, administrator, or operator membership is required.
@@ -733,7 +734,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
   /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}/enabled:
     patch:
-      tags: [Incidents]
+      tags: [Alerting]
       operationId: setWorkspaceAlertRuleEnabled
       summary: Enable or disable a workspace alert rule definition
       description: Changes the enabled flag and appends a workspace audit event atomically. This controls stored rule configuration only; scheduled evaluation is not part of this API slice.
