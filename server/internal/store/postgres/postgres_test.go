@@ -346,3 +346,88 @@ func TestWorkspaceMembershipAndAppendOnlyAudit(t *testing.T) {
 		t.Fatal("oversized audit details were accepted")
 	}
 }
+
+
+func TestWorkspaceScopedDataReadsDoNotCrossWorkspace(t *testing.T) {
+	databaseURL := os.Getenv("ORBIT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("ORBIT_TEST_DATABASE_URL is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	repository, err := Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open repository: %v", err)
+	}
+	defer repository.Close()
+
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	create := func(label string) store.Workspace {
+		workspace, createErr := repository.CreateWorkspace(ctx, store.CreateWorkspaceInput{
+			Name: "Scope " + label + " " + suffix,
+			Slug: "scope-" + label + "-" + suffix,
+			OwnerIssuer: "https://scope-test.example/",
+			OwnerSubject: label + "-" + suffix,
+		})
+		if createErr != nil {
+			t.Fatalf("create %s workspace: %v", label, createErr)
+		}
+		return workspace
+	}
+	workspaceA := create("alpha")
+	workspaceB := create("bravo")
+
+	var serviceAID string
+	if err := repository.pool.QueryRow(ctx, `
+		INSERT INTO services (workspace_id, name, environment, region, status, source)
+		VALUES ($1::uuid, $2, 'test', 'test-region', 'operational', 'scope_test')
+		RETURNING id::text
+	`, workspaceA.ID, "scope-service-"+suffix).Scan(&serviceAID); err != nil {
+		t.Fatalf("insert workspace A service: %v", err)
+	}
+	if _, err := repository.pool.Exec(ctx, `
+		INSERT INTO incidents (workspace_id, title, service_id, severity, status, source)
+		VALUES ($1::uuid, $2, $3::uuid, 'low', 'open', 'scope_test')
+	`, workspaceA.ID, "scope-incident-"+suffix, serviceAID); err != nil {
+		t.Fatalf("insert workspace A incident: %v", err)
+	}
+	if _, err := repository.pool.Exec(ctx, `
+		INSERT INTO telemetry_services (workspace_id, name)
+		VALUES ($1::uuid, $2)
+	`, workspaceA.ID, "scope-telemetry-"+suffix); err != nil {
+		t.Fatalf("insert workspace A telemetry service: %v", err)
+	}
+
+	servicesA, err := repository.ListWorkspaceServices(ctx, workspaceA.ID)
+	if err != nil || len(servicesA) != 1 || servicesA[0].Name != "scope-service-"+suffix {
+		t.Fatalf("workspace A services = %+v, err=%v", servicesA, err)
+	}
+	servicesB, err := repository.ListWorkspaceServices(ctx, workspaceB.ID)
+	if err != nil || len(servicesB) != 0 {
+		t.Fatalf("workspace B must not see workspace A services: %+v, err=%v", servicesB, err)
+	}
+	incidentsA, err := repository.ListWorkspaceIncidents(ctx, workspaceA.ID, "open")
+	if err != nil || len(incidentsA) != 1 || incidentsA[0].ServiceID != serviceAID {
+		t.Fatalf("workspace A incidents = %+v, err=%v", incidentsA, err)
+	}
+	incidentsB, err := repository.ListWorkspaceIncidents(ctx, workspaceB.ID, "")
+	if err != nil || len(incidentsB) != 0 {
+		t.Fatalf("workspace B must not see workspace A incidents: %+v, err=%v", incidentsB, err)
+	}
+	telemetryA, err := repository.ListWorkspaceTelemetryServices(ctx, workspaceA.ID, 50)
+	if err != nil || len(telemetryA) != 1 || telemetryA[0].Name != "scope-telemetry-"+suffix {
+		t.Fatalf("workspace A telemetry = %+v, err=%v", telemetryA, err)
+	}
+	telemetryB, err := repository.ListWorkspaceTelemetryServices(ctx, workspaceB.ID, 50)
+	if err != nil || len(telemetryB) != 0 {
+		t.Fatalf("workspace B must not see workspace A telemetry: %+v, err=%v", telemetryB, err)
+	}
+
+	_, err = repository.pool.Exec(ctx, `
+		INSERT INTO incidents (workspace_id, title, service_id, severity, status, source)
+		VALUES ($1::uuid, $2, $3::uuid, 'low', 'open', 'scope_test')
+	`, workspaceB.ID, "cross-workspace-link-"+suffix, serviceAID)
+	if err == nil {
+		t.Fatal("database must reject an incident linked to a service in another workspace")
+	}
+}
