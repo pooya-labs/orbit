@@ -55,7 +55,7 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 - [x] Add validated cursor-based pagination to the service catalog API and dashboard selector.
 - [x] Add allow-listed multi-series grouping and separate line rendering for the request-rate metric; arbitrary metric-name selection remains future work.
 - [x] Render queried telemetry in Metrics, Logs, and Traces dashboard views with loading/empty/error states, query freshness, and backend provenance.
-- [ ] Add stale-data and telemetry-gap indicators based on sample timestamps.
+- [x] Flag stale metric samples and gaps using the actual Prometheus sample timestamps and query step; event-driven logs and traces are not judged against metric scrape intervals.
 
 ## M05 — Operations workflows
 
