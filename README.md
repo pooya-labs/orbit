@@ -70,7 +70,7 @@ Stop containers with `docker compose down`. To delete local database/cache volum
 npm run typecheck
 npm run build
 cd server
-go mod download
+go mod tidy
 go test -race ./...
 go vet ./...
 go build ./cmd/orbit-api
