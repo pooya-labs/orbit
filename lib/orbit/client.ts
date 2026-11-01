@@ -122,9 +122,13 @@ export async function listTelemetryServices(
   window: TelemetryWindow = "1h",
   signal?: AbortSignal,
   baseUrl?: string,
+  cursor?: string,
+  limit = 50,
 ): Promise<TelemetryServicesResponse> {
+  const query = new URLSearchParams({ window, limit: String(limit) });
+  if (cursor) query.set("cursor", cursor);
   return getJSON<TelemetryServicesResponse>(
-    `/api/v1/telemetry/services?window=${encodeURIComponent(window)}`,
+    `/api/v1/telemetry/services?${query.toString()}`,
     signal,
     baseUrl,
   );
