@@ -454,6 +454,17 @@ func TestWorkloadIdentityWorkspaceGrantAuthorization(t *testing.T) {
  if err:=repository.SetWorkloadWorkspaceGrant(ctx,grant,true);err!=nil{t.Fatalf("grant metrics: %v",err)}
  authorized,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceA.ID,"metrics")
  if err!=nil||authorized.ID!=identity.ID{t.Fatalf("authorized workload = %+v, err=%v",authorized,err)}
+ listed,err:=repository.ListWorkloadIdentities(ctx,100)
+ if err!=nil{t.Fatalf("list workload identities: %v",err)}
+ foundIdentity:=false
+ for _,item:=range listed { if item.ID==identity.ID && item.Issuer==identity.Issuer && item.Subject==identity.Subject { foundIdentity=true } }
+ if !foundIdentity { t.Fatalf("workload identity %s was not listed",identity.ID) }
+ grants,err:=repository.ListWorkspaceWorkloadGrants(ctx,workspaceA.ID)
+ if err!=nil{t.Fatalf("list workspace workload grants: %v",err)}
+ if len(grants)!=1 || grants[0].IdentityID!=identity.ID || grants[0].Signal!="metrics" { t.Fatalf("workspace A grants = %+v, want only metrics",grants) }
+ grantsB,err:=repository.ListWorkspaceWorkloadGrants(ctx,workspaceB.ID)
+ if err!=nil{t.Fatalf("list workspace B grants: %v",err)}
+ if len(grantsB)!=0 { t.Fatalf("workspace B grants = %+v, want empty",grantsB) }
  if _,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceA.ID,"logs");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("logs should be denied, got %v",err)}
  if _,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceB.ID,"metrics");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("cross-workspace access should be denied, got %v",err)}
  if err:=repository.SetWorkloadWorkspaceGrant(ctx,grant,false);err!=nil{t.Fatalf("revoke metrics grant: %v",err)}
