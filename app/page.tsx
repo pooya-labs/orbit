@@ -60,7 +60,10 @@ const services: Service[] = [
   { name: "search-indexer", description: "Search infrastructure", region: "us-east-1", latency: "—", errorRate: "—", state: "Incident", initials: "SI", tone: "rose" },
 ];
 
-const navGroups = [
+type NavItem = { label: string; icon: LucideIcon; count?: string; alert?: boolean };
+type NavGroup = { label: string; items: NavItem[] };
+
+const navGroups: NavGroup[] = [
   {
     label: "OBSERVE",
     items: [
