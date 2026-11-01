@@ -408,6 +408,26 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	}
 }
 
+func TestTelemetryServicePaginationRejectsMalformedCursor(t *testing.T) {
+	handler := NewHandler(Config{}, nil, testLogger())
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/telemetry/services?cursor=!!!!",
+		nil,
+	))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+	var payload errorResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode invalid cursor response: %v", err)
+	}
+	if payload.Error.Code != "invalid_cursor" || payload.Error.RequestID == "" {
+		t.Fatalf("unexpected invalid cursor response: %+v", payload.Error)
+	}
+}
+
 func TestTelemetryServiceDiscoveryUsesCursorPagination(t *testing.T) {
 	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
