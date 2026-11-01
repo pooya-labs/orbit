@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,7 +26,10 @@ type fakeRepository struct {
 	catalog   []store.TelemetryService
 	pingErr   error
 	listErr   error
-	catalogErr error
+	catalogErr   error
+	rateLimitMu sync.Mutex
+	rateLimitCounts map[string]int64
+	rateLimitErr error
 }
 
 func (f *fakeRepository) Ping(context.Context) error { return f.pingErr }
@@ -147,6 +151,19 @@ func (f *fakeRepository) ListIncidents(_ context.Context, status string) ([]stor
 	}
 	return result, nil
 }
+func (f *fakeRepository) IncrementRateLimitWindow(_ context.Context, keyHash string) (int64, error) {
+	if f.rateLimitErr != nil {
+		return 0, f.rateLimitErr
+	}
+	f.rateLimitMu.Lock()
+	defer f.rateLimitMu.Unlock()
+	if f.rateLimitCounts == nil {
+		f.rateLimitCounts = make(map[string]int64)
+	}
+	f.rateLimitCounts[keyHash]++
+	return f.rateLimitCounts[keyHash], nil
+}
+
 func (f *fakeRepository) Close() {}
 
 func testLogger() *slog.Logger {
@@ -681,5 +698,49 @@ func TestTelemetryQueryValidationAndUnavailableResponses(t *testing.T) {
 				t.Fatalf("unexpected error payload: %+v", payload.Error)
 			}
 		})
+	}
+}
+
+
+func TestSharedIPRateLimitIsConsistentAcrossHandlers(t *testing.T) {
+	shared := &fakeRepository{}
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	firstInstance := withIPRateLimitStore(1, shared, next)
+	secondInstance := withIPRateLimitStore(1, shared, next)
+
+	firstRequest := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
+	firstRequest.RemoteAddr = "192.0.2.44:10001"
+	firstResponse := httptest.NewRecorder()
+	firstInstance.ServeHTTP(firstResponse, firstRequest)
+	if firstResponse.Code != http.StatusNoContent {
+		t.Fatalf("first instance status = %d, want %d", firstResponse.Code, http.StatusNoContent)
+	}
+
+	secondRequest := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
+	secondRequest.RemoteAddr = "192.0.2.44:10002"
+	secondResponse := httptest.NewRecorder()
+	secondInstance.ServeHTTP(secondResponse, secondRequest)
+	if secondResponse.Code != http.StatusTooManyRequests {
+		t.Fatalf("second instance status = %d, want shared limit %d; body=%s", secondResponse.Code, http.StatusTooManyRequests, secondResponse.Body.String())
+	}
+}
+
+func TestSharedRateLimitFailsClosedWhenPostgresIsUnavailable(t *testing.T) {
+	shared := &fakeRepository{rateLimitErr: errors.New("database is offline")}
+	handler := withIPRateLimitStore(10, shared, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
+	request.RemoteAddr = "192.0.2.55:12000"
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want fail-closed status %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	if strings.Contains(recorder.Body.String(), "database is offline") {
+		t.Fatal("internal rate-limit storage error leaked to the client")
 	}
 }

@@ -62,7 +62,7 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 ORBIT's milestones are not a reason to expose unsafe operations early. The delivery order is:
 
 1. Finish and merge the verified M04 read-path work. Keep complete workload-side OpenTelemetry resource ingestion as an explicit M04 follow-up.
-2. The initial M06 API security gate from [ADR 0001](decisions/0001-oidc-access-token-authentication.md) is merged in `977ce49`: OIDC discovery/JWKS access-token verification, centralized viewer/operator/administrator route policy, explicit production fail-closed configuration, request-body/token limits, and process-local per-IP/per-subject rate limiting are implemented and CI-verified. Browser PKCE, workspace membership/isolation, distributed limits, and audit-backed actor workflows remain separate acceptance work.
+2. The initial M06 API security gate from [ADR 0001](decisions/0001-oidc-access-token-authentication.md) is merged in `977ce49`: OIDC discovery/JWKS access-token verification, centralized viewer/operator/administrator route policy, explicit production fail-closed configuration, request-body/token limits, and baseline process-local per-IP/per-subject rate limiting are implemented and CI-verified. Browser PKCE is implemented on draft PR #12; shared PostgreSQL rate limiting is in a separate feature branch and awaits CI. Workspace membership/isolation and audit-backed actor workflows remain separate acceptance work.
 3. Deliver M05 in slices: incident lifecycle and immutable timeline first; alert rules and notification adapters second; deployment annotations third; SLO/error-budget calculations fourth; audit history across every mutation.
 4. Complete the remaining M06 operational hardening: retention/cardinality controls, load testing, backup/restore, dependency/security review, production deployment, and runbooks.
 
@@ -78,12 +78,13 @@ M05 mutations must not be exposed until workspace authorization and transactiona
 
 ## M06 — Production hardening
 
-The initial server-side OIDC resource-server and route-role gate is implemented and merged. It does not yet provide browser login, workspace isolation, or distributed rate limiting.
+The initial server-side OIDC resource-server and route-role gate is implemented and merged. Browser PKCE is implemented in draft PR #12; shared PostgreSQL rate limits are under review on a feature branch. Real provider integration and workspace isolation remain open.
 
 - [x] Merge and CI-verify OIDC discovery/JWKS access-token verification and server-side viewer/operator/administrator route enforcement (`977ce49`; CI includes Go race tests, web build, and the OTLP end-to-end smoke test).
 - [ ] Add browser Authorization Code + PKCE, token refresh/revocation, and an in-memory token lifecycle.
 - [ ] Add workspace membership and tenant-scoped repository queries before multi-user data access.
-- [ ] Replace process-local rate limits with a shared limiter for horizontally scaled deployments; add retention policies and cardinality guardrails.
+- [ ] Merge and CI-verify the shared PostgreSQL rate limiter for horizontally scaled API instances; enforce database-backed limits in staging/production and retain short-lived hashed keys.
+- [ ] Add retention policies and cardinality guardrails for telemetry and API state.
 - [ ] Load tests for ingestion and dashboard queries.
 - [ ] Threat model, dependency review, and secret scanning.
 - [ ] Production deployment guide and operational runbooks.

@@ -52,6 +52,9 @@ func (c Config) Validate() error {
 		if c.OIDCIssuer == "" || c.OIDCAudience == "" {
 			return fmt.Errorf("OIDC issuer and audience are required in %s", c.Environment)
 		}
+		if c.DatabaseURL == "" {
+			return fmt.Errorf("ORBIT_DATABASE_URL is required in %s for shared API rate limiting", c.Environment)
+		}
 	default:
 		return fmt.Errorf("ORBIT_ENVIRONMENT must be explicitly set to development, staging, or production")
 	}
