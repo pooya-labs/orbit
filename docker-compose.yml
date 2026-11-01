@@ -54,6 +54,9 @@ services:
       ORBIT_TEMPO_URL: http://tempo:3200
     ports:
       - "127.0.0.1:8080:8080"
+    networks:
+      - default
+      - telemetry-internal
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,11 +68,10 @@ services:
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
       - ./deploy/observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
-    ports:
-      - "127.0.0.1:4317:4317"
-      - "127.0.0.1:4318:4318"
-      - "127.0.0.1:9464:9464"
-      - "127.0.0.1:13133:13133"
+    # Raw OTLP receivers are reachable only from the isolated Docker network.
+    # The authenticated gateway will be the only production ingress path.
+    networks:
+      - telemetry-internal
     depends_on:
       loki:
         condition: service_started
@@ -88,8 +90,8 @@ services:
     volumes:
       - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - orbit-prometheus-data:/prometheus
-    ports:
-      - "127.0.0.1:9090:9090"
+    networks:
+      - telemetry-internal
     depends_on:
       otel-collector:
         condition: service_started
@@ -102,8 +104,8 @@ services:
     volumes:
       - ./deploy/observability/loki.yaml:/etc/loki/local-config.yaml:ro
       - orbit-loki-data:/loki
-    ports:
-      - "127.0.0.1:3100:3100"
+    networks:
+      - telemetry-internal
 
   tempo:
     image: grafana/tempo:3.1.1
@@ -113,8 +115,8 @@ services:
     volumes:
       - ./deploy/observability/tempo.yaml:/etc/tempo.yaml:ro
       - orbit-tempo-data:/var/tempo
-    ports:
-      - "127.0.0.1:3200:3200"
+    networks:
+      - telemetry-internal
 
   telemetry-demo:
     build:
@@ -124,8 +126,8 @@ services:
     restart: unless-stopped
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-    ports:
-      - "127.0.0.1:8081:8081"
+    networks:
+      - telemetry-internal
     depends_on:
       otel-collector:
         condition: service_started
@@ -135,6 +137,28 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
+
+  telemetry-smoke:
+    image: python:3.13-alpine
+    profiles: ["observability"]
+    working_dir: /workspace
+    entrypoint: ["python"]
+    volumes:
+      - ./scripts:/workspace/scripts:ro
+    networks:
+      - telemetry-internal
+    depends_on:
+      otel-collector:
+        condition: service_started
+      telemetry-demo:
+        condition: service_started
+      api:
+        condition: service_started
+
+networks:
+  telemetry-internal:
+    # No host/external attachment: OTLP receivers and backend APIs stay private.
+    internal: true
 
 volumes:
   orbit-postgres-data:

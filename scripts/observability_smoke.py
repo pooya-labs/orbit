@@ -11,11 +11,11 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-DEMO_URL = "http://127.0.0.1:8081"
-PROMETHEUS_URL = "http://127.0.0.1:9090"
-LOKI_URL = "http://127.0.0.1:3100"
-TEMPO_URL = "http://127.0.0.1:3200"
-ORBIT_API_URL = "http://127.0.0.1:8080"
+DEMO_URL = "http://telemetry-demo:8081"
+PROMETHEUS_URL = "http://prometheus:9090"
+LOKI_URL = "http://loki:3100"
+TEMPO_URL = "http://tempo:3200"
+ORBIT_API_URL = "http://api:8080"
 TIMEOUT_SECONDS = 120
 POLL_INTERVAL_SECONDS = 2
 
