@@ -13,6 +13,26 @@ func TestCommaSeparatedOriginsTrimsAndDeduplicates(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsEnvironmentToProduction(t *testing.T) {
+	t.Setenv("ORBIT_ENVIRONMENT", "")
+	t.Setenv("ORBIT_AUTH_ISSUER", "")
+	t.Setenv("ORBIT_AUTH_AUDIENCE", "")
+
+	got := Load()
+	if got.Environment != "production" {
+		t.Fatalf("default environment = %q, want production", got.Environment)
+	}
+	if err := got.Validate(); err == nil {
+		t.Fatal("default configuration must fail closed without OIDC credentials")
+	}
+}
+
+func TestValidateEmptyEnvironmentDefaultsToProduction(t *testing.T) {
+	if err := (Config{}).Validate(); err == nil {
+		t.Fatal("empty environment must not silently enable unauthenticated development mode")
+	}
+}
+
 func TestLoadReadsOIDCConfigurationDefaults(t *testing.T) {
 	t.Setenv("ORBIT_AUTH_ISSUER", " https://issuer.example ")
 	t.Setenv("ORBIT_AUTH_AUDIENCE", " orbit-api ")
