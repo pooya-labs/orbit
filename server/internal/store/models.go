@@ -40,6 +40,7 @@ type TelemetryService struct {
 	LastSeenAt          time.Time      `json:"last_seen_at"`
 	LastDiscoveredAt    time.Time      `json:"last_discovered_at"`
 	ResourceAttributes  map[string]any `json:"resource_attributes"`
+	ResourceAttributeSources map[string][]string `json:"resource_attribute_sources"`
 }
 
 type Repository interface {
