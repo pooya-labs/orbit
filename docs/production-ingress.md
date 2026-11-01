@@ -23,7 +23,7 @@ Supply these values through a protected deployment environment or secret manager
 Validate the merged Compose model before starting anything:
 
 ```sh
-docker compose -f docker-compose.yml -f deploy/production/compose.ingress.yaml --profile production-ingress config --quiet
+docker compose -f docker-compose.yml -f deploy/production/compose.ingress.yaml --profile observability --profile production-ingress config --quiet
 ```
 
 Start only after DNS, firewall, identity-provider, database, backup, and secret-management prerequisites are complete:
