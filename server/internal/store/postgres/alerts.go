@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -391,6 +392,11 @@ func (r *Repository) SetWorkspaceAlertRuleEnabled(ctx context.Context, input sto
 		map[string]any{"name": rule.Name, "enabled": rule.Enabled}); err != nil {
 		return store.AlertRule{}, err
 	}
+	if !input.Enabled {
+		if err := r.clearAlertRuleStateTx(ctx, tx, rule, "alert.disabled", time.Now().UTC()); err != nil {
+			return store.AlertRule{}, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return store.AlertRule{}, fmt.Errorf("commit alert-rule enabled update: %w", err)
 	}
@@ -429,6 +435,9 @@ func (r *Repository) DeleteWorkspaceAlertRule(ctx context.Context, input store.D
 	}
 	if err := appendAlertRuleAuditTx(ctx, tx, input.WorkspaceID, rule.ID,
 		input.ActorIssuer, input.ActorSubject, "alert_rule.deleted", input.RequestID, alertRuleAuditDetails(rule)); err != nil {
+		return err
+	}
+	if err := r.clearAlertRuleStateTx(ctx, tx, rule, "alert.deleted", time.Now().UTC()); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
