@@ -147,8 +147,12 @@ export default function TelemetryWorkspace({
     let mounted = true;
 
     const load = async (initial: boolean) => {
-      if (initial) setLoading(true);
-      else setRefreshing(true);
+      if (initial) {
+        setLoading(true);
+        if (view === "Metrics") setMetrics(null);
+        else if (view === "Logs") setLogs(null);
+        else setTraces(null);
+      } else setRefreshing(true);
       setError("");
       try {
         if (view === "Metrics") {
@@ -163,7 +167,7 @@ export default function TelemetryWorkspace({
           if (mounted) setLogs(response);
         } else {
           const response = await listTelemetryTraces(
-            { window: windowRange, service: "orbit-telemetry-demo", limit: 50 },
+            { window: windowRange, service: selectedService, limit: 50 },
             controller.signal,
             apiBaseUrl,
           );
