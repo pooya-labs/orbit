@@ -24,6 +24,12 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 - The API provides bounded read endpoints for request-rate metrics, service logs, and trace search, with source and query-time metadata.
 - GitHub Actions for tests, static build, and GitHub Pages deployment.
 
+## Project documentation
+
+- [Roadmap](docs/roadmap.md) — milestones, remaining work, and dependency gates.
+- [Architecture](docs/architecture.md) — current system shape and runtime boundaries.
+- [Project context & handoff](docs/project-context.md) — implementation history, decisions, and the continuity notes for future work.
+
 ## Technology
 
 | Layer | Technology |
