@@ -68,8 +68,8 @@ Workspace grants must be checked server-side on every ingestion authorization de
 
 ## Implementation sequence
 
-1. Add workload identity, workspace grant, and audit schema/repository methods with transactional grant changes.
-2. Add an ingestion-specific verifier configuration with a dedicated audience; do not weaken or repurpose the human API audience.
+1. [x] Add workload identity, workspace grant, and audit schema/repository methods with transactional grant changes (merged and CI-verified in PR #21). Rejected authorization-decision audit events remain an implementation follow-up.
+2. [ ] Add an ingestion-specific verifier configuration with a dedicated audience; do not weaken or repurpose the human API audience (strict RFC 9068 `at+jwt` profile and explicit `nbf` requirement are proposed in draft PR #22; CI/merge pending).
 3. Implement the OTLP gateway for both HTTP and gRPC. Resolve verified workload identity and workspace grants before accepting data.
 4. Strip producer tenant attributes and inject the canonical workspace ID into all signals. Reject conflicts and mixed-tenant batches.
 5. Restrict the Collector to private gateway-to-collector traffic and close public access to raw OTLP/backend ports.
