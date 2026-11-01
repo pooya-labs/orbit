@@ -43,10 +43,22 @@ type TelemetryService struct {
 	ResourceAttributeSources map[string][]string `json:"resource_attribute_sources"`
 }
 
+type TelemetryServiceCursor struct {
+	Name string
+	ID   string
+}
+
+type TelemetryServicePage struct {
+	Items    []TelemetryService
+	Next     *TelemetryServiceCursor
+	HasMore  bool
+}
+
 type Repository interface {
 	Ping(ctx context.Context) error
 	UpsertTelemetryServices(ctx context.Context, services []TelemetryService) ([]TelemetryService, error)
 	ListTelemetryServices(ctx context.Context, limit int) ([]TelemetryService, error)
+	ListTelemetryServicesPage(ctx context.Context, limit int, cursor *TelemetryServiceCursor) (TelemetryServicePage, error)
 	UpdateTelemetryServiceResourceAttributes(ctx context.Context, name string, attributes map[string]any, sources map[string][]string) error
 	ListServices(ctx context.Context) ([]Service, error)
 	ListIncidents(ctx context.Context, status string) ([]Incident, error)
