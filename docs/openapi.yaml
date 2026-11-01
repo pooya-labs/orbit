@@ -125,6 +125,58 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /api/v1/workspaces/{workspaceID}/incidents:
+    get:
+      tags: [Incidents]
+      operationId: listWorkspaceIncidents
+      summary: List incidents in a workspace
+      description: Returns at most 500 incidents belonging to the specified workspace. Any workspace member may read the incident inventory.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: status
+          required: false
+          description: Filter by lifecycle status. Omit to list all statuses.
+          schema:
+            type: string
+            enum: [open, investigating, monitoring, resolved]
+      responses:
+        "200":
+          description: Workspace incident inventory.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Incident"
+        "400":
+          description: Invalid workspace identifier or status filter.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Workspace incident storage is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       tags: [Incidents]
       operationId: createWorkspaceIncident
