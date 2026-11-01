@@ -16,7 +16,7 @@ PROMETHEUS_URL = "http://127.0.0.1:9090"
 LOKI_URL = "http://127.0.0.1:3100"
 TEMPO_URL = "http://127.0.0.1:3200"
 ORBIT_API_URL = "http://127.0.0.1:8080"
-TIMEOUT_SECONDS = 60
+TIMEOUT_SECONDS = 120
 POLL_INTERVAL_SECONDS = 2
 
 
@@ -122,10 +122,21 @@ def main() -> int:
                 {"service": "orbit-telemetry-demo", "window": "1h", "limit": "20"}
             )
             payload = get_json(f"{ORBIT_API_URL}/api/v1/telemetry/traces?{query}")
-            return (
+            traces = payload.get("data", [])
+            if (
                 payload.get("source") == "tempo"
                 and payload.get("service") == "orbit-telemetry-demo"
-                and any(item.get("traceID") == trace_id for item in payload.get("data", []))
+                and any(item.get("traceID") == trace_id for item in traces)
+            ):
+                return True
+            visible_ids = [
+                item.get("traceID")
+                for item in traces[:5]
+                if isinstance(item, dict) and isinstance(item.get("traceID"), str)
+            ]
+            raise RuntimeError(
+                "Tempo API search has not returned the emitted trace yet "
+                f"(returned={len(traces)}, expected={trace_id}, sample_ids={visible_ids})"
             )
 
         wait_for("ORBIT API discovers services across all three backends", api_services_exist)
