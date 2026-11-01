@@ -64,6 +64,7 @@ OpenTelemetry Collector
 - Docker Compose provisions PostgreSQL, Redis, NATS JetStream, and the Go API.
 - An optional `observability` profile adds OpenTelemetry Collector, Prometheus, Loki, and Tempo.
 - The Collector receives OTLP over gRPC (`4317`) and HTTP (`4318`), then routes metrics to Prometheus, traces to Tempo, and logs to Loki.
+- The opt-in `telemetry-demo` container is instrumented with the OpenTelemetry Go SDK and exports a request counter, a trace, and a structured log through OTLP/HTTP. Its `GET /emit` endpoint is a deterministic smoke-test trigger.
 - Prometheus scrapes the Collector's Prometheus exporter on `9464`; the Prometheus, Loki, and Tempo query interfaces use ports `9090`, `3100`, and `3200`.
 - Redis and NATS are provisioned but not yet wired into application code.
 - All local development ports are bound to `127.0.0.1`; the local telemetry backends have no authentication and must not be exposed to the internet.
@@ -112,8 +113,8 @@ OpenTelemetry Collector
 ## Current limitations
 
 - No authentication, workspace isolation, or user management.
-- The local OTLP pipeline is available, but the Go API and sample workloads are not instrumented yet.
-- ORBIT's API and dashboard do not yet query Prometheus, Tempo, or Loki; telemetry is not yet shown in the product UI.
+- The local OTLP pipeline and a dedicated instrumented demo workload are available; the production Go API is not instrumented yet.
+- ORBIT's API and dashboard do not yet query Prometheus, Tempo, or Loki; demo signals are verified in backend query APIs but are not yet shown in the product UI.
 - Redis and NATS are available in Compose but are not yet used by the Go API.
 - The Pages deployment is frontend-only. The Go API is local-only, not publicly hosted.
 - The dashboard remains a demo preview and does not yet consume the new database endpoints.
