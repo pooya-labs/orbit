@@ -139,3 +139,71 @@ func (r *Repository) SetWorkloadIdentityStatus(ctx context.Context,id,actorIssue
 }
 
 var _ store.WorkloadIdentityRepository = (*Repository)(nil)
+
+
+func (r *Repository) ListWorkloadIdentities(ctx context.Context, limit int) ([]store.WorkloadIdentity, error) {
+	if limit < 1 || limit > 100 {
+		return nil, fmt.Errorf("workload identity list limit must be between 1 and 100")
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT id::text, issuer, subject, display_name, status,
+		       expires_at, created_at, updated_at, revoked_at
+		FROM workload_identities
+		ORDER BY created_at DESC, id DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list workload identities: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]store.WorkloadIdentity, 0)
+	for rows.Next() {
+		var item store.WorkloadIdentity
+		if err := rows.Scan(
+			&item.ID, &item.Issuer, &item.Subject, &item.DisplayName, &item.Status,
+			&item.ExpiresAt, &item.CreatedAt, &item.UpdatedAt, &item.RevokedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan workload identity: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate workload identities: %w", err)
+	}
+	return items, nil
+}
+
+func (r *Repository) ListWorkspaceWorkloadGrants(ctx context.Context, workspaceID string) ([]store.WorkloadIdentityGrant, error) {
+	if !workspaceIDPattern.MatchString(workspaceID) {
+		return nil, fmt.Errorf("workspace ID must be a UUID")
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT wi.id::text, wi.issuer, wi.subject, wi.display_name, wi.status,
+		       wi.expires_at, wg.workspace_id::text, wg.signal, wg.granted_at
+		FROM workload_workspace_grants wg
+		JOIN workload_identities wi ON wi.id = wg.workload_identity_id
+		WHERE wg.workspace_id = $1::uuid AND wg.revoked_at IS NULL
+		ORDER BY wi.display_name, wg.signal
+	`, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("list workspace workload grants: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]store.WorkloadIdentityGrant, 0)
+	for rows.Next() {
+		var item store.WorkloadIdentityGrant
+		if err := rows.Scan(
+			&item.IdentityID, &item.Issuer, &item.Subject, &item.DisplayName,
+			&item.Status, &item.ExpiresAt, &item.WorkspaceID, &item.Signal, &item.GrantedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan workspace workload grant: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate workspace workload grants: %w", err)
+	}
+	return items, nil
+}
