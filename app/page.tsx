@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -104,7 +105,7 @@ function MetricCard({
   accent,
 }: {
   label: string;
-  value: React.ReactNode;
+  value: ReactNode;
   change: string;
   direction: "up" | "down";
   detail: string;
