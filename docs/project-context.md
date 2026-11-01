@@ -247,3 +247,19 @@ Scope boundary: this does not yet deliver the dashboard UI for incident operatio
 The repository now has an in-process OTLP gateway baseline for both HTTP and gRPC: sustained concurrency regression tests plus handler-path throughput/allocation benchmarks. See [M06 load-testing guide](m06-load-testing.md). The sustained tests use 16 workers × 32 metrics exports for each transport.
 
 Important boundary: the test verifier, workspace-grant repository, shared rate-limit store, and Collector forwarder are local stubs. This validates request-path behavior and bounded concurrency, but not PostgreSQL/Collector capacity, multi-process performance, production latency, TLS, or backpressure under real dependency load. A target-environment load report remains a production gate.
+
+
+## M05 implementation update — PR #69 workspace alert rule definitions
+
+PR #69 is merged into `main` (squash merge commit `64c4c4f1d36fd0c17ae444ac5736fadad0a32655`). CI run `41361579435` passed Go race tests/build and vet, web typecheck/production build, and the telemetry end-to-end smoke test.
+
+The backend now stores and manages alert-rule definitions per workspace. Migration 010 creates `alert_rules` with a case-insensitive workspace/name uniqueness index and bounded constraints. The authenticated API supports:
+- `GET /api/v1/workspaces/{workspaceID}/alert-rules`
+- `POST /api/v1/workspaces/{workspaceID}/alert-rules`
+- `PUT /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}`
+- `PATCH /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}/enabled`
+- `DELETE /api/v1/workspaces/{workspaceID}/alert-rules/{ruleID}`
+
+Owner, administrator, and operator roles can mutate definitions; any workspace member can list them. Each create/update/enable/disable/delete operation writes a workspace audit event in the same PostgreSQL transaction. Rule configuration is strictly allow-listed: metric `request_rate` only, operators `gt/gte/lt/lte`, thresholds in a finite positive bounded range, windows of 60/300/900 seconds, pending duration of 0–3600 seconds, and known severities. No arbitrary query expression or webhook destination is accepted.
+
+Important boundary: definitions are persisted configuration only. There is not yet a periodic evaluator, alert-instance lifecycle/deduplication, multi-replica scheduler coordination, or notification delivery/retry adapter. The current metric is the request counter emitted by the instrumented demo workload; do not advertise error-rate or latency alerting until those metrics exist and are sourced safely.

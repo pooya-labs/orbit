@@ -72,7 +72,9 @@ M05 mutations must not be exposed until workspace authorization and transactiona
 
 - [x] Backend incident lifecycle API and immutable timeline: workspace-scoped creation, validated status transitions/reopen, and atomic workspace audit (PR #66; migration 009; CI passing).
 - [ ] Dashboard UI for incident creation, status changes, detail, and timeline review.
-- [ ] Alert rules and notification adapters.
+- [x] Workspace-scoped alert rule definition CRUD with immutable workspace audit (PR #69; migration 010; CI passing). v1 is limited to the existing `request_rate` metric and rejects arbitrary query expressions.
+- [ ] Add a scheduled evaluator with persisted firing/resolved state, deduplication, and multi-replica coordination; stored rule definitions are not evaluated yet.
+- [ ] Add secure notification adapters and delivery/retry history.
 - [ ] Deployment annotations and release comparison.
 - [ ] SLO definitions and error-budget burn calculations.
 - [ ] Extend audit-backed history to every operator mutation and workflow.
@@ -200,3 +202,12 @@ Migration 009 adds a workspace-scoped incident timeline with a composite foreign
 The supported state transitions are: open → investigating/monitoring/resolved; investigating → monitoring/resolved; monitoring → investigating/resolved; resolved → investigating (reopen). Resolving sets `resolved_at`; reopening clears it. The authenticated API exposes POST workspace incidents, PATCH incident status, and GET incident timeline routes. The OpenAPI contract describes these endpoints and request/response schemas.
 
 This is the backend API and persistence slice only. Dashboard incident controls/detail/timeline UI, alert rules/notifications, deployment annotations, SLO/error-budget calculations, and wider audit workflows remain open. M05 is not complete.
+
+
+## M05 PR #69 — workspace alert rule definitions
+
+PR #69 is merged into `main` (squash merge commit `64c4c4f1d36fd0c17ae444ac5736fadad0a32655`). CI run `41361579435` passed all three jobs: Go API race tests/build and vet, web typecheck/production build, and the telemetry end-to-end smoke test.
+
+Migration 010 adds workspace-owned alert rule definitions with a case-insensitive unique name per workspace and database constraints for the supported metric, operators, threshold, evaluation window, pending duration, severity, and description bounds. The API supports list, create, replace, enable/disable, and delete. Owner/administrator/operator roles may mutate; workspace members may list. Every mutation and its append-only workspace audit event are committed in one transaction.
+
+Version 1 deliberately supports only `request_rate`, the metric currently emitted by the instrumented demo. It accepts fixed comparison operators and bounded settings, not arbitrary PromQL/LogQL. This PR stores definitions only: there is no scheduler/evaluator, firing/resolved state, deduplication, or notification delivery yet. M05 remains in progress.
