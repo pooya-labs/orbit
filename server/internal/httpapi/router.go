@@ -475,8 +475,16 @@ func withAuthorization(verifier auth.TokenVerifier, required bool, next http.Han
 			writeUnauthorized(w, r)
 			return
 		}
-		if !principal.HasRole(auth.RoleViewer) {
-			writeError(w, r, http.StatusForbidden, "insufficient_role", "The access token does not grant viewer access")
+		requiredRole := auth.RoleViewer
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			requiredRole = auth.RoleOperator
+		}
+		if !principal.HasRole(requiredRole) {
+			message := "The access token does not grant viewer access"
+			if requiredRole == auth.RoleOperator {
+				message = "The access token does not grant operator access"
+			}
+			writeError(w, r, http.StatusForbidden, "insufficient_role", message)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(auth.ContextWithPrincipal(r.Context(), principal)))
