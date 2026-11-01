@@ -170,7 +170,7 @@ func TestUnconfiguredBackendReturnsTypedError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}); err != ErrNotConfigured {
+	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo"); err != ErrNotConfigured {
 		t.Fatalf("error = %v, want ErrNotConfigured", err)
 	}
 }
