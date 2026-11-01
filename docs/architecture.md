@@ -50,6 +50,7 @@ OpenTelemetry Collector
 - Request IDs, structured JSON request logs, and panic recovery.
 - `GET /health/live`, `GET /health/ready`, and `GET /api/v1/meta`.
 - `GET /api/v1/services` and `GET /api/v1/incidents?status=...`.
+- `GET /api/v1/telemetry/metrics`, `/logs`, and `/traces` expose bounded queries against Prometheus, Loki, and Tempo.
 - Data endpoints use explicit JSON envelopes and return safe errors without leaking database details.
 
 ### PostgreSQL
@@ -114,7 +115,8 @@ OpenTelemetry Collector
 
 - No authentication, workspace isolation, or user management.
 - The local OTLP pipeline and a dedicated instrumented demo workload are available; the production Go API is not instrumented yet.
-- ORBIT's API and dashboard do not yet query Prometheus, Tempo, or Loki; demo signals are verified in backend query APIs but are not yet shown in the product UI.
+- ORBIT's API now performs fixed, bounded read queries against Prometheus, Tempo, and Loki (15m–24h windows, capped results, 6-second backend timeout, 2 MiB response cap).
+- The dashboard client has typed methods for those endpoints, but the product UI does not render the returned telemetry yet.
 - Redis and NATS are available in Compose but are not yet used by the Go API.
 - The Pages deployment is frontend-only. The Go API is local-only, not publicly hosted.
 - The dashboard remains a demo preview and does not yet consume the new database endpoints.

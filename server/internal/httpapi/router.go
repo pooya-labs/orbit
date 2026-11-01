@@ -5,18 +5,21 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
+	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 )
 
 type Config struct {
 	Version        string
 	Environment    string
 	AllowedOrigins []string
+	Telemetry      *telemetry.Client
 }
 
 type statusResponse struct {
@@ -113,12 +116,106 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 		writeJSON(w, http.StatusOK, incidentsResponse{Data: items})
 	})
 
+	mux.HandleFunc("GET /api/v1/telemetry/metrics", func(w http.ResponseWriter, r *http.Request) {
+		window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_window", err.Error())
+			return
+		}
+		if cfg.Telemetry == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Prometheus is not configured")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 7*time.Second)
+		defer cancel()
+		result, err := cfg.Telemetry.Metrics(ctx, window)
+		if err != nil {
+			writeTelemetryError(w, r, logger, "Prometheus", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	})
+	mux.HandleFunc("GET /api/v1/telemetry/logs", func(w http.ResponseWriter, r *http.Request) {
+		window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_window", err.Error())
+			return
+		}
+		service := r.URL.Query().Get("service")
+		if service == "" {
+			service = "orbit-telemetry-demo"
+		}
+		if err := telemetry.ValidateServiceName(service); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_service", err.Error())
+			return
+		}
+		limit, err := telemetry.ParseLimit(r.URL.Query().Get("limit"), 50)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_limit", err.Error())
+			return
+		}
+		if cfg.Telemetry == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Loki is not configured")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 7*time.Second)
+		defer cancel()
+		result, err := cfg.Telemetry.Logs(ctx, window, service, limit)
+		if err != nil {
+			writeTelemetryError(w, r, logger, "Loki", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	})
+	mux.HandleFunc("GET /api/v1/telemetry/traces", func(w http.ResponseWriter, r *http.Request) {
+		window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_window", err.Error())
+			return
+		}
+		service := r.URL.Query().Get("service")
+		if service == "" {
+			service = "orbit-telemetry-demo"
+		}
+		if err := telemetry.ValidateServiceName(service); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_service", err.Error())
+			return
+		}
+		limit, err := telemetry.ParseLimit(r.URL.Query().Get("limit"), 20)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_limit", err.Error())
+			return
+		}
+		if cfg.Telemetry == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Tempo is not configured")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 7*time.Second)
+		defer cancel()
+		result, err := cfg.Telemetry.Traces(ctx, window, service, limit)
+		if err != nil {
+			writeTelemetryError(w, r, logger, "Tempo", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	})
+
 	var handler http.Handler = mux
 	handler = withRequestLogging(logger, handler)
 	handler = withRequestID(handler)
 	handler = withRecovery(logger, handler)
 	handler = withCORS(cfg.AllowedOrigins, handler)
 	return handler
+}
+
+
+func writeTelemetryError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, backend string, err error) {
+	if errors.Is(err, telemetry.ErrNotConfigured) {
+		writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", backend+" is not configured")
+		return
+	}
+	logger.Error("telemetry query failed", "backend", backend, "error", err, "request_id", r.Header.Get("X-Request-ID"))
+	writeError(w, r, http.StatusServiceUnavailable, "telemetry_query_failed", backend+" data is temporarily unavailable")
 }
 
 func withCORS(origins []string, next http.Handler) http.Handler {

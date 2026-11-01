@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
+
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 )
 
@@ -209,5 +211,93 @@ func TestUnknownRouteIsNotFound(t *testing.T) {
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/not-a-route", nil))
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+}
+
+
+func TestTelemetryQueryEndpoints(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/query_range" || r.URL.Query().Get("query") != "sum(rate(orbit_demo_requests_total[5m]))" {
+			t.Errorf("unexpected Prometheus request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"matrix","result":[{"metric":{},"values":[[1,"0.2"]]}]}}`))
+	}))
+	defer prometheus.Close()
+
+	loki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loki/api/v1/query_range" || r.URL.Query().Get("query") != `{service_name="orbit-telemetry-demo"}` {
+			t.Errorf("unexpected Loki request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		if r.URL.Query().Get("limit") != "9" {
+			t.Errorf("Loki limit = %q, want 9", r.URL.Query().Get("limit"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"streams","result":[{"stream":{"service_name":"orbit-telemetry-demo"},"values":[["1","hello"]]}]}}`))
+	}))
+	defer loki.Close()
+
+	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/search" || r.URL.Query().Get("tags") != "service.name=orbit-telemetry-demo" {
+			t.Errorf("unexpected Tempo request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"traces":[{"traceID":"1234567890abcdef1234567890abcdef","rootServiceName":"orbit-telemetry-demo","durationMs":8}]}`))
+	}))
+	defer tempo.Close()
+
+	client, err := telemetry.NewClient(prometheus.URL, loki.URL, tempo.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandler(Config{Telemetry: client}, &fakeRepository{}, testLogger())
+
+	for _, path := range []string{
+		"/api/v1/telemetry/metrics?window=1h",
+		"/api/v1/telemetry/logs?window=1h&service=orbit-telemetry-demo&limit=9",
+		"/api/v1/telemetry/traces?window=1h&service=orbit-telemetry-demo&limit=7",
+	} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, body = %s", path, recorder.Code, recorder.Body.String())
+		}
+		var payload telemetry.QueryResult
+		if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("%s response JSON: %v", path, err)
+		}
+		if payload.Source == "" || payload.Window != "1h" || payload.QueriedAt.IsZero() || len(payload.Data) == 0 {
+			t.Fatalf("%s returned incomplete telemetry metadata: %+v", path, payload)
+		}
+	}
+}
+
+func TestTelemetryQueryValidationAndUnavailableResponses(t *testing.T) {
+	handler := NewHandler(Config{}, &fakeRepository{}, testLogger())
+
+	for _, test := range []struct {
+		path       string
+		wantStatus int
+		wantCode   string
+	}{
+		{path: "/api/v1/telemetry/metrics?window=7d", wantStatus: http.StatusBadRequest, wantCode: "invalid_window"},
+		{path: "/api/v1/telemetry/logs?service=bad%20service", wantStatus: http.StatusBadRequest, wantCode: "invalid_service"},
+		{path: "/api/v1/telemetry/traces?limit=101", wantStatus: http.StatusBadRequest, wantCode: "invalid_limit"},
+		{path: "/api/v1/telemetry/metrics?window=1h", wantStatus: http.StatusServiceUnavailable, wantCode: "telemetry_unavailable"},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path, nil))
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, test.wantStatus, recorder.Body.String())
+			}
+			var payload errorResponse
+			if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode error response: %v", err)
+			}
+			if payload.Error.Code != test.wantCode || payload.Error.RequestID == "" {
+				t.Fatalf("unexpected error payload: %+v", payload.Error)
+			}
+		})
 	}
 }

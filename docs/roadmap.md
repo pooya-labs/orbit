@@ -43,11 +43,14 @@ The optional `observability` profile accepts OTLP over gRPC/HTTP and routes metr
 
 ## M04 — Real telemetry
 
-- [ ] Ingest OTLP metrics, traces, and logs.
-- [ ] Normalize service/resource attributes.
+The v0.6.0 API can query the local Prometheus, Loki, and Tempo stores through bounded, source-labelled endpoints. Queries are fixed and do not accept arbitrary PromQL/LogQL from callers. The current metric query is the instrumented demo request-rate counter; production API instrumentation, catalog normalization, and UI rendering remain open.
+
+- [x] Verify OTLP metrics, traces, and logs reach all three local backends from an instrumented workload.
+- [x] Add bounded ORBIT API queries for Prometheus request-rate metrics, Loki service logs, and Tempo trace search.
+- [ ] Normalize service/resource attributes into ORBIT's service inventory.
 - [ ] Build service catalog from observed telemetry.
-- [ ] Implement bounded telemetry queries and pagination.
-- [ ] Display data freshness, gaps, and source provenance.
+- [ ] Add cursor-based pagination and multi-series metric selection.
+- [ ] Render queried telemetry in the dashboard with loading/empty/stale states, data freshness, gaps, and source provenance.
 
 ## M05 — Operations workflows
 

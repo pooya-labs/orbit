@@ -11,15 +11,21 @@ type Config struct {
 	Version        string
 	DatabaseURL    string
 	AllowedOrigins []string
+	PrometheusURL string
+	LokiURL string
+	TempoURL string
 }
 
 func Load() Config {
 	return Config{
 		HTTPAddr:       valueOrDefault("ORBIT_HTTP_ADDR", ":8080"),
 		Environment:    valueOrDefault("ORBIT_ENVIRONMENT", "development"),
-		Version:        valueOrDefault("ORBIT_VERSION", "0.2.0"),
+		Version:        valueOrDefault("ORBIT_VERSION", "0.6.0"),
 		DatabaseURL:    strings.TrimSpace(os.Getenv("ORBIT_DATABASE_URL")),
 		AllowedOrigins: commaSeparated(os.Getenv("ORBIT_ALLOWED_ORIGINS")),
+		PrometheusURL:  strings.TrimSpace(os.Getenv("ORBIT_PROMETHEUS_URL")),
+		LokiURL:        strings.TrimSpace(os.Getenv("ORBIT_LOKI_URL")),
+		TempoURL:       strings.TrimSpace(os.Getenv("ORBIT_TEMPO_URL")),
 	}
 }
 

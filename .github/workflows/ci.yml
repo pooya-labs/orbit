@@ -67,7 +67,7 @@ jobs:
         run: docker compose --profile observability config --quiet
 
       - name: Start telemetry stack and instrumented demo
-        run: docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo
+        run: docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo api
 
       - name: Wait for telemetry services
         shell: bash
@@ -79,7 +79,8 @@ jobs:
               && curl -fsS http://127.0.0.1:3100/ready >/dev/null \
               && curl -fsS http://127.0.0.1:3200/ready >/dev/null \
               && curl -fsS http://127.0.0.1:13133/ >/dev/null \
-              && curl -fsS http://127.0.0.1:8081/healthz >/dev/null; then
+              && curl -fsS http://127.0.0.1:8081/healthz >/dev/null  \
+              && curl -fsS http://127.0.0.1:8080/health/ready >/dev/null; then
               ready=1
               break
             fi
@@ -90,7 +91,7 @@ jobs:
             exit 1
           fi
 
-      - name: Verify OTLP metrics, logs, and traces end to end
+      - name: Verify OTLP signals and ORBIT API query endpoints end to end
         run: python3 scripts/observability_smoke.py
 
       - name: Verify Prometheus scrapes the ORBIT Collector
