@@ -62,6 +62,12 @@ function formatClock(timestamp: number | string, language: Language): string {
   }).format(date);
 }
 
+function parseStepMilliseconds(step?: string): number {
+  const match = /^(\\d+)(s|m)$/.exec(step ?? "");
+  if (!match) return 60_000;
+  return Number(match[1]) * (match[2] === "m" ? 60_000 : 1_000);
+}
+
 function formatRate(value: number, language: Language): string {
   if (!Number.isFinite(value)) return "—";
   const formatter = new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: value >= 10 ? 1 : 2, minimumFractionDigits: value >= 10 ? 1 : 2 });
@@ -326,6 +332,22 @@ export default function TelemetryWorkspace({
     }));
   }, [metricSeries]);
 
+  const metricQuality = useMemo(() => {
+    const allPoints = metricSeries.flatMap((series) => series.points);
+    if (allPoints.length === 0) return { stale: false, hasGaps: false };
+
+    const expectedStepMs = parseStepMilliseconds(metrics?.step);
+    const thresholdMs = Math.max(expectedStepMs * 2.5, 90_000);
+    const latestTimestampMs = Math.max(...allPoints.map((point) => point.timestamp)) * 1_000;
+    const stale = Date.now() - latestTimestampMs > thresholdMs;
+    const hasGaps = metricSeries.some((series) =>
+      series.points.some((point, index) =>
+        index > 0 && (point.timestamp - series.points[index - 1].timestamp) * 1_000 > thresholdMs,
+      ),
+    );
+    return { stale, hasGaps };
+  }, [metricSeries, metrics?.step]);
+
   const latestMetricRate = metricSeries.reduce((total, series) => {
     const latest = series.points[series.points.length - 1];
     return total + (latest?.value ?? 0);
@@ -450,6 +472,20 @@ export default function TelemetryWorkspace({
           <AlertCircle size={16} />
           <div><strong>{tr("queryFailed")}</strong><span>{error}</span></div>
           <button className="text-action" onClick={() => setReloadKey((value) => value + 1)}>{tr("retry")}</button>
+        </div>
+      )}
+
+      {view === "Metrics" && (metricQuality.stale || metricQuality.hasGaps) && (
+        <div className="telemetry-freshness-warning" role="status" aria-live="polite">
+          <Clock3 size={14} />
+          <span>
+            <strong>{tr("metricFreshness")}</strong>
+            {" "}
+            {[
+              metricQuality.stale ? tr("staleMetricWarning") : "",
+              metricQuality.hasGaps ? tr("metricGapWarning") : "",
+            ].filter(Boolean).join(" · ")}
+          </span>
         </div>
       )}
 
