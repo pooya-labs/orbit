@@ -113,3 +113,12 @@ This introduces a distinct machine identity and authorization lifecycle; human O
 PR #48 is merged into `main` (squash merge commit `3c5619d380b498a50660415b68175f8266c48a71`). CI run `41352185701` completed successfully: Go API tests/build, web typecheck/production build, and the local telemetry pipeline end-to-end smoke test all passed. The PostgreSQL-backed integration test uses four independent gateway/authorizer instances (two HTTP, two gRPC) and verifies that signal-grant revocation and workload-identity revocation are observed by other replicas for metrics, logs, and traces; denied requests do not reach the Collector forwarders.
 
 The test establishes read-after-commit revocation for requests authorized after the revocation transaction commits. It does not establish cancellation of requests that completed authorization before that commit. In-flight revocation ordering/cancellation remains an explicit open design and test item. Production ingestion remains disabled until TLS/network policy, in-flight semantics, broader load testing, real-provider PKCE, and operational runbooks are complete.
+
+
+## ADR 0002 — PR #50 in-flight revocation contract
+
+PR #50 is merged into `main` (squash merge commit `45680118f44c3cd35f64214072085e6ca1a43de6`). CI run `41352877449` passed Go API tests/build, web typecheck/production build, and the local telemetry pipeline end-to-end smoke test.
+
+The authorization decision is linearized when the shared PostgreSQL repository confirms the workload grant. An export that has already passed authorization and entered the Collector forwarder may complete even if identity revocation commits while that export is in flight. A request whose authorization begins after the revocation commit must be denied and must not reach the forwarder. The contract applies to OTLP/HTTP and OTLP/gRPC.
+
+This is not cancellation, rollback, or recall of telemetry already admitted to the Collector. Operators requiring stronger interruption semantics would need a separately designed and tested downstream cancellation/drain mechanism. The in-flight test covers identity revocation; grant/identity revocation latency under broader load and operational failure conditions remains part of the production hardening work. Production ingestion remains disabled until TLS/network policy, load/failure testing, real-provider PKCE, and runbooks are complete.
