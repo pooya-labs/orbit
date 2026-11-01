@@ -31,14 +31,14 @@ The browser dashboard can now read service and incident inventories from a confi
 
 ## M03 — Local platform
 
-The optional `observability` profile now accepts OTLP over gRPC/HTTP and routes metrics to Prometheus, traces to Tempo, and logs to Loki. GitHub Actions starts the four backends and verifies their readiness plus the Collector scrape target. This milestone delivers local infrastructure only: the Go API is not instrumented yet, and the dashboard does not query these backends.
+The optional `observability` profile accepts OTLP over gRPC/HTTP and routes metrics to Prometheus, traces to Tempo, and logs to Loki. An instrumented Go demo emits all three signals; GitHub Actions queries each backend and verifies the complete path. The production Go API remains uninstrumented, and the dashboard does not query these backends yet.
 
 - [x] Add Docker Compose for PostgreSQL, Redis, and NATS JetStream.
 - [x] Add the Go API container and database readiness dependency.
 - [x] Add deterministic, clearly labelled demo seed rows.
 - [x] Add an optional OpenTelemetry Collector and Prometheus profile with a local smoke test.
 - [x] Add Loki and Tempo local backends with OTLP export pipelines.
-- [ ] Add service instrumentation example with OTLP export.
+- [x] Add an instrumented Go service example with OTLP export for metrics, traces, and logs, plus an end-to-end backend smoke test.
 - [ ] Wire Redis cache and NATS event publishing into the API where justified.
 
 ## M04 — Real telemetry
