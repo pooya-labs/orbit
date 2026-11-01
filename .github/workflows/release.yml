@@ -25,7 +25,7 @@ jobs:
       - name: Read application version
         id: version
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
+          VERSION="$(node -p 'require("./package.json").version')"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create or update matching preview release
