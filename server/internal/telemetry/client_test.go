@@ -18,7 +18,7 @@ func TestParseWindowUsesBoundedChoices(t *testing.T) {
 		}
 	}
 	if got, err := ParseWindow(""); err != nil || got.Name != "1h" {
-		t.Fatalf("ParseWindow("") = %+v, %v; want 1h", got, err)
+		t.Fatalf("ParseWindow(empty) = %+v, %v; want 1h", got, err)
 	}
 	if _, err := ParseWindow("7d"); err == nil {
 		t.Fatal("expected unsupported window to be rejected")
