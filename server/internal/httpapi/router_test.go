@@ -1020,3 +1020,73 @@ func TestWorkspaceTelemetryQueriesRequireMembershipAndBackendTenantMatcher(t *te
 	}
 	if prometheusCalls != 1 || lokiCalls != 1 || tempoCalls != 1 { t.Fatal("non-member request reached a telemetry backend") }
 }
+
+
+func TestWorkspaceTelemetryQueriesRequireMembershipBeforeBackendAccess(t *testing.T) {
+	backendCalls := map[string]int{}
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/query_range":
+			backendCalls["prometheus"]++
+			_, _ = w.Write([]byte(`{"status":"success","data":{"result":[]}}`))
+		case "/loki/api/v1/query_range":
+			backendCalls["loki"]++
+			_, _ = w.Write([]byte(`{"status":"success","data":{"result":[]}}`))
+		case "/api/search":
+			backendCalls["tempo"]++
+			_, _ = w.Write([]byte(`{"traces":[]}`))
+		default:
+			t.Errorf("unexpected telemetry backend path %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer backend.Close()
+
+	client, err := telemetry.NewClient(backend.URL, backend.URL, backend.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viewer := fixedTokenVerifier{principal: auth.Principal{
+		Issuer: "https://identity.example", Subject: "member-1", Roles: []string{"viewer"},
+	}}
+	handler := NewHandler(Config{Environment: "production", AuthVerifier: viewer, Telemetry: client}, &fakeRepository{}, testLogger())
+
+	workspaceA := "00000000-0000-4000-8000-000000000001"
+	workspaceB := "00000000-0000-4000-8000-000000000099"
+	routes := []struct {
+		name string
+		path string
+		key  string
+	}{
+		{name: "metrics", path: "/telemetry/metrics?window=1h&service=api-gateway", key: "prometheus"},
+		{name: "logs", path: "/telemetry/logs?window=1h&service=api-gateway&limit=10", key: "loki"},
+		{name: "traces", path: "/telemetry/traces?window=1h&service=api-gateway&limit=10", key: "tempo"},
+	}
+
+	for _, route := range routes {
+		t.Run(route.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+workspaceB+route.path, nil)
+			request.Header.Set("Authorization", "Bearer valid-token")
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusNotFound {
+				t.Fatalf("non-member workspace query status = %d, want 404; body=%s", recorder.Code, recorder.Body.String())
+			}
+			if backendCalls[route.key] != 0 {
+				t.Fatalf("non-member request reached %s backend %d times", route.key, backendCalls[route.key])
+			}
+
+			request = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+workspaceA+route.path, nil)
+			request.Header.Set("Authorization", "Bearer valid-token")
+			recorder = httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("member workspace query status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+			}
+			if backendCalls[route.key] != 1 {
+				t.Fatalf("member request backend calls = %d, want 1", backendCalls[route.key])
+			}
+		})
+	}
+}
