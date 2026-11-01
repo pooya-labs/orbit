@@ -116,7 +116,7 @@ func (f *fakeRepository) UpdateTelemetryServiceResourceAttributes(_ context.Cont
 		}
 		return nil
 	}
-	return errors.New("telemetry service not found")
+	return store.ErrTelemetryServiceNotFound
 }
 
 func (f *fakeRepository) ListTelemetryServices(_ context.Context, limit int) ([]store.TelemetryService, error) {
