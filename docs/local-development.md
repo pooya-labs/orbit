@@ -89,7 +89,7 @@ Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/logs?service=orbit-tel
 Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/traces?service=orbit-telemetry-demo&window=1h&limit=20"
 ```
 
-The service discovery endpoint merges names from all configured stores, upserts observations into PostgreSQL, and returns the persisted active catalog with first-seen, last-seen, and last-discovered timestamps. If one store is temporarily unavailable, the API returns persisted services and a warning. Allowed windows are `15m`, `1h`, `6h`, and `24h`; service names are validated and query results are capped at 100. The request-rate query currently uses the instrumented demo counter and does not claim to be a generalized PromQL proxy.
+The service discovery endpoint merges names from all configured stores, upserts observations into PostgreSQL, and returns the persisted active catalog with first-seen, last-seen, and last-discovered timestamps. If one store is temporarily unavailable, the API returns persisted services and a warning. If all stores are unavailable, the API falls back to the last known PostgreSQL catalog when it contains services. Allowed windows are `15m`, `1h`, `6h`, and `24h`; service names are validated and query results are capped at 100. The request-rate query currently uses the instrumented demo counter and does not claim to be a generalized PromQL proxy.
 
 ## Connect the local dashboard to the API
 
