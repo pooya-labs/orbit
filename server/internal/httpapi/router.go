@@ -425,9 +425,10 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 	})
 
 	var handler http.Handler = mux
-	handler = withAuthorization(cfg.Environment, cfg.AuthVerifier, handler)
 	handler = withBodyLimit(1<<20, handler)
-	handler = withRateLimit(cfg.RateLimitPerMinute, handler)
+	handler = withSubjectRateLimit(cfg.RateLimitPerMinute, handler)
+	handler = withAuthorization(cfg.Environment, cfg.AuthVerifier, handler)
+	handler = withIPRateLimit(cfg.RateLimitPerMinute, handler)
 	handler = withRequestLogging(logger, handler)
 	handler = withRequestID(handler)
 	handler = withSecurityHeaders(handler)
