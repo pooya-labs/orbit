@@ -85,8 +85,19 @@ def main() -> int:
         wait_for("OTLP trace is queryable in Tempo", trace_exists)
         print("PASS: all three OTLP signals reached their local backends")
 
+        def api_services_exist() -> bool:
+            payload = get_json(f"{ORBIT_API_URL}/api/v1/telemetry/services?window=1h")
+            return (
+                payload.get("source") == "telemetry_backends"
+                and any(item.get("name") == "orbit-telemetry-demo" for item in payload.get("data", []))
+                and {"prometheus", "loki", "tempo"}.issubset(set(
+                    next((item.get("sources", []) for item in payload.get("data", [])
+                          if item.get("name") == "orbit-telemetry-demo"), [])
+                ))
+            )
+
         def api_metrics_exist() -> bool:
-            payload = get_json(f"{ORBIT_API_URL}/api/v1/telemetry/metrics?window=1h")
+            payload = get_json(f"{ORBIT_API_URL}/api/v1/telemetry/metrics?window=1h&service=orbit-telemetry-demo")
             series = payload.get("data", [])
             return (
                 payload.get("source") == "prometheus"
@@ -117,6 +128,7 @@ def main() -> int:
                 and any(item.get("traceID") == trace_id for item in payload.get("data", []))
             )
 
+        wait_for("ORBIT API discovers services across all three backends", api_services_exist)
         wait_for("ORBIT API returns the Prometheus metric", api_metrics_exist)
         wait_for("ORBIT API returns Loki logs", api_logs_exist)
         wait_for("ORBIT API returns the matching Tempo trace", api_traces_exist)
