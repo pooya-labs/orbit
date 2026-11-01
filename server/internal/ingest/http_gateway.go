@@ -3,8 +3,6 @@ package ingest
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -112,7 +110,7 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 	rateKey := "workload:" + decision.IdentityID + ":" + decision.WorkspaceID + ":" + decision.Signal
 	rateCtx, rateCancel := context.WithTimeout(r.Context(), 750*time.Millisecond)
-	allowed, rateErr := g.allowRate(rateCtx, rateKey, time.Now())
+	allowed, rateErr := allowWorkloadRate(rateCtx, g.sharedLimiter, g.limiter, g.limiter.limit, rateKey, time.Now())
 	rateCancel()
 	if rateErr != nil {
 		http.Error(w, "workload rate-limit service is temporarily unavailable", http.StatusServiceUnavailable)
@@ -318,18 +316,6 @@ func (f *collectorHTTPForwarder) Export(ctx context.Context, signal string, payl
 		return nil, errors.New("Collector response exceeds the 4 MiB limit")
 	}
 	return body, nil
-}
-
-func (g *HTTPGateway) allowRate(ctx context.Context, rawKey string, now time.Time) (bool, error) {
-	if g.sharedLimiter == nil {
-		return g.limiter.Allow(rawKey, now), nil
-	}
-	digest := sha256.Sum256([]byte(rawKey))
-	count, err := g.sharedLimiter.IncrementRateLimitWindow(ctx, hex.EncodeToString(digest[:]))
-	if err != nil {
-		return false, fmt.Errorf("increment shared workload rate limit: %w", err)
-	}
-	return count <= int64(g.limiter.limit), nil
 }
 
 type rateWindow struct {
