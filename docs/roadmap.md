@@ -97,3 +97,6 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - No secrets or real customer telemetry are committed.
 - Mobile and desktop layouts remain usable.
 - Documentation describes what is implemented, not only what is intended.
+
+
+Workspace-scoped telemetry query routes are now under CI review: Prometheus, Loki, and Tempo requests are constrained by the verified workspace ID after membership verification. These routes require the canonical `orbit_workspace_id` resource label; ingestion must attach and authenticate that label before tenant telemetry can be enabled.
