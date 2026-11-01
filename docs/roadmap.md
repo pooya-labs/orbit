@@ -158,7 +158,7 @@ PR #58 is merged into `main` (squash merge commit `fd7c7d23d952bdb6f08250c2dcd69
 
 The new HTTP and gRPC tests inject transient failures into the workload-grant repository, shared rate-limit store, and Collector forwarder. They verify that authorization/rate-limit database failures fail closed without forwarding, Collector failures map to the established transport status, and a subsequent request succeeds through the same gateway instance after the dependency is restored.
 
-These are deterministic in-process fault-injection tests. PR #62 separately adds real local TCP listener stop/restart coverage for both production Collector forwarders; it does not simulate Docker/container orchestration, packet loss, PostgreSQL process restarts, or sustained-load recovery. Broader burst/load, real PostgreSQL fault injection, network partition testing, and backpressure behavior remain open. Production tenant ingestion remains disabled.
+These are deterministic in-process fault-injection tests. PR #62 separately adds real local TCP listener stop/restart coverage for both production Collector forwarders; it does not simulate Docker/container orchestration, packet loss, PostgreSQL process restarts, or sustained-load recovery. Broader sustained-load/burst benchmarking, PostgreSQL process/container restart testing, network-partition scenarios beyond the test TCP proxy, and backpressure behavior remain open. Production tenant ingestion remains disabled.
 
 
 ## M06 PR #60 — default gateway burst-capacity boundary
@@ -175,3 +175,12 @@ PR #62 is merged into `main` (squash merge commit `534f6d02c04616a5d27831460b24f
 The new HTTP test starts a real local TCP OTLP/HTTP endpoint behind the production Collector HTTP forwarder, verifies success, stops the listener and verifies the gateway returns 502, restarts a listener on the same address, and verifies the same long-lived gateway/forwarder succeeds again. The gRPC test performs the equivalent listener stop/restart using a real gRPC Collector server and the production gRPC forwarder; the same client connection eventually reconnects and succeeds.
 
 This validates process-local TCP listener recovery and client reconnection behavior. It does not simulate container orchestration, packet loss or network partitions, database process restarts, cross-zone failures, or recovery under sustained load. Real PostgreSQL restart/fault injection, longer-duration load and backpressure, and production deployment verification remain open. Production tenant ingestion remains disabled.
+
+
+## M06 PR #64 — PostgreSQL pool recovery after network interruption
+
+PR #64 is merged into `main` (squash merge commit `6b2e3418be2e8fdff0c9634b361acaa5bb6d6da1`). CI run `41357596656` passed all three jobs, including Go race tests/build, web typecheck/production build, and the telemetry end-to-end smoke test.
+
+The new PostgreSQL integration test opens the real repository through a local TCP proxy, warms an established pgxpool connection, then closes active TCP tunnels and rejects new dials while the test network path is offline. The existing repository must report a Ping failure. The proxy is then restored and the same pgxpool/repository must reconnect and return to healthy Ping without being recreated.
+
+This proves connection-pool recovery after a real TCP path interruption against the CI PostgreSQL service. The database process remains running; PostgreSQL process/container restart, packet loss and partition simulation, prolonged outage behavior, sustained request load, and backpressure remain open.
