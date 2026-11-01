@@ -2,8 +2,10 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -239,4 +241,108 @@ func TestSharedRateLimitWindowUsesAtomicCountersAndExpiresOldBuckets(t *testing.
 			[]string{keyA, keyB, oldKey, concurrentKey},
 		)
 	})
+}
+
+
+func TestWorkspaceMembershipAndAppendOnlyAudit(t *testing.T) {
+	databaseURL := os.Getenv("ORBIT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("ORBIT_TEST_DATABASE_URL is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	repository, err := Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open repository: %v", err)
+	}
+	defer repository.Close()
+
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	issuer := "https://identity.example/"
+	subject := "workspace-owner-" + suffix
+	workspace, err := repository.CreateWorkspace(ctx, store.CreateWorkspaceInput{
+		Name: "Workspace " + suffix,
+		Slug: "ws-" + suffix,
+		OwnerIssuer: issuer,
+		OwnerSubject: subject,
+	})
+	if err != nil {
+		t.Fatalf("create workspace and owner atomically: %v", err)
+	}
+	if workspace.ID == "" || workspace.Slug != "ws-"+suffix || workspace.CreatedAt.IsZero() {
+		t.Fatalf("unexpected workspace result: %+v", workspace)
+	}
+
+	membership, err := repository.GetWorkspaceMembership(ctx, workspace.ID, issuer, subject)
+	if err != nil {
+		t.Fatalf("read owner membership: %v", err)
+	}
+	if membership.Role != "owner" {
+		t.Fatalf("new workspace owner role = %q, want owner", membership.Role)
+	}
+	workspaces, err := repository.ListWorkspacesForPrincipal(ctx, issuer, subject)
+	if err != nil {
+		t.Fatalf("list workspaces for owner: %v", err)
+	}
+	found := false
+	for _, item := range workspaces {
+		if item.ID == workspace.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("created workspace %q is missing from owner membership listing", workspace.ID)
+	}
+	if _, err := repository.GetWorkspaceMembership(ctx, workspace.ID, issuer, "not-a-member"); !errors.Is(err, store.ErrWorkspaceMembershipNotFound) {
+		t.Fatalf("non-member lookup error = %v, want ErrWorkspaceMembershipNotFound", err)
+	}
+
+	event, err := repository.AppendWorkspaceAuditEvent(ctx, store.WorkspaceAuditEvent{
+		WorkspaceID: workspace.ID,
+		ActorIssuer: issuer,
+		ActorSubject: subject,
+		Action: "workspace.created",
+		ResourceType: "workspace",
+		ResourceID: workspace.ID,
+		RequestID: "req-" + suffix,
+		Details: map[string]any{"source": "integration_test"},
+	})
+	if err != nil {
+		t.Fatalf("append audit event: %v", err)
+	}
+	if event.ID == "" || event.CreatedAt.IsZero() {
+		t.Fatalf("audit event was not persisted: %+v", event)
+	}
+	events, err := repository.ListWorkspaceAuditEvents(ctx, workspace.ID, 10)
+	if err != nil {
+		t.Fatalf("list workspace audit events: %v", err)
+	}
+	if len(events) != 2 || events[0].ID != event.ID || events[0].Details["source"] != "integration_test" || events[1].Action != "workspace.created" {
+		t.Fatalf("unexpected workspace audit timeline: %+v", events)
+	}
+	if _, err := repository.AppendWorkspaceAuditEvent(ctx, store.WorkspaceAuditEvent{
+		WorkspaceID: workspace.ID, ActorIssuer: issuer, ActorSubject: "not-a-member",
+		Action: "workspace.changed", ResourceType: "workspace", ResourceID: workspace.ID,
+	}); !errors.Is(err, store.ErrWorkspaceMembershipNotFound) {
+		t.Fatalf("non-member audit append error = %v, want ErrWorkspaceMembershipNotFound", err)
+	}
+
+	if _, err := repository.pool.Exec(ctx, "UPDATE workspace_audit_events SET action = 'workspace.changed' WHERE id = $1::uuid", event.ID); err == nil {
+		t.Fatal("audit event update succeeded; expected append-only trigger to reject it")
+	}
+	if _, err := repository.pool.Exec(ctx, "DELETE FROM workspace_audit_events WHERE id = $1::uuid", event.ID); err == nil {
+		t.Fatal("audit event delete succeeded; expected append-only trigger to reject it")
+	}
+	if _, err := repository.pool.Exec(ctx, "TRUNCATE workspace_audit_events"); err == nil {
+		t.Fatal("audit event truncate succeeded; expected append-only trigger to reject it")
+	}
+	if _, err := repository.AppendWorkspaceAuditEvent(ctx, store.WorkspaceAuditEvent{
+		WorkspaceID: workspace.ID, ActorIssuer: issuer, ActorSubject: subject,
+		Action: "workspace.created", ResourceType: "workspace",
+		Details: map[string]any{"oversized": strings.Repeat("x", 17*1024)},
+	}); err == nil {
+		t.Fatal("oversized audit details were accepted")
+	}
 }
