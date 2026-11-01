@@ -106,3 +106,10 @@ Workspace grants must be checked server-side on every ingestion authorization de
 ## Consequences
 
 This introduces a distinct machine identity and authorization lifecycle; human OIDC roles and workspace membership are not reused as a shortcut. The gateway is a security-critical component and must remain small, auditable, bounded, and independently tested. Until all acceptance criteria pass, tenant telemetry ingestion remains disabled for production and M06 remains incomplete.
+
+
+## ADR 0002 PR #48 revocation verification
+
+PR #48 is merged into `main` (squash merge commit `3c5619d380b498a50660415b68175f8266c48a71`). CI run `41352185701` completed successfully: Go API tests/build, web typecheck/production build, and the local telemetry pipeline end-to-end smoke test all passed. The PostgreSQL-backed integration test uses four independent gateway/authorizer instances (two HTTP, two gRPC) and verifies that signal-grant revocation and workload-identity revocation are observed by other replicas for metrics, logs, and traces; denied requests do not reach the Collector forwarders.
+
+The test establishes read-after-commit revocation for requests authorized after the revocation transaction commits. It does not establish cancellation of requests that completed authorization before that commit. In-flight revocation ordering/cancellation remains an explicit open design and test item. Production ingestion remains disabled until TLS/network policy, in-flight semantics, broader load testing, real-provider PKCE, and operational runbooks are complete.
