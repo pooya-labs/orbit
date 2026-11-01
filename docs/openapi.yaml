@@ -242,16 +242,7 @@ paths:
           schema:
             type: string
             default: instance,service_version,deployment_environment
-            enum:
-              - none
-              - instance
-              - job
-              - service_version
-              - deployment_environment
-              - container_name
-              - host_name
-              - cloud_region
-              - instance,service_version,deployment_environment
+            pattern: "^(none|((instance|job|service_version|deployment_environment|container_name|host_name|cloud_region)(,(instance|job|service_version|deployment_environment|container_name|host_name|cloud_region))*))$"
       responses:
         "200":
           description: Prometheus range query result with source and query timestamp.
