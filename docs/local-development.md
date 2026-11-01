@@ -3,63 +3,103 @@
 ## Requirements
 
 - Windows 10/11, macOS, or Linux
-- Node.js 20+
-- npm (included with Node.js)
 - Git
+- Node.js 20+ and npm
+- Docker Desktop (for the backend stack)
+- Go 1.24+ (only if running the API directly)
 
-## First run (Windows PowerShell)
+## Clone the repository
 
 ```powershell
 git clone https://github.com/pooya16pg-spec/orbit.git
 cd orbit
+```
+
+## Run the web workspace
+
+```powershell
 npm install
-Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Then open http://localhost:3000.
+Open http://localhost:3000. The local development server uses the root path; GitHub Pages uses the repository base path automatically during its deployment workflow.
 
-## Daily workflow
+## Run the backend and local infrastructure
 
-```powershell
-git pull
-npm run dev
-```
-
-Before pushing:
+With Docker Desktop running:
 
 ```powershell
-npm run typecheck
-npm run build
+docker compose up --build
 ```
 
-## Environment
+The first API startup runs the initial versioned SQL migration and adds sample service and incident rows. The records are marked `demo_seed`.
 
-The current dashboard does not require a backend. `.env.example` documents the future API endpoint. Do not place production credentials in `.env.example` or commit `.env.local`.
+Useful endpoints:
+
+- http://localhost:8080/health/live
+- http://localhost:8080/health/ready
+- http://localhost:8080/api/v1/meta
+- http://localhost:8080/api/v1/services
+- http://localhost:8080/api/v1/incidents
+- http://localhost:8080/api/v1/incidents?status=investigating
+
+PostgreSQL is exposed on localhost:5432, Redis on localhost:6379, and NATS on localhost:4222 (monitoring endpoint localhost:8222). These are local development ports, not production-secured services.
+
+Stop the containers:
+
+```powershell
+docker compose down
+```
+
+Delete container data too (destructive):
+
+```powershell
+docker compose down -v
+```
+
+## Run Go tests directly
+
+```powershell
+cd server
+go mod download
+go test -race ./...
+go vet ./...
+go run ./cmd/orbit-api
+```
+
+Set `ORBIT_DATABASE_URL` before running the API outside Docker. Example:
+
+```powershell
+$env:ORBIT_DATABASE_URL = "postgres://orbit:orbit_local_only@localhost:5432/orbit?sslmode=disable"
+go run ./cmd/orbit-api
+```
+
+## Environment and secrets
+
+- `.env.example` contains local-only defaults.
+- Compose currently has a deliberately local development password. Change all credentials before deploying any service outside localhost.
+- Never commit `.env.local`, production secrets, API keys, or real telemetry payloads.
+- The public GitHub Pages dashboard is frontend-only; it does not tunnel to a developer's local API.
 
 ## Troubleshooting
 
-### Port 3000 is already in use
-
-Stop the other development server, or run:
+### Port 3000 is in use
 
 ```powershell
 npm run dev -- --port 3001
 ```
 
-### Dependency installation is in a bad state
-
-Close the dev server, then run:
+### Rebuild the backend after changing Go code
 
 ```powershell
-Remove-Item -Recurse -Force node_modules
-Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue
-npm install
+docker compose up --build api
 ```
 
-### TypeScript or Next.js generated types look stale
+### Reset local database data
+
+This deletes all local Postgres and Redis volume data:
 
 ```powershell
-Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue
-npm run typecheck
+docker compose down -v
+docker compose up --build
 ```
