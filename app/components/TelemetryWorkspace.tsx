@@ -101,6 +101,9 @@ export default function TelemetryWorkspace({
   const [serviceWarnings, setServiceWarnings] = useState<string[]>([]);
   const [serviceError, setServiceError] = useState("");
   const [serviceLoading, setServiceLoading] = useState(true);
+  const [serviceCursor, setServiceCursor] = useState<string | null>(null);
+  const [serviceHasMore, setServiceHasMore] = useState(false);
+  const [serviceLoadingMore, setServiceLoadingMore] = useState(false);
   const [resourceAttributes, setResourceAttributes] = useState<TelemetryResourceAttributesResponse | null>(null);
   const [resourceLoading, setResourceLoading] = useState(true);
   const [resourceError, setResourceError] = useState("");
@@ -125,6 +128,8 @@ export default function TelemetryWorkspace({
         const response = await listTelemetryServices(windowRange, controller.signal, apiBaseUrl);
         if (!mounted) return;
         setDiscoveredServices(response.data);
+        setServiceCursor(response.next_cursor ?? null);
+        setServiceHasMore(response.has_more ?? false);
         setServiceWarnings(response.warnings ?? []);
         if (response.data.length > 0) {
           setSelectedService((current) => {
@@ -138,6 +143,8 @@ export default function TelemetryWorkspace({
         if (mounted) {
           setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت فهرست سرویس‌ها ناموفق بود." : "Unable to discover telemetry services.");
           setServiceWarnings([]);
+          setServiceCursor(null);
+          setServiceHasMore(false);
         }
       } finally {
         if (mounted) setServiceLoading(false);
@@ -152,6 +159,27 @@ export default function TelemetryWorkspace({
       window.clearInterval(interval);
     };
   }, [windowRange, apiBaseUrl, reloadKey, language]);
+
+  const loadMoreServices = async () => {
+    if (!serviceCursor || !serviceHasMore || serviceLoadingMore) return;
+    const controller = new AbortController();
+    setServiceLoadingMore(true);
+    try {
+      const response = await listTelemetryServices(windowRange, controller.signal, apiBaseUrl, serviceCursor, 50);
+      setDiscoveredServices((current) => {
+        const merged = new Map(current.map((service) => [service.name, service]));
+        for (const service of response.data) merged.set(service.name, service);
+        return Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
+      });
+      setServiceCursor(response.next_cursor ?? null);
+      setServiceHasMore(response.has_more ?? false);
+      setServiceWarnings(response.warnings ?? []);
+    } catch (cause) {
+      setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "بارگذاری سرویس‌های بیشتر ناموفق بود." : "Unable to load more services.");
+    } finally {
+      setServiceLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -320,6 +348,11 @@ export default function TelemetryWorkspace({
               discoveredServices.length > 0 ? `${discoveredServices.length} ${tr("discovered")}` : tr("noDiscoveredServices")}
           </small>
         </label>
+        {serviceHasMore ? (
+          <button className="telemetry-load-more" type="button" onClick={() => void loadMoreServices()} disabled={serviceLoadingMore || serviceLoading}>
+            {serviceLoadingMore ? tr("loadingMoreServices") : tr("loadMoreServices")}
+          </button>
+        ) : null}
         <div className="telemetry-controls">
           <div className="range-switcher" role="group" aria-label={tr("windowLabel")}>
             {windowOptions.map((item) => (
