@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	commonv1 "go.opentelemetry.io/proto/otlp/collector/common/v1"
 	logsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	metricsv1 "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	tracesv1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -88,8 +87,10 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	decision, err := g.authorizer.Authorize(r.Context(), r.Header.Values("Authorization"), workspaceID, signal)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrInvalidTarget), errors.Is(err, ErrInvalidBearer):
-			http.Error(w, "invalid workload credentials or target", http.StatusUnauthorized)
+		case errors.Is(err, ErrInvalidTarget):
+			http.Error(w, "invalid workspace or telemetry target", http.StatusBadRequest)
+		case errors.Is(err, ErrInvalidBearer):
+			http.Error(w, "invalid workload credentials", http.StatusUnauthorized)
 		case errors.Is(err, ErrDenied):
 			http.Error(w, "workload is not authorized for this workspace and signal", http.StatusForbidden)
 		default:
@@ -327,6 +328,3 @@ func (l *workspaceRateLimiter) Allow(key string, now time.Time) bool {
 	l.windows[key] = window
 	return true
 }
-
-// Ensure the generated OTLP response types remain the standard collector API.
-var _ = commonv1.ExportLogsServiceResponse{}
