@@ -99,14 +99,27 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	contentTypes := r.Header.Values("Content-Type")
+	if len(contentTypes) != 1 {
+		http.Error(w, errInvalidMediaType.Error(), http.StatusUnsupportedMediaType)
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(contentTypes[0])
 	if err != nil || (mediaType != "application/x-protobuf" && mediaType != "application/json") {
 		http.Error(w, errInvalidMediaType.Error(), http.StatusUnsupportedMediaType)
 		return
 	}
-	if encoding := strings.TrimSpace(strings.ToLower(r.Header.Get("Content-Encoding"))); encoding != "" && encoding != "identity" {
+	contentEncodings := r.Header.Values("Content-Encoding")
+	if len(contentEncodings) > 1 {
 		http.Error(w, errUnsupportedEncoding.Error(), http.StatusUnsupportedMediaType)
 		return
+	}
+	if len(contentEncodings) == 1 {
+		encoding := strings.TrimSpace(strings.ToLower(contentEncodings[0]))
+		if encoding != "" && encoding != "identity" {
+			http.Error(w, errUnsupportedEncoding.Error(), http.StatusUnsupportedMediaType)
+			return
+		}
 	}
 	if r.ContentLength > maxOTLPRequestBytes {
 		http.Error(w, "OTLP request exceeds the 4 MiB limit", http.StatusRequestEntityTooLarge)
