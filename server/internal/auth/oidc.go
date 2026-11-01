@@ -74,13 +74,13 @@ func (p Principal) HasRole(required string) bool {
 }
 
 type Verifier struct {
-	issuer     string
-	audience   string
+	issuer            string
+	audience          string
 	rolesClaim        string
 	requiredTokenType string
 	requireNotBefore  bool
 	skew              time.Duration
-	cacheTTL   time.Duration
+	cacheTTL          time.Duration
 	client     *http.Client
 	jwksURL    string
 
@@ -199,6 +199,16 @@ func NewVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
 		return nil, fmt.Errorf("load OIDC signing keys: %w", err)
 	}
 	return verifier, nil
+}
+
+// NewIngestionVerifier creates a verifier for workload access tokens. It
+// requires the RFC 9068 access-token type and an explicit not-before claim.
+// Callers must configure a dedicated ingestion audience distinct from the
+// human dashboard/API audience.
+func NewIngestionVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
+	cfg.RequiredTokenType = "at+jwt"
+	cfg.RequireNotBefore = true
+	return NewVerifier(ctx, cfg)
 }
 
 func validateRemoteURL(u *url.URL, allowInsecureHTTP bool) error {
