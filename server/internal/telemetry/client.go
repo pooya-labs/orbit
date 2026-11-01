@@ -65,6 +65,45 @@ func ParseLimit(value string, fallback int) (int, error) {
 	return limit, nil
 }
 
+var allowedMetricGroupLabels = map[string]struct{}{
+	"instance":               {},
+	"job":                    {},
+	"service_version":        {},
+	"deployment_environment": {},
+	"container_name":         {},
+	"host_name":              {},
+	"cloud_region":           {},
+}
+
+func ParseMetricGroupBy(value string) ([]string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		value = "instance,service_version,deployment_environment"
+	}
+	if value == "none" {
+		return []string{}, nil
+	}
+	parts := strings.Split(value, ",")
+	if len(parts) > len(allowedMetricGroupLabels) {
+		return nil, fmt.Errorf("group_by accepts at most %d dimensions", len(allowedMetricGroupLabels))
+	}
+	seen := make(map[string]struct{}, len(parts))
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		label := strings.TrimSpace(part)
+		if _, ok := allowedMetricGroupLabels[label]; !ok {
+			return nil, fmt.Errorf("group_by contains an unsupported dimension")
+		}
+		if _, exists := seen[label]; exists {
+			continue
+		}
+		seen[label] = struct{}{}
+		result = append(result, label)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
 func ValidateServiceName(value string) error {
 	if !serviceNamePattern.MatchString(value) {
 		return fmt.Errorf("service must contain only letters, numbers, dots, underscores, colons, or hyphens")
