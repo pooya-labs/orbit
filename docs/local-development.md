@@ -22,7 +22,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. The local development server uses the root path; GitHub Pages uses the repository base path automatically during its deployment workflow.
+Open http://localhost:3000. The local development server uses the root path; GitHub Pages uses the repository base path automatically during its deployment workflow. In the dashboard, choose **Connect a source**, enter `http://localhost:8080`, and select **Test and connect** to read local API data.
 
 ## Run the backend and local infrastructure
 
@@ -56,6 +56,12 @@ Delete container data too (destructive):
 ```powershell
 docker compose down -v
 ```
+
+## Connect the local dashboard to the API
+
+With `docker compose up --build` running, open the dashboard at `http://localhost:3000` and choose **Connect a source**. Enter `http://localhost:8080` and click **Test and connect**. ORBIT verifies `/api/v1/meta`, `/api/v1/services`, and `/api/v1/incidents` before switching the dashboard to API mode. The URL is saved in browser local storage and can be changed from the same source panel.
+
+The Go API allows the GitHub Pages origin and local development origins through `ORBIT_ALLOWED_ORIGINS`. If you use a different dashboard origin, add that exact origin to the allowlist and restart the API. The current API has no time-series metrics endpoint, so the dashboard deliberately hides the sample metric cards while API mode is active.
 
 ## Run Go tests directly
 
