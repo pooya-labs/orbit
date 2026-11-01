@@ -10,6 +10,7 @@ import type {
   TelemetryLogsResponse,
   TelemetryTracesResponse,
   TelemetryServicesResponse,
+  TelemetryResourceAttributesResponse,
 } from "./contracts";
 
 export class OrbitApiError extends Error {
@@ -124,6 +125,19 @@ export async function listTelemetryServices(
 ): Promise<TelemetryServicesResponse> {
   return getJSON<TelemetryServicesResponse>(
     `/api/v1/telemetry/services?window=${encodeURIComponent(window)}`,
+    signal,
+    baseUrl,
+  );
+}
+
+export async function getTelemetryServiceAttributes(
+  service: string,
+  window: TelemetryWindow = "1h",
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<TelemetryResourceAttributesResponse> {
+  return getJSON<TelemetryResourceAttributesResponse>(
+    `/api/v1/telemetry/services/${encodeURIComponent(service)}/attributes?window=${encodeURIComponent(window)}`,
     signal,
     baseUrl,
   );
