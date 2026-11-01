@@ -55,6 +55,60 @@ jobs:
       - name: Build
         run: go build -trimpath -o /tmp/orbit-api ./cmd/orbit-api
 
+  observability:
+    name: Local telemetry stack smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose configuration
+        run: docker compose --profile observability config --quiet
+
+      - name: Start telemetry backends
+        run: docker compose --profile observability up -d prometheus loki tempo otel-collector
+
+      - name: Wait for telemetry services
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:9090/-/ready >/dev/null \
+              && curl -fsS http://127.0.0.1:3100/ready >/dev/null \
+              && curl -fsS http://127.0.0.1:3200/ready >/dev/null \
+              && curl -fsS http://127.0.0.1:13133/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker compose --profile observability logs --no-color
+            exit 1
+          fi
+
+      - name: Verify Prometheus scrapes the ORBIT Collector
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            target_up="$(curl -fsS --get \
+              --data-urlencode 'query=up{job="orbit-otel-collector"}' \
+              http://127.0.0.1:9090/api/v1/query \
+              | python3 -c 'import json,sys; rows=json.load(sys.stdin)["data"]["result"]; print(rows[0]["value"][1] if rows else "")')"
+            if [ "$target_up" = "1" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --profile observability logs --no-color
+          exit 1
+
+      - name: Stop telemetry backends
+        if: always()
+        run: docker compose --profile observability down -v --remove-orphans
+
   web:
     name: Web typecheck and production build
     runs-on: ubuntu-latest
