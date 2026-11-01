@@ -92,7 +92,7 @@ Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/traces?service=orbit-t
 
 The API uses fixed, bounded queries instead of accepting arbitrary PromQL or LogQL from callers. Each response includes its source backend, window, query timestamp, and result. Local query interfaces: [Prometheus](http://localhost:9090), [Loki](http://localhost:3100/ready), and [Tempo](http://localhost:3200/ready). Collector health: [http://localhost:13133](http://localhost:13133).
 
-These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus keeps seven days of metrics and Loki is configured for seven-day log retention; data volumes persist until removed. Stop only these services with `docker compose stop prometheus loki tempo otel-collector telemetry-demo`.
+These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus keeps seven days of metrics and Loki is configured for seven-day log retention; data volumes persist until removed. Stop only these services with `docker compose stop postgres api prometheus loki tempo otel-collector telemetry-demo`.
 
 The local sample service proves end-to-end delivery of all three OTLP signals. The Go API now exposes bounded read-only queries to Prometheus, Loki, and Tempo. The production Go API does not yet export its own telemetry, and the dashboard does not render these queried results yet.
 
