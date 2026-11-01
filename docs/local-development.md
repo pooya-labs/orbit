@@ -74,15 +74,27 @@ docker compose --profile observability up -d prometheus loki tempo otel-collecto
 | Loki readiness | http://localhost:3100/ready |
 | Tempo readiness | http://localhost:3200/ready |
 
-The `telemetry-demo` workload is instrumented using the OpenTelemetry Go SDK. Send a sample request with `curl http://localhost:8081/emit`; it returns a trace ID and emits a metric, trace, and structured log. Query metrics in Prometheus at http://localhost:9090, logs in Loki at http://localhost:3100, and traces in Tempo at http://localhost:3200. The Collector routes OTLP metrics to Prometheus, traces to Tempo, and logs to Loki. All ports bind to loopback and the backends have no authentication; do not expose them outside your development machine. Prometheus and Loki retain seven days of data in named volumes. Stop these services with `docker compose stop prometheus loki tempo otel-collector telemetry-demo`.
+The `telemetry-demo` workload is instrumented using the OpenTelemetry Go SDK. Send a sample request with `curl.exe http://localhost:8081/emit`; it returns a trace ID and emits a metric, trace, and structured log. Query metrics in Prometheus at http://localhost:9090, logs in Loki at http://localhost:3100, and traces in Tempo at http://localhost:3200. The Collector routes OTLP metrics to Prometheus, traces to Tempo, and logs to Loki. The ORBIT API container is configured to reach those backends over the Compose network. All ports bind to loopback and the backends have no authentication; do not expose them outside your development machine. Prometheus and Loki retain seven days of data in named volumes. Stop these services with `docker compose stop prometheus loki tempo otel-collector telemetry-demo`.
 
-The dedicated demo workload is instrumented and its three OTLP signal paths are covered by CI. The production Go API is not instrumented yet, and the dashboard does not query these backends.
+The dedicated demo workload is instrumented and its three OTLP signal paths are covered by CI. The ORBIT API provides read-only, bounded queries for all three stores. The production Go API is not instrumented yet, and the dashboard does not render telemetry query results yet.
+
+### Query telemetry through the ORBIT API
+
+After starting the observability profile and generating a sample with `/emit`, query the same signals through ORBIT rather than calling each backend directly:
+
+```powershell
+Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/metrics?window=1h"
+Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/logs?service=orbit-telemetry-demo&window=1h&limit=50"
+Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/traces?service=orbit-telemetry-demo&window=1h&limit=20"
+```
+
+Allowed windows are `15m`, `1h`, `6h`, and `24h`. Log/trace service names are restricted to safe identifier characters and result limits are capped at 100. The metrics endpoint currently exposes the demo request-rate series only; it does not claim to be a generalized PromQL proxy.
 
 ## Connect the local dashboard to the API
 
 With `docker compose up --build` running, open the dashboard at `http://localhost:3000` and choose **Connect a source**. Enter `http://localhost:8080` and click **Test and connect**. ORBIT verifies `/api/v1/meta`, `/api/v1/services`, and `/api/v1/incidents` before switching the dashboard to API mode. The URL is saved in browser local storage and can be changed from the same source panel.
 
-The Go API allows the GitHub Pages origin and local development origins through `ORBIT_ALLOWED_ORIGINS`. If you use a different dashboard origin, add that exact origin to the allowlist and restart the API. The current API has no time-series metrics endpoint, so the dashboard deliberately hides the sample metric cards while API mode is active.
+The Go API allows the GitHub Pages origin and local development origins through `ORBIT_ALLOWED_ORIGINS`. If you use a different dashboard origin, add that exact origin to the allowlist and restart the API. The API now exposes read-only metrics, log, and trace endpoints (documented below), but the dashboard deliberately hides sample metric cards while API mode is active until real telemetry rendering is implemented.
 
 ## Run Go tests directly
 
