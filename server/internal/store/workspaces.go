@@ -76,6 +76,18 @@ type WorkloadIdentity struct {
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 }
 
+type WorkloadIdentityGrant struct {
+	IdentityID string
+	Issuer string
+	Subject string
+	DisplayName string
+	Status string
+	ExpiresAt *time.Time
+	WorkspaceID string
+	Signal string
+	GrantedAt time.Time
+}
+
 type CreateWorkloadIdentityInput struct {
 	Issuer string
 	Subject string
@@ -100,6 +112,8 @@ type WorkloadIdentityRepository interface {
 	SetWorkloadWorkspaceGrant(ctx context.Context, input WorkloadGrantInput, granted bool) error
 	AuthorizeWorkloadTelemetry(ctx context.Context, issuer, subject, workspaceID, signal string) (WorkloadIdentity, error)
 	SetWorkloadIdentityStatus(ctx context.Context, identityID, actorIssuer, actorSubject, status string) error
+	ListWorkloadIdentities(ctx context.Context, limit int) ([]WorkloadIdentity, error)
+	ListWorkspaceWorkloadGrants(ctx context.Context, workspaceID string) ([]WorkloadIdentityGrant, error)
 }
 
 type WorkspaceDataRepository interface {
