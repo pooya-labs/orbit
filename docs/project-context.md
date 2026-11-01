@@ -35,8 +35,8 @@ The version labels above describe the progression documented by the project; the
 - **Telemetry query APIs stay bounded and read-only.** Windows, result counts, dimensions, and query expressions are validated. Never accept arbitrary PromQL or LogQL directly from the browser.
 - **M04 attribute extraction is still a preview.** It maps an allowlist of labels/tags into OpenTelemetry-style names. It does not yet ingest the complete resource-attribute set directly from workload SDKs or the Collector.
 - **Redis and NATS are provisioned but not yet integrated into application behavior.** Do not claim caching or event delivery until the API actually uses them and tests cover those paths.
-- **M06 API security branch:** the current feature branch introduces OIDC access-token verification using issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and process-local per-IP/per-subject rate limits. This slice must pass CI and be merged before M05 state-changing routes are introduced.
-- **Security work still open:** browser Authorization Code + PKCE, token lifecycle, workspace membership and database scoping, distributed rate limits, transactional audit records, and production deployment controls. Until workspace scoping exists, the API must not be advertised as multi-tenant.
+- **M06 API security foundation:** OIDC access-token verification through issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and process-local per-IP/per-subject rate limits are merged in `main` (`977ce49`) and passed CI run `41288773472`. The static dashboard remains unchanged and does not yet send access tokens.
+- **Security work still open:** browser Authorization Code + PKCE, token refresh/revocation, workspace membership and tenant-scoped database queries, distributed rate limits, transactional audit records for M05 operations, and production deployment controls. Until workspace scoping exists, the API must not be advertised as multi-tenant.
 
 ## 4. Established UX and engineering decisions
 
@@ -80,16 +80,17 @@ M05 acceptance requires API and database tests, lifecycle-transition tests, work
 
 The detailed proposed design is recorded in [ADR 0001 — OIDC access-token validation and API authorization](decisions/0001-oidc-access-token-authentication.md). It deliberately distinguishes OAuth access tokens from OIDC ID tokens and sets a Go 1.24-compatible JOSE dependency constraint.
 
-Authentication and authorization are a prerequisite for M05 mutations. Deliver this security gate before enabling public state-changing routes:
+The initial server-side authentication gate is implemented in `main` (`977ce49`) and CI-verified. It validates OIDC access-token signatures and claims against issuer discovery/JWKS, applies viewer/operator/administrator route policy, rejects missing credentials in staging/production, bounds request bodies and token sizes, and enforces process-local per-IP/per-subject limits.
 
-- OIDC/JWT verification with issuer, audience, signature, expiry, and key-rotation validation;
-- explicit roles (at minimum viewer, operator, administrator) and server-side authorization on every route;
-- workspace/tenant scoping before multi-user access;
-- audit actor identity derived from verified claims, never trusted from request JSON;
-- request/body limits, per-subject and per-IP rate limits, and bounded backend concurrency;
+The remaining security work before multi-user or M05 operations deployment is:
+
+- browser Authorization Code + PKCE, in-memory token lifecycle, refresh and revocation;
+- workspace/tenant membership and database scoping;
+- actor identity and transactional audit records for every state-changing operation;
+- shared rate limiting and bounded backend concurrency for horizontally scaled deployments;
 - secret management, CORS allowlists, dependency review, backups/retention, cardinality guardrails, and operational runbooks.
 
-A local development bypass may exist only in an explicitly non-production environment. Startup must fail closed if production mode is configured without valid authentication settings. Health/readiness endpoints should reveal status, not credentials or sensitive topology.
+Local development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is explicitly set. Startup must fail closed if staging/production is configured without valid authentication settings. Health/readiness endpoints should reveal status, not credentials or sensitive topology.
 
 ## 8. Related portfolio context
 
