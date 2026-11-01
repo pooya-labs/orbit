@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,9 +14,11 @@ import (
 	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/config"
 	"github.com/pooya16pg-spec/orbit/server/internal/httpapi"
+	"github.com/pooya16pg-spec/orbit/server/internal/ingest"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/store/postgres"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -29,14 +32,13 @@ func main() {
 	var authVerifier httpapi.TokenVerifier
 	if cfg.OIDCIssuer != "" {
 		authCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		var authErr error
-		verifier, authErr := auth.NewVerifier(authCtx, auth.Config{
+		verifier, err := auth.NewVerifier(authCtx, auth.Config{
 			Issuer: cfg.OIDCIssuer, Audience: cfg.OIDCAudience,
 			RolesClaim: cfg.OIDCRolesClaim, AllowInsecureHTTP: cfg.Environment == "development",
 		})
 		cancel()
-		if authErr != nil {
-			logger.Error("OIDC authentication initialization failed", "error", authErr)
+		if err != nil {
+			logger.Error("OIDC authentication initialization failed", "error", err)
 			os.Exit(1)
 		}
 		authVerifier = verifier
@@ -64,8 +66,8 @@ func main() {
 		logger.Warn("PostgreSQL is not configured; readiness and data endpoints will be unavailable")
 	}
 
-	server := &http.Server{
-		Addr:              cfg.HTTPAddr,
+	apiServer := &http.Server{
+		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewHandler(httpapi.Config{
 			Version: cfg.Version, Environment: cfg.Environment, AllowedOrigins: cfg.AllowedOrigins,
 			Telemetry: telemetryClient, AuthVerifier: authVerifier,
@@ -78,32 +80,169 @@ func main() {
 		MaxHeaderBytes:    1 << 20,
 	}
 
-	serverErrors := make(chan error, 1)
+	var ingestionHTTPServer *http.Server
+	var ingestionGRPCServer *grpc.Server
+	var ingestionHTTPListener net.Listener
+	var ingestionGRPCListener net.Listener
+	var workloadVerifier *auth.Verifier
+	var collectorGRPCForwarder *ingest.CollectorGRPCForwarder
+
+	if cfg.WorkloadOIDCIssuer != "" {
+		workloadRepository, ok := repository.(store.WorkloadIdentityRepository)
+		if !ok || workloadRepository == nil {
+			logger.Error("workload ingestion requires a repository with workload identity authorization support")
+			os.Exit(1)
+		}
+		rateLimitStore, ok := repository.(ingest.WorkloadRateLimitStore)
+		if !ok || rateLimitStore == nil {
+			logger.Error("workload ingestion requires the shared PostgreSQL rate-limit store")
+			os.Exit(1)
+		}
+
+		authCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		workloadVerifier, err = auth.NewIngestionVerifier(authCtx, auth.Config{
+			Issuer: cfg.WorkloadOIDCIssuer,
+			Audience: cfg.WorkloadOIDCAudience,
+			AllowInsecureHTTP: cfg.Environment == "development",
+		}, cfg.OIDCAudience)
+		cancel()
+		if err != nil {
+			logger.Error("workload OIDC verifier initialization failed", "error", err)
+			os.Exit(1)
+		}
+		defer workloadVerifier.Close()
+
+		authorizer, err := ingest.NewAuthorizer(workloadVerifier, workloadRepository)
+		if err != nil {
+			logger.Error("workload authorization initialization failed", "error", err)
+			os.Exit(1)
+		}
+		httpForwarder, err := ingest.NewCollectorHTTPForwarder(cfg.CollectorOTLPHTTPURL, 10*time.Second)
+		if err != nil {
+			logger.Error("Collector OTLP HTTP client configuration is invalid", "error", err)
+			os.Exit(1)
+		}
+		collectorGRPCForwarder, err = ingest.NewCollectorGRPCForwarder(cfg.CollectorOTLPGRPCEndpoint)
+		if err != nil {
+			logger.Error("Collector OTLP gRPC client configuration is invalid", "error", err)
+			os.Exit(1)
+		}
+		defer collectorGRPCForwarder.Close()
+
+		httpHandler, err := ingest.NewHTTPGateway(authorizer, httpForwarder, ingest.HTTPGatewayConfig{
+			RequestsPerMinute: cfg.RateLimitPerMinute,
+			ForwardTimeout: 10 * time.Second,
+			RateLimitStore: rateLimitStore,
+		})
+		if err != nil {
+			logger.Error("OTLP HTTP gateway initialization failed", "error", err)
+			os.Exit(1)
+		}
+		ingestionGRPCServer, err = ingest.NewGRPCGatewayServer(authorizer, collectorGRPCForwarder, ingest.GRPCGatewayConfig{
+			RequestsPerMinute: cfg.RateLimitPerMinute,
+			ForwardTimeout: 10 * time.Second,
+			RateLimitStore: rateLimitStore,
+		})
+		if err != nil {
+			logger.Error("OTLP gRPC gateway initialization failed", "error", err)
+			os.Exit(1)
+		}
+
+		ingestionHTTPListener, err = net.Listen("tcp", cfg.IngestionHTTPAddr)
+		if err != nil {
+			logger.Error("could not bind OTLP HTTP gateway listener", "address", cfg.IngestionHTTPAddr, "error", err)
+			os.Exit(1)
+		}
+		ingestionGRPCListener, err = net.Listen("tcp", cfg.IngestionGRPCAddr)
+		if err != nil {
+			_ = ingestionHTTPListener.Close()
+			logger.Error("could not bind OTLP gRPC gateway listener", "address", cfg.IngestionGRPCAddr, "error", err)
+			os.Exit(1)
+		}
+		ingestionHTTPServer = &http.Server{
+			Handler: httpHandler,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout: 10 * time.Second,
+			WriteTimeout: 15 * time.Second,
+			IdleTimeout: 60 * time.Second,
+			MaxHeaderBytes: 64 << 10,
+		}
+		logger.Info(
+			"authenticated OTLP ingestion gateways enabled",
+			"http_address", cfg.IngestionHTTPAddr,
+			"grpc_address", cfg.IngestionGRPCAddr,
+			"collector_http", cfg.CollectorOTLPHTTPURL,
+			"collector_grpc", cfg.CollectorOTLPGRPCEndpoint,
+		)
+	} else {
+		logger.Warn("authenticated OTLP ingestion gateways are disabled; workload OIDC is not configured")
+	}
+
+	serverErrors := make(chan error, 3)
 	go func() {
 		logger.Info("starting ORBIT API", "address", cfg.HTTPAddr, "environment", cfg.Environment, "version", cfg.Version)
-		serverErrors <- server.ListenAndServe()
+		serverErrors <- apiServer.ListenAndServe()
 	}()
+	if ingestionHTTPServer != nil {
+		go func() {
+			logger.Info("starting authenticated OTLP HTTP gateway", "address", cfg.IngestionHTTPAddr)
+			serverErrors <- ingestionHTTPServer.Serve(ingestionHTTPListener)
+		}()
+		go func() {
+			logger.Info("starting authenticated OTLP gRPC gateway", "address", cfg.IngestionGRPCAddr)
+			serverErrors <- ingestionGRPCServer.Serve(ingestionGRPCListener)
+		}()
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	var runtimeErr error
 	select {
 	case err := <-serverErrors:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("HTTP server stopped unexpectedly", "error", err)
-			os.Exit(1)
+		if err == nil {
+			runtimeErr = errors.New("an ORBIT listener stopped unexpectedly")
+		} else {
+			runtimeErr = err
 		}
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			logger.Error("graceful shutdown failed", "error", err)
-			if closeErr := server.Close(); closeErr != nil {
-				logger.Error("forced server close failed", "error", closeErr)
-			}
-			os.Exit(1)
-		}
-		logger.Info("ORBIT API stopped")
 	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := apiServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error("API HTTP graceful shutdown failed", "error", err)
+		_ = apiServer.Close()
+	}
+	if ingestionHTTPServer != nil {
+		if err := ingestionHTTPServer.Shutdown(shutdownCtx); err != nil {
+			logger.Error("OTLP HTTP graceful shutdown failed", "error", err)
+			_ = ingestionHTTPServer.Close()
+		}
+	}
+	if ingestionGRPCServer != nil {
+		gracefulDone := make(chan struct{})
+		go func() {
+			ingestionGRPCServer.GracefulStop()
+			close(gracefulDone)
+		}()
+		select {
+		case <-gracefulDone:
+		case <-shutdownCtx.Done():
+			ingestionGRPCServer.Stop()
+		}
+	}
+	if ingestionHTTPListener != nil {
+		_ = ingestionHTTPListener.Close()
+	}
+	if ingestionGRPCListener != nil {
+		_ = ingestionGRPCListener.Close()
+	}
+
+	if runtimeErr != nil && !errors.Is(runtimeErr, http.ErrServerClosed) {
+		logger.Error("an ORBIT listener stopped unexpectedly", "error", runtimeErr)
+		os.Exit(1)
+	}
+	logger.Info("ORBIT API stopped")
 }

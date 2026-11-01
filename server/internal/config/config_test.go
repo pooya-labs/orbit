@@ -48,7 +48,7 @@ func TestLoadReadsOptionalTelemetryEndpoints(t *testing.T) {
 func TestProductionAndStagingRequireOIDC(t *testing.T) {
 	for _, environment := range []string{"production", "staging"} {
 		t.Run(environment, func(t *testing.T) {
-			cfg := Config{Environment: environment, RateLimitPerMinute: 120, OIDCRolesClaim: "roles", DatabaseURL: "postgres://orbit:test@localhost:5432/orbit"}
+			cfg := Config{Environment: environment, RateLimitPerMinute: 120, OIDCRolesClaim: "roles", DatabaseURL: "postgres://orbit:test@localhost:5432/orbit", IngestionHTTPAddr: "127.0.0.1:4319", IngestionGRPCAddr: "127.0.0.1:4320"}
 			if err := cfg.Validate(); err == nil {
 				t.Fatal("Validate() accepted a protected environment without OIDC settings")
 			}
@@ -57,8 +57,15 @@ func TestProductionAndStagingRequireOIDC(t *testing.T) {
 				t.Fatal("Validate() accepted an incomplete OIDC configuration")
 			}
 			cfg.OIDCAudience = "orbit-api"
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() accepted a protected environment without workload OIDC")
+			}
+			cfg.WorkloadOIDCIssuer = "https://identity.example/"
+			cfg.WorkloadOIDCAudience = "orbit-ingestion"
+			cfg.CollectorOTLPHTTPURL = "http://otel-collector:4318"
+			cfg.CollectorOTLPGRPCEndpoint = "otel-collector:4317"
 			if err := cfg.Validate(); err != nil {
-				t.Fatalf("Validate() rejected complete OIDC configuration: %v", err)
+				t.Fatalf("Validate() rejected complete human/workload OIDC configuration: %v", err)
 			}
 		})
 	}
@@ -120,6 +127,12 @@ func TestProductionAndStagingRequirePostgresForSharedRateLimits(t *testing.T) {
 				OIDCRolesClaim: "roles",
 				OIDCIssuer: "https://identity.example/",
 				OIDCAudience: "orbit-api",
+				WorkloadOIDCIssuer: "https://identity.example/",
+				WorkloadOIDCAudience: "orbit-ingestion",
+				CollectorOTLPHTTPURL: "http://otel-collector:4318",
+				CollectorOTLPGRPCEndpoint: "otel-collector:4317",
+				IngestionHTTPAddr: "127.0.0.1:4319",
+				IngestionGRPCAddr: "127.0.0.1:4320",
 			}
 			if err := cfg.Validate(); err == nil {
 				t.Fatal("Validate() accepted a protected environment without PostgreSQL")
@@ -131,3 +144,75 @@ func TestProductionAndStagingRequirePostgresForSharedRateLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadReadsWorkloadIngestionConfiguration(t *testing.T) {
+	t.Setenv("ORBIT_WORKLOAD_OIDC_ISSUER", " https://workloads.example/ ")
+	t.Setenv("ORBIT_WORKLOAD_OIDC_AUDIENCE", " orbit-ingestion ")
+	t.Setenv("ORBIT_INGESTION_HTTP_ADDR", " :5319 ")
+	t.Setenv("ORBIT_INGESTION_GRPC_ADDR", " :5320 ")
+	t.Setenv("ORBIT_COLLECTOR_OTLP_HTTP_URL", " http://otel-collector:4318 ")
+	t.Setenv("ORBIT_COLLECTOR_OTLP_GRPC_ENDPOINT", " otel-collector:4317 ")
+
+	got := Load()
+	if got.WorkloadOIDCIssuer != "https://workloads.example/" || got.WorkloadOIDCAudience != "orbit-ingestion" {
+		t.Fatalf("unexpected workload OIDC config: %+v", got)
+	}
+	if got.IngestionHTTPAddr != ":5319" || got.IngestionGRPCAddr != ":5320" {
+		t.Fatalf("unexpected ingestion listen addresses: %+v", got)
+	}
+	if got.CollectorOTLPHTTPURL != "http://otel-collector:4318" || got.CollectorOTLPGRPCEndpoint != "otel-collector:4317" {
+		t.Fatalf("unexpected Collector endpoints: %+v", got)
+	}
+}
+
+func TestWorkloadIngestionRequiresDistinctAudiencesDatabaseAndCollectorEndpoints(t *testing.T) {
+	base := Config{
+		Environment: "development",
+		RateLimitPerMinute: 120,
+		OIDCRolesClaim: "roles",
+		OIDCIssuer: "https://identity.example/",
+		OIDCAudience: "orbit-api",
+		WorkloadOIDCIssuer: "https://identity.example/",
+		WorkloadOIDCAudience: "orbit-ingestion",
+		DatabaseURL: "postgres://orbit:test@localhost:5432/orbit",
+		CollectorOTLPHTTPURL: "http://otel-collector:4318",
+		CollectorOTLPGRPCEndpoint: "otel-collector:4317",
+		IngestionHTTPAddr: "127.0.0.1:4319",
+		IngestionGRPCAddr: "127.0.0.1:4320",
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid workload ingestion config rejected: %v", err)
+	}
+	tests := []struct {
+		name string
+		edit func(*Config)
+	}{
+		{name: "same audience", edit: func(c *Config) { c.WorkloadOIDCAudience = c.OIDCAudience }},
+		{name: "missing database", edit: func(c *Config) { c.DatabaseURL = "" }},
+		{name: "missing collector HTTP endpoint", edit: func(c *Config) { c.CollectorOTLPHTTPURL = "" }},
+		{name: "invalid collector HTTP endpoint", edit: func(c *Config) { c.CollectorOTLPHTTPURL = "http://user:pass@collector:4318" }},
+		{name: "missing collector gRPC endpoint", edit: func(c *Config) { c.CollectorOTLPGRPCEndpoint = "" }},
+		{name: "URL used for gRPC endpoint", edit: func(c *Config) { c.CollectorOTLPGRPCEndpoint = "http://collector:4317" }},
+		{name: "workload without human audience", edit: func(c *Config) { c.OIDCIssuer = ""; c.OIDCAudience = "" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := base
+			test.edit(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() accepted an unsafe workload ingestion configuration")
+			}
+		})
+	}
+}
+
+
+func TestLoadDefaultsIngestionListenersToLoopback(t *testing.T) {
+	t.Setenv("ORBIT_INGESTION_HTTP_ADDR", "")
+	t.Setenv("ORBIT_INGESTION_GRPC_ADDR", "")
+	got := Load()
+	if got.IngestionHTTPAddr != "127.0.0.1:4319" || got.IngestionGRPCAddr != "127.0.0.1:4320" {
+		t.Fatalf("ingestion listener defaults are not loopback-only: %+v", got)
+	}
+}
+

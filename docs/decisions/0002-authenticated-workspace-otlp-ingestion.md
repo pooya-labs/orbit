@@ -33,6 +33,19 @@ Do not expose the Collector's raw OTLP receivers as a public multi-tenant endpoi
 4. Prometheus, Loki, and Tempo receive only canonical tenant attribution from the trusted gateway. Collector processors must not convert an untrusted producer value into a tenant label.
 5. The Collector and backend write endpoints remain private-network-only. Network policy/firewall rules must prevent clients from bypassing the gateway and reaching raw receivers or storage APIs.
 
+### Gateway listener and TLS boundary
+
+The application HTTP and gRPC ingestion listeners do not terminate TLS. Their default bind addresses are loopback-only (`127.0.0.1:4319` and `127.0.0.1:4320`). A deployment that needs remote workload connectivity must explicitly bind them to a private interface and place them behind a TLS-terminating ingress.
+
+Before enabling remote traffic, the deployment must:
+- terminate TLS at the ingress and reject plaintext external connections;
+- forward the original Authorization metadata/header unchanged and never log bearer credentials;
+- restrict listener reachability to the ingress using security groups, firewall rules, or Kubernetes NetworkPolicy;
+- keep Collector OTLP receivers and telemetry backend write APIs on a separate private network, reachable only by the gateway;
+- avoid publishing gateway or raw Collector ports directly to the public internet.
+
+The local Compose profile binds the gateway listeners to the container network only and publishes neither gateway nor raw Collector OTLP ports to the host. This is not a substitute for production ingress TLS and network-policy verification.
+
 ### OTLP protocol boundary
 
 - Support OTLP/HTTP and OTLP/gRPC only through the authenticated gateway.
@@ -57,7 +70,7 @@ Workspace grants must be checked server-side on every ingestion authorization de
 
 | Threat | Required mitigation |
 | --- | --- |
-| Producer forges another workspace ID | Strip reserved attributes and inject the DB-authorized canonical ID |
+| Producer forges another workspace ID | Reject producer-supplied reserved attributes and inject the DB-authorized canonical ID |
 | Token replay or theft | Short token lifetime, TLS, scoped audience, rotation/revocation, rate limits |
 | Credential from one service writes another signal/workspace | Explicit per-identity workspace and signal grants |
 | Direct Collector bypass | Private bind/network policy; backend and receiver ports not publicly exposed |
@@ -70,8 +83,8 @@ Workspace grants must be checked server-side on every ingestion authorization de
 
 1. [x] Add workload identity, workspace grant, and audit schema/repository methods with transactional grant changes (PR #21). Rejected authorization decisions are now appended to the audit log without storing credentials or telemetry payloads (PR #23).
 2. [x] Add an ingestion-specific verifier configuration with a dedicated audience; do not weaken or repurpose the human API audience (strict RFC 9068 `at+jwt` profile and explicit `nbf` requirement merged in PR #22).
-3. Implement the OTLP gateway for both HTTP and gRPC. Resolve verified workload identity and workspace grants before accepting data.
-4. Strip producer tenant attributes and inject the canonical workspace ID into all signals. Reject conflicts and mixed-tenant batches.
+3. [x] Implement OTLP/HTTP and OTLP/gRPC transport handlers with per-request workload verification and workspace/signal grant checks (PRs #28 and #29). Dedicated runtime listeners and verifier wiring are being added separately.
+4. [x] Reject producer-supplied reserved tenant attributes at all traversed OTLP attribute scopes and inject the canonical authorized workspace ID for all three signals (PR #27). Mixed-batch and cross-workspace integration tests remain outstanding.
 5. [x] Isolate the local Compose telemetry services on an internal Docker network and remove host-published raw OTLP ports (PR #26). Production gateway-to-collector network policy and deployment firewall rules remain outstanding.
 6. Add integration tests that submit valid, invalid, revoked, cross-workspace, forged-attribute, mixed-batch, and oversized requests for metrics, logs, and traces.
 7. Verify that a workload authorized for workspace A cannot write data visible under workspace B, even when it supplies B's identifier.

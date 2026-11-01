@@ -52,6 +52,10 @@ services:
       ORBIT_PROMETHEUS_URL: http://prometheus:9090
       ORBIT_LOKI_URL: http://loki:3100
       ORBIT_TEMPO_URL: http://tempo:3200
+      ORBIT_INGESTION_HTTP_ADDR: ":4319"
+      ORBIT_INGESTION_GRPC_ADDR: ":4320"
+      ORBIT_COLLECTOR_OTLP_HTTP_URL: http://otel-collector:4318
+      ORBIT_COLLECTOR_OTLP_GRPC_ENDPOINT: otel-collector:4317
     ports:
       - "127.0.0.1:8080:8080"
     networks:
