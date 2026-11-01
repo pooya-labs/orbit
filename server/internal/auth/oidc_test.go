@@ -116,8 +116,12 @@ func signES256Token(t *testing.T, key *ecdsa.PrivateKey, keyID string, claims ma
 }
 
 func signToken(t *testing.T, keyID, algorithm string, claims map[string]any, signer func([]byte) ([]byte, error)) string {
+	return signTokenWithType(t, "at+jwt", keyID, algorithm, claims, signer)
+}
+
+func signTokenWithType(t *testing.T, tokenType, keyID, algorithm string, claims map[string]any, signer func([]byte) ([]byte, error)) string {
 	t.Helper()
-	header, err := json.Marshal(map[string]any{"alg": algorithm, "kid": keyID, "typ": "at+jwt"})
+	header, err := json.Marshal(map[string]any{"alg": algorithm, "kid": keyID, "typ": tokenType})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,6 +151,52 @@ func newTestVerifier(t *testing.T, provider *testOIDCProvider) *Verifier {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
 	return verifier
+}
+
+
+func TestIngestionVerifierRequiresDedicatedAccessTokenProfile(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := newTestOIDCProvider(t, rsaJWK("ingestion-key", &privateKey.PublicKey))
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	verifier, err := NewIngestionVerifier(ctx, Config{
+		Issuer: provider.issuer, Audience: "orbit-telemetry-ingestion",
+		AllowInsecureHTTP: true, CacheTTL: time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("NewIngestionVerifier() error = %v", err)
+	}
+
+	claims := testClaims(provider.issuer)
+	claims["aud"] = []string{"orbit-telemetry-ingestion"}
+	valid := signRS256Token(t, privateKey, "ingestion-key", claims)
+	if _, err := verifier.Verify(ctx, valid); err != nil {
+		t.Fatalf("ingestion verifier rejected valid workload token: %v", err)
+	}
+
+	missingNotBefore := testClaims(provider.issuer)
+	missingNotBefore["aud"] = []string{"orbit-telemetry-ingestion"}
+	delete(missingNotBefore, "nbf")
+	if _, err := verifier.Verify(ctx, signRS256Token(t, privateKey, "ingestion-key", missingNotBefore)); err == nil {
+		t.Fatal("ingestion verifier accepted a token without nbf")
+	}
+
+	wrongAudience := testClaims(provider.issuer)
+	if _, err := verifier.Verify(ctx, signRS256Token(t, privateKey, "ingestion-key", wrongAudience)); err == nil {
+		t.Fatal("ingestion verifier accepted the human API audience")
+	}
+
+	wrongType := signTokenWithType(t, "JWT", "ingestion-key", "RS256", claims, func(input []byte) ([]byte, error) {
+		digest := sha256.Sum256(input)
+		return rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, digest[:])
+	})
+	if _, err := verifier.Verify(ctx, wrongType); err == nil {
+		t.Fatal("ingestion verifier accepted a generic JWT type")
+	}
 }
 
 func TestVerifyRS256AccessTokenAndRoleHierarchy(t *testing.T) {
