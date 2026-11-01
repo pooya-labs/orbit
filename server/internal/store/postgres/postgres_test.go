@@ -431,3 +431,34 @@ func TestWorkspaceScopedDataReadsDoNotCrossWorkspace(t *testing.T) {
 		t.Fatal("database must reject an incident linked to a service in another workspace")
 	}
 }
+
+
+func TestWorkloadIdentityWorkspaceGrantAuthorization(t *testing.T) {
+ databaseURL:=os.Getenv("ORBIT_TEST_DATABASE_URL")
+ if databaseURL=="" { t.Skip("ORBIT_TEST_DATABASE_URL is not set") }
+ ctx,cancel:=context.WithTimeout(context.Background(),20*time.Second);defer cancel()
+ repository,err:=Open(ctx,databaseURL);if err!=nil{t.Fatalf("open repository: %v",err)};defer repository.Close()
+ suffix:=fmt.Sprintf("%d",time.Now().UnixNano())
+ actorIssuer:="https://identity.example/"
+ actorSubject:="workload-admin-"+suffix
+ workspaceA,err:=repository.CreateWorkspace(ctx,store.CreateWorkspaceInput{Name:"Workload A "+suffix,Slug:"workload-a-"+suffix,OwnerIssuer:actorIssuer,OwnerSubject:actorSubject})
+ if err!=nil{t.Fatalf("create workspace A: %v",err)}
+ workspaceB,err:=repository.CreateWorkspace(ctx,store.CreateWorkspaceInput{Name:"Workload B "+suffix,Slug:"workload-b-"+suffix,OwnerIssuer:actorIssuer,OwnerSubject:actorSubject})
+ if err!=nil{t.Fatalf("create workspace B: %v",err)}
+ identity,err:=repository.CreateWorkloadIdentity(ctx,store.CreateWorkloadIdentityInput{
+  Issuer:"https://workloads.example/",Subject:"collector-"+suffix,DisplayName:"Test Collector",
+  ActorIssuer:actorIssuer,ActorSubject:actorSubject,
+ })
+ if err!=nil{t.Fatalf("create workload identity: %v",err)}
+ grant:=store.WorkloadGrantInput{IdentityID:identity.ID,WorkspaceID:workspaceA.ID,Signal:"metrics",ActorIssuer:actorIssuer,ActorSubject:actorSubject}
+ if err:=repository.SetWorkloadWorkspaceGrant(ctx,grant,true);err!=nil{t.Fatalf("grant metrics: %v",err)}
+ authorized,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceA.ID,"metrics")
+ if err!=nil||authorized.ID!=identity.ID{t.Fatalf("authorized workload = %+v, err=%v",authorized,err)}
+ if _,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceA.ID,"logs");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("logs should be denied, got %v",err)}
+ if _,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceB.ID,"metrics");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("cross-workspace access should be denied, got %v",err)}
+ if err:=repository.SetWorkloadWorkspaceGrant(ctx,grant,false);err!=nil{t.Fatalf("revoke metrics grant: %v",err)}
+ if _,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceA.ID,"metrics");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("revoked grant should be denied, got %v",err)}
+ if err:=repository.SetWorkloadIdentityStatus(ctx,identity.ID,actorIssuer,actorSubject,"revoked");err!=nil{t.Fatalf("revoke workload identity: %v",err)}
+ if _,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceA.ID,"metrics");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("revoked identity should be denied, got %v",err)}
+ if err:=repository.SetWorkloadIdentityStatus(ctx,identity.ID,actorIssuer,actorSubject,"active");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("revoked identity must not be re-enabled, got %v",err)}
+}
