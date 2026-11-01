@@ -333,7 +333,7 @@ func TestAuthenticatedOTLPGatewaysRejectProducerWorkspaceSpoofingForEverySignal(
 			}
 			if grpcForwarder.metricsCalls != 0 || grpcForwarder.logsCalls != 0 || grpcForwarder.tracesCalls != 0 {
 				t.Fatalf("spoofed %s payload reached gRPC Collector forwarder: metrics=%d logs=%d traces=%d",
-					signal, signal, grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
+					signal, grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
 			}
 		})
 	}
@@ -509,7 +509,7 @@ func TestAuthenticatedOTLPGatewaysRejectOversizedRequestsForEverySignal(t *testi
 			}
 			if grpcForwarder.metricsCalls != 0 || grpcForwarder.logsCalls != 0 || grpcForwarder.tracesCalls != 0 {
 				t.Fatalf("oversized %s payload reached gRPC Collector forwarder: metrics=%d logs=%d traces=%d",
-					grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
+					signal, grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
 			}
 		})
 	}
