@@ -139,3 +139,14 @@ This is a fail-closed compatibility boundary, not full telemetry tenant isolatio
 ### Workspace-scoped telemetry query contract
 
 The workspace API exposes separate metrics, logs, and traces query routes under `/api/v1/workspaces/{workspaceID}/telemetry/*`. Every request verifies the caller's workspace membership before contacting a backend. Prometheus and Loki selectors and Tempo TraceQL include the workspace UUID as `orbit_workspace_id` / `resource.orbit.workspace.id`; there is deliberately no fallback to unscoped queries. Telemetry producers must attach the canonical workspace resource attribute, and ingestion must authenticate/authorize the producer's workspace assignment. Until that ingestion trust boundary is implemented and tested, these query routes return only data that carries the workspace label and must not be treated as proof that the ingestion path is tenant-safe.
+
+
+## 12. Workload identity administration and runtime ingestion (M06)
+
+The authenticated OTLP runtime listeners are wired in `server/cmd/orbit-api`: the human API verifier and the dedicated strict workload-token verifier are separate, and HTTP/gRPC ingestion listeners start only when workload OIDC is explicitly configured. The gateways require the shared PostgreSQL rate-limit store, use bounded request/concurrency limits, and forward only to the private Collector endpoints. The listeners default to loopback; remote deployments still require TLS termination and private-network policy as described in ADR 0002.
+
+PR #34 is merged. It adds administrator-only workload identity creation, listing, and status changes, plus workspace owner/administrator grant listing and per-signal grant/revoke endpoints. Repository mutations write workload audit events transactionally with the identity/grant changes. The routes are API-only; no public management UI is enabled.
+
+The existing PostgreSQL-backed integration suite verifies valid grants, cross-workspace denial, and revoked-identity denial for metrics, logs, and traces over both OTLP/HTTP and OTLP/gRPC. PR #36 adds an additional integration layer that attempts to forge the reserved `orbit.workspace.id` attribute for each signal and verifies both gateways reject it before forwarding to the Collector. That PR is awaiting CI at the time of this note.
+
+Do not enable production tenant ingestion until the remaining mixed-batch cases, end-to-end backend/query isolation, ingress TLS/network policy, load and revocation-bound tests, and deployment runbooks are verified.
