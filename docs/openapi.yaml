@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ORBIT API
-  version: 0.8.0
+  version: 0.9.0
   summary: Service inventory and bounded observability query API
   description: |
     ORBIT reads service and incident inventories from PostgreSQL and exposes
@@ -129,7 +129,7 @@ paths:
       tags: [Telemetry]
       operationId: discoverTelemetryServices
       summary: Discover service names across configured telemetry backends
-      description: Queries Prometheus, Loki, and Tempo concurrently, merges duplicate service names, and preserves backend provenance. Partial backend failures are returned as warnings when at least one backend succeeds.
+      description: Queries Prometheus, Loki, and Tempo concurrently, merges duplicate service names, persists observations and backend provenance in PostgreSQL, then returns the active persisted catalog. Services not observed for seven days are omitted from the response. Partial backend failures are returned as warnings when at least one backend succeeds.
       parameters:
         - in: query
           name: window
@@ -342,15 +342,32 @@ components:
           type: array
           items:
             type: object
-            required: [name, sources]
+            required: [id, name, sources, first_seen_at, last_seen_at, last_discovered_at, resource_attributes]
             properties:
+              id:
+                type: string
+                format: uuid
               name:
                 type: string
+                pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
               sources:
                 type: array
+                uniqueItems: true
                 items:
                   type: string
                   enum: [prometheus, loki, tempo]
+              first_seen_at:
+                type: string
+                format: date-time
+              last_seen_at:
+                type: string
+                format: date-time
+              last_discovered_at:
+                type: string
+                format: date-time
+              resource_attributes:
+                type: object
+                additionalProperties: true
     TelemetryMetricsResponse:
       type: object
       required: [source, window, queried_at, query, step, data]
