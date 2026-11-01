@@ -25,6 +25,7 @@ import (
 const (
 	maxBearerTokenBytes = 16 << 10
 	maxRemoteDocumentBytes = 1 << 20
+	maxJWKSKeys = 100
 	defaultCacheTTL = 5 * time.Minute
 	forcedRefreshInterval = 30 * time.Second
 )
@@ -105,6 +106,14 @@ type jwkDocument struct {
 	Use     string   `json:"use"`
 	Alg     string   `json:"alg"`
 	KeyOps  []string `json:"key_ops"`
+	D       string   `json:"d"`
+	P       string   `json:"p"`
+	Q       string   `json:"q"`
+	DP      string   `json:"dp"`
+	DQ      string   `json:"dq"`
+	QI      string   `json:"qi"`
+	K       string   `json:"k"`
+	OTH     json.RawMessage `json:"oth"`
 	N       string   `json:"n"`
 	E       string   `json:"e"`
 	Crv     string   `json:"crv"`
@@ -234,11 +243,18 @@ func (v *Verifier) refreshKeysLocked(ctx context.Context) error {
 	if err := v.fetchJSON(ctx, v.jwksURL, &document); err != nil {
 		return err
 	}
+	if len(document.Keys) == 0 || len(document.Keys) > maxJWKSKeys {
+		return fmt.Errorf("JWKS must contain between 1 and %d keys", maxJWKSKeys)
+	}
 	keys := make(map[string]verificationKey, len(document.Keys))
 	for _, raw := range document.Keys {
 		var item jwkDocument
 		if err := json.Unmarshal(raw, &item); err != nil {
 			return fmt.Errorf("decode JWK: %w", err)
+		}
+		if item.D != "" || item.P != "" || item.Q != "" || item.DP != "" ||
+			item.DQ != "" || item.QI != "" || item.K != "" || len(item.OTH) > 0 {
+			return errors.New("JWKS must not publish private key material")
 		}
 		if item.KeyID == "" {
 			continue
@@ -378,9 +394,14 @@ func (v *Verifier) Verify(ctx context.Context, serialized string) (Principal, er
 				return nil, errors.New("JWT type is not an access-token type")
 			}
 		}
+		for _, untrustedHeader := range []string{"jku", "jwk", "x5u", "crit", "b64"} {
+			if _, present := token.Header[untrustedHeader]; present {
+				return nil, fmt.Errorf("JWT header %q is not supported", untrustedHeader)
+			}
+		}
 		keyID, ok := token.Header["kid"].(string)
-		if !ok || keyID == "" {
-			return nil, errors.New("JWT is missing its key ID")
+		if !ok || keyID == "" || len(keyID) > 256 {
+			return nil, errors.New("JWT is missing a valid key ID")
 		}
 		return v.keyFor(ctx, keyID, algorithm)
 	},
@@ -464,4 +485,12 @@ func parseRoles(claims jwt.MapClaims, claimName string) ([]string, error) {
 		roles = append(roles, role)
 	}
 	return roles, nil
+}
+
+
+// Close releases idle HTTP connections held by the OIDC verifier.
+func (v *Verifier) Close() {
+	if v != nil && v.client != nil {
+		v.client.CloseIdleConnections()
+	}
 }
