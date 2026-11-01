@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	otellog "go.opentelemetry.io/otel/log"
 	metricapi "go.opentelemetry.io/otel/metric"
+	traceapi "go.opentelemetry.io/otel/trace"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -32,7 +33,7 @@ const (
 )
 
 type telemetry struct {
-	tracer   otel.Tracer
+	tracer   traceapi.Tracer
 	requests metricapi.Int64Counter
 	logger   otellog.Logger
 
