@@ -615,6 +615,40 @@ func TestTelemetryServiceResourceAttributesEndpoint(t *testing.T) {
 	}
 }
 
+func TestTelemetryServiceAttributesReturnsNotFoundWhenServiceIsNotCatalogued(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/series" || r.URL.Query().Get("match[]") != `{service_name="unknown-service"}` {
+			t.Errorf("unexpected Prometheus resource query: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":[{"service_name":"unknown-service","service_version":"1.0"}]}`))
+	}))
+	defer prometheus.Close()
+
+	client, err := telemetry.NewClient(prometheus.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandler(Config{Telemetry: client}, &fakeRepository{}, testLogger())
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/telemetry/services/unknown-service/attributes?window=1h",
+		nil,
+	))
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusNotFound, recorder.Body.String())
+	}
+	var payload errorResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode service-not-found response: %v", err)
+	}
+	if payload.Error.Code != "service_not_found" || payload.Error.RequestID == "" {
+		t.Fatalf("unexpected service-not-found response: %+v", payload.Error)
+	}
+}
+
 func TestTelemetryQueryValidationAndUnavailableResponses(t *testing.T) {
 	handler := NewHandler(Config{}, &fakeRepository{}, testLogger())
 
