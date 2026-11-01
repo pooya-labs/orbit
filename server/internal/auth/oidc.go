@@ -38,6 +38,8 @@ type Config struct {
 	CacheTTL          time.Duration
 	HTTPTimeout       time.Duration
 	AllowInsecureHTTP bool
+	RequiredTokenType string
+	RequireNotBefore  bool
 }
 
 type Principal struct {
@@ -72,11 +74,13 @@ func (p Principal) HasRole(required string) bool {
 }
 
 type Verifier struct {
-	issuer     string
-	audience   string
-	rolesClaim string
-	skew       time.Duration
-	cacheTTL   time.Duration
+	issuer            string
+	audience          string
+	rolesClaim        string
+	requiredTokenType string
+	requireNotBefore  bool
+	skew              time.Duration
+	cacheTTL          time.Duration
 	client     *http.Client
 	jwksURL    string
 
@@ -131,6 +135,9 @@ func NewVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
 	if cfg.RolesClaim == "" {
 		cfg.RolesClaim = "roles"
 	}
+	if cfg.RequiredTokenType != "" && cfg.RequiredTokenType != "at+jwt" {
+		return nil, errors.New("required JWT token type must be at+jwt")
+	}
 	if cfg.ClockSkew <= 0 {
 		cfg.ClockSkew = 60 * time.Second
 	}
@@ -163,6 +170,7 @@ func NewVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
 	}
 	verifier := &Verifier{
 		issuer: cfg.Issuer, audience: cfg.Audience, rolesClaim: cfg.RolesClaim,
+		requiredTokenType: cfg.RequiredTokenType, requireNotBefore: cfg.RequireNotBefore,
 		skew: cfg.ClockSkew, cacheTTL: cfg.CacheTTL, client: client,
 		keys: make(map[string]verificationKey),
 	}
@@ -191,6 +199,21 @@ func NewVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
 		return nil, fmt.Errorf("load OIDC signing keys: %w", err)
 	}
 	return verifier, nil
+}
+
+// NewIngestionVerifier creates a verifier for workload access tokens. It
+// requires the RFC 9068 access-token type and an explicit not-before claim.
+// humanAudience is supplied explicitly so a configuration mistake cannot
+// silently reuse the human dashboard/API audience for machine credentials.
+func NewIngestionVerifier(ctx context.Context, cfg Config, humanAudience string) (*Verifier, error) {
+	cfg.Audience = strings.TrimSpace(cfg.Audience)
+	humanAudience = strings.TrimSpace(humanAudience)
+	if humanAudience == "" || cfg.Audience == "" || cfg.Audience == humanAudience {
+		return nil, errors.New("workload ingestion audience must be configured and distinct from the human API audience")
+	}
+	cfg.RequiredTokenType = "at+jwt"
+	cfg.RequireNotBefore = true
+	return NewVerifier(ctx, cfg)
 }
 
 func validateRemoteURL(u *url.URL, allowInsecureHTTP bool) error {
@@ -391,10 +414,17 @@ func (v *Verifier) Verify(ctx context.Context, serialized string) (Principal, er
 		if algorithm != "RS256" && algorithm != "ES256" {
 			return nil, errors.New("JWT signing algorithm is not allowed")
 		}
-		if tokenType, present := token.Header["typ"]; present {
+		tokenType, present := token.Header["typ"]
+		if v.requiredTokenType != "" && !present {
+			return nil, errors.New("JWT type header is required")
+		}
+		if present {
 			value, ok := tokenType.(string)
 			if !ok || (value != "JWT" && value != "at+JWT" && value != "at+jwt") {
 				return nil, errors.New("JWT type is not an access-token type")
+			}
+			if v.requiredTokenType != "" && value != v.requiredTokenType {
+				return nil, errors.New("JWT type does not match the required access-token type")
 			}
 		}
 		for _, untrustedHeader := range []string{"jku", "jwk", "x5u", "crit", "b64"} {
@@ -429,6 +459,13 @@ func (v *Verifier) Verify(ctx context.Context, serialized string) (Principal, er
 	if err != nil || strings.TrimSpace(subject) == "" {
 		return Principal{}, errors.New("access token subject is missing or invalid")
 	}
+	if v.requireNotBefore {
+		notBefore, nbfErr := claims.GetNotBefore()
+		if nbfErr != nil || notBefore == nil {
+			return Principal{}, errors.New("access token not-before claim is missing or invalid")
+		}
+	}
+
 	issuedAt, err := claims.GetIssuedAt()
 	if err != nil || issuedAt == nil {
 		return Principal{}, errors.New("access token issued-at claim is missing or invalid")
