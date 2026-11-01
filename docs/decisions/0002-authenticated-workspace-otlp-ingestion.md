@@ -57,7 +57,7 @@ Workspace grants must be checked server-side on every ingestion authorization de
 
 | Threat | Required mitigation |
 | --- | --- |
-| Producer forges another workspace ID | Strip reserved attributes and inject the DB-authorized canonical ID |
+| Producer forges another workspace ID | Reject producer-supplied reserved attributes and inject the DB-authorized canonical ID |
 | Token replay or theft | Short token lifetime, TLS, scoped audience, rotation/revocation, rate limits |
 | Credential from one service writes another signal/workspace | Explicit per-identity workspace and signal grants |
 | Direct Collector bypass | Private bind/network policy; backend and receiver ports not publicly exposed |
@@ -70,8 +70,8 @@ Workspace grants must be checked server-side on every ingestion authorization de
 
 1. [x] Add workload identity, workspace grant, and audit schema/repository methods with transactional grant changes (PR #21). Rejected authorization decisions are now appended to the audit log without storing credentials or telemetry payloads (PR #23).
 2. [x] Add an ingestion-specific verifier configuration with a dedicated audience; do not weaken or repurpose the human API audience (strict RFC 9068 `at+jwt` profile and explicit `nbf` requirement merged in PR #22).
-3. Implement the OTLP gateway for both HTTP and gRPC. Resolve verified workload identity and workspace grants before accepting data.
-4. Strip producer tenant attributes and inject the canonical workspace ID into all signals. Reject conflicts and mixed-tenant batches.
+3. [x] Implement OTLP/HTTP and OTLP/gRPC transport handlers with per-request workload verification and workspace/signal grant checks (PRs #28 and #29). Dedicated runtime listeners and verifier wiring are being added separately.
+4. [x] Reject producer-supplied reserved tenant attributes at all traversed OTLP attribute scopes and inject the canonical authorized workspace ID for all three signals (PR #27). Mixed-batch and cross-workspace integration tests remain outstanding.
 5. [x] Isolate the local Compose telemetry services on an internal Docker network and remove host-published raw OTLP ports (PR #26). Production gateway-to-collector network policy and deployment firewall rules remain outstanding.
 6. Add integration tests that submit valid, invalid, revoked, cross-workspace, forged-attribute, mixed-batch, and oversized requests for metrics, logs, and traces.
 7. Verify that a workload authorized for workspace A cannot write data visible under workspace B, even when it supplies B's identifier.
