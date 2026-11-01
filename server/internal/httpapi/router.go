@@ -135,7 +135,7 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 		}
 		if repository == nil {
 			result.Warnings = append(result.Warnings, "PostgreSQL catalog persistence unavailable")
-		} else if len(result.Data) > 0 {
+		} else {
 			observations := make([]store.TelemetryService, 0, len(result.Data))
 			for _, discovered := range result.Data {
 				observations = append(observations, store.TelemetryService{
@@ -144,29 +144,32 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 					ResourceAttributes: discovered.ResourceAttributes,
 				})
 			}
-			persisted, persistErr := repository.UpsertTelemetryServices(ctx, observations)
-			if persistErr != nil {
+			if _, persistErr := repository.UpsertTelemetryServices(ctx, observations); persistErr != nil {
 				logger.Error("persist telemetry service catalog failed", "error", persistErr, "request_id", r.Header.Get("X-Request-ID"))
 				writeError(w, r, http.StatusServiceUnavailable, "catalog_persistence_failed", "Telemetry service catalog is temporarily unavailable")
 				return
 			}
-			persistedByName := make(map[string]store.TelemetryService, len(persisted))
-			for _, item := range persisted {
-				persistedByName[item.Name] = item
+			persisted, listErr := repository.ListTelemetryServices(ctx, 250)
+			if listErr != nil {
+				logger.Error("read persisted telemetry service catalog failed", "error", listErr, "request_id", r.Header.Get("X-Request-ID"))
+				writeError(w, r, http.StatusServiceUnavailable, "catalog_query_failed", "Telemetry service catalog is temporarily unavailable")
+				return
 			}
-			for index := range result.Data {
-				if item, ok := persistedByName[result.Data[index].Name]; ok {
-					result.Data[index].ID = item.ID
-					result.Data[index].FirstSeenAt = item.FirstSeenAt
-					result.Data[index].LastSeenAt = item.LastSeenAt
-					result.Data[index].LastDiscoveredAt = item.LastDiscoveredAt
-					result.Data[index].ResourceAttributes = item.ResourceAttributes
-				}
+			result.Data = make([]telemetry.DiscoveredService, 0, len(persisted))
+			for _, item := range persisted {
+				result.Data = append(result.Data, telemetry.DiscoveredService{
+					ID:                 item.ID,
+					Name:               item.Name,
+					Sources:            item.Sources,
+					FirstSeenAt:        item.FirstSeenAt,
+					LastSeenAt:         item.LastSeenAt,
+					LastDiscoveredAt:   item.LastDiscoveredAt,
+					ResourceAttributes: item.ResourceAttributes,
+				})
 			}
 		}
 		writeJSON(w, http.StatusOK, result)
 	})
-
 	mux.HandleFunc("GET /api/v1/telemetry/metrics", func(w http.ResponseWriter, r *http.Request) {
 		window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
 		if err != nil {
