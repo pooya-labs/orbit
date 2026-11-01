@@ -123,6 +123,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		{version: "005_workspaces_memberships_audit", file: "migrations/005_workspaces_memberships_audit.sql"},
 		{version: "006_workspace_data_scope", file: "migrations/006_workspace_data_scope.sql"},
 		{version: "007_workload_identities", file: "migrations/007_workload_identities.sql"},
+		{version: "008_workload_authorization_denials", file: "migrations/008_workload_authorization_denials.sql"},
 	}
 
 	for _, item := range migrations {
