@@ -927,3 +927,41 @@ func TestWorkspaceScopedInventoryRoutesRequireMembership(t *testing.T) {
 		t.Fatalf("non-member scoped service read status = %d, want 404", recorder.Code)
 	}
 }
+
+
+func TestLegacyGlobalReadRoutesDisabledOutsideDevelopment(t *testing.T) {
+	viewer := fixedTokenVerifier{principal: auth.Principal{
+		Issuer: "https://identity.example", Subject: "legacy-route-test", Roles: []string{"viewer"},
+	}}
+	paths := []string{
+		"/api/v1/services",
+		"/api/v1/incidents",
+		"/api/v1/telemetry/services",
+		"/api/v1/telemetry/services/example/attributes",
+		"/api/v1/telemetry/metrics",
+		"/api/v1/telemetry/logs",
+		"/api/v1/telemetry/traces",
+	}
+	for _, environment := range []string{"staging", "production"} {
+		handler := NewHandler(Config{Environment: environment, AuthVerifier: viewer}, &fakeRepository{}, testLogger())
+		for _, path := range paths {
+			request := httptest.NewRequest(http.MethodGet, path, nil)
+			request.Header.Set("Authorization", "Bearer valid-token")
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusNotFound || !strings.Contains(recorder.Body.String(), "legacy_route_disabled") {
+				t.Fatalf("%s %s status/body = %d %s; want 404 legacy_route_disabled", environment, path, recorder.Code, recorder.Body.String())
+			}
+		}
+	}
+}
+
+func TestLegacyGlobalReadRoutesRemainAvailableInDevelopment(t *testing.T) {
+	handler := NewHandler(Config{Environment: "development"}, &fakeRepository{}, testLogger())
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("development legacy services status/body = %d %s; want 200", recorder.Code, recorder.Body.String())
+	}
+}
