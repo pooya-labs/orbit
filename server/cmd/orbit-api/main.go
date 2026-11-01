@@ -29,13 +29,14 @@ func main() {
 	var authVerifier *auth.Verifier
 	if cfg.OIDCIssuer != "" {
 		authCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		authVerifier, err = auth.NewVerifier(authCtx, auth.Config{
+		var authErr error
+		authVerifier, authErr = auth.NewVerifier(authCtx, auth.Config{
 			Issuer: cfg.OIDCIssuer, Audience: cfg.OIDCAudience,
 			RolesClaim: cfg.OIDCRolesClaim, AllowInsecureHTTP: cfg.Environment == "development",
 		})
 		cancel()
-		if err != nil {
-			logger.Error("OIDC authentication initialization failed", "error", err)
+		if authErr != nil {
+			logger.Error("OIDC authentication initialization failed", "error", authErr)
 			os.Exit(1)
 		}
 	}
