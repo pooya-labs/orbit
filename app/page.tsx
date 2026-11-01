@@ -262,12 +262,12 @@ export default function Home() {
       const parsed = new URL(apiUrlInput.trim());
       if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password ||
           parsed.search || parsed.hash || (parsed.pathname !== "/" && parsed.pathname !== "")) {
-        throw new Error("Enter an API base URL such as http://localhost:8080.");
+        throw new Error(tr("invalidApiUrl"));
       }
       endpoint = parsed.origin;
     } catch (error) {
       setApiStatus("error");
-      setApiError(error instanceof Error ? error.message : "Enter a valid API URL.");
+      setApiError(error instanceof Error ? error.message : tr("validApiUrl"));
       return;
     }
 
@@ -293,7 +293,7 @@ export default function Home() {
       setSourcePanelOpen(false);
     } catch (error) {
       setApiStatus("error");
-      setApiError(error instanceof Error ? error.message : "Unable to connect to the ORBIT API.");
+      setApiError(error instanceof Error ? error.message : tr("connectFailed"));
     }
   };
 
@@ -366,7 +366,7 @@ export default function Home() {
           <div className="usage-card">
             <div className="usage-heading"><span>{tr("telemetryVolume")}</span><span>68%</span></div>
             <div className="usage-track"><span /></div>
-            <p>6.8 GB <span>of 10 GB monthly</span></p>
+            <p>6.8 GB <span>{language === "fa" ? "از ۱۰ گیگابایت در ماه" : "of 10 GB monthly"}</span></p>
           </div>
           <button className="nav-item"><Settings2 size={17} /><span>{tr("settings")}</span></button>
           <button className="nav-item"><CircleHelp size={17} /><span>{tr("helpSupport")}</span><ExternalLink size={12} className="nav-external" /></button>
@@ -414,7 +414,7 @@ export default function Home() {
             <div>
               <div className="eyebrow"><span className="eyebrow-line" /> {telemetryView ? `${language === "fa" ? "زنده" : "LIVE"} ${navLabel(language, telemetryView).toUpperCase()}` : tr("systemOverview")} <span className="demo-tag">{sourceMode === "api" ? tr("apiConnected") : tr("demoEnvironment")}</span></div>
               <h1>{activeNav === "Overview" ? tr("goodMorning") : navLabel(language, activeNav)}</h1>
-              <p className="page-subtitle">{telemetryView ? `Query ${telemetryView.toLowerCase()} from the connected observability pipeline.` : "وضعیت سرویس‌ها و زیرساخت را در یک نگاه ببین."}</p>
+              <p className="page-subtitle">{telemetryView ? tr("liveQuerySubtitle").replace("{view}", navLabel(language, telemetryView).toLowerCase()) : tr("overviewSubtitle")}</p>
             </div>
             <div className="heading-actions">
               <div className="last-updated"><span className={refreshing ? "pulse-dot" : "idle-dot"} /> {sourceMode === "api" ? `${tr("connected")} · ${apiMetadata?.environment ?? "API"}` : refreshing ? tr("autoRefreshPaused") : tr("manualRefresh")}</div>
@@ -448,7 +448,7 @@ export default function Home() {
                 </div>
               </form>
               {apiError && <p className="source-error" role="alert">{apiError}</p>}
-              {apiStatus === "connected" && <p className="source-success" role="status">{tr("connectionVerified")} {apiServices.length} services and {apiIncidents.length} incidents loaded.</p>}
+              {apiStatus === "connected" && <p className="source-success" role="status">{tr("connectionVerified")} {apiServices.length} {tr("services")} · {apiIncidents.length} {tr("incidentsLoaded")}</p>}
             </section>
           )}
 
@@ -481,12 +481,12 @@ export default function Home() {
             <div className="panel-header">
               <div><div className="panel-title-line"><h2>{tr("trafficPerformance")}</h2><span className="live-indicator"><i /> {tr("sample")}</span></div><p>{tr("incomingRequests")}</p></div>
               <div className="range-switcher" role="group" aria-label="Chart time range">
-                {["1 hour", "6 hours", "24 hours"].map((item) => <button key={item} className={range === item ? "selected" : ""} onClick={() => setRange(item)}>{item}</button>)}
+                {["1 hour", "6 hours", "24 hours"].map((item) => <button key={item} className={range === item ? "selected" : ""} onClick={() => setRange(item)}>{language === "fa" ? (item === "1 hour" ? "۱ ساعت" : item === "6 hours" ? "۶ ساعت" : "۲۴ ساعت") : item}</button>)}
               </div>
             </div>
             <div className="chart-summary">
               <div><strong>18,429</strong><span>{tr("requestPerMinute")}</span></div>
-              <div className="chart-summary-change"><ArrowUpRight size={14} /> 6.4% <span>compared to prior period</span></div>
+              <div className="chart-summary-change"><ArrowUpRight size={14} /> 6.4% <span>{tr("comparedPrior")}</span></div>
             </div>
             <div className="chart-wrap">
               <div className="chart-y-labels"><span>30k</span><span>20k</span><span>10k</span><span>0</span></div>
@@ -550,7 +550,7 @@ export default function Home() {
 {sourceMode === "demo" ? (
           <section className="bottom-grid">
             <div className="bottom-stat"><div className="bottom-icon green"><ShieldCheck size={17} /></div><div><span>{tr("availabilitySlo")}</span><strong>99.94%</strong></div><span className="bottom-note good"><Check size={13} /> {tr("withinTarget")}</span></div>
-            <div className="bottom-stat"><div className="bottom-icon violet"><GitBranch size={17} /></div><div><span>{tr("deploymentsToday")}</span><strong>08</strong></div><span className="bottom-note">Across 4 services</span></div>
+            <div className="bottom-stat"><div className="bottom-icon violet"><GitBranch size={17} /></div><div><span>{tr("deploymentsToday")}</span><strong>08</strong></div><span className="bottom-note">{tr("acrossFourServices")}</span></div>
             <div className="bottom-stat"><div className="bottom-icon blue"><Database size={17} /></div><div><span>{tr("dataIngestion")}</span><strong>2.4 MB/s</strong></div><span className="bottom-note"><Signal size={13} /> {tr("sampleStream")}</span></div>
           </section>
           ) : null}
