@@ -223,6 +223,12 @@ func TestWorkspaceAlertRuleHTTPValidationAndConflictMapping(t *testing.T) {
 		t.Fatalf("duplicate name status/body = %d %s; want 409 alert_rule_name_conflict", conflict.Code, conflict.Body.String())
 	}
 
+	missingEnabled := alertRouteRequest(handler, http.MethodPatch,
+		"/api/v1/workspaces/"+repository.workspace.ID+"/alert-rules/55555555-5555-4555-8555-555555555555/enabled", `{}`)
+	if missingEnabled.Code != http.StatusBadRequest {
+		t.Fatalf("missing enabled field status = %d, want 400", missingEnabled.Code)
+	}
+
 	repository.createErr = nil
 	repository.enableErr = store.ErrAlertRuleForbidden
 	forbidden := alertRouteRequest(handler, http.MethodPatch, base+"/55555555-5555-4555-8555-555555555555/enabled", `{"enabled":false}`)
