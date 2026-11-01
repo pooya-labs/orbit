@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getMetadata, listIncidents, listServices } from "../lib/orbit/client";
 import type { ApiMetadata, IncidentSummary, ServiceSummary } from "../lib/orbit/contracts";
 import { chartArea, chartPoints, demoIncidents, demoServices } from "../lib/orbit/demo";
+import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../lib/orbit/i18n";
 import type { ReactNode } from "react";
 import TelemetryWorkspace, { type TelemetryView } from "./components/TelemetryWorkspace";
 import type { LucideIcon } from "lucide-react";
@@ -91,15 +92,16 @@ function mapApiService(item: ServiceSummary, index: number): Service {
   };
 }
 
-function formatAge(timestamp: string): string {
+function formatAge(timestamp: string, language: Language): string {
   const elapsed = Math.max(0, Date.now() - new Date(timestamp).getTime());
-  if (!Number.isFinite(elapsed)) return "time unavailable";
+  if (!Number.isFinite(elapsed)) return t(language, "timeUnavailable");
   const minutes = Math.floor(elapsed / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
+  const relative = new Intl.RelativeTimeFormat(formatLocale(language), { numeric: "auto" });
+  if (minutes < 1) return t(language, "justNow");
+  if (minutes < 60) return relative.format(-minutes, "minute");
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  return `${Math.floor(hours / 24)} d ago`;
+  if (hours < 24) return relative.format(-hours, "hour");
+  return relative.format(-Math.floor(hours / 24), "day");
 }
 
 function toIncidentRow(
@@ -211,6 +213,8 @@ function MetricCard({
 
 export default function Home() {
   const [activeNav, setActiveNav] = useState("Overview");
+  const [language, setLanguage] = useState<Language>("en");
+  const tr = (key: TranslationKey) => t(language, key);
   const [range, setRange] = useState("1 hour");
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(true);
@@ -229,12 +233,27 @@ export default function Home() {
 
   useEffect(() => {
     try {
+      const savedLanguage = window.localStorage.getItem("orbit.language");
+      if (savedLanguage === "en" || savedLanguage === "fa") setLanguage(savedLanguage);
+      else if (window.navigator.language.toLowerCase().startsWith("fa")) setLanguage("fa");
+    } catch {
+      // Language selection remains available when storage is disabled.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
       const savedUrl = window.localStorage.getItem("orbit.apiBaseUrl");
       if (savedUrl) setApiUrlInput(savedUrl);
     } catch {
       // Storage may be unavailable in a restricted browser context.
     }
   }, []);
+
+  const changeLanguage = (next: Language) => {
+    setLanguage(next);
+    try { window.localStorage.setItem("orbit.language", next); } catch { /* State still changes for this session. */ }
+  };
 
   const connectSource = async () => {
     let endpoint: string;
