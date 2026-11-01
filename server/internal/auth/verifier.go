@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/lestrrat-go/jwx/v3/jws"
 	"github.com/lestrrat-go/jwx/v3/jwt"
@@ -210,6 +211,11 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (Principal, erro
 	keyCopy, err := key.Clone()
 	if err != nil {
 		return Principal{}, ErrInvalidToken
+	}
+	if _, hasAlgorithm := keyCopy.Algorithm(); !hasAlgorithm {
+		if err := keyCopy.Set("alg", jwa.SignatureAlgorithm(algorithmName)); err != nil {
+			return Principal{}, ErrInvalidToken
+		}
 	}
 	if err := singleKeySet.AddKey(keyCopy); err != nil {
 		return Principal{}, ErrInvalidToken
