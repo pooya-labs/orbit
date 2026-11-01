@@ -5,6 +5,10 @@ import type {
   IncidentStatus,
   IncidentSummary,
   ServiceSummary,
+  TelemetryWindow,
+  TelemetryMetricsResponse,
+  TelemetryLogsResponse,
+  TelemetryTracesResponse,
 } from "./contracts";
 
 export class OrbitApiError extends Error {
@@ -95,4 +99,49 @@ export async function listIncidents(
     baseUrl,
   );
   return response.data;
+}
+
+
+export async function getTelemetryMetrics(
+  window: TelemetryWindow = "1h",
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<TelemetryMetricsResponse> {
+  return getJSON<TelemetryMetricsResponse>(
+    `/api/v1/telemetry/metrics?window=${encodeURIComponent(window)}`,
+    signal,
+    baseUrl,
+  );
+}
+
+export async function listTelemetryLogs(
+  options: { window?: TelemetryWindow; service?: string; limit?: number } = {},
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<TelemetryLogsResponse> {
+  const query = new URLSearchParams();
+  query.set("window", options.window ?? "1h");
+  query.set("service", options.service ?? "orbit-telemetry-demo");
+  if (options.limit !== undefined) query.set("limit", String(options.limit));
+  return getJSON<TelemetryLogsResponse>(
+    `/api/v1/telemetry/logs?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+}
+
+export async function listTelemetryTraces(
+  options: { window?: TelemetryWindow; service?: string; limit?: number } = {},
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<TelemetryTracesResponse> {
+  const query = new URLSearchParams();
+  query.set("window", options.window ?? "1h");
+  query.set("service", options.service ?? "orbit-telemetry-demo");
+  if (options.limit !== undefined) query.set("limit", String(options.limit));
+  return getJSON<TelemetryTracesResponse>(
+    `/api/v1/telemetry/traces?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
 }
