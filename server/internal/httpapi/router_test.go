@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
@@ -149,6 +150,17 @@ func (f *fakeRepository) ListIncidents(_ context.Context, status string) ([]stor
 }
 func (f *fakeRepository) Close() {}
 
+type staticTokenVerifier struct {
+	principal auth.Principal
+}
+
+func (v staticTokenVerifier) Verify(_ context.Context, rawToken string) (auth.Principal, error) {
+	if rawToken != "valid-test-token" {
+		return auth.Principal{}, auth.ErrInvalidToken
+	}
+	return v.principal, nil
+}
+
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
@@ -193,6 +205,95 @@ func TestReadinessWithoutDatabase(t *testing.T) {
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestAuthorizationMiddlewareProtectsAPIAndPreservesPublicRoutes(t *testing.T) {
+	repository := &fakeRepository{services: []store.Service{
+		{ID: "svc-1", Name: "api-gateway", Status: "operational", Source: "demo_seed"},
+	}}
+	handler := NewHandler(Config{
+		Environment: "production",
+		RequireAuthentication: true,
+		Authenticator: staticTokenVerifier{principal: auth.Principal{
+			Issuer: "https://issuer.example", Subject: "operator-1", Roles: []string{auth.RoleOperator},
+		}},
+	}, repository, testLogger())
+
+	for _, test := range []struct {
+		name       string
+		path       string
+		token      string
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "missing bearer", path: "/api/v1/services", wantStatus: http.StatusUnauthorized, wantCode: "unauthorized"},
+		{name: "invalid bearer", path: "/api/v1/services", token: "bad-token", wantStatus: http.StatusUnauthorized, wantCode: "unauthorized"},
+		{name: "valid operator inherits viewer", path: "/api/v1/services", token: "valid-test-token", wantStatus: http.StatusOK},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, test.path, nil)
+			if test.token != "" {
+				request.Header.Set("Authorization", "Bearer "+test.token)
+			}
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", recorder.Code, test.wantStatus, recorder.Body.String())
+			}
+			if test.wantCode != "" {
+				var payload errorResponse
+				if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+					t.Fatalf("decode auth error: %v", err)
+				}
+				if payload.Error.Code != test.wantCode {
+					t.Fatalf("error code = %q, want %q", payload.Error.Code, test.wantCode)
+				}
+				if recorder.Header().Get("WWW-Authenticate") == "" {
+					t.Fatal("expected WWW-Authenticate challenge")
+				}
+			}
+		})
+	}
+
+	for _, path := range []string{"/health/live", "/health/ready", "/api/v1/meta"} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("public route %s status = %d, want 200", path, recorder.Code)
+		}
+	}
+}
+
+func TestAuthorizationMiddlewareRejectsMissingVerifierInProtectedMode(t *testing.T) {
+	handler := NewHandler(Config{Environment: "production", RequireAuthentication: true}, &fakeRepository{}, testLogger())
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/services", nil))
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	var payload errorResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode authentication-unavailable response: %v", err)
+	}
+	if payload.Error.Code != "authentication_unavailable" {
+		t.Fatalf("unexpected error code: %q", payload.Error.Code)
+	}
+}
+
+func TestAuthorizationMiddlewareRejectsNonViewerRole(t *testing.T) {
+	handler := NewHandler(Config{
+		RequireAuthentication: true,
+		Authenticator: staticTokenVerifier{principal: auth.Principal{
+			Issuer: "https://issuer.example", Subject: "readless", Roles: []string{"unknown-role"},
+		}},
+	}, &fakeRepository{}, testLogger())
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
+	request.Header.Set("Authorization", "Bearer valid-test-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
 	}
 }
 
@@ -290,6 +391,9 @@ func TestCORSPreflightAllowsConfiguredOrigin(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Header().Get("Access-Control-Allow-Methods"), "GET") {
 		t.Fatal("expected GET to be allowed")
+	}
+	if !strings.Contains(recorder.Header().Get("Access-Control-Allow-Headers"), "Authorization") {
+		t.Fatal("expected Authorization header to be allowed for browser token requests")
 	}
 }
 
