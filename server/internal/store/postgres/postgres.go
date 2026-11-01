@@ -209,6 +209,58 @@ func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []sto
 	return persisted, nil
 }
 
+
+func (r *Repository) ListTelemetryServices(ctx context.Context, limit int) ([]store.TelemetryService, error) {
+	if limit < 1 || limit > 250 {
+		limit = 250
+	}
+	rows, err := r.pool.Query(ctx, \`
+		SELECT
+			services.id::text,
+			services.name,
+			COALESCE(
+				array_agg(sources.source ORDER BY sources.source)
+					FILTER (WHERE sources.source IS NOT NULL),
+				ARRAY[]::text[]
+			),
+			services.first_seen_at,
+			services.last_seen_at,
+			services.last_discovered_at,
+			services.resource_attributes
+		FROM telemetry_services AS services
+		LEFT JOIN telemetry_service_sources AS sources
+			ON sources.service_id = services.id
+		WHERE services.last_seen_at >= NOW() - INTERVAL '7 days'
+		GROUP BY services.id
+		ORDER BY services.name ASC
+		LIMIT $1
+	\`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query persisted telemetry services: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]store.TelemetryService, 0)
+	for rows.Next() {
+		var item store.TelemetryService
+		var attributes []byte
+		if err := rows.Scan(
+			&item.ID, &item.Name, &item.Sources, &item.FirstSeenAt,
+			&item.LastSeenAt, &item.LastDiscoveredAt, &attributes,
+		); err != nil {
+			return nil, fmt.Errorf("scan persisted telemetry service: %w", err)
+		}
+		if err := json.Unmarshal(attributes, &item.ResourceAttributes); err != nil {
+			return nil, fmt.Errorf("decode persisted telemetry resource attributes: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate persisted telemetry services: %w", err)
+	}
+	return items, nil
+}
+
 func (r *Repository) ListServices(ctx context.Context) ([]store.Service, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id::text, name, description, environment, region, status,
