@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   release:
-    name: Publish v0.1.0 preview release
+    name: Publish v0.2.0 backend preview release
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
@@ -20,9 +20,9 @@ jobs:
       - name: Create or update preview release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.0
+          tag_name: v0.2.0
           target_commitish: ${{ github.event.workflow_run.head_sha }}
-          name: ORBIT v0.1.0 — Public Preview
+          name: ORBIT v0.2.0 — Public Preview
           draft: false
           prerelease: true
           make_latest: false
@@ -38,6 +38,8 @@ jobs:
             - PostgreSQL schema, versioned migration, and clearly labelled demo seed rows.
             - Docker Compose for PostgreSQL, Redis, NATS JetStream, and the Go API.
             - GitHub Actions CI and GitHub Pages deployment.
+            - OpenAPI 3.1 contract and typed TypeScript API client with bounded request errors.
+            - CORS allowlist for explicitly configured browser origins.
 
             ### Important limitations
             - Dashboard metrics and incidents are illustrative demo data.
