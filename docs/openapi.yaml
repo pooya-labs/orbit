@@ -153,7 +153,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "503":
-          description: All configured telemetry backends are unavailable.
+          description: All telemetry backends are unavailable, or PostgreSQL catalog persistence/querying failed.
           content:
             application/json:
               schema:
