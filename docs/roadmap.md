@@ -57,6 +57,17 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 - [x] Render queried telemetry in Metrics, Logs, and Traces dashboard views with loading/empty/error states, query freshness, and backend provenance.
 - [x] Flag stale metric samples and gaps using the actual Prometheus sample timestamps and query step; event-driven logs and traces are not judged against metric scrape intervals.
 
+## Execution order and dependency gates
+
+ORBIT's milestones are not a reason to expose unsafe operations early. The delivery order is:
+
+1. Finish and merge the verified M04 read-path work. Keep complete workload-side OpenTelemetry resource ingestion as an explicit M04 follow-up.
+2. Implement the M06 security gate (OIDC/JWT verification, server-side RBAC, actor identity, request limits, and workspace boundary) before adding public state-changing operations.
+3. Deliver M05 in slices: incident lifecycle and immutable timeline first; alert rules and notification adapters second; deployment annotations third; SLO/error-budget calculations fourth; audit history across every mutation.
+4. Complete the remaining M06 operational hardening: retention/cardinality controls, load testing, backup/restore, dependency/security review, production deployment, and runbooks.
+
+M05 mutations must not be publicly enabled while the API has no authentication or role enforcement. Local development can keep an explicit non-production mode, but production configuration must fail closed.
+
 ## M05 — Operations workflows
 
 - [ ] Incident lifecycle and timeline.
