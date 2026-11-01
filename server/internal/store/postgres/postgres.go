@@ -137,6 +137,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		{version: "007_workload_identities", file: "migrations/007_workload_identities.sql"},
 		{version: "008_workload_authorization_denials", file: "migrations/008_workload_authorization_denials.sql"},
 		{version: "009_incident_timeline", file: "migrations/009_incident_timeline.sql"},
+		{version: "010_alert_rules", file: "migrations/010_alert_rules.sql"},
 	}
 
 	for _, item := range migrations {
