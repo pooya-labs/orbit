@@ -17,7 +17,8 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 - Go HTTP API with liveness, readiness, metadata, service inventory, and incident endpoints.
 - PostgreSQL repository with a versioned initial migration and clearly marked seed data.
 - Docker Compose stack for PostgreSQL, Redis, NATS, and the Go API.
-- Optional local OpenTelemetry Collector → Prometheus, Tempo, and Loki pipeline; dashboard/API integration is still a later milestone.
+- Optional local OpenTelemetry Collector → Prometheus, Tempo, and Loki pipeline.
+- An instrumented Go demo emits a request metric, trace, and structured log through OTLP/HTTP; CI verifies all three in their backend query APIs.
 - GitHub Actions for tests, static build, and GitHub Pages deployment.
 
 ## Technology
@@ -29,7 +30,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 | Persistence | PostgreSQL 17 |
 | Cache | Redis 7 (stack provisioned; application integration pending) |
 | Event transport | NATS JetStream (stack provisioned; application integration pending) |
-| Local telemetry pipeline | OpenTelemetry Collector · Prometheus · Loki · Tempo (opt-in Compose profile) |
+| Local telemetry pipeline | OpenTelemetry Collector · Prometheus · Loki · Tempo · instrumented Go demo (opt-in Compose profile) |
 | CI/CD | GitHub Actions · GitHub Pages · Docker Compose |
 
 ## Run locally on Windows
@@ -77,14 +78,14 @@ Stop containers with `docker compose down`. To delete local database/cache volum
 The telemetry backends are optional and do not start during a normal `docker compose up`:
 
 ```powershell
-docker compose --profile observability up -d prometheus loki tempo otel-collector
+docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo
 ```
 
-Send OTLP from an instrumented workload to `http://localhost:4318` (HTTP) or `localhost:4317` (gRPC). The Collector routes metrics to Prometheus, traces to Tempo, and logs to Loki. Local query interfaces: [Prometheus](http://localhost:9090), [Loki](http://localhost:3100/ready), and [Tempo](http://localhost:3200/ready). Collector health: [http://localhost:13133](http://localhost:13133).
+The `telemetry-demo` service is an instrumented Go workload. Trigger one request with `curl http://localhost:8081/emit`; it emits a request counter, a trace (the response includes its trace ID), and a structured log. You can also point another workload at `http://localhost:4318` (OTLP/HTTP) or `localhost:4317` (OTLP/gRPC). The Collector routes metrics to Prometheus, traces to Tempo, and logs to Loki. Local query interfaces: [Prometheus](http://localhost:9090), [Loki](http://localhost:3100/ready), and [Tempo](http://localhost:3200/ready). Collector health: [http://localhost:13133](http://localhost:13133).
 
-These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus keeps seven days of metrics and Loki is configured for seven-day log retention; data volumes persist until removed. Stop only these services with `docker compose stop prometheus loki tempo otel-collector`.
+These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus keeps seven days of metrics and Loki is configured for seven-day log retention; data volumes persist until removed. Stop only these services with `docker compose stop prometheus loki tempo otel-collector telemetry-demo`.
 
-The collector and storage backends are now provisioned, but the Go API does not yet export telemetry and the ORBIT dashboard does not yet query these backends. The next milestones add an instrumented sample workload and connect observed telemetry to the product.
+The local sample service proves end-to-end delivery of all three OTLP signals. The production Go API does not yet export telemetry, and the ORBIT dashboard does not yet query these backends; those remain the next product-integration milestones.
 
 ## Quality checks
 
@@ -104,6 +105,7 @@ GitHub Actions runs web typecheck/build, Go tests against a real PostgreSQL serv
 
 ```text
 app/                         Next.js dashboard and design system
+examples/telemetry-go/        Instrumented OTLP demo workload
 server/cmd/orbit-api/        Go API entry point
 server/internal/httpapi/     HTTP routes and middleware
 server/internal/store/       API read models and repository contract
@@ -118,7 +120,7 @@ See [docs/roadmap.md](docs/roadmap.md), [docs/architecture.md](docs/architecture
 
 ## Release status
 
-The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview added a verified browser source switch between demo fixtures and a configured ORBIT API. The v0.4.0 preview adds an optional local OTLP pipeline backed by Prometheus, Loki, and Tempo. The Go API is not instrumented yet, the dashboard does not query the telemetry stores, and authentication/hosted backend deployment remain future milestones.
+The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview added a verified browser source switch between demo fixtures and a configured ORBIT API. The v0.4.0 preview added the optional local OTLP pipeline backed by Prometheus, Loki, and Tempo. The v0.5.0 preview adds an instrumented Go workload and CI verification that metrics, logs, and traces reach their respective backends. The production API and dashboard are not connected to those telemetry stores yet.
 
 ## License
 
