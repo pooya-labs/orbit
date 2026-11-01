@@ -29,20 +29,20 @@ The path workspace ID is a candidate selector only. For every request, the gatew
 3. Validate the candidate workspace ID format.
 4. Call `AuthorizeWorkloadTelemetry(issuer, subject, workspace_id, signal)` before forwarding any bytes to the Collector.
 5. Fail closed on authorization denial or database errors.
-6. Remove or validate reserved tenant attributes and inject the canonical workspace ID obtained from the authorized server-side decision.
+6. Reject producer-supplied reserved tenant attributes at every OTLP attribute scope and inject the canonical workspace ID obtained from the authorized server-side decision.
 
 The gateway must not accept a workspace selector from query parameters, arbitrary HTTP headers, or the OTLP body as a substitute for the path selector. Supplying multiple competing selectors is a bad request.
 
 ### OTLP/gRPC
 
-Standard OTLP gRPC method paths cannot carry a workspace identifier. Require exactly one gRPC metadata value named `orbit-workspace-id` on each Export call. Treat it as the same untrusted candidate selector used by HTTP, never as an authorization claim. Verify the token and database grant for the requested signal before reading/forwarding the Export payload. Reject missing, duplicate, malformed, or conflicting metadata.
+Standard OTLP gRPC method paths cannot carry a workspace identifier. Require exactly one gRPC metadata value named `orbit-workspace-id` on each Export call. Treat it as the same untrusted candidate selector used by HTTP, never as an authorization claim. Verify the token and database grant for the requested signal before accepting the Export payload for processing or forwarding. Reject missing, duplicate, malformed, or conflicting metadata.
 
 ### One request, one workspace, one signal
 
 - Each HTTP request or gRPC Export call is authorized for exactly one workspace and one signal.
 - A workload with multiple grants must explicitly select the destination on every request; there is no implicit default workspace, even when only one grant currently exists.
 - A batch containing reserved workspace attributes that disagree with the selected, authorized workspace is rejected as a whole. The gateway must never split and partially forward a mixed batch.
-- Producer-supplied reserved workspace attributes are removed from all relevant OTLP attribute scopes before canonical attribution is injected.
+- Producer-supplied reserved workspace attributes are rejected at all relevant OTLP attribute scopes; accepted payloads receive canonical attribution only after authorization.
 - Authorization is checked on every request in the initial implementation. Any future cache must have a short, documented bound and revocation invalidation.
 
 ## Security properties
