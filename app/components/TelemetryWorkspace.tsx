@@ -63,7 +63,7 @@ function formatClock(timestamp: number | string, language: Language): string {
 }
 
 function parseStepMilliseconds(step?: string): number {
-  const match = /^(\\d+)(s|m)$/.exec(step ?? "");
+  const match = /^(\d+)(s|m)$/.exec(step ?? "");
   if (!match) return 60_000;
   return Number(match[1]) * (match[2] === "m" ? 60_000 : 1_000);
 }
