@@ -106,7 +106,7 @@ export default function TelemetryWorkspace({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
-  const windowOptions = windows.map((item) => ({ ...item, label: language === "fa" ? ({ "15 min": "۱۵ دقیقه", "1 hour": "۱ ساعت", "6 hours": "۶ ساعت", "24 hours": "۲۴ ساعت" }[item.label] ?? item.label) : item.label }));
+  const windowOptions = windows.map((item) => ({ ...item, label: language === "fa" ? (item.value === "15m" ? "۱۵ دقیقه" : item.value === "1h" ? "۱ ساعت" : item.value === "6h" ? "۶ ساعت" : "۲۴ ساعت") : item.label }));
 
 
   useEffect(() => {
@@ -131,7 +131,7 @@ export default function TelemetryWorkspace({
       } catch (cause) {
         if (controller.signal.aborted) return;
         if (mounted) {
-          setServiceError(cause instanceof Error ? cause.message : "Unable to discover telemetry services.");
+          setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت فهرست سرویس‌ها ناموفق بود." : "Unable to discover telemetry services.");
           setServiceWarnings([]);
         }
       } finally {
@@ -182,7 +182,7 @@ export default function TelemetryWorkspace({
       } catch (cause) {
         if (controller.signal.aborted) return;
         if (mounted) {
-          setError(cause instanceof Error ? cause.message : "Unable to query telemetry.");
+          setError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت داده‌های تله‌متری ناموفق بود." : "Unable to query telemetry.");
         }
       } finally {
         if (mounted) {
@@ -351,9 +351,9 @@ export default function TelemetryWorkspace({
               {logRows.map((entry, index) => (
                 <article className="telemetry-log-row" key={`${entry.timestamp}-${index}`}>
                   <time>{formatClock(Number(entry.timestamp) / 1_000_000, language)}</time>
-                  <span className="telemetry-log-level">INFO</span>
+                  <span className="telemetry-log-level">{language === "fa" ? "اطلاعات" : "INFO"}</span>
                   <code>{entry.line}</code>
-                  <small>{entry.labels.service_name ?? "unknown-service"}</small>
+                  <small>{entry.labels.service_name ?? (language === "fa" ? "سرویس نامشخص" : "unknown-service")}</small>
                 </article>
               ))}
             </div>
@@ -371,12 +371,12 @@ export default function TelemetryWorkspace({
                 <article className="telemetry-trace-row" key={trace.traceID}>
                   <div className="telemetry-trace-icon"><Workflow size={16} /></div>
                   <div className="telemetry-trace-main">
-                    <strong>{trace.rootTraceName || "Trace"}</strong>
-                    <span>{trace.rootServiceName || "unknown-service"}</span>
+                    <strong>{trace.rootTraceName || (language === "fa" ? "ردیابی" : "Trace")}</strong>
+                    <span>{trace.rootServiceName || (language === "fa" ? "سرویس نامشخص" : "unknown-service")}</span>
                     <code>{trace.traceID}</code>
                   </div>
                   <div className="telemetry-trace-side">
-                    <strong>{Number.isFinite(trace.durationMs) ? `${trace.durationMs.toFixed(1)} ms` : "—"}</strong>
+                    <strong>{Number.isFinite(trace.durationMs) ? `${new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 1 }).format(trace.durationMs)} ms` : "—"}</strong>
                     <span>{trace.startTimeUnixNano ? formatClock(nanoTimestamp(trace.startTimeUnixNano), language) : t(language, "timeUnavailable")}</span>
                   </div>
                 </article>
