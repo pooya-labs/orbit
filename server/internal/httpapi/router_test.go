@@ -418,6 +418,105 @@ func TestTelemetryServiceDiscoveryFallsBackToPersistedCatalog(t *testing.T) {
 	}
 }
 
+func TestTelemetryServiceResourceAttributesEndpoint(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/series" || r.URL.Query().Get("match[]") != `{service_name="orbit-telemetry-demo"}` {
+			t.Errorf("unexpected Prometheus resource metadata request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":[{"service_name":"orbit-telemetry-demo","service_version":"1.4.2","deployment_environment":"development"}]}`))
+	}))
+	defer prometheus.Close()
+
+	loki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loki/api/v1/series" || r.URL.Query().Get("match[]") != `{service_name="orbit-telemetry-demo"}` {
+			t.Errorf("unexpected Loki resource metadata request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":[{"service_name":"orbit-telemetry-demo","service_version":"1.4.2","container_name":"telemetry-demo"}]}`))
+	}))
+	defer loki.Close()
+
+	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/v2/search/tags":
+			if r.URL.Query().Get("scope") != "resource" || !strings.Contains(r.URL.Query().Get("q"), "resource.service.name") {
+				t.Errorf("unexpected Tempo resource tag query: %s", r.URL.RawQuery)
+			}
+			_, _ = w.Write([]byte(`{"scopes":[{"name":"resource","tags":["service.version","deployment.environment","host.name"]}]}`))
+		case strings.HasPrefix(r.URL.Path, "/api/v2/search/tag/"):
+			if !strings.Contains(r.URL.Query().Get("q"), "resource.service.name") {
+				t.Errorf("Tempo tag values were not service scoped: %s", r.URL.RawQuery)
+			}
+			switch r.URL.Path {
+			case "/api/v2/search/tag/.service.version/values":
+				_, _ = w.Write([]byte(`{"tagValues":[{"type":"string","value":"1.4.2"}]}`))
+			case "/api/v2/search/tag/.deployment.environment/values":
+				_, _ = w.Write([]byte(`{"tagValues":[{"type":"string","value":"development"}]}`))
+			case "/api/v2/search/tag/.host.name/values":
+				_, _ = w.Write([]byte(`{"tagValues":[{"type":"string","value":"node-a"}]}`))
+			default:
+				t.Errorf("unexpected Tempo tag values path: %s", r.URL.Path)
+				http.NotFound(w, r)
+			}
+		default:
+			t.Errorf("unexpected Tempo resource metadata path: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer tempo.Close()
+
+	client, err := telemetry.NewClient(prometheus.URL, loki.URL, tempo.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &fakeRepository{catalog: []store.TelemetryService{{
+		ID: "catalog-orbit-demo",
+		Name: "orbit-telemetry-demo",
+		Sources: []string{"prometheus", "loki", "tempo"},
+	}}}
+	handler := NewHandler(Config{Telemetry: client}, repository, testLogger())
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/telemetry/services/orbit-telemetry-demo/attributes?window=1h",
+		nil,
+	))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("resource attributes status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	var result telemetry.ResourceAttributesResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode resource attributes: %v", err)
+	}
+	if result.Service != "orbit-telemetry-demo" || result.Window != "1h" || len(result.SourcesQueried) != 3 {
+		t.Fatalf("unexpected resource attribute metadata: %+v", result)
+	}
+	for key, want := range map[string]any{
+		"service.name": "orbit-telemetry-demo",
+		"service.version": "1.4.2",
+		"deployment.environment": "development",
+		"container.name": "telemetry-demo",
+		"host.name": "node-a",
+	} {
+		if result.Attributes[key] != want {
+			t.Errorf("attribute %s = %#v, want %#v", key, result.Attributes[key], want)
+		}
+	}
+	serviceVersionSources := result.AttributeSources["service.version"]
+	if len(serviceVersionSources) != 3 || serviceVersionSources[0] != "loki" || serviceVersionSources[1] != "prometheus" || serviceVersionSources[2] != "tempo" {
+		t.Fatalf("unexpected service.version provenance: %v", serviceVersionSources)
+	}
+	if repository.catalog[0].ResourceAttributes["service.version"] != "1.4.2" {
+		t.Fatalf("resource attributes were not persisted: %+v", repository.catalog[0])
+	}
+	if len(repository.catalog[0].ResourceAttributeSources["service.version"]) != 3 {
+		t.Fatalf("attribute provenance was not persisted: %+v", repository.catalog[0].ResourceAttributeSources)
+	}
+}
+
 func TestTelemetryQueryValidationAndUnavailableResponses(t *testing.T) {
 	handler := NewHandler(Config{}, &fakeRepository{}, testLogger())
 
