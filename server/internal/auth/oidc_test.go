@@ -166,9 +166,14 @@ func TestIngestionVerifierRequiresDedicatedAccessTokenProfile(t *testing.T) {
 	verifier, err := NewIngestionVerifier(ctx, Config{
 		Issuer: provider.issuer, Audience: "orbit-telemetry-ingestion",
 		AllowInsecureHTTP: true, CacheTTL: time.Minute,
-	})
+	}, "orbit-api")
 	if err != nil {
 		t.Fatalf("NewIngestionVerifier() error = %v", err)
+	}
+	if _, err := NewIngestionVerifier(ctx, Config{
+		Issuer: provider.issuer, Audience: "orbit-api", AllowInsecureHTTP: true,
+	}, "orbit-api"); err == nil {
+		t.Fatal("ingestion verifier accepted the human API audience")
 	}
 
 	claims := testClaims(provider.issuer)
