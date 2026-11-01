@@ -25,8 +25,6 @@ BEGIN
     ALTER TABLE incidents ALTER COLUMN workspace_id SET NOT NULL;
     ALTER TABLE incidents ADD CONSTRAINT incidents_workspace_fk
         FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE RESTRICT;
-    ALTER TABLE incidents ADD CONSTRAINT incidents_service_workspace_fk
-        FOREIGN KEY (service_id, workspace_id) REFERENCES services(id, workspace_id) ON DELETE RESTRICT;
 
     ALTER TABLE telemetry_services ADD COLUMN IF NOT EXISTS workspace_id UUID;
     UPDATE telemetry_services SET workspace_id = legacy_id WHERE workspace_id IS NULL;
@@ -43,3 +41,6 @@ CREATE INDEX IF NOT EXISTS incidents_workspace_status_started_idx
     ON incidents (workspace_id, status, started_at DESC);
 CREATE INDEX IF NOT EXISTS telemetry_services_workspace_last_seen_idx
     ON telemetry_services (workspace_id, last_seen_at DESC);
+
+ALTER TABLE incidents ADD CONSTRAINT incidents_service_workspace_fk
+    FOREIGN KEY (service_id, workspace_id) REFERENCES services(id, workspace_id) ON DELETE RESTRICT;
