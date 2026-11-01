@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -340,6 +341,69 @@ func validateWorkspaceID(workspaceID string) error {
 		return errors.New("workspace identifier is invalid")
 	}
 	return nil
+}
+
+// WorkspaceRequestRate returns an instant, workspace-scoped request rate.
+// A missing Prometheus series is reported as available=false, not as zero, so
+// an evaluator never resolves an alert merely because telemetry disappeared.
+func (c *Client) WorkspaceRequestRate(ctx context.Context, workspaceID, service string, windowSeconds int) (float64, bool, error) {
+	if err := validateWorkspaceID(workspaceID); err != nil {
+		return 0, false, err
+	}
+	if c == nil || c.prometheusURL == "" {
+		return 0, false, ErrNotConfigured
+	}
+	switch windowSeconds {
+	case 60, 300, 900:
+	default:
+		return 0, false, errors.New("request-rate window must be 60, 300, or 900 seconds")
+	}
+	selectors := []string{fmt.Sprintf("orbit_workspace_id=%q", workspaceID)}
+	if service != "" {
+		if err := ValidateServiceName(service); err != nil {
+			return 0, false, err
+		}
+		selectors = append(selectors, fmt.Sprintf("service_name=%q", service))
+	}
+	query := fmt.Sprintf("sum(rate(%s{%s}[%ds]))", metricName, strings.Join(selectors, ","), windowSeconds)
+	values := url.Values{}
+	values.Set("query", query)
+	values.Set("time", c.now().UTC().Format(time.RFC3339Nano))
+	values.Set("timeout", "5s")
+	payload, err := c.get(ctx, c.prometheusURL, "/api/v1/query", values)
+	if err != nil {
+		return 0, false, fmt.Errorf("query workspace request rate: %w", err)
+	}
+	if payload.Status != "success" {
+		return 0, false, errors.New("Prometheus returned an unsuccessful instant query status")
+	}
+	var result struct {
+		ResultType string `json:"resultType"`
+		Result []struct {
+			Value []json.RawMessage `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(payload.Data, &result); err != nil {
+		return 0, false, fmt.Errorf("decode Prometheus request-rate result: %w", err)
+	}
+	if result.ResultType != "vector" {
+		return 0, false, errors.New("Prometheus request-rate query did not return a vector")
+	}
+	if len(result.Result) == 0 {
+		return 0, false, nil
+	}
+	if len(result.Result) != 1 || len(result.Result[0].Value) != 2 {
+		return 0, false, errors.New("Prometheus request-rate query returned an unexpected result shape")
+	}
+	var rawValue string
+	if err := json.Unmarshal(result.Result[0].Value[1], &rawValue); err != nil {
+		return 0, false, errors.New("Prometheus request-rate sample value is not a string")
+	}
+	value, err := strconv.ParseFloat(rawValue, 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+		return 0, false, errors.New("Prometheus request-rate sample value is invalid")
+	}
+	return value, true, nil
 }
 
 func (c *Client) WorkspaceMetrics(ctx context.Context, workspaceID string, window QueryWindow, service string, groupBy []string) (QueryResult, error) {
