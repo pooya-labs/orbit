@@ -1,3 +1,2 @@
 .git
-*.sum
 *_test.go
