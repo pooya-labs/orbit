@@ -116,7 +116,9 @@ The test establishes read-after-commit revocation for requests authorized after 
 - [x] Establish the authorization boundary: an export already authorized and admitted to the Collector forwarder may finish after a later revocation commit; authorization beginning after the commit must fail closed and must not be forwarded.
 - [x] Verify gateway admission-capacity behavior under saturation for OTLP/HTTP and OTLP/gRPC (PR #51; merged and CI-passing). The tests prove a second request is rejected while the single admission slot is occupied, is not forwarded, and the admitted request completes after capacity is released.
 - [x] Verify gRPC fail-closed behavior when the shared rate-limit store is unavailable, map Collector failures to Unavailable, and map forward deadlines to DeadlineExceeded (PR #53; merged and CI-passing).
-- [ ] Add broader burst/load coverage, HTTP forward-timeout mapping (PR #54 merged and CI-passing), database outages/recovery, Collector recovery, and explicit backpressure tests.
+- [x] Verify deterministic recovery after transient workload-grant database, shared rate-limit-store, and Collector failures for HTTP and gRPC using the same long-lived gateway instance (PR #58; merged and CI-passing).
+- [x] Verify the default 64-slot admission bound under a synchronized HTTP/gRPC burst, reject requests over capacity before Collector forwarding, and release admitted requests cleanly (PR #60; merged and CI-passing).
+- [ ] Add sustained throughput/load benchmarks, real PostgreSQL/Collector restart and network-fault tests, and explicit backpressure/recovery-under-load tests.
 - [x] Add an optional Caddy TLS edge-ingress Compose overlay for OTLP/HTTP and OTLP/gRPC (PR #56; merged with CI passing). CI validates the Caddyfile, the rendered Compose topology, and that only the edge proxy publishes ingress ports.
 - [ ] Deploy and verify the ingress scaffold with real DNS/ACME certificates, host-firewall rules, trusted-proxy behavior, and deployment-specific NetworkPolicy/cloud controls; assess internal-hop mTLS.
 - [ ] Configure and end-to-end verify a real OIDC provider for browser PKCE, including callback, state/nonce, issuer/audience validation, and key rotation.
@@ -148,3 +150,19 @@ PR #54 is merged with passing CI. Collector forward timeouts now return HTTP 504
 PR #56 is merged into `main` (squash merge commit `45997fd2ec508e260a51a027208152c9b155ac0f`). CI run `41354509326` passed all three jobs: Go API tests/build, web typecheck/production build, and the local telemetry pipeline end-to-end smoke test. The ingress validation also passed: Caddy accepted the configuration, the merged Compose model was rendered with both observability and production-ingress profiles, only Caddy publishes 80/443, API OTLP listeners remain unpublished, raw Collector receivers remain unpublished, and Caddy is isolated from the default application and telemetry networks.
 
 The optional overlay routes separate OTLP/HTTP and OTLP/gRPC domains through Caddy TLS termination to the authenticated ORBIT gateways. It is a deployment scaffold, not a completed production rollout: real DNS/ACME issuance, host firewall rules, provider configuration, trusted-proxy validation, internal-hop mTLS assessment, production secrets, and deployment-specific network policies remain open. Production tenant ingestion remains disabled.
+
+
+## M06 PR #58 — dependency failure recovery
+
+PR #58 is merged into `main` (squash merge commit `fd7c7d23d952bdb6f08250c2dcd699c2816620d3`). CI run `41355041031` passed all three jobs: Go API tests/build, web typecheck/production build, and the local telemetry pipeline end-to-end smoke test.
+
+The new HTTP and gRPC tests inject transient failures into the workload-grant repository, shared rate-limit store, and Collector forwarder. They verify that authorization/rate-limit database failures fail closed without forwarding, Collector failures map to the established transport status, and a subsequent request succeeds through the same gateway instance after the dependency is restored.
+
+These are deterministic in-process fault-injection tests. They do not simulate an actual PostgreSQL restart, TCP partition, Collector process restart, or recovery under sustained traffic. Broader burst/load, real infrastructure fault injection, and backpressure behavior remain open. Production tenant ingestion remains disabled.
+
+
+## M06 PR #60 — default gateway burst-capacity boundary
+
+PR #60 is merged into `main` (squash merge commit `cb85c0afea6647ecc59b9fe59e499ce8383fc526`). CI run `41355534531` passed all three jobs. New synchronized tests hold all 64 default HTTP or gRPC admission slots inside blocking Collector forwarders, then verify additional HTTP requests receive 503 and additional gRPC requests receive ResourceExhausted without reaching the forwarder. After capacity is released, all admitted requests complete and the active-forward count returns to zero.
+
+This verifies the configured in-process admission boundary under a deterministic burst. It is not a throughput benchmark or sustained production load test; broader load, network/process fault injection, and backpressure remain open.

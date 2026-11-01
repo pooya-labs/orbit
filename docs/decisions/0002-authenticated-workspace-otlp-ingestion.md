@@ -137,3 +137,17 @@ PR #54 is merged with passing CI and makes the corresponding OTLP/HTTP deadline 
 PR #56 is merged into `main` (squash merge commit `45997fd2ec508e260a51a027208152c9b155ac0f`). CI run `41354509326` passed Go API tests/build, web typecheck/production build, and the local telemetry pipeline smoke test. The new optional Compose overlay places Caddy on a dedicated ingress network, routes separate OTLP/HTTP and OTLP/gRPC hostnames to the authenticated ORBIT listeners, and publishes only the edge ports 80/443. API OTLP ports 4319/4320 and raw Collector ports 4317/4318 remain unpublished. Caddy is not attached to the application default or telemetry-internal networks.
 
 This establishes the reviewed Compose topology and Caddy configuration; it does not prove a real internet-facing deployment. DNS/ACME issuance, host firewall rules, trusted-proxy behavior, production secret delivery, internal-hop mTLS assessment, and cloud/Kubernetes NetworkPolicy remain open. The edge proxy does not replace workload JWT verification, workspace grants, signal permissions, or shared rate limiting. Production tenant ingestion remains disabled.
+
+
+## ADR 0002 — PR #58 dependency recovery coverage
+
+PR #58 is merged into `main` (squash merge commit `fd7c7d23d952bdb6f08250c2dcd699c2816620d3`). CI run `41355041031` passed all three jobs. HTTP and gRPC tests inject transient errors from the workload grant repository, shared rate-limit store, and Collector forwarder. Database dependency failures fail closed and are not forwarded; a later request succeeds through the same gateway instance after the dependency error is cleared.
+
+This provides deterministic recovery-contract coverage, not real process/network fault testing. PostgreSQL/Collector restart behavior, network partitions, recovery under sustained load, and explicit backpressure remain open before production tenant ingestion can be enabled.
+
+
+## ADR 0002 — PR #60 default burst-capacity verification
+
+PR #60 is merged into `main` (squash merge commit `cb85c0afea6647ecc59b9fe59e499ce8383fc526`). CI run `41355534531` passed Go race tests/build, web typecheck/build, and the local telemetry pipeline smoke test. Tests fill all 64 default HTTP/gRPC admission slots using blocking Collector forwarders, verify additional requests fail with the transport-specific capacity status before forwarding, then release all admitted requests and verify they complete with no capacity leak.
+
+The tests prove the configured in-process cap and deterministic rejection behavior, not sustained throughput, real infrastructure fault recovery, or backpressure behavior at production load.
