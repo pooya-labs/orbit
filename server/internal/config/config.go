@@ -25,7 +25,7 @@ type Config struct {
 func Load() Config {
 	return Config{
 		HTTPAddr:       valueOrDefault("ORBIT_HTTP_ADDR", ":8080"),
-		Environment:    valueOrDefault("ORBIT_ENVIRONMENT", "development"),
+		Environment:    strings.TrimSpace(os.Getenv("ORBIT_ENVIRONMENT")),
 		Version:        valueOrDefault("ORBIT_VERSION", "0.10.0"),
 		DatabaseURL:    strings.TrimSpace(os.Getenv("ORBIT_DATABASE_URL")),
 		AllowedOrigins: commaSeparated(os.Getenv("ORBIT_ALLOWED_ORIGINS")),
@@ -46,9 +46,14 @@ func (c Config) Validate() error {
 	if (c.OIDCIssuer == "") != (c.OIDCAudience == "") {
 		return fmt.Errorf("ORBIT_OIDC_ISSUER and ORBIT_OIDC_AUDIENCE must be configured together")
 	}
-	if (c.Environment == "production" || c.Environment == "staging") &&
-		(c.OIDCIssuer == "" || c.OIDCAudience == "") {
-		return fmt.Errorf("OIDC issuer and audience are required in %s", c.Environment)
+	switch c.Environment {
+	case "development", "test":
+	case "staging", "production":
+		if c.OIDCIssuer == "" || c.OIDCAudience == "" {
+			return fmt.Errorf("OIDC issuer and audience are required in %s", c.Environment)
+		}
+	default:
+		return fmt.Errorf("ORBIT_ENVIRONMENT must be explicitly set to development, staging, or production")
 	}
 	if c.OIDCRolesClaim == "" || len(c.OIDCRolesClaim) > 64 {
 		return fmt.Errorf("ORBIT_OIDC_ROLES_CLAIM must contain between 1 and 64 characters")
