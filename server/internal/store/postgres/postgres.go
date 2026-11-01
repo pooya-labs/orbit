@@ -78,6 +78,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 	}{
 		{version: "001_initial", file: "migrations/001_initial.sql"},
 		{version: "002_telemetry_service_catalog", file: "migrations/002_telemetry_service_catalog.sql"},
+		{version: "003_telemetry_resource_attribute_sources", file: "migrations/003_telemetry_resource_attribute_sources.sql"},
 	}
 
 	for _, item := range migrations {
@@ -125,6 +126,56 @@ var allowedTelemetrySources = map[string]struct{}{
 	"tempo":      {},
 }
 
+var resourceAttributeNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
+
+func normalizeResourceAttributeSources(input map[string][]string) (map[string][]string, error) {
+	result := make(map[string][]string, len(input))
+	for key, sources := range input {
+		if !resourceAttributeNamePattern.MatchString(key) {
+			return nil, fmt.Errorf("invalid resource attribute name")
+		}
+		seen := make(map[string]struct{}, len(sources))
+		for _, source := range sources {
+			source = strings.TrimSpace(source)
+			if _, ok := allowedTelemetrySources[source]; !ok {
+				return nil, fmt.Errorf("unsupported resource attribute source")
+			}
+			seen[source] = struct{}{}
+		}
+		for source := range seen {
+			result[key] = append(result[key], source)
+		}
+		sort.Strings(result[key])
+	}
+	return result, nil
+}
+
+func mergeResourceAttributeSources(existing, incoming map[string][]string) map[string][]string {
+	merged := make(map[string]map[string]struct{}, len(existing)+len(incoming))
+	for key, sources := range existing {
+		merged[key] = make(map[string]struct{}, len(sources))
+		for _, source := range sources {
+			merged[key][source] = struct{}{}
+		}
+	}
+	for key, sources := range incoming {
+		if merged[key] == nil {
+			merged[key] = make(map[string]struct{}, len(sources))
+		}
+		for _, source := range sources {
+			merged[key][source] = struct{}{}
+		}
+	}
+	result := make(map[string][]string, len(merged))
+	for key, sources := range merged {
+		for source := range sources {
+			result[key] = append(result[key], source)
+		}
+		sort.Strings(result[key])
+	}
+	return result
+}
+
 func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []store.TelemetryService) ([]store.TelemetryService, error) {
 	if len(services) == 0 {
 		return []store.TelemetryService{}, nil
@@ -166,6 +217,10 @@ func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []sto
 		if err != nil {
 			return nil, fmt.Errorf("encode telemetry resource attributes: %w", err)
 		}
+		incomingAttributeSources, err := normalizeResourceAttributeSources(service.ResourceAttributeSources)
+		if err != nil {
+			return nil, err
+		}
 
 		var item store.TelemetryService
 		var persistedAttributes []byte
@@ -189,6 +244,32 @@ func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []sto
 			return nil, fmt.Errorf("decode telemetry resource attributes: %w", err)
 		}
 
+		var existingSourcesJSON []byte
+		if err := tx.QueryRow(ctx, `
+			SELECT resource_attribute_sources
+			FROM telemetry_services
+			WHERE id = $1::uuid
+			FOR UPDATE
+		`, item.ID).Scan(&existingSourcesJSON); err != nil {
+			return nil, fmt.Errorf("read resource attribute provenance: %w", err)
+		}
+		existingAttributeSources := make(map[string][]string)
+		if err := json.Unmarshal(existingSourcesJSON, &existingAttributeSources); err != nil {
+			return nil, fmt.Errorf("decode resource attribute provenance: %w", err)
+		}
+		item.ResourceAttributeSources = mergeResourceAttributeSources(existingAttributeSources, incomingAttributeSources)
+		mergedSourcesJSON, err := json.Marshal(item.ResourceAttributeSources)
+		if err != nil {
+			return nil, fmt.Errorf("encode resource attribute provenance: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE telemetry_services
+			SET resource_attribute_sources = $2::jsonb
+			WHERE id = $1::uuid
+		`, item.ID, string(mergedSourcesJSON)); err != nil {
+			return nil, fmt.Errorf("persist resource attribute provenance: %w", err)
+		}
+
 		for _, source := range sources {
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO telemetry_service_sources (service_id, source)
@@ -210,6 +291,70 @@ func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []sto
 	return persisted, nil
 }
 
+func (r *Repository) UpdateTelemetryServiceResourceAttributes(
+	ctx context.Context,
+	name string,
+	attributes map[string]any,
+	attributeSources map[string][]string,
+) error {
+	if !telemetryServiceNamePattern.MatchString(name) {
+		return fmt.Errorf("invalid telemetry service name")
+	}
+	if attributes == nil {
+		attributes = map[string]any{}
+	}
+	attributesJSON, err := json.Marshal(attributes)
+	if err != nil {
+		return fmt.Errorf("encode telemetry resource attributes: %w", err)
+	}
+	incomingSources, err := normalizeResourceAttributeSources(attributeSources)
+	if err != nil {
+		return err
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin resource attribute update: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var serviceID string
+	var existingJSON []byte
+	err = tx.QueryRow(ctx, `
+		SELECT id::text, resource_attribute_sources
+		FROM telemetry_services
+		WHERE name = $1
+		FOR UPDATE
+	`, name).Scan(&serviceID, &existingJSON)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("telemetry service not found")
+	}
+	if err != nil {
+		return fmt.Errorf("read telemetry service for attribute update: %w", err)
+	}
+	existingSources := make(map[string][]string)
+	if err := json.Unmarshal(existingJSON, &existingSources); err != nil {
+		return fmt.Errorf("decode resource attribute provenance: %w", err)
+	}
+	mergedSources := mergeResourceAttributeSources(existingSources, incomingSources)
+	mergedJSON, err := json.Marshal(mergedSources)
+	if err != nil {
+		return fmt.Errorf("encode resource attribute provenance: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE telemetry_services
+		SET resource_attributes = resource_attributes || $2::jsonb,
+		    resource_attribute_sources = $3::jsonb,
+		    updated_at = NOW()
+		WHERE id = $1::uuid
+	`, serviceID, string(attributesJSON), string(mergedJSON)); err != nil {
+		return fmt.Errorf("update telemetry resource attributes: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit telemetry resource attributes: %w", err)
+	}
+	return nil
+}
 
 func (r *Repository) ListTelemetryServices(ctx context.Context, limit int) ([]store.TelemetryService, error) {
 	if limit < 1 || limit > 250 {
@@ -227,7 +372,8 @@ func (r *Repository) ListTelemetryServices(ctx context.Context, limit int) ([]st
 			services.first_seen_at,
 			services.last_seen_at,
 			services.last_discovered_at,
-			services.resource_attributes
+			services.resource_attributes,
+			services.resource_attribute_sources
 		FROM telemetry_services AS services
 		LEFT JOIN telemetry_service_sources AS sources
 			ON sources.service_id = services.id
@@ -245,14 +391,18 @@ func (r *Repository) ListTelemetryServices(ctx context.Context, limit int) ([]st
 	for rows.Next() {
 		var item store.TelemetryService
 		var attributes []byte
+		var attributeSources []byte
 		if err := rows.Scan(
 			&item.ID, &item.Name, &item.Sources, &item.FirstSeenAt,
-			&item.LastSeenAt, &item.LastDiscoveredAt, &attributes,
+			&item.LastSeenAt, &item.LastDiscoveredAt, &attributes, &attributeSources,
 		); err != nil {
 			return nil, fmt.Errorf("scan persisted telemetry service: %w", err)
 		}
 		if err := json.Unmarshal(attributes, &item.ResourceAttributes); err != nil {
 			return nil, fmt.Errorf("decode persisted telemetry resource attributes: %w", err)
+		}
+		if err := json.Unmarshal(attributeSources, &item.ResourceAttributeSources); err != nil {
+			return nil, fmt.Errorf("decode resource attribute provenance: %w", err)
 		}
 		items = append(items, item)
 	}
