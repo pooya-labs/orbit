@@ -34,6 +34,12 @@ compactor:
 limits_config:
   allow_structured_metadata: true
   retention_period: 168h
+  otlp_config:
+    resource_attributes:
+      attributes_config:
+        - action: index_label
+          attributes:
+            - orbit.workspace.id
 
 analytics:
   reporting_enabled: false
