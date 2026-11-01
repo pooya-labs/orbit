@@ -81,7 +81,7 @@ jobs:
             -e ORBIT_OTLP_HTTP_DOMAIN -e ORBIT_OTLP_GRPC_DOMAIN \
             -v "$PWD/deploy/production/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.10.2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-          docker compose -f docker-compose.yml -f deploy/production/compose.ingress.yaml --profile production-ingress config --format json > /tmp/orbit-compose.json
+          docker compose -f docker-compose.yml -f deploy/production/compose.ingress.yaml --profile observability --profile production-ingress config --format json > /tmp/orbit-compose.json
           python3 - <<'PY'
           import json
           with open("/tmp/orbit-compose.json", encoding="utf-8") as handle:
