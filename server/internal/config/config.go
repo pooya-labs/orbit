@@ -47,7 +47,7 @@ func (c Config) Validate() error {
 		return fmt.Errorf("ORBIT_OIDC_ISSUER and ORBIT_OIDC_AUDIENCE must be configured together")
 	}
 	switch c.Environment {
-	case "development", "test":
+	case "development":
 	case "staging", "production":
 		if c.OIDCIssuer == "" || c.OIDCAudience == "" {
 			return fmt.Errorf("OIDC issuer and audience are required in %s", c.Environment)
