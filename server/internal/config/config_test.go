@@ -202,3 +202,13 @@ func TestWorkloadIngestionRequiresDistinctAudiencesDatabaseAndCollectorEndpoints
 	}
 }
 
+
+func TestLoadDefaultsIngestionListenersToLoopback(t *testing.T) {
+	t.Setenv("ORBIT_INGESTION_HTTP_ADDR", "")
+	t.Setenv("ORBIT_INGESTION_GRPC_ADDR", "")
+	got := Load()
+	if got.IngestionHTTPAddr != "127.0.0.1:4319" || got.IngestionGRPCAddr != "127.0.0.1:4320" {
+		t.Fatalf("ingestion listener defaults are not loopback-only: %+v", got)
+	}
+}
+
