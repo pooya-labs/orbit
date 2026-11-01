@@ -90,8 +90,12 @@ func testClaims(issuer string) map[string]any {
 }
 
 func signRS256Token(t *testing.T, key *rsa.PrivateKey, keyID string, claims map[string]any) string {
+	return signRS256TokenWithAlgorithm(t, key, keyID, "RS256", claims)
+}
+
+func signRS256TokenWithAlgorithm(t *testing.T, key *rsa.PrivateKey, keyID, algorithm string, claims map[string]any) string {
 	t.Helper()
-	return signToken(t, keyID, "RS256", claims, func(input []byte) ([]byte, error) {
+	return signToken(t, keyID, algorithm, claims, func(input []byte) ([]byte, error) {
 		digest := sha256.Sum256(input)
 		return rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
 	})
@@ -226,10 +230,7 @@ func TestVerifyRejectsInvalidClaimsAndSignatures(t *testing.T) {
 			if algorithm == "" {
 				algorithm = "RS256"
 			}
-			token := signRS256Token(t, privateKey, "rsa-1", claims)
-			if test.alg != "" {
-				token = strings.Replace(token, "RS256", test.alg, 1)
-			}
+			token := signRS256TokenWithAlgorithm(t, privateKey, "rsa-1", algorithm, claims)
 			if _, err := verifier.Verify(context.Background(), token); err == nil {
 				t.Fatal("Verify() accepted an invalid access token")
 			}
