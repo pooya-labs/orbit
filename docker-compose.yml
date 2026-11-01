@@ -46,7 +46,7 @@ services:
     environment:
       ORBIT_HTTP_ADDR: ":8080"
       ORBIT_ENVIRONMENT: development
-      ORBIT_VERSION: 0.4.0
+      ORBIT_VERSION: 0.5.0
       ORBIT_DATABASE_URL: postgres://orbit:orbit_local_only@postgres:5432/orbit?sslmode=disable
       ORBIT_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,https://pooya16pg-spec.github.io
     ports:
@@ -112,6 +112,26 @@ services:
       - orbit-tempo-data:/var/tempo
     ports:
       - "127.0.0.1:3200:3200"
+
+  telemetry-demo:
+    build:
+      context: ./examples/telemetry-go
+      dockerfile: Dockerfile
+    profiles: ["observability"]
+    restart: unless-stopped
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8081/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
 volumes:
   orbit-postgres-data:
