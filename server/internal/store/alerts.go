@@ -128,10 +128,14 @@ type AlertRuleObservation struct {
 
 // AlertRuleEvaluationRepository is used only by the internal scheduler.
 // WithAlertEvaluationLease serializes scheduler ticks across API replicas.
+type AlertRuleStateRepository interface {
+	GetWorkspaceAlertRuleState(context.Context, string, string, string, string) (AlertRuleState, error)
+	ListWorkspaceAlertRuleEvents(context.Context, string, string, string, string, int) ([]AlertRuleEvent, error)
+}
+
 type AlertRuleEvaluationRepository interface {
+	AlertRuleStateRepository
 	WithAlertEvaluationLease(context.Context, func(context.Context) error) (bool, error)
 	ListEnabledAlertRulesForEvaluation(context.Context, int) ([]AlertRule, error)
 	ApplyAlertRuleObservation(context.Context, AlertRuleObservation) (AlertRuleState, error)
-	GetWorkspaceAlertRuleState(context.Context, string, string, string, string) (AlertRuleState, error)
-	ListWorkspaceAlertRuleEvents(context.Context, string, string, string, string, int) ([]AlertRuleEvent, error)
 }
