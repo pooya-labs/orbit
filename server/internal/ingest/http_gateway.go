@@ -3,6 +3,8 @@ package ingest
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -36,15 +38,23 @@ type OTLPForwarder interface {
 	Export(context.Context, string, []byte) ([]byte, error)
 }
 
+// WorkloadRateLimitStore is implemented by the shared PostgreSQL rate-limit
+// repository. The gateway hashes keys before they leave process memory.
+type WorkloadRateLimitStore interface {
+	IncrementRateLimitWindow(context.Context, string) (int64, error)
+}
+
 type HTTPGatewayConfig struct {
 	RequestsPerMinute int
 	ForwardTimeout time.Duration
+	RateLimitStore WorkloadRateLimitStore
 }
 
 type HTTPGateway struct {
 	authorizer *Authorizer
 	forwarder OTLPForwarder
 	limiter *workspaceRateLimiter
+	sharedLimiter WorkloadRateLimitStore
 	timeout time.Duration
 	concurrency chan struct{}
 }
@@ -66,6 +76,7 @@ func NewHTTPGateway(authorizer *Authorizer, forwarder OTLPForwarder, cfg HTTPGat
 		authorizer: authorizer,
 		forwarder: forwarder,
 		limiter: newWorkspaceRateLimiter(cfg.RequestsPerMinute),
+		sharedLimiter: cfg.RateLimitStore,
 		timeout: cfg.ForwardTimeout,
 		concurrency: make(chan struct{}, maxConcurrentExports),
 	}
@@ -99,8 +110,16 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rateKey := decision.IdentityID + ":" + decision.WorkspaceID + ":" + decision.Signal
-	if !g.limiter.Allow(rateKey, time.Now()) {
+	rateKey := "workload:" + decision.IdentityID + ":" + decision.WorkspaceID + ":" + decision.Signal
+	rateCtx, rateCancel := context.WithTimeout(r.Context(), 750*time.Millisecond)
+	allowed, rateErr := g.allowRate(rateCtx, rateKey, time.Now())
+	rateCancel()
+	if rateErr != nil {
+		http.Error(w, "workload rate-limit service is temporarily unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if !allowed {
+		w.Header().Set("Retry-After", "60")
 		http.Error(w, "workload telemetry rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
@@ -299,6 +318,18 @@ func (f *collectorHTTPForwarder) Export(ctx context.Context, signal string, payl
 		return nil, errors.New("Collector response exceeds the 4 MiB limit")
 	}
 	return body, nil
+}
+
+func (g *HTTPGateway) allowRate(ctx context.Context, rawKey string, now time.Time) (bool, error) {
+	if g.sharedLimiter == nil {
+		return g.limiter.Allow(rawKey, now), nil
+	}
+	digest := sha256.Sum256([]byte(rawKey))
+	count, err := g.sharedLimiter.IncrementRateLimitWindow(ctx, hex.EncodeToString(digest[:]))
+	if err != nil {
+		return false, fmt.Errorf("increment shared workload rate limit: %w", err)
+	}
+	return count <= int64(g.limiter.limit), nil
 }
 
 type rateWindow struct {
