@@ -124,6 +124,177 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/v1/workspaces/{workspaceID}/incidents:
+    post:
+      tags: [Incidents]
+      operationId: createWorkspaceIncident
+      summary: Create a workspace incident
+      description: Creates an incident in the specified workspace. The authenticated principal must be an owner, administrator, or operator in that workspace. Incident creation, its first timeline event, and the workspace audit event commit in one PostgreSQL transaction.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentCreateRequest"
+      responses:
+        "201":
+          description: Incident created with its first immutable timeline event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentResponse"
+        "400":
+          description: Invalid request body or incident fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Workspace role is not allowed to create incidents.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership or service was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Incident storage or a required database dependency is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/incidents/{incidentID}/status:
+    patch:
+      tags: [Incidents]
+      operationId: transitionWorkspaceIncident
+      summary: Change an incident status
+      description: Applies a validated lifecycle transition. Reopening a resolved incident moves it to investigating. A transition comment, immutable timeline event, and workspace audit event are written atomically with the incident update.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: incidentID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentTransitionRequest"
+      responses:
+        "200":
+          description: Updated incident.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentResponse"
+        "400":
+          description: Invalid request body, status, or identifier.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Workspace role is not allowed to change incident status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership or incident was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Requested transition is not permitted or the incident already has that status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Incident storage or a required database dependency is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/incidents/{incidentID}/timeline:
+    get:
+      tags: [Incidents]
+      operationId: listWorkspaceIncidentTimeline
+      summary: Read an incident's immutable timeline
+      description: Returns at most 100 chronological timeline events. Workspace members may read the timeline; mutation privileges are not required. Timeline records cannot be updated, deleted, or truncated through the database.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: incidentID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: limit
+          required: false
+          description: Maximum number of latest events to return.
+          schema:
+            type: integer
+            enum: [10, 25, 50, 100]
+            default: 50
+      responses:
+        "200":
+          description: Incident timeline in chronological order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentTimelineResponse"
+        "400":
+          description: Invalid identifier or page size.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership or incident was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Incident timeline storage is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/v1/telemetry/services:
     get:
       tags: [Telemetry]
@@ -368,6 +539,11 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
 
     TelemetryQueryMeta:
@@ -685,7 +861,84 @@ components:
           format: date-time
         source:
           type: string
-          enum: [demo_seed, live]
+          enum: [demo_seed, live, api]
+    IncidentCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [title, service_id, severity]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: string
+          maxLength: 8000
+          default: ""
+        service_id:
+          type: string
+          format: uuid
+        severity:
+          type: string
+          enum: [critical, high, medium, low]
+    IncidentTransitionRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [open, investigating, monitoring, resolved]
+        comment:
+          type: string
+          maxLength: 4000
+          default: ""
+    IncidentResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Incident"
+    IncidentTimelineEvent:
+      type: object
+      required: [id, workspace_id, incident_id, event_type, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        incident_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          enum: [incident.created, incident.status_changed, incident.reopened]
+        from_status:
+          type: string
+          enum: [open, investigating, monitoring, resolved]
+        to_status:
+          type: string
+          enum: [open, investigating, monitoring, resolved]
+        comment:
+          type: string
+        request_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+    IncidentTimelineResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncidentTimelineEvent"
     ErrorResponse:
       type: object
       required: [error]
