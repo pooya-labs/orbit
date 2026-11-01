@@ -6,9 +6,10 @@ import (
 )
 
 type Config struct {
-	HTTPAddr    string
-	Environment string
-	Version     string
+	HTTPAddr     string
+	Environment  string
+	Version      string
+	DatabaseURL  string
 }
 
 func Load() Config {
@@ -16,6 +17,7 @@ func Load() Config {
 		HTTPAddr:    valueOrDefault("ORBIT_HTTP_ADDR", ":8080"),
 		Environment: valueOrDefault("ORBIT_ENVIRONMENT", "development"),
 		Version:     valueOrDefault("ORBIT_VERSION", "0.1.0"),
+		DatabaseURL: strings.TrimSpace(os.Getenv("ORBIT_DATABASE_URL")),
 	}
 }
 
