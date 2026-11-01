@@ -118,9 +118,10 @@ go vet ./...
 go run ./cmd/orbit-api
 ```
 
-Set `ORBIT_DATABASE_URL` before running the API outside Docker. Example:
+Set `ORBIT_ENVIRONMENT=development` explicitly and configure `ORBIT_DATABASE_URL` before running the API outside Docker. Example:
 
 ```powershell
+$env:ORBIT_ENVIRONMENT = "development"
 $env:ORBIT_DATABASE_URL = "postgres://orbit:orbit_local_only@localhost:5432/orbit?sslmode=disable"
 go run ./cmd/orbit-api
 ```
