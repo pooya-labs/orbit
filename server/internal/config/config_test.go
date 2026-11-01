@@ -131,3 +131,44 @@ func TestProductionAndStagingRequirePostgresForSharedRateLimits(t *testing.T) {
 		})
 	}
 }
+
+
+func TestWorkloadOTLPConfigurationMustBeCompleteAndUseDistinctAudience(t *testing.T) {
+	base := Config{
+		Environment: "development", RateLimitPerMinute: 120, OIDCRolesClaim: "roles",
+		OIDCIssuer: "https://identity.example", OIDCAudience: "orbit-api",
+	}
+	tests := []struct {
+		name string
+		edit func(*Config)
+		wantError bool
+	}{
+		{name: "disabled by default", edit: func(*Config) {}, wantError: false},
+		{name: "audience without collector", edit: func(c *Config) { c.OIDCWorkloadAudience = "orbit-telemetry" }, wantError: true},
+		{name: "collector without audience", edit: func(c *Config) { c.OTLPCollectorHTTPURL = "http://otel-collector:4318" }, wantError: true},
+		{name: "same audience as human API", edit: func(c *Config) { c.OIDCWorkloadAudience = "orbit-api"; c.OTLPCollectorHTTPURL = "http://otel-collector:4318" }, wantError: true},
+		{name: "complete dedicated audience", edit: func(c *Config) { c.OIDCWorkloadAudience = "orbit-telemetry"; c.OTLPCollectorHTTPURL = "http://otel-collector:4318" }, wantError: false},
+		{name: "requires human OIDC issuer", edit: func(c *Config) { c.OIDCIssuer = ""; c.OIDCAudience = ""; c.OIDCWorkloadAudience = "orbit-telemetry"; c.OTLPCollectorHTTPURL = "http://otel-collector:4318" }, wantError: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := base
+			test.edit(&cfg)
+			err := cfg.Validate()
+			if (err != nil) != test.wantError {
+				t.Fatalf("Validate() error = %v, wantError %v", err, test.wantError)
+			}
+		})
+	}
+}
+
+func TestLoadReadsWorkloadOTLPConfiguration(t *testing.T) {
+	t.Setenv("ORBIT_OIDC_ISSUER", "https://identity.example")
+	t.Setenv("ORBIT_OIDC_AUDIENCE", "orbit-api")
+	t.Setenv("ORBIT_OIDC_WORKLOAD_AUDIENCE", "orbit-telemetry")
+	t.Setenv("ORBIT_OTLP_COLLECTOR_HTTP_URL", " http://otel-collector:4318 ")
+	got := Load()
+	if got.OIDCWorkloadAudience != "orbit-telemetry" || got.OTLPCollectorHTTPURL != "http://otel-collector:4318" {
+		t.Fatalf("unexpected workload OTLP configuration: %+v", got)
+	}
+}
