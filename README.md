@@ -8,11 +8,12 @@ ORBIT is an engineering-first observability platform for understanding the healt
 
 **[Open the ORBIT dashboard](https://pooya16pg-spec.github.io/orbit/)**
 
-The public preview is a static, responsive workspace. Its metrics, service catalogue, and incident timeline are explicitly labelled illustrative demo data; no production systems are connected.
+The public preview is a static, responsive workspace. Demo mode uses clearly labelled illustrative data; API mode can read service and incident inventories from an explicitly configured ORBIT API. No production systems are connected by default.
 
 ## Current implementation
 
-- Responsive Next.js + TypeScript observability workspace.
+- Responsive Next.js + TypeScript observability workspace with an explicit demo/API source switch.
+- The dashboard can read service and incident inventories from a configured ORBIT API URL; unsupported aggregate metrics are not presented as live data.
 - Go HTTP API with liveness, readiness, metadata, service inventory, and incident endpoints.
 - PostgreSQL repository with a versioned initial migration and clearly marked seed data.
 - Docker Compose stack for PostgreSQL, Redis, NATS, and the Go API.
@@ -42,6 +43,12 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+## Connect the dashboard to the local API
+
+For a local API, run the dashboard locally with `npm run dev` and run the backend with Docker Compose. Open `http://localhost:3000`, choose **Connect a source**, enter `http://localhost:8080`, then select **Test and connect**. The dashboard verifies metadata and reads services and incidents. The URL is stored only in this browser. The public GitHub Pages site does not host the Go API; connecting that hosted site requires a separately hosted HTTPS API whose CORS allowlist includes the Pages origin.
+
+When connected, the dashboard hides illustrative metric cards and charts because the current API does not expose time-series telemetry yet. Demo mode remains available at any time.
 
 ## Run the backend stack
 
@@ -96,7 +103,7 @@ See [docs/roadmap.md](docs/roadmap.md), [docs/architecture.md](docs/architecture
 
 ## Release status
 
-The v0.1.0 public preview is the first dashboard release. The v0.2.0 backend foundation adds PostgreSQL-backed services/incidents, an OpenAPI contract, a typed TypeScript client, and a local Docker Compose stack. Live telemetry ingestion, authentication, and hosted backend deployment are not yet implemented.
+The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview adds a verified browser source switch between demo fixtures and a configured ORBIT API. Live telemetry ingestion, authentication, and hosted backend deployment are not yet implemented.
 
 ## License
 
