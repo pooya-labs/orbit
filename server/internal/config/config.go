@@ -1,19 +1,25 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
 type Config struct {
-	HTTPAddr       string
-	Environment    string
-	Version        string
-	DatabaseURL    string
-	AllowedOrigins []string
-	PrometheusURL string
-	LokiURL string
-	TempoURL string
+	HTTPAddr             string
+	Environment          string
+	Version              string
+	DatabaseURL           string
+	AllowedOrigins        []string
+	PrometheusURL         string
+	LokiURL               string
+	TempoURL              string
+	OIDCIssuer            string
+	OIDCAudience          string
+	OIDCRolesClaim        string
+	RateLimitPerMinute    int
 }
 
 func Load() Config {
@@ -25,8 +31,47 @@ func Load() Config {
 		AllowedOrigins: commaSeparated(os.Getenv("ORBIT_ALLOWED_ORIGINS")),
 		PrometheusURL:  strings.TrimSpace(os.Getenv("ORBIT_PROMETHEUS_URL")),
 		LokiURL:        strings.TrimSpace(os.Getenv("ORBIT_LOKI_URL")),
-		TempoURL:       strings.TrimSpace(os.Getenv("ORBIT_TEMPO_URL")),
+		TempoURL:          strings.TrimSpace(os.Getenv("ORBIT_TEMPO_URL")),
+		OIDCIssuer:        strings.TrimSpace(os.Getenv("ORBIT_OIDC_ISSUER")),
+		OIDCAudience:      strings.TrimSpace(os.Getenv("ORBIT_OIDC_AUDIENCE")),
+		OIDCRolesClaim:    valueOrDefault("ORBIT_OIDC_ROLES_CLAIM", "roles"),
+		RateLimitPerMinute: integerOrDefault("ORBIT_RATE_LIMIT_PER_MINUTE", 120),
 	}
+}
+
+func (c Config) Validate() error {
+	if c.RateLimitPerMinute < 1 || c.RateLimitPerMinute > 10000 {
+		return fmt.Errorf("ORBIT_RATE_LIMIT_PER_MINUTE must be between 1 and 10000")
+	}
+	if (c.OIDCIssuer == "") != (c.OIDCAudience == "") {
+		return fmt.Errorf("ORBIT_OIDC_ISSUER and ORBIT_OIDC_AUDIENCE must be configured together")
+	}
+	if (c.Environment == "production" || c.Environment == "staging") &&
+		(c.OIDCIssuer == "" || c.OIDCAudience == "") {
+		return fmt.Errorf("OIDC issuer and audience are required in %s", c.Environment)
+	}
+	if c.OIDCRolesClaim == "" || len(c.OIDCRolesClaim) > 64 {
+		return fmt.Errorf("ORBIT_OIDC_ROLES_CLAIM must contain between 1 and 64 characters")
+	}
+	for _, char := range c.OIDCRolesClaim {
+		if !(char >= 'a' && char <= 'z') && !(char >= 'A' && char <= 'Z') &&
+			!(char >= '0' && char <= '9') && char != '_' && char != '-' && char != '.' {
+			return fmt.Errorf("ORBIT_OIDC_ROLES_CLAIM contains an unsupported character")
+		}
+	}
+	return nil
+}
+
+func integerOrDefault(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0
+	}
+	return parsed
 }
 
 func valueOrDefault(key, fallback string) string {
