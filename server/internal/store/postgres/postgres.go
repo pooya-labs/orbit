@@ -121,6 +121,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		{version: "003_telemetry_resource_attribute_sources", file: "migrations/003_telemetry_resource_attribute_sources.sql"},
 		{version: "004_shared_api_rate_limits", file: "migrations/004_shared_api_rate_limits.sql"},
 		{version: "005_workspaces_memberships_audit", file: "migrations/005_workspaces_memberships_audit.sql"},
+		{version: "006_workspace_data_scope", file: "migrations/006_workspace_data_scope.sql"},
 	}
 
 	for _, item := range migrations {
@@ -267,8 +268,8 @@ func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []sto
 		var item store.TelemetryService
 		var persistedAttributes []byte
 		err = tx.QueryRow(ctx, `
-			INSERT INTO telemetry_services (name, resource_attributes)
-			VALUES ($1, $2::jsonb)
+			INSERT INTO telemetry_services (workspace_id, name, resource_attributes)
+			VALUES ((SELECT id FROM workspaces WHERE slug = 'legacy-default'), $1, $2::jsonb)
 			ON CONFLICT (name) DO UPDATE SET
 				resource_attributes = telemetry_services.resource_attributes || EXCLUDED.resource_attributes,
 				last_seen_at = NOW(),
@@ -605,3 +606,115 @@ func (r *Repository) ListIncidents(ctx context.Context, status string) ([]store.
 }
 
 var _ store.Repository = (*Repository)(nil)
+
+
+func (r *Repository) ListWorkspaceServices(ctx context.Context, workspaceID string) ([]store.Service, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id::text, name, description, environment, region, status,
+		       latency_p95_ms, error_rate, last_seen_at, source
+		FROM services
+		WHERE workspace_id = $1::uuid
+		ORDER BY name ASC
+		LIMIT 500
+	`, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("query workspace services: %w", err)
+	}
+	defer rows.Close()
+	items := make([]store.Service, 0)
+	for rows.Next() {
+		var item store.Service
+		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Environment,
+			&item.Region, &item.Status, &item.LatencyP95, &item.ErrorRate,
+			&item.LastSeenAt, &item.Source); err != nil {
+			return nil, fmt.Errorf("scan workspace service: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate workspace services: %w", err)
+	}
+	return items, nil
+}
+
+func (r *Repository) ListWorkspaceIncidents(ctx context.Context, workspaceID, status string) ([]store.Incident, error) {
+	query := `
+		SELECT i.id::text, i.title, i.description, i.service_id::text,
+		       s.name, i.severity, i.status, i.started_at, i.updated_at,
+		       i.resolved_at, i.source
+		FROM incidents i
+		JOIN services s
+		  ON s.id = i.service_id AND s.workspace_id = i.workspace_id
+		WHERE i.workspace_id = $1::uuid
+	`
+	args := []any{workspaceID}
+	if status != "" {
+		query += " AND i.status = $2"
+		args = append(args, status)
+	}
+	query += " ORDER BY i.started_at DESC LIMIT 500"
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query workspace incidents: %w", err)
+	}
+	defer rows.Close()
+	items := make([]store.Incident, 0)
+	for rows.Next() {
+		var item store.Incident
+		if err := rows.Scan(&item.ID, &item.Title, &item.Description, &item.ServiceID,
+			&item.ServiceName, &item.Severity, &item.Status, &item.StartedAt,
+			&item.UpdatedAt, &item.ResolvedAt, &item.Source); err != nil {
+			return nil, fmt.Errorf("scan workspace incident: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate workspace incidents: %w", err)
+	}
+	return items, nil
+}
+
+func (r *Repository) ListWorkspaceTelemetryServices(ctx context.Context, workspaceID string, limit int) ([]store.TelemetryService, error) {
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT s.id::text, s.name,
+		       COALESCE(array_agg(src.source ORDER BY src.source)
+		           FILTER (WHERE src.source IS NOT NULL), ARRAY[]::text[]),
+		       s.first_seen_at, s.last_seen_at, s.last_discovered_at,
+		       s.resource_attributes, s.resource_attribute_sources
+		FROM telemetry_services s
+		LEFT JOIN telemetry_service_sources src ON src.service_id = s.id
+		WHERE s.workspace_id = $1::uuid
+		GROUP BY s.id
+		ORDER BY s.name ASC, s.id ASC
+		LIMIT $2
+	`, workspaceID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query workspace telemetry services: %w", err)
+	}
+	defer rows.Close()
+	items := make([]store.TelemetryService, 0)
+	for rows.Next() {
+		var item store.TelemetryService
+		var attributesJSON, sourcesJSON []byte
+		if err := rows.Scan(&item.ID, &item.Name, &item.Sources, &item.FirstSeenAt,
+			&item.LastSeenAt, &item.LastDiscoveredAt, &attributesJSON, &sourcesJSON); err != nil {
+			return nil, fmt.Errorf("scan workspace telemetry service: %w", err)
+		}
+		if err := json.Unmarshal(attributesJSON, &item.ResourceAttributes); err != nil {
+			return nil, fmt.Errorf("decode workspace telemetry attributes: %w", err)
+		}
+		if err := json.Unmarshal(sourcesJSON, &item.ResourceAttributeSources); err != nil {
+			return nil, fmt.Errorf("decode workspace telemetry attribute sources: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate workspace telemetry services: %w", err)
+	}
+	return items, nil
+}
+
+var _ store.WorkspaceDataRepository = (*Repository)(nil)

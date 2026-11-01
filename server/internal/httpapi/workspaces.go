@@ -169,5 +169,83 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, lo
 		}
 		writeJSON(w, http.StatusOK, workspaceAuditResponse{Data: events})
 	})
+
+	workspaceData, dataAvailable := repository.(store.WorkspaceDataRepository)
+	registerScopedRead := func(pattern string, read func(http.ResponseWriter, *http.Request, context.Context, string)) {
+		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			principal, ok := principalFromContext(r.Context())
+			if !ok {
+				unauthorized(w, r)
+				return
+			}
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+			workspaceID := r.PathValue("workspaceID")
+			if _, err := workspaceRepository.GetWorkspaceMembership(ctx, workspaceID, principal.Issuer, principal.Subject); err != nil {
+				if errors.Is(err, store.ErrWorkspaceMembershipNotFound) {
+					writeError(w, r, http.StatusNotFound, "workspace_not_found", "Workspace was not found")
+				} else if strings.Contains(err.Error(), "UUID") {
+					writeError(w, r, http.StatusBadRequest, "invalid_workspace_id", "Workspace identifier is invalid")
+				} else {
+					logger.Error("verify workspace membership failed", "error", err, "request_id", r.Header.Get("X-Request-ID"))
+					writeError(w, r, http.StatusServiceUnavailable, "workspace_authorization_unavailable", "Workspace access could not be verified")
+				}
+				return
+			}
+			if !dataAvailable || workspaceData == nil {
+				writeError(w, r, http.StatusServiceUnavailable, "workspace_data_unavailable", "Workspace-scoped data access is not available")
+				return
+			}
+			read(w, r, ctx, workspaceID)
+		})
+	}
+
+	registerScopedRead("GET /api/v1/workspaces/{workspaceID}/services", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+		items, err := workspaceData.ListWorkspaceServices(ctx, workspaceID)
+		if err != nil {
+			logger.Error("list workspace services failed", "error", err, "request_id", r.Header.Get("X-Request-ID"))
+			writeError(w, r, http.StatusServiceUnavailable, "workspace_services_unavailable", "Workspace services are temporarily unavailable")
+			return
+		}
+		writeJSON(w, http.StatusOK, servicesResponse{Data: items})
+	})
+
+	registerScopedRead("GET /api/v1/workspaces/{workspaceID}/incidents", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+		status := r.URL.Query().Get("status")
+		if !validIncidentStatus(status) {
+			writeError(w, r, http.StatusBadRequest, "invalid_status", "status must be open, investigating, monitoring, or resolved")
+			return
+		}
+		items, err := workspaceData.ListWorkspaceIncidents(ctx, workspaceID, status)
+		if err != nil {
+			logger.Error("list workspace incidents failed", "error", err, "request_id", r.Header.Get("X-Request-ID"))
+			writeError(w, r, http.StatusServiceUnavailable, "workspace_incidents_unavailable", "Workspace incidents are temporarily unavailable")
+			return
+		}
+		writeJSON(w, http.StatusOK, incidentsResponse{Data: items})
+	})
+
+	registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/services", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+		limit := 50
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			switch raw {
+			case "10": limit = 10
+			case "25": limit = 25
+			case "50": limit = 50
+			case "100": limit = 100
+			default:
+				writeError(w, r, http.StatusBadRequest, "invalid_limit", "limit must be 10, 25, 50, or 100")
+				return
+			}
+		}
+		items, err := workspaceData.ListWorkspaceTelemetryServices(ctx, workspaceID, limit)
+		if err != nil {
+			logger.Error("list workspace telemetry services failed", "error", err, "request_id", r.Header.Get("X-Request-ID"))
+			writeError(w, r, http.StatusServiceUnavailable, "workspace_telemetry_unavailable", "Workspace telemetry catalog is temporarily unavailable")
+			return
+		}
+		writeJSON(w, http.StatusOK, struct { Data []store.TelemetryService `json:"data"` }{Data: items})
+	})
+
 }
 

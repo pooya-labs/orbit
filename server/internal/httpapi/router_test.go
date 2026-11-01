@@ -861,3 +861,69 @@ func TestWorkspaceCreationUsesVerifiedPrincipal(t *testing.T) {
 		t.Fatalf("workspace create status/body = %d %s", recorder.Code, recorder.Body.String())
 	}
 }
+
+
+func (f *fakeRepository) ListWorkspaceServices(_ context.Context, workspaceID string) ([]store.Service, error) {
+	if workspaceID != "00000000-0000-4000-8000-000000000001" {
+		return nil, store.ErrWorkspaceNotFound
+	}
+	return append([]store.Service(nil), f.services...), nil
+}
+
+func (f *fakeRepository) ListWorkspaceIncidents(_ context.Context, workspaceID, status string) ([]store.Incident, error) {
+	if workspaceID != "00000000-0000-4000-8000-000000000001" {
+		return nil, store.ErrWorkspaceNotFound
+	}
+	items := make([]store.Incident, 0)
+	for _, item := range f.incidents {
+		if status == "" || item.Status == status {
+			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
+func (f *fakeRepository) ListWorkspaceTelemetryServices(_ context.Context, workspaceID string, limit int) ([]store.TelemetryService, error) {
+	if workspaceID != "00000000-0000-4000-8000-000000000001" {
+		return nil, store.ErrWorkspaceNotFound
+	}
+	items := append([]store.TelemetryService(nil), f.catalog...)
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func TestWorkspaceScopedInventoryRoutesRequireMembership(t *testing.T) {
+	repository := &fakeRepository{
+		services: []store.Service{{ID: "svc-1", Name: "workspace-service"}},
+		incidents: []store.Incident{{ID: "inc-1", Title: "workspace incident", Status: "open"}},
+		catalog: []store.TelemetryService{{ID: "tel-1", Name: "workspace-telemetry"}},
+	}
+	viewer := fixedTokenVerifier{principal: auth.Principal{
+		Issuer: "https://identity.example", Subject: "member-1", Roles: []string{"viewer"},
+	}}
+	handler := NewHandler(Config{Environment: "production", AuthVerifier: viewer}, repository, testLogger())
+
+	for _, path := range []string{
+		"/api/v1/workspaces/00000000-0000-4000-8000-000000000001/services",
+		"/api/v1/workspaces/00000000-0000-4000-8000-000000000001/incidents",
+		"/api/v1/workspaces/00000000-0000-4000-8000-000000000001/telemetry/services",
+	} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.Header.Set("Authorization", "Bearer valid-token")
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s status/body = %d %s", path, recorder.Code, recorder.Body.String())
+		}
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-4000-8000-000000000099/services", nil)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("non-member scoped service read status = %d, want 404", recorder.Code)
+	}
+}

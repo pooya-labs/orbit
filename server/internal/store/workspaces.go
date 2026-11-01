@@ -57,3 +57,9 @@ type WorkspaceRepository interface {
 	AppendWorkspaceAuditEvent(ctx context.Context, event WorkspaceAuditEvent) (WorkspaceAuditEvent, error)
 	ListWorkspaceAuditEvents(ctx context.Context, workspaceID string, limit int) ([]WorkspaceAuditEvent, error)
 }
+
+type WorkspaceDataRepository interface {
+	ListWorkspaceServices(ctx context.Context, workspaceID string) ([]Service, error)
+	ListWorkspaceIncidents(ctx context.Context, workspaceID, status string) ([]Incident, error)
+	ListWorkspaceTelemetryServices(ctx context.Context, workspaceID string, limit int) ([]TelemetryService, error)
+}
