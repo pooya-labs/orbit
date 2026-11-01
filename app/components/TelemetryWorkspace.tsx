@@ -13,13 +13,13 @@ import {
   getTelemetryMetrics,
   listTelemetryLogs,
   listTelemetryTraces,
-} from "../lib/orbit/client";
+} from "../../lib/orbit/client";
 import type {
   TelemetryLogsResponse,
   TelemetryMetricsResponse,
   TelemetryTracesResponse,
   TelemetryWindow,
-} from "../lib/orbit/contracts";
+} from "../../lib/orbit/contracts";
 
 export type TelemetryView = "Metrics" | "Logs" | "Traces";
 
