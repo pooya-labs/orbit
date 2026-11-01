@@ -148,7 +148,7 @@ export default function IncidentWorkspace({ apiBaseUrl, language, sourceMode }: 
       current = false;
       controller.abort();
     };
-  }, [apiBaseUrl, language, sourceMode, user?.issuer, user?.sub]);
+  }, [apiBaseUrl, language, sourceMode, user?.sub, user?.sub]);
 
   useEffect(() => {
     if (!workspaceId || sourceMode !== "api" || !user) return;
@@ -190,7 +190,7 @@ export default function IncidentWorkspace({ apiBaseUrl, language, sourceMode }: 
       current = false;
       controller.abort();
     };
-  }, [apiBaseUrl, language, sourceMode, user?.issuer, user?.sub, workspaceId]);
+  }, [apiBaseUrl, language, sourceMode, user?.sub, user?.sub, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || !selectedIncidentId || sourceMode !== "api" || !user) {
@@ -214,7 +214,7 @@ export default function IncidentWorkspace({ apiBaseUrl, language, sourceMode }: 
       current = false;
       controller.abort();
     };
-  }, [apiBaseUrl, sourceMode, user?.issuer, user?.sub, workspaceId, selectedIncidentId, timelineVersion]);
+  }, [apiBaseUrl, sourceMode, user?.sub, user?.sub, workspaceId, selectedIncidentId, timelineVersion]);
 
   const selectedIncident = incidents.find((incident) => incident.id === selectedIncidentId) ?? null;
   const nextStatuses = selectedIncident ? transitions[selectedIncident.status] : [];
