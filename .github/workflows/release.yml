@@ -44,18 +44,20 @@ jobs:
             **Public preview:** https://pooya16pg-spec.github.io/orbit/
 
             ### Included
-            - Responsive Next.js observability workspace.
-            - Explicit Demo / API source switch for service and incident inventories.
-            - Go API with health, metadata, PostgreSQL-backed service and incident endpoints.
-            - Docker Compose for PostgreSQL, Redis, NATS JetStream, and the Go API.
-            - OpenAPI 3.1 contract, typed TypeScript API client, and CI / Pages deployment.
+            - Responsive Next.js observability dashboard with Overview, Metrics, Logs, and Traces views.
+            - Explicit Demo / API source switch for service and incident inventory.
+            - Live telemetry views that query the ORBIT API, with 15m / 1h / 6h / 24h windows, query timestamps, refresh, and loading / empty / error states.
+            - Go API with health, metadata, PostgreSQL-backed service and incident endpoints, plus bounded Prometheus, Loki, and Tempo query endpoints.
+            - Optional local Docker Compose observability profile with OpenTelemetry Collector, Prometheus, Loki, Tempo, and an instrumented Go demo workload.
+            - OpenAPI 3.1 contract, typed TypeScript API client, and GitHub Actions checks that verify metrics, logs, and traces through both their backends and the ORBIT API.
 
             ### Important limitations
-            - The default public dashboard uses clearly labelled demo fixtures.
-            - API mode reads services and incidents only; aggregate time-series metrics are not implemented yet.
-            - The public Pages site is frontend-only; the Go API is not hosted publicly.
-            - Redis and NATS are provisioned but are not yet wired into API behavior.
-            - OpenTelemetry ingestion, authentication, and production operations workflows remain planned.
+            - The public GitHub Pages site hosts the frontend only; it does not host the Go API or telemetry backends.
+            - Live telemetry on the hosted site requires a separately hosted HTTPS ORBIT API and telemetry stack, with the Pages origin added to ORBIT_ALLOWED_ORIGINS.
+            - The current request-rate metric is the instrumented orbit-telemetry-demo counter; Logs and Traces default to that demo service.
+            - The production ORBIT API is not yet self-instrumented, and observed resource attributes are not yet normalized into the service catalog.
+            - Redis and NATS are provisioned for local development but are not yet wired into application behavior.
+            - Production authentication, high availability, and hardened operational policies remain future work.
 
             This is an early public preview, not a production monitoring service.
         env:
