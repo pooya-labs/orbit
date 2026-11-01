@@ -268,8 +268,8 @@ func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []sto
 		var item store.TelemetryService
 		var persistedAttributes []byte
 		err = tx.QueryRow(ctx, `
-			INSERT INTO telemetry_services (name, resource_attributes)
-			VALUES ($1, $2::jsonb)
+			INSERT INTO telemetry_services (workspace_id, name, resource_attributes)
+			VALUES ((SELECT id FROM workspaces WHERE slug = 'legacy-default'), $1, $2::jsonb)
 			ON CONFLICT (name) DO UPDATE SET
 				resource_attributes = telemetry_services.resource_attributes || EXCLUDED.resource_attributes,
 				last_seen_at = NOW(),
