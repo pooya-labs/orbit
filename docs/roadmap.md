@@ -62,7 +62,7 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 ORBIT's milestones are not a reason to expose unsafe operations early. The delivery order is:
 
 1. Finish and merge the verified M04 read-path work. Keep complete workload-side OpenTelemetry resource ingestion as an explicit M04 follow-up.
-2. Implement the M06 security gate from [ADR 0001](decisions/0001-oidc-access-token-authentication.md): OIDC discovery, OAuth access-token/JWKS verification, server-side RBAC, actor identity, request limits, and workspace boundary before adding public state-changing operations.
+2. Complete and merge the M06 API security gate from [ADR 0001](decisions/0001-oidc-access-token-authentication.md). The current feature branch adds OIDC discovery/JWKS access-token verification, centralized viewer/operator/administrator route policy, explicit production fail-closed configuration, request-body/token limits, and process-local per-IP/per-subject rate limiting. Browser PKCE, workspace membership/isolation, distributed limits, and audit-backed actor workflows remain separate acceptance work.
 3. Deliver M05 in slices: incident lifecycle and immutable timeline first; alert rules and notification adapters second; deployment annotations third; SLO/error-budget calculations fourth; audit history across every mutation.
 4. Complete the remaining M06 operational hardening: retention/cardinality controls, load testing, backup/restore, dependency/security review, production deployment, and runbooks.
 
@@ -78,8 +78,12 @@ M05 mutations must not be publicly enabled while the API has no authentication o
 
 ## M06 — Production hardening
 
-- [ ] Workspace authentication and role-based access control.
-- [ ] Rate limits, retention policies, and cardinality guardrails.
+The current security branch is the first API resource-server slice. It does not yet provide browser login, workspace isolation, or distributed rate limiting.
+
+- [ ] Merge and CI-verify OIDC discovery/JWKS verification and server-side role enforcement (feature branch in progress).
+- [ ] Add browser Authorization Code + PKCE, token refresh/revocation, and an in-memory token lifecycle.
+- [ ] Add workspace membership and tenant-scoped repository queries before multi-user data access.
+- [ ] Replace process-local rate limits with a shared limiter for horizontally scaled deployments; add retention policies and cardinality guardrails.
 - [ ] Load tests for ingestion and dashboard queries.
 - [ ] Threat model, dependency review, and secret scanning.
 - [ ] Production deployment guide and operational runbooks.
