@@ -210,6 +210,38 @@ func TestHTTPGatewayEnforcesBodyAndEncodingLimits(t *testing.T) {
 	}
 }
 
+
+func TestHTTPGatewayRejectsDuplicateMediaHeaders(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		header string
+		values []string
+	}{
+		{name: "duplicate content type", header: "Content-Type", values: []string{"application/json", "application/x-protobuf"}},
+		{name: "duplicate content encoding", header: "Content-Encoding", values: []string{"identity", "gzip"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			forwarder := &forwarderStub{}
+			handler := newTestHTTPGateway(t, forwarder, 10)
+			request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+testWorkspace+"/v1/metrics", strings.NewReader("{}"))
+			request.Header.Set("Authorization", "Bearer signed-token")
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Del(test.header)
+			for _, value := range test.values {
+				request.Header.Add(test.header, value)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusUnsupportedMediaType {
+				t.Fatalf("HTTP status = %d, want 415", response.Code)
+			}
+			if forwarder.calls != 0 {
+				t.Fatal("ambiguous media headers reached Collector")
+			}
+		})
+	}
+}
+
 func TestHTTPGatewayMapsAuthorizationFailuresAndCollectorErrors(t *testing.T) {
 	forwarder := &forwarderStub{err: errors.New("collector unavailable")}
 	verifier, grants := validStubs()
