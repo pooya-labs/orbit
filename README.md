@@ -8,7 +8,7 @@ ORBIT is an engineering-first observability platform for understanding the healt
 
 **[Open the ORBIT dashboard](https://pooya16pg-spec.github.io/orbit/)**
 
-The public preview is a static, responsive workspace. Its metrics, service catalogue, and incident timeline are explicitly labelled illustrative demo data; no production systems are connected.
+The public preview is a static, responsive workspace. Demo mode uses clearly labelled illustrative data; API mode can read service and incident inventories from an explicitly configured ORBIT API. No production systems are connected by default.
 
 ## Current implementation
 
