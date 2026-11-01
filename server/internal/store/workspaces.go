@@ -58,6 +58,50 @@ type WorkspaceRepository interface {
 	ListWorkspaceAuditEvents(ctx context.Context, workspaceID string, limit int) ([]WorkspaceAuditEvent, error)
 }
 
+
+var (
+	ErrWorkloadIdentityNotFound = errors.New("workload identity not found")
+	ErrWorkloadAuthorizationDenied = errors.New("workload telemetry authorization denied")
+)
+
+type WorkloadIdentity struct {
+	ID string `json:"id"`
+	Issuer string `json:"-"`
+	Subject string `json:"-"`
+	DisplayName string `json:"display_name"`
+	Status string `json:"status"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+}
+
+type CreateWorkloadIdentityInput struct {
+	Issuer string
+	Subject string
+	DisplayName string
+	ExpiresAt *time.Time
+	ActorIssuer string
+	ActorSubject string
+}
+
+type WorkloadGrantInput struct {
+	IdentityID string
+	WorkspaceID string
+	Signal string
+	ActorIssuer string
+	ActorSubject string
+}
+
+// WorkloadIdentityRepository manages machine identities independently from
+// human workspace memberships. Implementations must fail closed on DB errors.
+type WorkloadIdentityRepository interface {
+	CreateWorkloadIdentity(ctx context.Context, input CreateWorkloadIdentityInput) (WorkloadIdentity, error)
+	SetWorkloadWorkspaceGrant(ctx context.Context, input WorkloadGrantInput, granted bool) error
+	AuthorizeWorkloadTelemetry(ctx context.Context, issuer, subject, workspaceID, signal string) (WorkloadIdentity, error)
+	SetWorkloadIdentityStatus(ctx context.Context, identityID, actorIssuer, actorSubject, status string) error
+}
+
 type WorkspaceDataRepository interface {
 	ListWorkspaceServices(ctx context.Context, workspaceID string) ([]Service, error)
 	ListWorkspaceIncidents(ctx context.Context, workspaceID, status string) ([]Incident, error)
