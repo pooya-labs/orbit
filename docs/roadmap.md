@@ -114,9 +114,19 @@ The test establishes read-after-commit revocation for requests authorized after 
 
 - [x] Define and CI-verify in-flight revocation semantics for OTLP/HTTP and OTLP/gRPC (PR #50; merge commit `45680118f44c3cd35f64214072085e6ca1a43de6`; CI run `41352877449` passed all three jobs).
 - [x] Establish the authorization boundary: an export already authorized and admitted to the Collector forwarder may finish after a later revocation commit; authorization beginning after the commit must fail closed and must not be forwarded.
-- [ ] Add broader load/capacity, burst, concurrency, database/Collector outage, timeout, and backpressure tests.
+- [x] Verify gateway admission-capacity behavior under saturation for OTLP/HTTP and OTLP/gRPC (PR #51; merged and CI-passing). The tests prove a second request is rejected while the single admission slot is occupied, is not forwarded, and the admitted request completes after capacity is released.
+- [ ] Add broader burst/load coverage and database/Collector outage, timeout, and backpressure tests.
 - [ ] Verify production ingress TLS termination, trusted-proxy behavior, firewall/NetworkPolicy restrictions, and Collector/backend isolation.
 - [ ] Configure and end-to-end verify a real OIDC provider for browser PKCE, including callback, state/nonce, issuer/audience validation, and key rotation.
 - [ ] Complete dependency/secrets review, telemetry retention/cardinality controls, backup/restore, deployment and incident-response runbooks.
 
 The in-flight contract does not cancel or roll back data already admitted to the Collector. Production tenant ingestion remains disabled until the remaining production gates are verified.
+
+
+## M06 PR #51 — gateway admission capacity
+
+PR #51 is merged into `main` (squash merge commit `1ff6a8baf80e50910f4c0b41ebaec73b4fdd26ba`). CI run `41353306270` completed successfully across Go API tests/build, web typecheck/production build, and the local telemetry pipeline end-to-end smoke test.
+
+The PostgreSQL-backed integration tests exercise both OTLP/HTTP and OTLP/gRPC with a gateway admission capacity of one. The first export is held inside a blocking Collector forwarder; a second export is rejected with HTTP 503 or gRPC ResourceExhausted and does not reach the forwarder. Once the first export is released, it completes successfully. This verifies the admission-capacity boundary, not a full production load or outage envelope.
+
+Remaining M06 work includes broader burst/load testing, database and Collector outage/timeout behavior, explicit backpressure verification, ingress TLS/network controls, real-provider browser PKCE, retention/cardinality, dependency/secrets review, backup/restore, and operational runbooks. Production tenant ingestion remains disabled.
