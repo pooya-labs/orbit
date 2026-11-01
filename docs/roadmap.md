@@ -8,12 +8,15 @@ The roadmap is milestone-based. A milestone is complete only when its acceptance
 - [x] Build responsive observability overview.
 - [x] Add service search, time-range controls, and mobile navigation.
 - [x] Label all illustrative telemetry as demo data.
-- [ ] Verify production build and type-check in CI.
+- [x] Verify production build and type-check in CI.
 - [ ] Add accessible keyboard and screen-reader review.
 
 ## M02 — API foundation
 
-- [ ] Create Go API module and health/readiness endpoints.
+- [x] Create Go API module and health/readiness endpoints.
+- [x] Add API metadata endpoint and server lifecycle handling.
+- [x] Add request IDs, structured HTTP logs, and panic recovery.
+- [x] Add unit tests and Go CI checks.
 - [ ] Define versioned OpenAPI contract for services and incidents.
 - [ ] Add typed frontend API client and request error model.
 - [ ] Add integration tests for API contracts.
