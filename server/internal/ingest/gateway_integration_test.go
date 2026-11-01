@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -512,5 +514,84 @@ func TestAuthenticatedOTLPGatewaysRejectOversizedRequestsForEverySignal(t *testi
 					signal, grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
 			}
 		})
+	}
+}
+
+
+type concurrentMetricsForwarder struct {
+	calls atomic.Int64
+}
+
+func (f *concurrentMetricsForwarder) Export(_ context.Context, signal string, _ []byte) ([]byte, error) {
+	if signal != "metrics" {
+		return nil, fmt.Errorf("unexpected signal %q", signal)
+	}
+	f.calls.Add(1)
+	return proto.Marshal(&metricsv1.ExportMetricsServiceResponse{})
+}
+
+func TestSharedWorkloadRateLimitAllowsOnlyConfiguredConcurrentRequestsAcrossInstances(t *testing.T) {
+	repository, workspaceA, _, _, verifier := openGatewayIntegrationRepository(t)
+	authorizer, err := NewAuthorizer(verifier, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const limit = 5
+	forwarderA := &concurrentMetricsForwarder{}
+	forwarderB := &concurrentMetricsForwarder{}
+	newGateway := func(forwarder OTLPForwarder) http.Handler {
+		handler, err := NewHTTPGateway(authorizer, forwarder, HTTPGatewayConfig{
+			RequestsPerMinute: limit,
+			ForwardTimeout: 5 * time.Second,
+			RateLimitStore: repository,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return handler
+	}
+	gateways := []http.Handler{newGateway(forwarderA), newGateway(forwarderB)}
+
+	payload, err := proto.Marshal(integrationOTLPRequest(t, "metrics"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const total = 32
+	statuses := make(chan int, total)
+	var workers sync.WaitGroup
+	for i := 0; i < total; i++ {
+		workers.Add(1)
+		go func(index int) {
+			defer workers.Done()
+			request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+workspaceA.ID+"/v1/metrics", bytes.NewReader(payload))
+			request.Header.Set("Authorization", "Bearer integration-workload-token")
+			request.Header.Set("Content-Type", "application/x-protobuf")
+			response := httptest.NewRecorder()
+			gateways[index%len(gateways)].ServeHTTP(response, request)
+			statuses <- response.Code
+		}(i)
+	}
+	workers.Wait()
+	close(statuses)
+
+	accepted, limited := 0, 0
+	for code := range statuses {
+		switch code {
+		case http.StatusOK:
+			accepted++
+		case http.StatusTooManyRequests:
+			limited++
+		default:
+			t.Fatalf("unexpected concurrent request status %d", code)
+		}
+	}
+	forwarded := forwarderA.calls.Load() + forwarderB.calls.Load()
+	if accepted != limit || limited != total-limit {
+		t.Fatalf("concurrent outcomes: accepted=%d limited=%d; want accepted=%d limited=%d",
+			accepted, limited, limit, total-limit)
+	}
+	if forwarded != int64(limit) {
+		t.Fatalf("Collector received %d requests, want exactly %d", forwarded, limit)
 	}
 }
