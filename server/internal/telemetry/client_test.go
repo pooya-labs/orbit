@@ -11,6 +11,51 @@ import (
 	"time"
 )
 
+func TestParseMetricGroupByUsesSafeAllowList(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:  "default dimensions",
+			input: "",
+			want:  []string{"deployment_environment", "instance", "service_version"},
+		},
+		{
+			name:  "aggregate only",
+			input: "none",
+			want:  []string{},
+		},
+		{
+			name:  "trims sorts and removes duplicates",
+			input: " service_version,cloud_region,cloud_region ",
+			want:  []string{"cloud_region", "service_version"},
+		},
+		{
+			name:    "rejects arbitrary Prometheus labels",
+			input:   "__name__",
+			wantErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := ParseMetricGroupBy(test.input)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("ParseMetricGroupBy(%q) error = %v, wantErr %v", test.input, err, test.wantErr)
+			}
+			if test.wantErr {
+				return
+			}
+			if strings.Join(got, ",") != strings.Join(test.want, ",") {
+				t.Fatalf("ParseMetricGroupBy(%q) = %v, want %v", test.input, got, test.want)
+			}
+		})
+	}
+}
+
 func TestParseWindowUsesBoundedChoices(t *testing.T) {
 	for _, name := range []string{"15m", "1h", "6h", "24h"} {
 		if _, err := ParseWindow(name); err != nil {
