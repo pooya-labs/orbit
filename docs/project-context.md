@@ -35,7 +35,8 @@ The version labels above describe the progression documented by the project; the
 - **Telemetry query APIs stay bounded and read-only.** Windows, result counts, dimensions, and query expressions are validated. Never accept arbitrary PromQL or LogQL directly from the browser.
 - **M04 attribute extraction is still a preview.** It maps an allowlist of labels/tags into OpenTelemetry-style names. It does not yet ingest the complete resource-attribute set directly from workload SDKs or the Collector.
 - **Redis and NATS are provisioned but not yet integrated into application behavior.** Do not claim caching or event delivery until the API actually uses them and tests cover those paths.
-- **There is no authentication, workspace isolation, or role system yet.** This is a hard deployment boundary, not a minor TODO.
+- **M06 API security branch:** the current feature branch introduces OIDC access-token verification using issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and process-local per-IP/per-subject rate limits. This slice must pass CI and be merged before M05 state-changing routes are introduced.
+- **Security work still open:** browser Authorization Code + PKCE, token lifecycle, workspace membership and database scoping, distributed rate limits, transactional audit records, and production deployment controls. Until workspace scoping exists, the API must not be advertised as multi-tenant.
 
 ## 4. Established UX and engineering decisions
 
@@ -94,7 +95,13 @@ A local development bypass may exist only in an explicitly non-production enviro
 
 The GitHub account also contains separate portfolio projects (Pooya.OS, AuraPulse, NexusCanvas, and LuminaGlass). ORBIT is its own repository and backend architecture, not a shared monorepo. Reuse visual/design conventions where appropriate, but do not couple their runtime state, APIs, or deployment pipelines without an explicit product decision.
 
-## 9. Continuity rule
+## 9. M06 security handoff
+
+The `feature/m06-oidc-auth-security-gate` branch contains the initial API security implementation. Its acceptance checks must include signature-tampering, unsupported algorithms, issuer/audience/time-claim failures, unknown `kid` and JWKS rotation, role escalation attempts, CORS Authorization preflight, request limits, and startup failure when staging/production OIDC settings are absent. Do not mark M06 complete or expose the API publicly until CI is green and browser authentication, workspace isolation, shared rate limiting, secrets, retention, and runbooks are addressed.
+
+The API currently accepts access tokens only through `Authorization: Bearer`; it never reads credentials from URLs or browser storage. The static dashboard does not yet implement PKCE, so connecting that dashboard to an auth-protected API is a later frontend milestone.
+
+## 10. Continuity rule
 
 When resuming work, start with:
 1. `docs/roadmap.md` for milestone status;
