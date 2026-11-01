@@ -77,6 +77,8 @@ M05 acceptance requires API and database tests, lifecycle-transition tests, work
 
 ## 7. M06 security gate and production hardening
 
+The detailed proposed design is recorded in [ADR 0001 — OIDC access-token validation and API authorization](decisions/0001-oidc-access-token-authentication.md). It deliberately distinguishes OAuth access tokens from OIDC ID tokens and sets a Go 1.24-compatible JOSE dependency constraint.
+
 Authentication and authorization are a prerequisite for M05 mutations. Deliver this security gate before enabling public state-changing routes:
 
 - OIDC/JWT verification with issuer, audience, signature, expiry, and key-rotation validation;
