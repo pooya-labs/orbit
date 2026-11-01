@@ -129,7 +129,7 @@ paths:
       tags: [Telemetry]
       operationId: discoverTelemetryServices
       summary: Discover service names across configured telemetry backends
-      description: Queries Prometheus, Loki, and Tempo concurrently, merges duplicate service names, and, when PostgreSQL is configured, persists observations and backend provenance before returning the active catalog. Services and source observations not seen for seven days are omitted. Without PostgreSQL, the response contains the current discovery result and a warning. Partial backend failures are returned as warnings when at least one backend succeeds.
+      description: Queries Prometheus, Loki, and Tempo concurrently, merges duplicate service names, and, when PostgreSQL is configured, persists observations and backend provenance before returning the active catalog. Services and source observations not seen for seven days are omitted. If every backend is unavailable, the API returns the last known PostgreSQL catalog with a warning when cached services exist. Without PostgreSQL, the response contains the current discovery result and a warning. Partial backend failures are returned as warnings when at least one backend succeeds.
       parameters:
         - in: query
           name: window
