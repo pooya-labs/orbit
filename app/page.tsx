@@ -5,6 +5,7 @@ import { getMetadata, listIncidents, listServices } from "../lib/orbit/client";
 import type { ApiMetadata, IncidentSummary, ServiceSummary } from "../lib/orbit/contracts";
 import { chartArea, chartPoints, demoIncidents, demoServices } from "../lib/orbit/demo";
 import type { ReactNode } from "react";
+import TelemetryWorkspace, { type TelemetryView } from "./components/TelemetryWorkspace";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -305,6 +306,11 @@ export default function Home() {
     setMobileNavOpen(false);
   };
 
+  const telemetryView: TelemetryView | null =
+    activeNav === "Metrics" || activeNav === "Logs" || activeNav === "Traces"
+      ? activeNav
+      : null;
+
   return (
     <main className="app-shell">
       {mobileNavOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
@@ -382,9 +388,9 @@ export default function Home() {
         <div className="content-wrap">
           <div className="page-heading">
             <div>
-              <div className="eyebrow"><span className="eyebrow-line" /> SYSTEM OVERVIEW <span className="demo-tag">{sourceMode === "api" ? "API CONNECTED" : "DEMO ENVIRONMENT"}</span></div>
+              <div className="eyebrow"><span className="eyebrow-line" /> {telemetryView ? `LIVE ${telemetryView.toUpperCase()}` : "SYSTEM OVERVIEW"} <span className="demo-tag">{sourceMode === "api" ? "API CONNECTED" : "DEMO ENVIRONMENT"}</span></div>
               <h1>{activeNav === "Overview" ? "Good morning, team." : activeNav}</h1>
-              <p className="page-subtitle">Here&apos;s what&apos;s happening across your infrastructure.</p>
+              <p className="page-subtitle">{telemetryView ? `Query ${telemetryView.toLowerCase()} from the connected observability pipeline.` : "Here's what's happening across your infrastructure."}</p>
             </div>
             <div className="heading-actions">
               <div className="last-updated"><span className={refreshing ? "pulse-dot" : "idle-dot"} /> {sourceMode === "api" ? `Connected · ${apiMetadata?.environment ?? "API"}` : refreshing ? "Auto-refresh paused in demo" : "Manual refresh mode"}</div>
@@ -422,6 +428,21 @@ export default function Home() {
             </section>
           )}
 
+{telemetryView ? (
+            sourceMode === "api" ? (
+              <TelemetryWorkspace view={telemetryView} apiBaseUrl={apiUrlInput} />
+            ) : (
+              <section className="panel telemetry-connect-prompt">
+                <div className="source-placeholder-icon"><Activity size={18} /></div>
+                <div>
+                  <h2>Connect a telemetry source</h2>
+                  <p>Live {telemetryView.toLowerCase()} queries are available after connecting an ORBIT API backed by the local observability stack. Demo fixtures are never presented as live telemetry.</p>
+                </div>
+                <button className="button-primary" onClick={() => setSourcePanelOpen(true)}>Connect API source <ArrowUpRight size={14} /></button>
+              </section>
+            )
+          ) : (
+            <>
 {sourceMode === "demo" ? (
           <section className="metrics-grid" aria-label="Key metrics">
             <MetricCard label="REQUESTS / MIN" value="24.8k" change="12.6%" direction="down" detail="vs. previous period" icon={Activity} accent="cyan" />
@@ -458,12 +479,7 @@ export default function Home() {
             </div>
             <div className="chart-legend"><span><i className="legend-line" /> Requests / min</span><span><i className="legend-dash" /> Previous period</span><span className="chart-footnote">Illustrative telemetry · {range}</span></div>
           </section>
-          ) : (
-            <section className="panel source-placeholder" aria-labelledby="metrics-unavailable-title">
-              <div className="source-placeholder-icon"><Activity size={18} /></div>
-              <div><h2 id="metrics-unavailable-title">Metrics are the next data pipeline milestone</h2><p>The API currently exposes service and incident inventories. Request-rate charts, latency time series, and metric freshness will appear after telemetry ingestion is implemented.</p></div>
-            </section>
-          )}
+          ) : null}
 
           <div className="lower-grid">
             <section className="panel services-panel">
@@ -515,7 +531,10 @@ export default function Home() {
           </section>
           ) : null}
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> SYSTEMS OBSERVATORY</span><span><Globe2 size={12} /> {sourceMode === "api" ? "Service and incident inventory from connected API" : "All systems are illustrative"} <i /> <span className="footer-version">v0.6.0</span></span></footer>
+            </>
+          )}
+
+          <footer className="page-footer"><span>ORBIT <b>·</b> SYSTEMS OBSERVATORY</span><span><Globe2 size={12} /> {sourceMode === "api" ? "Service and incident inventory from connected API" : "All systems are illustrative"} <i /> <span className="footer-version">v0.7.0</span></span></footer>
         </div>
       </section>
     </main>

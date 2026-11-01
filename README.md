@@ -94,7 +94,7 @@ The API uses fixed, bounded queries instead of accepting arbitrary PromQL or Log
 
 These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus keeps seven days of metrics and Loki is configured for seven-day log retention; data volumes persist until removed. Stop only these services with `docker compose stop postgres api prometheus loki tempo otel-collector telemetry-demo`.
 
-The local sample service proves end-to-end delivery of all three OTLP signals. The Go API now exposes bounded read-only queries to Prometheus, Loki, and Tempo. The production Go API does not yet export its own telemetry, and the dashboard does not render these queried results yet.
+The local sample service proves end-to-end delivery of all three OTLP signals. The Go API exposes bounded read-only queries to Prometheus, Loki, and Tempo, and the dashboard now renders those query results in separate Metrics, Logs, and Traces views. The production Go API does not yet export its own telemetry, and observed services are not yet normalized into the service catalog.
 
 ## Quality checks
 
@@ -129,7 +129,7 @@ See [docs/roadmap.md](docs/roadmap.md), [docs/architecture.md](docs/architecture
 
 ## Release status
 
-The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview added a verified browser source switch between demo fixtures and a configured ORBIT API. The v0.4.0 preview added the optional local OTLP pipeline backed by Prometheus, Loki, and Tempo. The v0.5.0 preview adds an instrumented Go workload and CI verification that metrics, logs, and traces reach their respective backends. The v0.6.0 preview adds bounded ORBIT API read endpoints for Prometheus metrics, Loki logs, and Tempo trace search. Dashboard rendering, production API instrumentation, and service catalog normalization remain future milestones.
+The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview added a verified browser source switch between demo fixtures and a configured ORBIT API. The v0.4.0 preview added the optional local OTLP pipeline backed by Prometheus, Loki, and Tempo. The v0.5.0 preview adds an instrumented Go workload and CI verification that metrics, logs, and traces reach their respective backends. The v0.6.0 preview adds bounded ORBIT API read endpoints for Prometheus metrics, Loki logs, and Tempo trace search. The v0.7.0 preview adds live Metrics, Logs, and Traces dashboard views with selectable time windows, 30-second refresh, query timestamps, and explicit loading/empty/error states. Production API instrumentation and service catalog normalization remain future milestones.
 
 ## License
 

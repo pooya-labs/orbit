@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ORBIT API
-  version: 0.6.0
+  version: 0.7.0
   summary: Service inventory and bounded observability query API
   description: |
     ORBIT reads service and incident inventories from PostgreSQL and exposes

@@ -116,7 +116,8 @@ OpenTelemetry Collector
 - No authentication, workspace isolation, or user management.
 - The local OTLP pipeline and a dedicated instrumented demo workload are available; the production Go API is not instrumented yet.
 - ORBIT's API now performs fixed, bounded read queries against Prometheus, Tempo, and Loki (15m–24h windows, capped results, 6-second backend timeout, 2 MiB response cap).
-- The dashboard client has typed methods for those endpoints, but the product UI does not render the returned telemetry yet.
+- The dashboard has separate Metrics, Logs, and Traces views that call the typed query methods, display backend provenance and query timestamps, and support 15m/1h/6h/24h windows with 30-second refresh.
+- The UI distinguishes loading, empty, and error results; stale-data and missing-interval detection are still pending.
 - Redis and NATS are available in Compose but are not yet used by the Go API.
 - The Pages deployment is frontend-only. The Go API is local-only, not publicly hosted.
-- The dashboard remains a demo preview and does not yet consume the new database endpoints.
+- The Overview dashboard consumes the service and incident API in API mode; the Metrics/Logs/Traces views consume the bounded telemetry query API. The dashboard remains a preview and does not yet provide a normalized catalog derived from observed resource attributes.
