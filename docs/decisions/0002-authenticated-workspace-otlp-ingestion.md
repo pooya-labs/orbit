@@ -89,9 +89,9 @@ Workspace grants must be checked server-side on every ingestion authorization de
 6. [x] Verify oversized-request rejection for metrics, logs, and traces over HTTP/gRPC (PR #42). Valid-grant, revoked-identity, cross-workspace, forged-attribute, mixed-resource batch, and oversized-request denial coverage is implemented and CI-verified over both transports. PR #39 and PR #40 are merged and CI-passing: workspace query matchers are verified across Prometheus, Loki, and Tempo, and non-members are rejected before backend access.
 7. [x] Verify shared rate-limit enforcement across gateway instances and HTTP/gRPC transports (PR #43; merged, CI-passing).
 8. [ ] Complete concurrent multi-replica rate-limit verification (PR #46; CI pending).
-7. [ ] Verify end-to-end that a workload authorized for workspace A cannot write data visible under workspace B, even when it supplies B's identifier. Gateway-level denial tests exist; backend-to-query visibility verification remains open.
-8. Run end-to-end tests through Prometheus, Loki, Tempo, and the workspace-scoped ORBIT query endpoints.
-9. Add load, rate-limit, revocation-latency, backup/restore, and deployment-network-policy tests before enabling production ingestion.
+9. [ ] Verify end-to-end that a workload authorized for workspace A cannot write data visible under workspace B, even when it supplies B's identifier. Gateway-level denial tests exist; backend-to-query visibility verification remains open.
+10. Run end-to-end tests through Prometheus, Loki, Tempo, and the workspace-scoped ORBIT query endpoints.
+11. Add load, rate-limit, revocation-latency, backup/restore, and deployment-network-policy tests before enabling production ingestion.
 
 ## Acceptance criteria
 
