@@ -15,6 +15,7 @@ DEMO_URL = "http://127.0.0.1:8081"
 PROMETHEUS_URL = "http://127.0.0.1:9090"
 LOKI_URL = "http://127.0.0.1:3100"
 TEMPO_URL = "http://127.0.0.1:3200"
+ORBIT_API_URL = "http://127.0.0.1:8080"
 TIMEOUT_SECONDS = 60
 POLL_INTERVAL_SECONDS = 2
 
@@ -80,6 +81,44 @@ def main() -> int:
         wait_for("OTLP log is queryable in Loki", log_exists)
         wait_for("OTLP trace is queryable in Tempo", trace_exists)
         print("PASS: all three OTLP signals reached their local backends")
+
+        def api_metrics_exist() -> bool:
+            payload = get_json(f"{ORBIT_API_URL}/api/v1/telemetry/metrics?window=1h")
+            series = payload.get("data", [])
+            return (
+                payload.get("source") == "prometheus"
+                and payload.get("window") == "1h"
+                and bool(payload.get("queried_at"))
+                and any(item.get("values") for item in series)
+            )
+
+        def api_logs_exist() -> bool:
+            query = urllib.parse.urlencode(
+                {"service": "orbit-telemetry-demo", "window": "1h", "limit": "50"}
+            )
+            payload = get_json(f"{ORBIT_API_URL}/api/v1/telemetry/logs?{query}")
+            return (
+                payload.get("source") == "loki"
+                and payload.get("service") == "orbit-telemetry-demo"
+                and bool(payload.get("data"))
+            )
+
+        def api_traces_exist() -> bool:
+            query = urllib.parse.urlencode(
+                {"service": "orbit-telemetry-demo", "window": "1h", "limit": "20"}
+            )
+            payload = get_json(f"{ORBIT_API_URL}/api/v1/telemetry/traces?{query}")
+            return (
+                payload.get("source") == "tempo"
+                and payload.get("service") == "orbit-telemetry-demo"
+                and any(item.get("traceID") == trace_id for item in payload.get("data", []))
+            )
+
+        wait_for("ORBIT API returns the Prometheus metric", api_metrics_exist)
+        wait_for("ORBIT API returns Loki logs", api_logs_exist)
+        wait_for("ORBIT API returns the matching Tempo trace", api_traces_exist)
+        print("PASS: all three signals are queryable through the ORBIT API")
+
         return 0
     except (OSError, urllib.error.URLError, TimeoutError, ValueError, RuntimeError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
