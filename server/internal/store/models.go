@@ -2,8 +2,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var ErrTelemetryServiceNotFound = errors.New("telemetry service not found")
 
 type Service struct {
 	ID          string     `json:"id"`
