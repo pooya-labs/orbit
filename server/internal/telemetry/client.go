@@ -477,6 +477,7 @@ func (c *Client) DiscoverResourceAttributes(ctx context.Context, window QueryWin
 	warnings := make([]string, 0)
 	sourcesQueried := make([]string, 0, configured)
 	successful := 0
+	successfulSources := make([]string, 0, configured)
 	for range configured {
 		result := <-results
 		sourcesQueried = append(sourcesQueried, result.name)
@@ -485,6 +486,7 @@ func (c *Client) DiscoverResourceAttributes(ctx context.Context, window QueryWin
 			continue
 		}
 		successful++
+		successfulSources = append(successfulSources, result.name)
 		warnings = append(warnings, result.warnings...)
 		for key, values := range result.attributes {
 			for _, value := range values {
@@ -498,7 +500,9 @@ func (c *Client) DiscoverResourceAttributes(ctx context.Context, window QueryWin
 
 	// service.name is authoritative from the selector itself. Record only
 	// backends that successfully answered the service-scoped metadata query.
-	mergeResourceAttribute(attributes, sources, "service.name", service, "catalog")
+	for _, source := range successfulSources {
+		mergeResourceAttribute(attributes, sources, "service.name", service, source)
+	}
 	orderedAttributes := make(map[string]any, len(attributes))
 	attributeSources := make(map[string][]string, len(sources))
 	for key, values := range attributes {
@@ -654,7 +658,7 @@ func (c *Client) tempoResourceAttributes(ctx context.Context, window QueryWindow
 				tagQuery.Set("start", strconv.FormatInt(now.Add(-window.Duration).Unix(), 10))
 				tagQuery.Set("end", strconv.FormatInt(now.Unix(), 10))
 				tagQuery.Set("limit", strconv.Itoa(maxResourceAttributeValues))
-				endpoint := "/api/v2/search/tag/" + url.PathEscape(tag) + "/values"
+				endpoint := "/api/v2/search/tag/" + url.PathEscape("."+tag) + "/values"
 				body, requestErr := c.getRaw(ctx, c.tempoURL, endpoint, tagQuery)
 				if requestErr != nil {
 					tagResults <- tagResult{name: tag, err: requestErr}
@@ -707,8 +711,10 @@ var resourceTagNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,1
 
 func normalizePromResourceLabel(name string) string {
 	switch name {
-	case "__name__", "service_name", "job", "instance":
+	case "__name__", "job", "instance":
 		return ""
+	case "service_name":
+		return "service.name"
 	case "service_version":
 		return "service.version"
 	case "deployment_environment":
@@ -737,8 +743,6 @@ func normalizeLokiResourceLabel(name string) string {
 		return normalized
 	}
 	switch name {
-	case "service_name":
-		return "service.name"
 	case "job", "instance", "filename", "level":
 		return "loki.labels." + name
 	}
