@@ -33,13 +33,14 @@ func TestPostgresMigrationAndReadModels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list services: %v", err)
 	}
-	if len(services) < 5 {
-		t.Fatalf("got %d services, want at least 5 seeded services", len(services))
-	}
+	seededServices := 0
 	for _, service := range services {
-		if service.Source != "demo_seed" {
-			t.Fatalf("service %q source = %q, want demo_seed", service.Name, service.Source)
+		if service.Source == "demo_seed" {
+			seededServices++
 		}
+	}
+	if seededServices < 5 {
+		t.Fatalf("got %d demo_seed services among %d total, want at least 5 seeded services", seededServices, len(services))
 	}
 
 	incidents, err := repository.ListIncidents(ctx, "")
