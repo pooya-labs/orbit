@@ -62,11 +62,11 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 ORBIT's milestones are not a reason to expose unsafe operations early. The delivery order is:
 
 1. Finish and merge the verified M04 read-path work. Keep complete workload-side OpenTelemetry resource ingestion as an explicit M04 follow-up.
-2. Complete and merge the M06 API security gate from [ADR 0001](decisions/0001-oidc-access-token-authentication.md). The current feature branch adds OIDC discovery/JWKS access-token verification, centralized viewer/operator/administrator route policy, explicit production fail-closed configuration, request-body/token limits, and process-local per-IP/per-subject rate limiting. Browser PKCE, workspace membership/isolation, distributed limits, and audit-backed actor workflows remain separate acceptance work.
+2. The initial M06 API security gate from [ADR 0001](decisions/0001-oidc-access-token-authentication.md) is merged in `977ce49`: OIDC discovery/JWKS access-token verification, centralized viewer/operator/administrator route policy, explicit production fail-closed configuration, request-body/token limits, and process-local per-IP/per-subject rate limiting are implemented and CI-verified. Browser PKCE, workspace membership/isolation, distributed limits, and audit-backed actor workflows remain separate acceptance work.
 3. Deliver M05 in slices: incident lifecycle and immutable timeline first; alert rules and notification adapters second; deployment annotations third; SLO/error-budget calculations fourth; audit history across every mutation.
 4. Complete the remaining M06 operational hardening: retention/cardinality controls, load testing, backup/restore, dependency/security review, production deployment, and runbooks.
 
-M05 mutations must not be publicly enabled while the API has no authentication or role enforcement. Local development can keep an explicit non-production mode, but production configuration must fail closed.
+M05 mutations must not be exposed until workspace authorization and transactional audit identity are implemented for each operation. The API now enforces bearer authentication and baseline roles, but it does not yet provide tenant membership or audit-backed mutation workflows. Local development can omit OIDC only with an explicit non-production environment; staging and production fail closed.
 
 ## M05 — Operations workflows
 
@@ -78,9 +78,9 @@ M05 mutations must not be publicly enabled while the API has no authentication o
 
 ## M06 — Production hardening
 
-The current security branch is the first API resource-server slice. It does not yet provide browser login, workspace isolation, or distributed rate limiting.
+The initial server-side OIDC resource-server and route-role gate is implemented and merged. It does not yet provide browser login, workspace isolation, or distributed rate limiting.
 
-- [ ] Merge and CI-verify OIDC discovery/JWKS verification and server-side role enforcement (feature branch in progress).
+- [x] Merge and CI-verify OIDC discovery/JWKS access-token verification and server-side viewer/operator/administrator route enforcement (`977ce49`; CI includes Go race tests, web build, and the OTLP end-to-end smoke test).
 - [ ] Add browser Authorization Code + PKCE, token refresh/revocation, and an in-memory token lifecycle.
 - [ ] Add workspace membership and tenant-scoped repository queries before multi-user data access.
 - [ ] Replace process-local rate limits with a shared limiter for horizontally scaled deployments; add retention policies and cardinality guardrails.
