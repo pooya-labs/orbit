@@ -39,6 +39,8 @@ type alertRouteRepository struct {
 	updateErr error
 	enableErr error
 	deleteErr error
+	state store.AlertRuleState
+	events []store.AlertRuleEvent
 }
 
 func (r *alertRouteRepository) CreateWorkspaceAlertRule(_ context.Context, input store.CreateWorkspaceAlertRuleInput) (store.AlertRule, error) {
@@ -111,6 +113,29 @@ func (r *alertRouteRepository) SetWorkspaceAlertRuleEnabled(_ context.Context, i
 	return store.AlertRule{}, store.ErrAlertRuleNotFound
 }
 
+func (r *alertRouteRepository) GetWorkspaceAlertRuleState(_ context.Context, workspaceID, ruleID, issuer, subject string) (store.AlertRuleState, error) {
+	if workspaceID != r.workspace.ID || issuer != "https://orbit.test/issuer" || subject != "alert-route-operator" {
+		return store.AlertRuleState{}, store.ErrWorkspaceMembershipNotFound
+	}
+	if len(r.rules) == 0 || r.rules[0].ID != ruleID {
+		return store.AlertRuleState{}, store.ErrAlertRuleNotFound
+	}
+	state := r.state
+	state.RuleID = ruleID
+	state.WorkspaceID = workspaceID
+	if state.State == "" {
+		state.State = "normal"
+	}
+	return state, nil
+}
+
+func (r *alertRouteRepository) ListWorkspaceAlertRuleEvents(_ context.Context, workspaceID, ruleID, issuer, subject string, _ int) ([]store.AlertRuleEvent, error) {
+	if workspaceID != r.workspace.ID || issuer != "https://orbit.test/issuer" || subject != "alert-route-operator" {
+		return nil, store.ErrWorkspaceMembershipNotFound
+	}
+	return append([]store.AlertRuleEvent(nil), r.events...), nil
+}
+
 func (r *alertRouteRepository) DeleteWorkspaceAlertRule(_ context.Context, input store.DeleteWorkspaceAlertRuleInput) error {
 	r.deletedInput = input
 	if r.deleteErr != nil {
@@ -176,6 +201,17 @@ func TestWorkspaceAlertRuleHTTPRoutes(t *testing.T) {
 	listed := alertRouteRequest(handler, http.MethodGet, base+"?limit=25", "")
 	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), "High request rate") {
 		t.Fatalf("list status/body = %d %s", listed.Code, listed.Body.String())
+	}
+
+	repository.state = store.AlertRuleState{State: "firing"}
+	repository.events = []store.AlertRuleEvent{{ID: "alert-event", RuleID: ruleID, EventType: "alert.firing"}}
+	state := alertRouteRequest(handler, http.MethodGet, base+"/"+ruleID+"/state", "")
+	if state.Code != http.StatusOK || !strings.Contains(state.Body.String(), `"state":"firing"`) {
+		t.Fatalf("state response status/body = %d %s", state.Code, state.Body.String())
+	}
+	events := alertRouteRequest(handler, http.MethodGet, base+"/"+ruleID+"/events?limit=10", "")
+	if events.Code != http.StatusOK || !strings.Contains(events.Body.String(), "alert.firing") {
+		t.Fatalf("events response status/body = %d %s", events.Code, events.Body.String())
 	}
 
 	updated := alertRouteRequest(handler, http.MethodPut, base+"/"+ruleID,
