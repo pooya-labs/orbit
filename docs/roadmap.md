@@ -1,41 +1,48 @@
 # ORBIT Roadmap
 
-The roadmap is milestone-based. A milestone is complete only when its acceptance criteria are verified in code.
+A milestone is complete only when its acceptance criteria are implemented and verified.
 
-## M01 — Workspace foundation
+## M01 — Public workspace
 
 - [x] Establish Next.js + TypeScript app structure.
 - [x] Build responsive observability overview.
-- [x] Add service search, time-range controls, and mobile navigation.
+- [x] Add service search, chart range controls, and mobile navigation.
 - [x] Label all illustrative telemetry as demo data.
-- [x] Verify production build and type-check in CI.
-- [ ] Add accessible keyboard and screen-reader review.
+- [x] Verify production type-check and build.
+- [x] Configure static export for GitHub Pages.
+- [x] Add automated Pages deployment.
+- [ ] Accessibility review with keyboard and screen readers.
 
-## M02 — API foundation
+## M02 — API and persistence foundation
 
-- [x] Create Go API module and health/readiness endpoints.
-- [x] Add API metadata endpoint and server lifecycle handling.
-- [x] Add request IDs, structured HTTP logs, and panic recovery.
-- [x] Add unit tests and Go CI checks.
-- [ ] Define versioned OpenAPI contract for services and incidents.
-- [ ] Add typed frontend API client and request error model.
-- [ ] Add integration tests for API contracts.
-- [ ] Replace dashboard fixtures with a named demo provider behind the same interfaces used by live data.
+- [x] Create Go API module and server lifecycle.
+- [x] Add liveness, readiness, and metadata endpoints.
+- [x] Add request IDs, structured HTTP logs, safe error envelopes, and panic recovery.
+- [x] Add PostgreSQL connection pooling and readiness probe.
+- [x] Add versioned initial migration and schema migration ledger.
+- [x] Add service and incident read endpoints.
+- [x] Add PostgreSQL-backed integration tests in CI.
+- [ ] Publish OpenAPI 3.1 contract.
+- [ ] Add typed frontend API client and a separate demo-data provider.
+- [ ] Connect the public dashboard to a hosted API after backend deployment and CORS/auth design.
 
 ## M03 — Local platform
 
-- [ ] Add Docker Compose for PostgreSQL, Redis, NATS, and OpenTelemetry Collector.
-- [ ] Add Prometheus, Loki, and Tempo local development profiles.
-- [ ] Add deterministic seed data and documented reset commands.
+- [x] Add Docker Compose for PostgreSQL, Redis, and NATS JetStream.
+- [x] Add the Go API container and database readiness dependency.
+- [x] Add deterministic, clearly labelled demo seed rows.
+- [ ] Add OpenTelemetry Collector and Prometheus.
+- [ ] Add Loki and Tempo development profiles.
 - [ ] Add service instrumentation example with OTLP export.
+- [ ] Wire Redis cache and NATS event publishing into the API where justified.
 
 ## M04 — Real telemetry
 
 - [ ] Ingest OTLP metrics, traces, and logs.
 - [ ] Normalize service/resource attributes.
 - [ ] Build service catalog from observed telemetry.
-- [ ] Implement query endpoints with bounded time ranges and pagination.
-- [ ] Display data freshness and source provenance.
+- [ ] Implement bounded telemetry queries and pagination.
+- [ ] Display data freshness, gaps, and source provenance.
 
 ## M05 — Operations workflows
 
@@ -45,18 +52,18 @@ The roadmap is milestone-based. A milestone is complete only when its acceptance
 - [ ] SLO definitions and error-budget burn calculations.
 - [ ] Audit trail for operator actions.
 
-## M06 — Hardening
+## M06 — Production hardening
 
 - [ ] Workspace authentication and role-based access control.
 - [ ] Rate limits, retention policies, and cardinality guardrails.
 - [ ] Load tests for ingestion and dashboard queries.
 - [ ] Threat model, dependency review, and secret scanning.
 - [ ] Production deployment guide and operational runbooks.
+- [ ] Hosted API and managed persistence deployment.
 
 ## Definition of done
 
-- Type-check and production build pass.
-- Relevant automated tests pass.
+- Type-check, unit tests, integration tests, and production builds pass.
 - Empty, loading, stale, partial, and error states are covered.
 - No secrets or real customer telemetry are committed.
 - Mobile and desktop layouts remain usable.
