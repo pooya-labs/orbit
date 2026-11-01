@@ -490,6 +490,7 @@ type ResourceAttributesResult struct {
 
 type attributeBackendResult struct {
 	name       string
+	observed   bool
 	attributes map[string][]any
 	warnings   []string
 	err        error
@@ -529,7 +530,7 @@ func (c *Client) DiscoverResourceAttributes(ctx context.Context, window QueryWin
 	warnings := make([]string, 0)
 	sourcesQueried := make([]string, 0, configured)
 	successful := 0
-	successfulSources := make([]string, 0, configured)
+	observedSources := make([]string, 0, configured)
 	for range configured {
 		result := <-results
 		sourcesQueried = append(sourcesQueried, result.name)
@@ -538,7 +539,9 @@ func (c *Client) DiscoverResourceAttributes(ctx context.Context, window QueryWin
 			continue
 		}
 		successful++
-		successfulSources = append(successfulSources, result.name)
+		if result.observed {
+			observedSources = append(observedSources, result.name)
+		}
 		warnings = append(warnings, result.warnings...)
 		for key, values := range result.attributes {
 			for _, value := range values {
@@ -552,7 +555,7 @@ func (c *Client) DiscoverResourceAttributes(ctx context.Context, window QueryWin
 
 	// service.name is authoritative from the selector itself. Record only
 	// backends that successfully answered the service-scoped metadata query.
-	for _, source := range successfulSources {
+	for _, source := range observedSources {
 		mergeResourceAttribute(attributes, sources, "service.name", service, source)
 	}
 	orderedAttributes := make(map[string]any, len(attributes))
@@ -604,6 +607,10 @@ func (c *Client) prometheusResourceAttributes(ctx context.Context, window QueryW
 		return result
 	}
 	for _, series := range payload.Data {
+		if series["service_name"] != service {
+			continue
+		}
+		result.observed = true
 		for key, value := range series {
 			if normalized := normalizePromResourceLabel(key); normalized != "" {
 				mergeResourceAttribute(result.attributes, nil, normalized, value, "")
@@ -634,6 +641,10 @@ func (c *Client) lokiResourceAttributes(ctx context.Context, window QueryWindow,
 		return result
 	}
 	for _, series := range payload.Data {
+		if series["service_name"] != service {
+			continue
+		}
+		result.observed = true
 		for key, value := range series {
 			if normalized := normalizeLokiResourceLabel(key); normalized != "" {
 				mergeResourceAttribute(result.attributes, nil, normalized, value, "")
@@ -673,6 +684,7 @@ func (c *Client) tempoResourceAttributes(ctx context.Context, window QueryWindow
 		if scope.Name != "resource" {
 			continue
 		}
+		result.observed = true
 		for _, tag := range scope.Tags {
 			if tag == "service.name" || !resourceTagNamePattern.MatchString(tag) {
 				continue
