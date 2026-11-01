@@ -70,11 +70,12 @@ M05 mutations must not be exposed until workspace authorization and transactiona
 
 ## M05 — Operations workflows
 
-- [ ] Incident lifecycle and timeline.
+- [x] Backend incident lifecycle API and immutable timeline: workspace-scoped creation, validated status transitions/reopen, and atomic workspace audit (PR #66; migration 009; CI passing).
+- [ ] Dashboard UI for incident creation, status changes, detail, and timeline review.
 - [ ] Alert rules and notification adapters.
 - [ ] Deployment annotations and release comparison.
 - [ ] SLO definitions and error-budget burn calculations.
-- [ ] Audit trail for operator actions.
+- [ ] Extend audit-backed history to every operator mutation and workflow.
 
 ## M06 — Production hardening
 
@@ -184,3 +185,14 @@ PR #64 is merged into `main` (squash merge commit `6b2e3418be2e8fdff0c9634b361ac
 The new PostgreSQL integration test opens the real repository through a local TCP proxy, warms an established pgxpool connection, then closes active TCP tunnels and rejects new dials while the test network path is offline. The existing repository must report a Ping failure. The proxy is then restored and the same pgxpool/repository must reconnect and return to healthy Ping without being recreated.
 
 This proves connection-pool recovery after a real TCP path interruption against the CI PostgreSQL service. The database process remains running; PostgreSQL process/container restart, packet loss and partition simulation, prolonged outage behavior, sustained request load, and backpressure remain open.
+
+
+## M05 PR #66 — workspace incident lifecycle backend
+
+PR #66 is merged into `main` (squash merge commit `7a57dd4ef8752e8e18d6dec5f0e75112637167dd`). CI run `41360316146` passed all three jobs: Go API race tests/build and vet, web typecheck/production build, and the local telemetry pipeline end-to-end smoke test.
+
+Migration 009 adds a workspace-scoped incident timeline with a composite foreign key back to the incident/workspace pair. Database triggers reject UPDATE, DELETE, and TRUNCATE. The PostgreSQL Repository provides transactional create and status-transition commands. Every mutation writes its timeline event and workspace audit event in the same transaction. Owners, administrators, and operators may create/change incidents; any workspace member may read the timeline.
+
+The supported state transitions are: open → investigating/monitoring/resolved; investigating → monitoring/resolved; monitoring → investigating/resolved; resolved → investigating (reopen). Resolving sets `resolved_at`; reopening clears it. The authenticated API exposes POST workspace incidents, PATCH incident status, and GET incident timeline routes. The OpenAPI contract describes these endpoints and request/response schemas.
+
+This is the backend API and persistence slice only. Dashboard incident controls/detail/timeline UI, alert rules/notifications, deployment annotations, SLO/error-budget calculations, and wider audit workflows remain open. M05 is not complete.

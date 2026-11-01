@@ -225,3 +225,19 @@ This covers local listener restart and reconnect semantics, not Docker orchestra
 PR #64 is merged into `main` (squash merge commit `6b2e3418be2e8fdff0c9634b361acaa5bb6d6da1`). CI run `41357596656` passed all three jobs. A PostgreSQL integration test routes the real pgxpool through a local TCP proxy, warms an established session, closes active tunnels and refuses new connections while offline, observes a repository Ping failure, then restores the same proxy and verifies the existing repository/pool reconnects and becomes healthy.
 
 The PostgreSQL process remains running during the simulated network outage. This is real TCP-path disruption and pgxpool reconnect coverage, not a database process/container restart, packet-loss or cross-zone partition test, or sustained-load benchmark. Continue with DB process lifecycle tests where the deployment environment permits, long-duration load/backpressure, and remaining production go-live gates. Tenant ingestion remains disabled.
+
+
+## M05 implementation update — PR #66 incident lifecycle backend
+
+PR #66 is merged into `main` (squash merge commit `7a57dd4ef8752e8e18d6dec5f0e75112637167dd`). CI run `41360316146` passed Go race tests/build and vet, web typecheck/production build, and the local telemetry pipeline end-to-end smoke test.
+
+The first M05 slice provides workspace-scoped incident creation, status transitions, reopening, and immutable timeline reads. Migration 009 adds `incident_timeline_events`, a composite foreign key to the owning incident/workspace, and database triggers against UPDATE/DELETE/TRUNCATE. PostgreSQL mutation methods lock and verify the actor's workspace membership, check service/incident scope, and write incident data, timeline event, and `workspace_audit_events` in the same transaction. Only owner/administrator/operator roles may mutate; workspace members may read the timeline.
+
+HTTP routes:
+- `POST /api/v1/workspaces/{workspaceID}/incidents`
+- `PATCH /api/v1/workspaces/{workspaceID}/incidents/{incidentID}/status`
+- `GET /api/v1/workspaces/{workspaceID}/incidents/{incidentID}/timeline`
+
+The status graph deliberately prevents arbitrary jumps and distinguishes reopening a resolved incident as `incident.reopened`. The OpenAPI 3.1 document now contains these route contracts and schemas.
+
+Scope boundary: this does not yet deliver the dashboard UI for incident operations, alert rules/notification adapters, deployment annotations, SLO/error-budget workflows, or a complete audit trail for all operator actions. Treat M05 as in progress, not complete.
