@@ -534,7 +534,7 @@ export default function Home() {
             </>
           )}
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> SYSTEMS OBSERVATORY</span><span><Globe2 size={12} /> {sourceMode === "api" ? "Service and incident inventory from connected API" : "All systems are illustrative"} <i /> <span className="footer-version">v0.7.0</span></span></footer>
+          <footer className="page-footer"><span>ORBIT <b>·</b> SYSTEMS OBSERVATORY</span><span><Globe2 size={12} /> {sourceMode === "api" ? "Service and incident inventory from connected API" : "All systems are illustrative"} <i /> <span className="footer-version">v0.8.0</span></span></footer>
         </div>
       </section>
     </main>
