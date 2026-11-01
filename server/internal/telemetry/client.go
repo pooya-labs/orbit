@@ -301,7 +301,6 @@ func (c *Client) Services(ctx context.Context, window QueryWindow) (ServiceDisco
 		values := url.Values{}
 		values.Set("start", strconv.FormatInt(start.UnixNano(), 10))
 		values.Set("end", strconv.FormatInt(now.UnixNano(), 10))
-		values.Set("limit", strconv.Itoa(maxServiceCount))
 		queries = append(queries, backendQuery{"loki", c.lokiURL, "/loki/api/v1/label/service_name/values", values, false})
 	}
 	if c.tempoURL != "" {
