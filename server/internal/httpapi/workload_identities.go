@@ -145,6 +145,10 @@ func registerWorkloadIdentityRoutes(mux *http.ServeMux, repository store.Reposit
 			unavailable(w, r)
 			return
 		}
+		if _, ok := principalFromContext(r.Context()); !ok {
+			unauthorized(w, r)
+			return
+		}
 		limit := 50
 		if raw := r.URL.Query().Get("limit"); raw != "" {
 			parsed, err := strconv.Atoi(raw)
@@ -278,9 +282,11 @@ func registerWorkloadIdentityRoutes(mux *http.ServeMux, repository store.Reposit
 					w.WriteHeader(http.StatusNoContent)
 					return
 				}
-				writeJSON(w, http.StatusOK, workloadGrantResponse{Data: workloadGrantAdminView{
-					IdentityID: r.PathValue("identityID"), WorkspaceID: r.PathValue("workspaceID"), Signal: signal,
-					GrantedAt: time.Now().UTC(),
+				writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{
+					"identity_id": r.PathValue("identityID"),
+					"workspace_id": r.PathValue("workspaceID"),
+					"signal": signal,
+					"granted": true,
 				}})
 			}
 		}
