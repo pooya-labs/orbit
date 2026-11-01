@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
@@ -742,5 +743,40 @@ func TestSharedRateLimitFailsClosedWhenPostgresIsUnavailable(t *testing.T) {
 	}
 	if strings.Contains(recorder.Body.String(), "database is offline") {
 		t.Fatal("internal rate-limit storage error leaked to the client")
+	}
+}
+
+
+func TestSharedSubjectRateLimitIsConsistentAcrossHandlers(t *testing.T) {
+	shared := &fakeRepository{}
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	firstInstance := withSubjectRateLimitStore(1, shared, next)
+	secondInstance := withSubjectRateLimitStore(1, shared, next)
+	principal := auth.Principal{Issuer: "https://identity.example/", Subject: "subject-123"}
+
+	firstRequest := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
+	firstRequest.RemoteAddr = "192.0.2.10:10001"
+	firstRequest = firstRequest.WithContext(context.WithValue(firstRequest.Context(), principalContextKey{}, principal))
+	firstResponse := httptest.NewRecorder()
+	firstInstance.ServeHTTP(firstResponse, firstRequest)
+	if firstResponse.Code != http.StatusNoContent {
+		t.Fatalf("first instance status = %d, want %d", firstResponse.Code, http.StatusNoContent)
+	}
+
+	secondRequest := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
+	secondRequest.RemoteAddr = "192.0.2.11:10002"
+	secondRequest = secondRequest.WithContext(context.WithValue(secondRequest.Context(), principalContextKey{}, principal))
+	secondResponse := httptest.NewRecorder()
+	secondInstance.ServeHTTP(secondResponse, secondRequest)
+	if secondResponse.Code != http.StatusTooManyRequests {
+		t.Fatalf("second instance status = %d, want shared subject limit %d; body=%s", secondResponse.Code, http.StatusTooManyRequests, secondResponse.Body.String())
+	}
+
+	for key := range shared.rateLimitCounts {
+		if len(key) != 64 {
+			t.Fatalf("shared store key is not a fixed-length SHA-256 digest: %q", key)
+		}
 	}
 }
