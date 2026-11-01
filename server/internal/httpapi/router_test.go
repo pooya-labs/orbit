@@ -265,6 +265,36 @@ func TestAuthorizationMiddlewareProtectsAPIAndPreservesPublicRoutes(t *testing.T
 	}
 }
 
+func TestAuthorizationMiddlewareRequiresOperatorForNonReadRequests(t *testing.T) {
+	viewerHandler := NewHandler(Config{
+		RequireAuthentication: true,
+		Authenticator: staticTokenVerifier{principal: auth.Principal{
+			Issuer: "https://issuer.example", Subject: "viewer-1", Roles: []string{auth.RoleViewer},
+		}},
+	}, &fakeRepository{}, testLogger())
+	viewerRequest := httptest.NewRequest(http.MethodPost, "/api/v1/services", nil)
+	viewerRequest.Header.Set("Authorization", "Bearer valid-test-token")
+	viewerRecorder := httptest.NewRecorder()
+	viewerHandler.ServeHTTP(viewerRecorder, viewerRequest)
+	if viewerRecorder.Code != http.StatusForbidden {
+		t.Fatalf("viewer POST status = %d, want %d", viewerRecorder.Code, http.StatusForbidden)
+	}
+
+	operatorHandler := NewHandler(Config{
+		RequireAuthentication: true,
+		Authenticator: staticTokenVerifier{principal: auth.Principal{
+			Issuer: "https://issuer.example", Subject: "operator-1", Roles: []string{auth.RoleOperator},
+		}},
+	}, &fakeRepository{}, testLogger())
+	operatorRequest := httptest.NewRequest(http.MethodPost, "/api/v1/services", nil)
+	operatorRequest.Header.Set("Authorization", "Bearer valid-test-token")
+	operatorRecorder := httptest.NewRecorder()
+	operatorHandler.ServeHTTP(operatorRecorder, operatorRequest)
+	if operatorRecorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("operator POST reached route policy with status = %d, want route-level %d", operatorRecorder.Code, http.StatusMethodNotAllowed)
+	}
+}
+
 func TestAuthorizationMiddlewareRejectsMissingVerifierInProtectedMode(t *testing.T) {
 	handler := NewHandler(Config{Environment: "production", RequireAuthentication: true}, &fakeRepository{}, testLogger())
 	recorder := httptest.NewRecorder()
