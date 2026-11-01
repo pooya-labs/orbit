@@ -99,6 +99,12 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rateKey := decision.IdentityID + ":" + decision.WorkspaceID + ":" + decision.Signal
+	if !g.limiter.Allow(rateKey, time.Now()) {
+		http.Error(w, "workload telemetry rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+
 	contentTypes := r.Header.Values("Content-Type")
 	if len(contentTypes) != 1 {
 		http.Error(w, errInvalidMediaType.Error(), http.StatusUnsupportedMediaType)
@@ -171,12 +177,6 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.Error(w, "invalid OTLP payload", http.StatusBadRequest)
 		}
-		return
-	}
-
-	rateKey := decision.IdentityID + ":" + decision.WorkspaceID + ":" + decision.Signal
-	if !g.limiter.Allow(rateKey, time.Now()) {
-		http.Error(w, "workload telemetry rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
 
