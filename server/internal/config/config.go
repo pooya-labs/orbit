@@ -18,6 +18,8 @@ type Config struct {
 	TempoURL              string
 	OIDCIssuer            string
 	OIDCAudience          string
+	OIDCWorkloadAudience  string
+	OTLPCollectorHTTPURL  string
 	OIDCRolesClaim        string
 	RateLimitPerMinute    int
 }
@@ -34,6 +36,8 @@ func Load() Config {
 		TempoURL:          strings.TrimSpace(os.Getenv("ORBIT_TEMPO_URL")),
 		OIDCIssuer:        strings.TrimSpace(os.Getenv("ORBIT_OIDC_ISSUER")),
 		OIDCAudience:      strings.TrimSpace(os.Getenv("ORBIT_OIDC_AUDIENCE")),
+		OIDCWorkloadAudience: strings.TrimSpace(os.Getenv("ORBIT_OIDC_WORKLOAD_AUDIENCE")),
+		OTLPCollectorHTTPURL: strings.TrimSpace(os.Getenv("ORBIT_OTLP_COLLECTOR_HTTP_URL")),
 		OIDCRolesClaim:    valueOrDefault("ORBIT_OIDC_ROLES_CLAIM", "roles"),
 		RateLimitPerMinute: integerOrDefault("ORBIT_RATE_LIMIT_PER_MINUTE", 120),
 	}
@@ -45,6 +49,17 @@ func (c Config) Validate() error {
 	}
 	if (c.OIDCIssuer == "") != (c.OIDCAudience == "") {
 		return fmt.Errorf("ORBIT_OIDC_ISSUER and ORBIT_OIDC_AUDIENCE must be configured together")
+	}
+	if (c.OIDCWorkloadAudience == "") != (c.OTLPCollectorHTTPURL == "") {
+		return fmt.Errorf("ORBIT_OIDC_WORKLOAD_AUDIENCE and ORBIT_OTLP_COLLECTOR_HTTP_URL must be configured together")
+	}
+	if c.OIDCWorkloadAudience != "" {
+		if c.OIDCIssuer == "" || c.OIDCAudience == "" {
+			return fmt.Errorf("workload OTLP ingestion requires the human OIDC issuer and audience to be configured")
+		}
+		if c.OIDCWorkloadAudience == c.OIDCAudience {
+			return fmt.Errorf("ORBIT_OIDC_WORKLOAD_AUDIENCE must differ from ORBIT_OIDC_AUDIENCE")
+		}
 	}
 	switch c.Environment {
 	case "development":
