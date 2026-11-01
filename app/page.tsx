@@ -454,7 +454,7 @@ export default function Home() {
 
 {telemetryView ? (
             sourceMode === "api" ? (
-              <TelemetryWorkspace view={telemetryView} apiBaseUrl={apiUrlInput} />
+              <TelemetryWorkspace view={telemetryView} apiBaseUrl={apiUrlInput} language={language} />
             ) : (
               <section className="panel telemetry-connect-prompt">
                 <div className="source-placeholder-icon"><Activity size={18} /></div>
@@ -508,28 +508,28 @@ export default function Home() {
           <div className="lower-grid">
             <section className="panel services-panel">
               <div className="panel-header compact">
-                <div><div className="panel-title-line"><h2>Service health</h2><span className="subtle-count">{sourceServices.length} monitored</span></div><p>Health across your distributed services</p></div>
-                <button className="text-action" onClick={() => setShowAllServices(!showAllServices)}>{showAllServices ? "Show less" : "View all"} <ArrowUpRight size={14} /></button>
+                <div><div className="panel-title-line"><h2>{tr("serviceHealth")}</h2><span className="subtle-count">{sourceServices.length} {tr("monitored")}</span></div><p>{tr("serviceHealthSubtitle")}</p></div>
+                <button className="text-action" onClick={() => setShowAllServices(!showAllServices)}>{showAllServices ? tr("showLess") : tr("viewAll")} <ArrowUpRight size={14} /></button>
               </div>
               <div className="service-table">
-                <div className="service-table-head"><span>SERVICE</span><span>LATENCY</span><span>ERROR RATE</span><span>STATUS</span></div>
+                <div className="service-table-head"><span>{tr("service")}</span><span>{tr("latency")}</span><span>{tr("errorRate")}</span><span>{tr("status")}</span></div>
                 {filteredServices.map((service) => (
                   <div className="service-row" key={service.name}>
                     <div className="service-name-cell"><div className={`service-avatar ${service.tone}`}>{service.initials}</div><div><strong>{service.name}</strong><span>{service.description}</span></div></div>
                     <span className="service-metric">{service.latency}</span>
                     <span className={`service-metric ${service.state === "Degraded" || service.state === "Incident" ? "metric-warning" : ""}`}>{service.errorRate}</span>
-                    <span className="service-status"><StatusDot state={service.state} />{service.state}</span>
+                    <span className="service-status"><StatusDot state={service.state} />{service.state === "Operational" ? tr("operational") : service.state === "Degraded" ? tr("degraded") : service.state === "Incident" ? tr("incident") : tr("unknownStatus")}</span>
                   </div>
                 ))}
-                {filteredServices.length === 0 && <div className="empty-state">No services match “{search}”.</div>}
+                {filteredServices.length === 0 && <div className="empty-state">{tr("noServicesMatch")} “{search}”.</div>}
               </div>
-              <div className="panel-footer"><span>Showing {filteredServices.length} of {sourceServices.length} services</span><span className="demo-footnote">{sourceMode === "api" ? "API DATA" : "DEMO DATA"}</span></div>
+              <div className="panel-footer"><span>{tr("showing")} {filteredServices.length} {tr("of")} {sourceServices.length} {tr("services").toLowerCase()}</span><span className="demo-footnote">{sourceMode === "api" ? tr("apiData") : tr("demoData")}</span></div>
             </section>
 
             <section className="panel incidents-panel">
               <div className="panel-header compact">
-                <div><div className="panel-title-line"><h2>Active incidents</h2><span className="incident-count">{incidentRows.length}</span></div><p>Issues that may need attention</p></div>
-                <button className="icon-button subtle-more" aria-label="Incident options"><MoreHorizontal size={18} /></button>
+                <div><div className="panel-title-line"><h2>{tr("activeIncidents")}</h2><span className="incident-count">{incidentRows.length}</span></div><p>{tr("issuesAttention")}</p></div>
+                <button className="icon-button subtle-more" aria-label={tr("incidentOptions")}><MoreHorizontal size={18} /></button>
               </div>
               <div className="incident-list">
                 {incidentRows.length > 0 ? incidentRows.map((incident) => (
@@ -541,24 +541,24 @@ export default function Home() {
                       <div className="incident-meta"><Clock3 size={12} /> {incident.timeAgo} <span>·</span> <span className="incident-open">{incident.statusLabel}</span></div>
                     </div>
                   </article>
-                )) : <div className="empty-state">No active incidents reported by this source.</div>}
+                )) : <div className="empty-state">{tr("noActiveIncidents")}</div>}
               </div>
-              <button className="incident-link" onClick={() => chooseNav("Incidents")}>View incident timeline <ArrowUpRight size={14} /></button>
+              <button className="incident-link" onClick={() => chooseNav("Incidents")}>{tr("incidentTimeline")} <ArrowUpRight size={14} /></button>
             </section>
           </div>
 
 {sourceMode === "demo" ? (
           <section className="bottom-grid">
-            <div className="bottom-stat"><div className="bottom-icon green"><ShieldCheck size={17} /></div><div><span>AVAILABILITY SLO</span><strong>99.94%</strong></div><span className="bottom-note good"><Check size={13} /> Within target</span></div>
-            <div className="bottom-stat"><div className="bottom-icon violet"><GitBranch size={17} /></div><div><span>DEPLOYMENTS TODAY</span><strong>08</strong></div><span className="bottom-note">Across 4 services</span></div>
-            <div className="bottom-stat"><div className="bottom-icon blue"><Database size={17} /></div><div><span>DATA INGESTION</span><strong>2.4 MB/s</strong></div><span className="bottom-note"><Signal size={13} /> Sample stream</span></div>
+            <div className="bottom-stat"><div className="bottom-icon green"><ShieldCheck size={17} /></div><div><span>{tr("availabilitySlo")}</span><strong>99.94%</strong></div><span className="bottom-note good"><Check size={13} /> {tr("withinTarget")}</span></div>
+            <div className="bottom-stat"><div className="bottom-icon violet"><GitBranch size={17} /></div><div><span>{tr("deploymentsToday")}</span><strong>08</strong></div><span className="bottom-note">Across 4 services</span></div>
+            <div className="bottom-stat"><div className="bottom-icon blue"><Database size={17} /></div><div><span>{tr("dataIngestion")}</span><strong>2.4 MB/s</strong></div><span className="bottom-note"><Signal size={13} /> {tr("sampleStream")}</span></div>
           </section>
           ) : null}
 
             </>
           )}
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> SYSTEMS OBSERVATORY</span><span><Globe2 size={12} /> {sourceMode === "api" ? "Service and incident inventory from connected API" : "All systems are illustrative"} <i /> <span className="footer-version">v0.8.0</span></span></footer>
+          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v0.9.0</span></span><span className="owner-credit"><strong>{tr("projectOwner")}:</strong> <a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a> <span>·</span> <a href="https://github.com/pooya16pg-spec/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a></span></footer>
         </div>
       </section>
     </main>
