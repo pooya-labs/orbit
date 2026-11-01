@@ -12,7 +12,11 @@ import (
 
 	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
 	metricsv1 "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
+	logsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	tracesv1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
+	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
+	tracespb "go.opentelemetry.io/proto/otlp/trace/v1"
 	resourcev1 "go.opentelemetry.io/proto/otlp/resource/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -32,7 +36,16 @@ func (f *forwarderStub) Export(_ context.Context, signal string, payload []byte)
 	if f.err != nil {
 		return nil, f.err
 	}
-	return proto.Marshal(&metricsv1.ExportMetricsServiceResponse{})
+	switch signal {
+	case "metrics":
+		return proto.Marshal(&metricsv1.ExportMetricsServiceResponse{})
+	case "logs":
+		return proto.Marshal(&logsv1.ExportLogsServiceResponse{})
+	case "traces":
+		return proto.Marshal(&tracesv1.ExportTraceServiceResponse{})
+	default:
+		return nil, errors.New("unexpected signal")
+	}
 }
 
 func newTestHTTPGateway(t *testing.T, forwarder OTLPForwarder, requestsPerMinute int) http.Handler {
@@ -97,6 +110,45 @@ func TestHTTPGatewayAuthorizesAndInjectsCanonicalWorkspace(t *testing.T) {
 	}
 	if response.Header().Get("Content-Type") != "application/x-protobuf" {
 		t.Fatalf("response Content-Type = %q", response.Header().Get("Content-Type"))
+	}
+}
+
+
+func TestHTTPGatewaySupportsAllThreeOTLPSignals(t *testing.T) {
+	for _, signal := range []string{"metrics", "logs", "traces"} {
+		t.Run(signal, func(t *testing.T) {
+			forwarder := &forwarderStub{}
+			handler := newTestHTTPGateway(t, forwarder, 10)
+			message, _, err := newSignalMessages(signal)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch typed := message.(type) {
+			case *metricsv1.ExportMetricsServiceRequest:
+				typed.ResourceMetrics = []*metricspb.ResourceMetrics{{Resource: &resourcev1.Resource{}}}
+			case *logsv1.ExportLogsServiceRequest:
+				typed.ResourceLogs = []*logspb.ResourceLogs{{Resource: &resourcev1.Resource{}}}
+			case *tracesv1.ExportTraceServiceRequest:
+				typed.ResourceSpans = []*tracespb.ResourceSpans{{Resource: &resourcev1.Resource{}}}
+			default:
+				t.Fatalf("unexpected request type %T", message)
+			}
+			payload, err := proto.Marshal(message)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+testWorkspace+"/v1/"+signal, bytes.NewReader(payload))
+			request.Header.Set("Authorization", "Bearer signed-token")
+			request.Header.Set("Content-Type", "application/x-protobuf")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("HTTP status = %d, body=%s", response.Code, response.Body.String())
+			}
+			if forwarder.calls != 1 || forwarder.signal != signal {
+				t.Fatalf("forwarder = %+v, want one %s export", forwarder, signal)
+			}
+		})
 	}
 }
 
