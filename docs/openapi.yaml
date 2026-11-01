@@ -235,6 +235,23 @@ paths:
             type: string
             pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
             default: orbit-telemetry-demo
+        - in: query
+          name: group_by
+          required: false
+          description: Comma-separated allow-list of grouping labels. Use none for one aggregate series; arbitrary PromQL is never accepted.
+          schema:
+            type: string
+            default: instance,service_version,deployment_environment
+            enum:
+              - none
+              - instance
+              - job
+              - service_version
+              - deployment_environment
+              - container_name
+              - host_name
+              - cloud_region
+              - instance,service_version,deployment_environment
       responses:
         "200":
           description: Prometheus range query result with source and query timestamp.
@@ -485,6 +502,11 @@ components:
           description: Fixed service-scoped PromQL expression.
         step:
           type: string
+        group_by:
+          type: array
+          items:
+            type: string
+            enum: [instance, job, service_version, deployment_environment, container_name, host_name, cloud_region]
         data:
           type: array
           items:
