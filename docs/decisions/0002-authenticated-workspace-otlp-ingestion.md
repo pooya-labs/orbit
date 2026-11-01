@@ -160,3 +160,10 @@ PR #62 is merged into `main` (squash merge commit `534f6d02c04616a5d27831460b24f
 HTTP and gRPC recovery tests now use real local TCP Collector listeners with the production forwarder implementations. Each test establishes a successful export, stops the Collector listener, verifies the live gateway cannot export while the listener is down, restarts the listener on the same address, and verifies the same gateway and forwarder succeed after reconnect.
 
 This establishes listener stop/restart recovery in-process. It does not establish recovery from container orchestration, packet loss/network partitions, PostgreSQL process restarts, or sustained production load. These remain open validation gates; production tenant ingestion remains disabled.
+
+
+## ADR 0002 — PR #64 PostgreSQL pool recovery after network interruption
+
+PR #64 is merged into `main` (squash merge commit `6b2e3418be2e8fdff0c9634b361acaa5bb6d6da1`). CI run `41357596656` passed the complete pipeline. The integration test opens the production PostgreSQL Repository/pgxpool through a local TCP proxy, warms a connection, closes established tunnels and rejects new connections, verifies Ping fails while the database network path is unavailable, then restores the proxy and verifies the same pool reconnects without recreating the Repository.
+
+The database server itself remains online. This establishes recovery from a TCP path interruption, not PostgreSQL process restart, container replacement, or packet-loss/partition tolerance. Those and sustained-load/backpressure tests remain open validation work.
