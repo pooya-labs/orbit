@@ -12,15 +12,32 @@ import (
 
 	"github.com/pooya16pg-spec/orbit/server/internal/config"
 	"github.com/pooya16pg-spec/orbit/server/internal/httpapi"
+	"github.com/pooya16pg-spec/orbit/server/internal/store"
+	"github.com/pooya16pg-spec/orbit/server/internal/store/postgres"
 )
 
 func main() {
 	cfg := config.Load()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
+	var repository store.Repository
+	if cfg.DatabaseURL != "" {
+		startupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		db, err := postgres.Open(startupCtx, cfg.DatabaseURL)
+		cancel()
+		if err != nil {
+			logger.Error("database initialization failed", "error", err)
+			os.Exit(1)
+		}
+		repository = db
+		defer repository.Close()
+	} else {
+		logger.Warn("PostgreSQL is not configured; readiness and data endpoints will be unavailable")
+	}
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewHandler(httpapi.Config{Version: cfg.Version, Environment: cfg.Environment}, logger),
+		Handler:           httpapi.NewHandler(httpapi.Config{Version: cfg.Version, Environment: cfg.Environment}, repository, logger),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
