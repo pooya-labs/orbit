@@ -48,7 +48,6 @@ jobs:
             - Explicit Demo / API source switch for service and incident inventory.
             - Live telemetry views that query the ORBIT API, with 15m / 1h / 6h / 24h windows, query timestamps, refresh, and loading / empty / error states.
             - Cross-backend service discovery across Prometheus, Loki, and Tempo, with merged names, source provenance, and a shared service selector.
-            - Cross-backend service discovery across Prometheus, Loki, and Tempo, with merged names, source provenance, and a shared service selector.
             - Go API with health, metadata, PostgreSQL-backed service and incident endpoints, plus bounded Prometheus, Loki, and Tempo query endpoints.
             - Optional local Docker Compose observability profile with OpenTelemetry Collector, Prometheus, Loki, Tempo, and an instrumented Go demo workload.
             - OpenAPI 3.1 contract, typed TypeScript API client, and GitHub Actions checks that verify metrics, logs, and traces through both their backends and the ORBIT API.
