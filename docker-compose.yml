@@ -48,6 +48,7 @@ services:
       ORBIT_ENVIRONMENT: development
       ORBIT_VERSION: 0.2.0
       ORBIT_DATABASE_URL: postgres://orbit:orbit_local_only@postgres:5432/orbit?sslmode=disable
+      ORBIT_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,https://pooya16pg-spec.github.io
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
