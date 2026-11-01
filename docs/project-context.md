@@ -35,8 +35,8 @@ The version labels above describe the progression documented by the project; the
 - **Telemetry query APIs stay bounded and read-only.** Windows, result counts, dimensions, and query expressions are validated. Never accept arbitrary PromQL or LogQL directly from the browser.
 - **M04 attribute extraction is still a preview.** It maps an allowlist of labels/tags into OpenTelemetry-style names. It does not yet ingest the complete resource-attribute set directly from workload SDKs or the Collector.
 - **Redis and NATS are provisioned but not yet integrated into application behavior.** Do not claim caching or event delivery until the API actually uses them and tests cover those paths.
-- **M06 API security foundation:** OIDC access-token verification through issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and process-local per-IP/per-subject rate limits are merged in `main` (`977ce49`) and passed CI run `41288773472`. The static dashboard remains unchanged and does not yet send access tokens.
-- **Security work still open:** browser Authorization Code + PKCE, token refresh/revocation, workspace membership and tenant-scoped database queries, distributed rate limits, transactional audit records for M05 operations, and production deployment controls. Until workspace scoping exists, the API must not be advertised as multi-tenant.
+- **M06 API security foundation:** OIDC access-token verification through issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and process-local per-IP/per-subject rate limits are merged in `main` (`977ce49`) and CI-verified. A shared PostgreSQL fixed-window rate limiter is under development on `feature/m06-shared-postgres-rate-limit`; staging and production will require PostgreSQL so rate limiting cannot silently fall back to per-process memory.
+- **Security work still open:** real browser OIDC provider registration and end-to-end browser/API verification, token revocation/global logout, workspace membership and tenant-scoped database queries, completion of shared PostgreSQL rate-limit acceptance, transactional audit records for M05 operations, and production deployment controls. Until workspace scoping exists, the API must not be advertised as multi-tenant.
 
 ## 4. Established UX and engineering decisions
 
@@ -84,10 +84,10 @@ The initial server-side authentication gate is implemented in `main` (`977ce49`)
 
 The remaining security work before multi-user or M05 operations deployment is:
 
-- browser Authorization Code + PKCE, in-memory token lifecycle, refresh and revocation;
+- real OIDC provider registration, callback/CORS/audience end-to-end verification, and provider token revocation/global logout (provider-neutral browser PKCE is isolated on draft PR #12);
 - workspace/tenant membership and database scoping;
 - actor identity and transactional audit records for every state-changing operation;
-- shared rate limiting and bounded backend concurrency for horizontally scaled deployments;
+- CI-verified shared PostgreSQL rate limiting (currently under development on a separate branch) and bounded backend concurrency for horizontally scaled deployments;
 - secret management, CORS allowlists, dependency review, backups/retention, cardinality guardrails, and operational runbooks.
 
 Local development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is explicitly set. Startup must fail closed if staging/production is configured without valid authentication settings. Health/readiness endpoints should reveal status, not credentials or sensitive topology.
@@ -100,7 +100,7 @@ The GitHub account also contains separate portfolio projects (Pooya.OS, AuraPuls
 
 The initial server-side OIDC access-token and RBAC gate is merged in `main` as `977ce49` and passed CI run `41288773472`. Its tests cover signature tampering, RS256/ES256, issuer/audience/time-claim failures, unknown `kid` and JWKS rotation, role enforcement, CORS Authorization preflight, request limits, and startup failure when staging/production OIDC settings are absent. This completes only the API resource-server foundation, not all of M06. Browser PKCE/token lifecycle, workspace membership and tenant-scoped queries, shared rate limiting, secrets, retention, production deployment, and runbooks remain open.
 
-The API currently accepts access tokens only through `Authorization: Bearer`; it never reads credentials from URLs or browser storage. The static dashboard does not yet implement PKCE, so connecting that dashboard to an auth-protected API is a later frontend milestone.
+The API currently accepts access tokens only through `Authorization: Bearer`; it never reads credentials from URLs or browser storage. A provider-neutral static-dashboard PKCE client is under review on draft PR #12. It is not deployed and has no real issuer/client configured yet.
 
 ## 10. Continuity rule
 

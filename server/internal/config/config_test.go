@@ -48,7 +48,7 @@ func TestLoadReadsOptionalTelemetryEndpoints(t *testing.T) {
 func TestProductionAndStagingRequireOIDC(t *testing.T) {
 	for _, environment := range []string{"production", "staging"} {
 		t.Run(environment, func(t *testing.T) {
-			cfg := Config{Environment: environment, RateLimitPerMinute: 120, OIDCRolesClaim: "roles"}
+			cfg := Config{Environment: environment, RateLimitPerMinute: 120, OIDCRolesClaim: "roles", DatabaseURL: "postgres://orbit:test@localhost:5432/orbit"}
 			if err := cfg.Validate(); err == nil {
 				t.Fatal("Validate() accepted a protected environment without OIDC settings")
 			}
@@ -107,5 +107,27 @@ func TestValidateRequiresExplicitEnvironment(t *testing.T) {
 	cfg.Environment = "development"
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() rejected explicit development mode: %v", err)
+	}
+}
+
+
+func TestProductionAndStagingRequirePostgresForSharedRateLimits(t *testing.T) {
+	for _, environment := range []string{"production", "staging"} {
+		t.Run(environment, func(t *testing.T) {
+			cfg := Config{
+				Environment: environment,
+				RateLimitPerMinute: 120,
+				OIDCRolesClaim: "roles",
+				OIDCIssuer: "https://identity.example/",
+				OIDCAudience: "orbit-api",
+			}
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() accepted a protected environment without PostgreSQL")
+			}
+			cfg.DatabaseURL = "postgres://orbit:test@localhost:5432/orbit"
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("Validate() rejected protected environment with shared rate-limit storage: %v", err)
+			}
+		})
 	}
 }

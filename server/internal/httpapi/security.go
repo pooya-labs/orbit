@@ -2,7 +2,8 @@ package httpapi
 
 import (
 	"context"
-	"encoding/base64"
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
 	"net/http"
 	"strings"
@@ -159,14 +160,39 @@ func requestIP(r *http.Request) string {
 	return host
 }
 
+type sharedRateLimitStore interface {
+	IncrementRateLimitWindow(context.Context, string) (int64, error)
+}
+
+func allowRateLimit(ctx context.Context, shared sharedRateLimitStore, fallback *requestRateLimiter, rawKey string, limit int, now time.Time) (bool, error) {
+	if shared == nil { return fallback.allow([]string{rawKey}, now), nil }
+	digest := sha256.Sum256([]byte(rawKey))
+	count, err := shared.IncrementRateLimitWindow(ctx, hex.EncodeToString(digest[:]))
+	if err != nil { return false, err }
+	return count <= int64(limit), nil
+}
+
+func rateLimitStoreUnavailable(w http.ResponseWriter, r *http.Request) {
+	writeError(w, r, http.StatusServiceUnavailable, "rate_limit_store_unavailable", "The shared API rate-limit store is temporarily unavailable")
+}
+
 func withIPRateLimit(limit int, next http.Handler) http.Handler {
-	limiter := newRequestRateLimiter(limit)
+	return withIPRateLimitStore(limit, nil, next)
+}
+
+func withIPRateLimitStore(limit int, shared sharedRateLimitStore, next http.Handler) http.Handler {
+	if limit <= 0 { limit = 120 }
+	fallback := newRequestRateLimiter(limit)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/api/v1/meta" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !limiter.allow([]string{"ip:" + requestIP(r)}, time.Now()) {
+		ctx, cancel := context.WithTimeout(r.Context(), 750*time.Millisecond)
+		allowed, err := allowRateLimit(ctx, shared, fallback, "ip:"+requestIP(r), limit, time.Now())
+		cancel()
+		if err != nil { rateLimitStoreUnavailable(w, r); return }
+		if !allowed {
 			w.Header().Set("Retry-After", "60")
 			writeError(w, r, http.StatusTooManyRequests, "rate_limit_exceeded", "The API request limit has been reached; retry shortly")
 			return
@@ -176,19 +202,25 @@ func withIPRateLimit(limit int, next http.Handler) http.Handler {
 }
 
 func withSubjectRateLimit(limit int, next http.Handler) http.Handler {
-	limiter := newRequestRateLimiter(limit)
+	return withSubjectRateLimitStore(limit, nil, next)
+}
+
+func withSubjectRateLimitStore(limit int, shared sharedRateLimitStore, next http.Handler) http.Handler {
+	if limit <= 0 { limit = 120 }
+	fallback := newRequestRateLimiter(limit)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/api/v1/meta" {
 			next.ServeHTTP(w, r)
 			return
 		}
 		principal, ok := principalFromContext(r.Context())
-		if !ok {
-			next.ServeHTTP(w, r)
-			return
-		}
-		key := "subject:" + base64.RawURLEncoding.EncodeToString([]byte(principal.Issuer)) + "." + base64.RawURLEncoding.EncodeToString([]byte(principal.Subject))
-		if !limiter.allow([]string{key}, time.Now()) {
+		if !ok { next.ServeHTTP(w, r); return }
+		key := "subject:" + principal.Issuer + "\x00" + principal.Subject
+		ctx, cancel := context.WithTimeout(r.Context(), 750*time.Millisecond)
+		allowed, err := allowRateLimit(ctx, shared, fallback, key, limit, time.Now())
+		cancel()
+		if err != nil { rateLimitStoreUnavailable(w, r); return }
+		if !allowed {
 			w.Header().Set("Retry-After", "60")
 			writeError(w, r, http.StatusTooManyRequests, "rate_limit_exceeded", "The authenticated subject request limit has been reached; retry shortly")
 			return

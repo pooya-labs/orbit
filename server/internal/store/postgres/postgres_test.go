@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -152,4 +153,90 @@ func TestPostgresMigrationAndReadModels(t *testing.T) {
 	if _, err := repository.pool.Exec(ctx, "DELETE FROM telemetry_services WHERE name = $1", name); err != nil {
 		t.Fatalf("clean up catalog test service: %v", err)
 	}
+}
+
+
+func TestSharedRateLimitWindowUsesAtomicCountersAndExpiresOldBuckets(t *testing.T) {
+	databaseURL := os.Getenv("ORBIT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("ORBIT_TEST_DATABASE_URL is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	repository, err := Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open repository: %v", err)
+	}
+	defer repository.Close()
+
+	now := time.Now().UTC().Truncate(time.Minute)
+	oldBucket := now.Add(-10 * time.Minute)
+	oldKey := fmt.Sprintf("%064x", time.Now().UnixNano()+11)
+	if _, err := repository.pool.Exec(ctx, `
+		INSERT INTO api_rate_limit_windows (bucket_start, key_hash, request_count, expires_at)
+		VALUES ($1::timestamptz, $2, 9, $1::timestamptz + INTERVAL '2 minutes')
+	`, oldBucket, oldKey); err != nil {
+		t.Fatalf("insert expired rate-limit bucket: %v", err)
+	}
+
+	keyA := fmt.Sprintf("%064x", time.Now().UnixNano()+12)
+	keyB := fmt.Sprintf("%064x", time.Now().UnixNano()+13)
+	first, err := repository.IncrementRateLimitWindow(ctx, keyA)
+	if err != nil { t.Fatalf("first shared increment: %v", err) }
+	second, err := repository.IncrementRateLimitWindow(ctx, keyA)
+	if err != nil { t.Fatalf("second shared increment: %v", err) }
+	other, err := repository.IncrementRateLimitWindow(ctx, keyB)
+	if err != nil { t.Fatalf("independent shared increment: %v", err) }
+	if first != 1 || second != 2 || other != 1 {
+		t.Fatalf("unexpected shared counts: first=%d second=%d other=%d", first, second, other)
+	}
+
+	// Multiple concurrent API instances must not lose counter increments. Sum
+	// across the two adjacent minute buckets so a test that crosses a minute
+	// boundary remains deterministic.
+	const concurrentRequests = 24
+	concurrentKey := fmt.Sprintf("%064x", time.Now().UnixNano()+14)
+	var workers sync.WaitGroup
+	errors := make(chan error, concurrentRequests)
+	for range concurrentRequests {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			_, incrementErr := repository.IncrementRateLimitWindow(ctx, concurrentKey)
+			if incrementErr != nil {
+				errors <- incrementErr
+			}
+		}()
+	}
+	workers.Wait()
+	close(errors)
+	for incrementErr := range errors {
+		t.Fatalf("concurrent shared increment: %v", incrementErr)
+	}
+	var concurrentTotal int64
+	if err := repository.pool.QueryRow(ctx,
+		"SELECT COALESCE(SUM(request_count), 0) FROM api_rate_limit_windows WHERE key_hash = $1",
+		concurrentKey,
+	).Scan(&concurrentTotal); err != nil {
+		t.Fatalf("read concurrent counter total: %v", err)
+	}
+	if concurrentTotal != concurrentRequests {
+		t.Fatalf("concurrent counter total = %d, want %d", concurrentTotal, concurrentRequests)
+	}
+
+	var oldRows int
+	if err := repository.pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM api_rate_limit_windows WHERE key_hash = $1", oldKey,
+	).Scan(&oldRows); err != nil { t.Fatalf("check expired bucket cleanup: %v", err) }
+	if oldRows != 0 { t.Fatalf("expired bucket remains in database: %d rows", oldRows) }
+
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cleanupCancel()
+		_, _ = repository.pool.Exec(cleanupCtx,
+			"DELETE FROM api_rate_limit_windows WHERE key_hash = ANY($1::char(64)[])",
+			[]string{keyA, keyB, oldKey, concurrentKey},
+		)
+	})
 }

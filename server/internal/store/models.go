@@ -65,5 +65,6 @@ type Repository interface {
 	UpdateTelemetryServiceResourceAttributes(ctx context.Context, name string, attributes map[string]any, sources map[string][]string) error
 	ListServices(ctx context.Context) ([]Service, error)
 	ListIncidents(ctx context.Context, status string) ([]Incident, error)
+	IncrementRateLimitWindow(ctx context.Context, keyHash string) (int64, error)
 	Close()
 }
