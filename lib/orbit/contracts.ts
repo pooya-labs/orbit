@@ -59,6 +59,7 @@ export interface TelemetryQueryResponse<T> {
   query?: string;
   step?: string;
   service?: string;
+  group_by?: string[];
   limit?: number;
   data: T;
 }
