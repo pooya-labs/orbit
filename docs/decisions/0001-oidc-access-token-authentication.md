@@ -38,7 +38,7 @@ Reject `alg=none`, symmetric MAC algorithms, unsupported algorithms, missing/unk
 
 Limit the bearer token size (initial target: 16 KiB) before parsing. Accept credentials only from the Authorization header, not query parameters or arbitrary cookies. Do not log bearer tokens or complete authorization headers.
 
-Use a maintained JOSE/JWT implementation with explicit signature and claim validation. The repository currently targets Go 1.24. The reviewed candidate is `github.com/lestrrat-go/jwx/v3` pinned to v3.0.12, whose module declares Go 1.24.0 and matches this repository's Go 1.24 toolchain and must not be adopted without an intentional toolchain upgrade. Reuse a long-lived JWKS cache with controlled refresh and key-rotation behavior; do not fetch remote keys for every request.
+Use a maintained JOSE/JWT implementation with explicit signature and claim validation. The repository currently targets Go 1.24. The reviewed candidate is `github.com/lestrrat-go/jwx/v3` pinned to v3.0.12; its module declares Go 1.24.0 and is compatible with this repository Go 1.24 toolchain. Reuse a long-lived JWKS cache with controlled refresh and key-rotation behavior; do not fetch remote keys for every request.
 
 ### 3. Identity and role mapping
 
