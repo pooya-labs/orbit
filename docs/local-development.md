@@ -32,7 +32,7 @@ With Docker Desktop running:
 docker compose up --build
 ```
 
-The first API startup runs the initial versioned SQL migration and adds sample service and incident rows. The records are marked `demo_seed`.
+The first API startup runs the versioned SQL migrations and adds sample service and incident rows. Migration `002_telemetry_service_catalog` creates the normalized observed-service and source tables. The records are marked `demo_seed`.
 
 Useful endpoints:
 
@@ -76,7 +76,7 @@ docker compose --profile observability up -d postgres api prometheus loki tempo 
 
 The `telemetry-demo` workload is instrumented using the OpenTelemetry Go SDK. Send a sample request with `curl.exe http://localhost:8081/emit`; it returns a trace ID and emits a metric, trace, and structured log. Query metrics in Prometheus at http://localhost:9090, logs in Loki at http://localhost:3100, and traces in Tempo at http://localhost:3200. The Collector routes OTLP metrics to Prometheus, traces to Tempo, and logs to Loki. The ORBIT API container is configured to reach those backends over the Compose network. All ports bind to loopback and the backends have no authentication; do not expose them outside your development machine. Prometheus and Loki retain seven days of data in named volumes. Stop these services with `docker compose stop postgres api prometheus loki tempo otel-collector telemetry-demo`.
 
-The dedicated demo workload is instrumented and its three OTLP signal paths are covered by CI. The ORBIT API provides read-only, bounded queries for all three stores and discovers service names from Prometheus, Loki, and Tempo. The Metrics, Logs, and Traces views show those discoveries in a shared service selector. The production Go API is not instrumented yet, and telemetry-discovered services are not persisted into the PostgreSQL service inventory yet.
+The dedicated demo workload is instrumented and its three OTLP signal paths are covered by CI. The ORBIT API provides read-only, bounded queries for all three stores and discovers service names from Prometheus, Loki, and Tempo. The Metrics, Logs, and Traces views show those discoveries in a shared service selector. The production Go API is not instrumented yet. The catalog currently stores discovered names and backend provenance; its JSONB resource-attribute field is ready for richer instrumentation metadata.
 
 ### Query telemetry through the ORBIT API
 
@@ -89,13 +89,13 @@ Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/logs?service=orbit-tel
 Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/traces?service=orbit-telemetry-demo&window=1h&limit=20"
 ```
 
-The service discovery endpoint merges names from all configured stores and indicates which backend(s) reported each service. If one store is temporarily unavailable, the API returns the other results with a warning. Allowed windows are `15m`, `1h`, `6h`, and `24h`; service names are validated and query results are capped at 100. The request-rate query currently uses the instrumented demo counter and does not claim to be a generalized PromQL proxy.
+The service discovery endpoint merges names from all configured stores, upserts observations into PostgreSQL, and returns the persisted active catalog with first-seen, last-seen, and last-discovered timestamps. If one store is temporarily unavailable, the API returns persisted services and a warning. Allowed windows are `15m`, `1h`, `6h`, and `24h`; service names are validated and query results are capped at 100. The request-rate query currently uses the instrumented demo counter and does not claim to be a generalized PromQL proxy.
 
 ## Connect the local dashboard to the API
 
 With `docker compose up --build` running, open the dashboard at `http://localhost:3000` and choose **Connect a source**. Enter `http://localhost:8080` and click **Test and connect**. ORBIT verifies `/api/v1/meta`, `/api/v1/services`, and `/api/v1/incidents` before switching the dashboard to API mode. The URL is saved in browser local storage and can be changed from the same source panel.
 
-The Go API allows the GitHub Pages origin and local development origins through `ORBIT_ALLOWED_ORIGINS`. If you use a different dashboard origin, add that exact origin to the allowlist and restart the API. After connecting the local dashboard to the local API, select **Metrics**, **Logs**, or **Traces** in the navigation. A shared service selector is populated from discovered service names and shows source provenance. Each view queries its corresponding backend through the ORBIT API, supports 15m/1h/6h/24h windows, refreshes every 30 seconds, and shows the backend source and last query time. The Overview page remains focused on service and incident inventory. If you open the GitHub Pages website instead of the local frontend, you need a separately hosted HTTPS API that permits the Pages origin; `localhost:8080` on your computer is not reachable by the hosted site.
+The Go API allows the GitHub Pages origin and local development origins through `ORBIT_ALLOWED_ORIGINS`. If you use a different dashboard origin, add that exact origin to the allowlist and restart the API. After connecting the local dashboard to the local API, select **Metrics**, **Logs**, or **Traces** in the navigation. A shared service selector is populated from the persisted service catalog and shows source provenance. Each view queries its corresponding backend through the ORBIT API, supports 15m/1h/6h/24h windows, refreshes every 30 seconds, and shows the backend source and last query time. The Overview page remains focused on service and incident inventory. If you open the GitHub Pages website instead of the local frontend, you need a separately hosted HTTPS API that permits the Pages origin; `localhost:8080` on your computer is not reachable by the hosted site.
 
 ## Run Go tests directly
 
