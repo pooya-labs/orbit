@@ -35,6 +35,14 @@ const windows: { value: TelemetryWindow; label: string }[] = [
   { value: "24h", label: "24 hours" },
 ];
 
+const metricGroupOptions = [
+  { value: "instance", label: "groupInstance" },
+  { value: "service_version", label: "groupVersion" },
+  { value: "deployment_environment", label: "groupEnvironment" },
+] as const;
+
+const metricSeriesColors = ["#65d9c1", "#8db8e9", "#b6a4eb", "#e6b87d", "#e59c9c"];
+
 function formatClock(timestamp: number | string, language: Language): string {
   const numericTimestamp = typeof timestamp === "string" ? Number(timestamp) : timestamp;
   const value = typeof timestamp === "number"
@@ -97,6 +105,7 @@ export default function TelemetryWorkspace({
   const tr = (key: TranslationKey) => t(language, key);
   const [windowRange, setWindowRange] = useState<TelemetryWindow>("1h");
   const [selectedService, setSelectedService] = useState("orbit-telemetry-demo");
+  const [metricGroupBy, setMetricGroupBy] = useState<string[]>(["instance", "service_version", "deployment_environment"]);
   const [discoveredServices, setDiscoveredServices] = useState<DiscoveredTelemetryService[]>([]);
   const [serviceWarnings, setServiceWarnings] = useState<string[]>([]);
   const [serviceError, setServiceError] = useState("");
@@ -230,7 +239,8 @@ export default function TelemetryWorkspace({
       setError("");
       try {
         if (view === "Metrics") {
-          const response = await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl, selectedService);
+          const groupBy = metricGroupBy.length > 0 ? [...metricGroupBy].sort().join(",") : "none";
+          const response = await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl, selectedService, groupBy);
           if (mounted) setMetrics(response);
         } else if (view === "Logs") {
           const response = await listTelemetryLogs(
@@ -268,29 +278,58 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language]);
+  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy]);
 
-  const metricSamples = useMemo(() => {
+  const metricSeries = useMemo(() => {
     if (!metrics) return [];
-    return metrics.data
-      .flatMap((series) => series.values)
-      .map(([timestamp, value]) => ({ timestamp, value: Number(value) }))
-      .filter((point) => Number.isFinite(point.value))
-      .sort((a, b) => a.timestamp - b.timestamp);
-  }, [metrics]);
+    return metrics.data.map((series, index) => {
+      const points = series.values
+        .map(([timestamp, value]) => ({ timestamp, value: Number(value) }))
+        .filter((point) => Number.isFinite(point.value))
+        .sort((a, b) => a.timestamp - b.timestamp);
+      const dimensions = Object.entries(series.metric)
+        .filter(([key, value]) => key !== "service_name" && value !== "")
+        .sort(([a], [b]) => a.localeCompare(b));
+      const label = dimensions.length > 0
+        ? dimensions.map(([key, value]) => `${key}=${value}`).join(" · ")
+        : tr("groupAggregate");
+      return {
+        key: dimensions.map(([key, value]) => `${key}=${value}`).join("|") || `aggregate-${index}`,
+        label,
+        points,
+      };
+    }).filter((series) => series.points.length > 0);
+  }, [metrics, language]);
 
-  const chartPoints = useMemo(() => {
-    if (metricSamples.length < 2) return "";
-    const values = metricSamples.map((point) => point.value);
-    const min = Math.min(0, ...values);
-    const max = Math.max(...values);
-    const span = max - min || 1;
-    return values.map((value, index) => {
-      const x = 8 + (index / (values.length - 1)) * 584;
-      const y = 108 - ((value - min) / span) * 92;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-  }, [metricSamples]);
+  const metricSamples = useMemo(
+    () => metricSeries.flatMap((series) => series.points).sort((a, b) => a.timestamp - b.timestamp),
+    [metricSeries],
+  );
+
+  const chartSeries = useMemo(() => {
+    if (metricSeries.length === 0) return [];
+    const allPoints = metricSeries.flatMap((series) => series.points);
+    const minTimestamp = Math.min(...allPoints.map((point) => point.timestamp));
+    const maxTimestamp = Math.max(...allPoints.map((point) => point.timestamp));
+    const timeSpan = maxTimestamp - minTimestamp || 1;
+    const minValue = Math.min(0, ...allPoints.map((point) => point.value));
+    const maxValue = Math.max(...allPoints.map((point) => point.value));
+    const valueSpan = maxValue - minValue || 1;
+
+    return metricSeries.map((series, index) => ({
+      ...series,
+      color: metricSeriesColors[index % metricSeriesColors.length],
+      points: series.points.map((point) => ({
+        x: 8 + ((point.timestamp - minTimestamp) / timeSpan) * 584,
+        y: 108 - ((point.value - minValue) / valueSpan) * 92,
+      })),
+    }));
+  }, [metricSeries]);
+
+  const latestMetricRate = metricSeries.reduce((total, series) => {
+    const latest = series.points[series.points.length - 1];
+    return total + (latest?.value ?? 0);
+  }, 0);
 
   const logRows = useMemo(() => {
     if (!logs) return [];
@@ -415,23 +454,77 @@ export default function TelemetryWorkspace({
       )}
 
       {view === "Metrics" && (
+        <div className="telemetry-grouping-panel" role="group" aria-label={tr("groupBy")}>
+          <span className="telemetry-kicker">{tr("groupBy")}</span>
+          <button
+            type="button"
+            className={metricGroupBy.length === 0 ? "selected" : ""}
+            aria-pressed={metricGroupBy.length === 0}
+            onClick={() => setMetricGroupBy([])}
+          >
+            {tr("groupAggregate")}
+          </button>
+          <button
+            type="button"
+            className={metricGroupBy.length === metricGroupOptions.length && metricGroupOptions.every((item) => metricGroupBy.includes(item.value)) ? "selected" : ""}
+            aria-pressed={metricGroupBy.length === metricGroupOptions.length && metricGroupOptions.every((item) => metricGroupBy.includes(item.value))}
+            onClick={() => setMetricGroupBy(metricGroupOptions.map((item) => item.value))}
+          >
+            {tr("groupDetailed")}
+          </button>
+          {metricGroupOptions.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              className={metricGroupBy.includes(item.value) ? "selected" : ""}
+              aria-pressed={metricGroupBy.includes(item.value)}
+              onClick={() => setMetricGroupBy((current) => current.includes(item.value)
+                ? current.filter((value) => value !== item.value)
+                : [...current, item.value])}
+            >
+              {tr(item.label)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === "Metrics" && (
         <div className="panel telemetry-content-panel">
           {loading && !metrics ? <TelemetryLoading language={language} /> : metricSamples.length === 0 ? (
             <TelemetryEmpty title={tr("noMetricSamplesTitle")} message={language === "fa" ? tr("noMetricSamplesMessage").replace("این سرویس", selectedService) : tr("noMetricSamplesMessage").replace("this service", selectedService)} />
           ) : (
             <>
               <div className="telemetry-stat-row">
-                <div><span className="telemetry-kicker">{tr("requestRate")}</span><strong>{formatRate(metricSamples[metricSamples.length - 1].value, language)}<small> req/s</small></strong><p>{tr("latestPrometheus")}</p></div>
-                <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("samples")}</span><strong>{metricSamples.length}</strong><p>{tr("acrossWindow")} {windowRange}</p></div>
+                <div><span className="telemetry-kicker">{tr("requestRate")}</span><strong>{formatRate(latestMetricRate, language)}<small> req/s</small></strong><p>{tr("latestPrometheus")}</p></div>
+                <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("samples")}</span><strong>{metricSamples.length}</strong><p>{chartSeries.length} {tr("series")} · {tr("acrossWindow")} {windowRange}</p></div>
                 <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("queryStep")}</span><strong>{metrics?.step ?? "—"}</strong><p>{tr("prometheusResolution")}</p></div>
               </div>
               <div className="telemetry-chart">
-                {chartPoints ? (
-                  <svg viewBox="0 0 600 120" role="img" aria-label={`${tr("requestRate")} · ${windowRange}`}>
-                    <defs><linearGradient id="telemetryMetricFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#65d9c1" stopOpacity=".2" /><stop offset="100%" stopColor="#65d9c1" stopOpacity="0" /></linearGradient></defs>
-                    <path d={`M ${chartPoints.replace(/ /g, " L ")} L 592 116 L 8 116 Z`} fill="url(#telemetryMetricFill)" />
-                    <polyline points={chartPoints} fill="none" stroke="#65d9c1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                {chartSeries.length > 0 ? (
+                  <>
+                    <svg viewBox="0 0 600 120" role="img" aria-label={`${tr("requestRate")} · ${windowRange}`}>
+                      {chartSeries.map((series) => {
+                        const points = series.points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+                        return (
+                          <g key={series.key}>
+                            {series.points.length > 1 ? (
+                              <polyline points={points} fill="none" stroke={series.color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                            ) : (
+                              <circle cx={series.points[0].x} cy={series.points[0].y} r="4" fill={series.color} />
+                            )}
+                          </g>
+                        );
+                      })}
+                    </svg>
+                    <div className="telemetry-series-legend" aria-label={tr("series")}>
+                      {chartSeries.map((series) => (
+                        <span key={series.key}>
+                          <i style={{ backgroundColor: series.color }} />
+                          {series.label}
+                        </span>
+                      ))}
+                    </div>
+                  </>
                 ) : <TelemetryEmpty title={tr("notEnoughSamples")} message={tr("singleSample")} />}
               </div>
               <div className="telemetry-data-footer"><span>{tr("queryLabel")}: <code>{metrics?.query}</code></span><span>{tr("windowLabel")}: {windowRange}</span></div>
