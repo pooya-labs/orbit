@@ -367,3 +367,58 @@ func TestGRPCGatewayMapsCollectorFailureAndForwardTimeout(t *testing.T) {
 		}
 	})
 }
+
+
+// TestGRPCGatewayRecoversAfterDatabaseAndCollectorFailures verifies transient
+// dependency failures map to Unavailable without permanently disabling a
+// long-lived gateway after the dependencies recover.
+func TestGRPCGatewayRecoversAfterDatabaseAndCollectorFailures(t *testing.T) {
+	verifier, grants := validStubs()
+	authorizer, err := NewAuthorizer(verifier, grants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared := &rateLimitStoreStub{}
+	forwarder := &grpcForwarderStub{}
+	gateway := &GRPCGateway{
+		authorizer: authorizer,
+		forwarder: forwarder,
+		limiter: newWorkspaceRateLimiter(10),
+		sharedLimiter: shared,
+		timeout: 2 * time.Second,
+		concurrency: make(chan struct{}, maxConcurrentGRPCExports),
+	}
+	service := &metricsGRPCService{gateway: gateway}
+	ctx := grpcWorkloadContext([]string{testWorkspace}, []string{"Bearer signed-token"})
+	request := &metricsv1.ExportMetricsServiceRequest{
+		ResourceMetrics: []*metricspb.ResourceMetrics{{Resource: &resourcev1.Resource{}}},
+	}
+
+	grants.err = errors.New("postgres temporarily unavailable")
+	if _, err := service.Export(ctx, request); status.Code(err) != codes.Unavailable {
+		t.Fatalf("authorization outage code = %s, want Unavailable; err=%v", status.Code(err), err)
+	}
+	grants.err = nil
+
+	shared.err = errors.New("shared rate-limit store temporarily unavailable")
+	if _, err := service.Export(ctx, request); status.Code(err) != codes.Unavailable {
+		t.Fatalf("rate-limit store outage code = %s, want Unavailable; err=%v", status.Code(err), err)
+	}
+	if forwarder.metricsCalls != 0 {
+		t.Fatalf("database failures reached Collector %d times", forwarder.metricsCalls)
+	}
+	shared.err = nil
+
+	forwarder.err = errors.New("Collector temporarily unavailable")
+	if _, err := service.Export(ctx, request); status.Code(err) != codes.Unavailable {
+		t.Fatalf("Collector outage code = %s, want Unavailable; err=%v", status.Code(err), err)
+	}
+	forwarder.err = nil
+
+	if _, err := service.Export(ctx, request); err != nil {
+		t.Fatalf("request after dependency recovery failed: %v", err)
+	}
+	if forwarder.metricsCalls != 2 {
+		t.Fatalf("Collector calls = %d, want 2 (failed attempt and recovered request)", forwarder.metricsCalls)
+	}
+}
