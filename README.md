@@ -4,73 +4,100 @@
 
 ORBIT is an engineering-first observability platform for understanding the health, behavior, and reliability of distributed services.
 
-> **Current stage:** Milestone 01 — responsive observability workspace. The dashboard uses clearly labelled illustrative demo data. No production systems are connected yet.
+## Live preview
 
-## What is being built
+**[Open the ORBIT dashboard](https://pooya16pg-spec.github.io/orbit/)**
 
-- Service inventory and dependency topology
-- Metrics, distributed traces, and structured logs
-- Incident timelines, alert policies, and SLO tracking
-- Deployment markers and release health
-- OpenTelemetry-native ingestion and service instrumentation
+The public preview is a static, responsive workspace. Its metrics, service catalogue, and incident timeline are explicitly labelled illustrative demo data; no production systems are connected.
 
-## Technology direction
+## Current implementation
+
+- Responsive Next.js + TypeScript observability workspace.
+- Go HTTP API with liveness, readiness, metadata, service inventory, and incident endpoints.
+- PostgreSQL repository with a versioned initial migration and clearly marked seed data.
+- Docker Compose stack for PostgreSQL, Redis, NATS, and the Go API.
+- GitHub Actions for tests, static build, and GitHub Pages deployment.
+
+## Technology
 
 | Layer | Technology |
 | --- | --- |
 | Web application | Next.js · React · TypeScript |
-| API and ingestion | Go |
-| Persistence | PostgreSQL |
-| Cache and ephemeral state | Redis |
-| Event transport | NATS |
-| Telemetry pipeline | OpenTelemetry · Prometheus · Loki · Tempo |
-| Local infrastructure | Docker Compose |
-
-The web workspace is the first deliverable. Backend services will be introduced behind documented API contracts, then connected to real telemetry. **Demo values must never be presented as live production data.**
+| API | Go 1.24+ |
+| Persistence | PostgreSQL 17 |
+| Cache | Redis 7 (stack provisioned; application integration pending) |
+| Event transport | NATS JetStream (stack provisioned; application integration pending) |
+| Telemetry direction | OpenTelemetry · Prometheus · Loki · Tempo |
+| CI/CD | GitHub Actions · GitHub Pages · Docker Compose |
 
 ## Run locally on Windows
 
-Requirements: Node.js 20 or newer and Git.
+Requirements: Git, Node.js 20+, and npm.
 
 ```powershell
 git clone https://github.com/pooya16pg-spec/orbit.git
 cd orbit
 npm install
-Copy-Item .env.example .env.local
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Useful commands:
+## Run the backend stack
+
+Install Docker Desktop, then from the repository root:
+
+```powershell
+docker compose up --build
+```
+
+This starts PostgreSQL, Redis, NATS, and the Go API. On its first start the API applies the initial SQL migration and inserts five sample services and two sample incidents, each marked with source `demo_seed`.
+
+| Endpoint | Purpose |
+| --- | --- |
+| [http://localhost:8080/health/live](http://localhost:8080/health/live) | Process liveness |
+| [http://localhost:8080/health/ready](http://localhost:8080/health/ready) | PostgreSQL readiness |
+| [http://localhost:8080/api/v1/meta](http://localhost:8080/api/v1/meta) | API metadata |
+| [http://localhost:8080/api/v1/services](http://localhost:8080/api/v1/services) | Service inventory |
+| [http://localhost:8080/api/v1/incidents](http://localhost:8080/api/v1/incidents) | Incident inventory |
+| [http://localhost:8080/api/v1/incidents?status=investigating](http://localhost:8080/api/v1/incidents?status=investigating) | Filter incidents |
+
+Stop containers with `docker compose down`. To delete local database/cache volumes too, use `docker compose down -v` (this permanently deletes their local data).
+
+## Quality checks
 
 ```powershell
 npm run typecheck
 npm run build
-npm run start
+cd server
+go mod download
+go test -race ./...
+go vet ./...
+go build ./cmd/orbit-api
 ```
+
+GitHub Actions runs the web checks and Go tests against a real PostgreSQL service container.
 
 ## Repository map
 
 ```text
-app/                  Next.js app router, dashboard, global styles
-server/               Go API, configuration, HTTP handlers, PostgreSQL repository
-server/.../migrations  Versioned SQL schema and explicit demo seed rows
-docs/                 Architecture decisions and development notes
-.github/workflows/    CI and GitHub Pages deployment
+app/                         Next.js dashboard and design system
+server/cmd/orbit-api/        Go API entry point
+server/internal/httpapi/     HTTP routes and middleware
+server/internal/store/       API read models and repository contract
+server/internal/store/postgres/ PostgreSQL implementation and migrations
+docs/                        Architecture, roadmap, local development
+.github/workflows/            CI and Pages deployment
 ```
-
-## Development principles
-
-1. Real telemetry or explicitly labelled demo data — never ambiguous synthetic "live" data.
-2. Keep ingestion, storage, querying, and presentation as separate concerns.
-3. Prefer observable failure modes, typed contracts, and reproducible local infrastructure.
-4. Design for desktop and mobile without sacrificing information density on large screens.
 
 ## Roadmap
 
-See [docs/roadmap.md](docs/roadmap.md) for the staged implementation plan and [docs/architecture.md](docs/architecture.md) for the initial system boundaries.
+See [docs/roadmap.md](docs/roadmap.md) and [docs/architecture.md](docs/architecture.md).
+
+## Release status
+
+The v0.1.0 public preview is the dashboard milestone. PostgreSQL-backed API work is in progress and is available for local evaluation through Docker Compose. Live telemetry ingestion, authentication, and hosted backend deployment are not yet implemented.
 
 ## License
 
-No license has been selected yet. All rights are reserved by default.
+No open-source license has been selected. All rights are reserved by default.
