@@ -62,7 +62,7 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 ORBIT's milestones are not a reason to expose unsafe operations early. The delivery order is:
 
 1. Finish and merge the verified M04 read-path work. Keep complete workload-side OpenTelemetry resource ingestion as an explicit M04 follow-up.
-2. Implement the M06 security gate (OIDC/JWT verification, server-side RBAC, actor identity, request limits, and workspace boundary) before adding public state-changing operations.
+2. Implement the M06 security gate from [ADR 0001](decisions/0001-oidc-access-token-authentication.md): OIDC discovery, OAuth access-token/JWKS verification, server-side RBAC, actor identity, request limits, and workspace boundary before adding public state-changing operations.
 3. Deliver M05 in slices: incident lifecycle and immutable timeline first; alert rules and notification adapters second; deployment annotations third; SLO/error-budget calculations fourth; audit history across every mutation.
 4. Complete the remaining M06 operational hardening: retention/cardinality controls, load testing, backup/restore, dependency/security review, production deployment, and runbooks.
 
