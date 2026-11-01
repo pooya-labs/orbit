@@ -47,6 +47,7 @@ type Repository interface {
 	Ping(ctx context.Context) error
 	UpsertTelemetryServices(ctx context.Context, services []TelemetryService) ([]TelemetryService, error)
 	ListTelemetryServices(ctx context.Context, limit int) ([]TelemetryService, error)
+	UpdateTelemetryServiceResourceAttributes(ctx context.Context, name string, attributes map[string]any, sources map[string][]string) error
 	ListServices(ctx context.Context) ([]Service, error)
 	ListIncidents(ctx context.Context, status string) ([]Incident, error)
 	Close()
