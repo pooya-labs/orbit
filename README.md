@@ -46,7 +46,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Connect the dashboard to the local API
 
-After starting the backend stack, open the dashboard and choose **Connect a source**. Enter `http://localhost:8080`, then select **Test and connect**. The dashboard verifies metadata and reads services and incidents. The URL is stored only in this browser. The public GitHub Pages site does not host the Go API; a remote API must explicitly allow the site origin through `ORBIT_ALLOWED_ORIGINS`.
+For a local API, run the dashboard locally with `npm run dev` and run the backend with Docker Compose. Open `http://localhost:3000`, choose **Connect a source**, enter `http://localhost:8080`, then select **Test and connect**. The dashboard verifies metadata and reads services and incidents. The URL is stored only in this browser. The public GitHub Pages site does not host the Go API; connecting that hosted site requires a separately hosted HTTPS API whose CORS allowlist includes the Pages origin.
 
 When connected, the dashboard hides illustrative metric cards and charts because the current API does not expose time-series telemetry yet. Demo mode remains available at any time.
 
