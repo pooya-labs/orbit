@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -406,4 +407,84 @@ func TestWorkspaceQueriesRejectMalformedWorkspaceIDBeforeBackendCall(t *testing.
 	if _,err:=client.WorkspaceMetrics(context.Background(),"not-a-uuid",window,"api-gateway",nil);err==nil{t.Fatal("expected invalid workspace ID")}
 	if _,err:=client.WorkspaceLogs(context.Background(),"not-a-uuid",window,"api-gateway",10);err==nil{t.Fatal("expected invalid workspace ID")}
 	if _,err:=client.WorkspaceTraces(context.Background(),"not-a-uuid",window,"api-gateway",10);err==nil{t.Fatal("expected invalid workspace ID")}
+}
+
+
+func TestWorkspaceBackendQueriesRemainIsolatedAcrossSequentialWorkspaceReads(t *testing.T) {
+	const (
+		workspaceA = "00000000-0000-4000-8000-000000000001"
+		workspaceB = "00000000-0000-4000-8000-000000000002"
+	)
+	expectedWorkspace := workspaceA
+	calls := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var query string
+		switch r.URL.Path {
+		case "/api/v1/query_range":
+			query = r.URL.Query().Get("query")
+			if !strings.Contains(query, "orbit_workspace_id="+strconv.Quote(expectedWorkspace)) {
+				t.Errorf("Prometheus query for workspace %s lacks exact tenant matcher: %s", expectedWorkspace, query)
+			}
+			if strings.Contains(query, "orbit_workspace_id="+strconv.Quote(otherWorkspaceID(expectedWorkspace, workspaceA, workspaceB))) {
+				t.Errorf("Prometheus query for workspace %s contains the other tenant matcher: %s", expectedWorkspace, query)
+			}
+			calls["prometheus"]++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"success","data":{"result":[]}}`))
+		case "/loki/api/v1/query_range":
+			query = r.URL.Query().Get("query")
+			if !strings.Contains(query, "orbit_workspace_id="+strconv.Quote(expectedWorkspace)) {
+				t.Errorf("Loki query for workspace %s lacks exact tenant matcher: %s", expectedWorkspace, query)
+			}
+			if strings.Contains(query, "orbit_workspace_id="+strconv.Quote(otherWorkspaceID(expectedWorkspace, workspaceA, workspaceB))) {
+				t.Errorf("Loki query for workspace %s contains the other tenant matcher: %s", expectedWorkspace, query)
+			}
+			calls["loki"]++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"success","data":{"result":[]}}`))
+		case "/api/search":
+			query = r.URL.Query().Get("q")
+			if !strings.Contains(query, "resource.orbit.workspace.id = "+strconv.Quote(expectedWorkspace)) {
+				t.Errorf("Tempo query for workspace %s lacks exact tenant matcher: %s", expectedWorkspace, query)
+			}
+			if strings.Contains(query, "resource.orbit.workspace.id = "+strconv.Quote(otherWorkspaceID(expectedWorkspace, workspaceA, workspaceB))) {
+				t.Errorf("Tempo query for workspace %s contains the other tenant matcher: %s", expectedWorkspace, query)
+			}
+			calls["tempo"]++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"traces":[]}`))
+		default:
+			t.Errorf("unexpected backend path %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, server.URL, server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	window := QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}
+	for _, workspaceID := range []string{workspaceA, workspaceB} {
+		expectedWorkspace = workspaceID
+		if _, err := client.WorkspaceMetrics(context.Background(), workspaceID, window, "api-gateway", nil); err != nil {
+			t.Fatalf("workspace %s metrics query: %v", workspaceID, err)
+		}
+		if _, err := client.WorkspaceLogs(context.Background(), workspaceID, window, "api-gateway", 10); err != nil {
+			t.Fatalf("workspace %s logs query: %v", workspaceID, err)
+		}
+		if _, err := client.WorkspaceTraces(context.Background(), workspaceID, window, "api-gateway", 10); err != nil {
+			t.Fatalf("workspace %s traces query: %v", workspaceID, err)
+		}
+	}
+	if calls["prometheus"] != 2 || calls["loki"] != 2 || calls["tempo"] != 2 {
+		t.Fatalf("backend call counts = %+v; want two tenant-scoped reads per backend", calls)
+	}
+}
+
+func otherWorkspaceID(current, first, second string) string {
+	if current == first {
+		return second
+	}
+	return first
 }
