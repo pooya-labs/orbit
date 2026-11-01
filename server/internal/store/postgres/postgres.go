@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -64,10 +65,10 @@ func (r *Repository) Ping(ctx context.Context) error {
 }
 
 func (r *Repository) Migrate(ctx context.Context) error {
-	if _, err := r.pool.Exec(ctx, \`CREATE TABLE IF NOT EXISTS schema_migrations (
+	if _, err := r.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
 		version TEXT PRIMARY KEY,
 		applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-	)\`); err != nil {
+	)`); err != nil {
 		return fmt.Errorf("create migration ledger: %w", err)
 	}
 
@@ -116,7 +117,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 }
 
 
-var telemetryServiceNamePattern = regexp.MustCompile(\`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$\`)
+var telemetryServiceNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 
 var allowedTelemetrySources = map[string]struct{}{
 	"prometheus": {},
@@ -168,7 +169,7 @@ func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []sto
 
 		var item store.TelemetryService
 		var persistedAttributes []byte
-		err = tx.QueryRow(ctx, \`
+		err = tx.QueryRow(ctx, `
 			INSERT INTO telemetry_services (name, resource_attributes)
 			VALUES ($1, $2::jsonb)
 			ON CONFLICT (name) DO UPDATE SET
@@ -177,7 +178,7 @@ func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []sto
 				last_discovered_at = NOW(),
 				updated_at = NOW()
 			RETURNING id::text, name, first_seen_at, last_seen_at, last_discovered_at, resource_attributes
-		\`, service.Name, string(attributesJSON)).Scan(
+		`, service.Name, string(attributesJSON)).Scan(
 			&item.ID, &item.Name, &item.FirstSeenAt, &item.LastSeenAt,
 			&item.LastDiscoveredAt, &persistedAttributes,
 		)
@@ -189,13 +190,13 @@ func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []sto
 		}
 
 		for _, source := range sources {
-			if _, err := tx.Exec(ctx, \`
+			if _, err := tx.Exec(ctx, `
 				INSERT INTO telemetry_service_sources (service_id, source)
 				VALUES ($1::uuid, $2)
 				ON CONFLICT (service_id, source) DO UPDATE SET
 					last_seen_at = NOW(),
 					last_discovered_at = NOW()
-			\`, item.ID, source); err != nil {
+			`, item.ID, source); err != nil {
 				return nil, fmt.Errorf("upsert telemetry service source: %w", err)
 			}
 		}
@@ -214,7 +215,7 @@ func (r *Repository) ListTelemetryServices(ctx context.Context, limit int) ([]st
 	if limit < 1 || limit > 250 {
 		limit = 250
 	}
-	rows, err := r.pool.Query(ctx, \`
+	rows, err := r.pool.Query(ctx, `
 		SELECT
 			services.id::text,
 			services.name,
@@ -234,7 +235,7 @@ func (r *Repository) ListTelemetryServices(ctx context.Context, limit int) ([]st
 		GROUP BY services.id
 		ORDER BY services.name ASC
 		LIMIT $1
-	\`, limit)
+	`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query persisted telemetry services: %w", err)
 	}
