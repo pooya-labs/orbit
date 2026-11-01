@@ -26,6 +26,8 @@ Open http://localhost:3000. The local development server uses the root path; Git
 
 ## Run the backend and local infrastructure
 
+Before starting the API, choose an explicit runtime mode. The supplied Compose file sets `ORBIT_ENVIRONMENT=development`; running the API directly requires setting it yourself. Development can omit OIDC, but if either OIDC variable is set, both must be set and a successful discovery/JWKS load is required.
+
 With Docker Desktop running:
 
 ```powershell
@@ -34,7 +36,7 @@ docker compose up --build
 
 The first API startup runs the versioned SQL migrations and adds sample service and incident rows. Migration `002_telemetry_service_catalog` creates the normalized observed-service and source tables. The records are marked `demo_seed`.
 
-Useful endpoints:
+Useful endpoints (service and telemetry data routes are public only in explicit local development mode):
 
 - http://localhost:8080/health/live
 - http://localhost:8080/health/ready
@@ -97,6 +99,15 @@ With `docker compose up --build` running, open the dashboard at `http://localhos
 
 The Go API allows the GitHub Pages origin and local development origins through `ORBIT_ALLOWED_ORIGINS`. If you use a different dashboard origin, add that exact origin to the allowlist and restart the API. After connecting the local dashboard to the local API, select **Metrics**, **Logs**, or **Traces** in the navigation. A shared service selector is populated from the persisted service catalog and shows source provenance. Each view queries its corresponding backend through the ORBIT API, supports 15m/1h/6h/24h windows, refreshes every 30 seconds, and shows the backend source and last query time. The Overview page remains focused on service and incident inventory. If you open the GitHub Pages website instead of the local frontend, you need a separately hosted HTTPS API that permits the Pages origin; `localhost:8080` on your computer is not reachable by the hosted site.
 
+
+With an OIDC-enabled API, send a verified access token explicitly when calling protected endpoints:
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:ORBIT_ACCESS_TOKEN" }
+Invoke-RestMethod -Headers $headers "http://localhost:8080/api/v1/services"
+Invoke-RestMethod -Headers $headers "http://localhost:8080/api/v1/telemetry/services?window=1h"
+```
+
 ## Run Go tests directly
 
 ```powershell
@@ -114,9 +125,14 @@ $env:ORBIT_DATABASE_URL = "postgres://orbit:orbit_local_only@localhost:5432/orbi
 go run ./cmd/orbit-api
 ```
 
-## Environment and secrets
+## Environment, authentication and secrets
 
-- `.env.example` contains local-only defaults.
+- `.env.example` contains local-only defaults and documents the optional issuer/audience settings.
+- Set `ORBIT_ENVIRONMENT=development` explicitly for a local API without authentication. Do not rely on an implicit default.
+- To enable OIDC in development, set both `ORBIT_OIDC_ISSUER` and `ORBIT_OIDC_AUDIENCE`. The issuer must publish a matching `/.well-known/openid-configuration` document and a reachable `jwks_uri`. `ORBIT_OIDC_ROLES_CLAIM` defaults to `roles`; supported values are `viewer`, `operator`, and `administrator`.
+- Staging and production require both OIDC settings and fail startup if discovery/JWKS validation fails. API data routes then require `Authorization: Bearer <access-token>`; the token must target the configured API audience. The public `/health/live` and `/api/v1/meta` endpoints remain unauthenticated.
+- The dashboard does not yet implement OIDC PKCE, so do not connect the static frontend to an auth-protected API until the browser-authentication milestone is implemented.
+- `ORBIT_RATE_LIMIT_PER_MINUTE` defaults to 120 per IP and authenticated subject, per API process. This is a development safety limit, not a distributed production quota.
 - Compose currently has a deliberately local development password. Change all credentials before deploying any service outside localhost.
 - Never commit `.env.local`, production secrets, API keys, or real telemetry payloads.
 - The public GitHub Pages dashboard is frontend-only; it does not tunnel to a developer's local API.
