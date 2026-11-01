@@ -33,6 +33,19 @@ Do not expose the Collector's raw OTLP receivers as a public multi-tenant endpoi
 4. Prometheus, Loki, and Tempo receive only canonical tenant attribution from the trusted gateway. Collector processors must not convert an untrusted producer value into a tenant label.
 5. The Collector and backend write endpoints remain private-network-only. Network policy/firewall rules must prevent clients from bypassing the gateway and reaching raw receivers or storage APIs.
 
+### Gateway listener and TLS boundary
+
+The application HTTP and gRPC ingestion listeners do not terminate TLS. Their default bind addresses are loopback-only (`127.0.0.1:4319` and `127.0.0.1:4320`). A deployment that needs remote workload connectivity must explicitly bind them to a private interface and place them behind a TLS-terminating ingress.
+
+Before enabling remote traffic, the deployment must:
+- terminate TLS at the ingress and reject plaintext external connections;
+- forward the original Authorization metadata/header unchanged and never log bearer credentials;
+- restrict listener reachability to the ingress using security groups, firewall rules, or Kubernetes NetworkPolicy;
+- keep Collector OTLP receivers and telemetry backend write APIs on a separate private network, reachable only by the gateway;
+- avoid publishing gateway or raw Collector ports directly to the public internet.
+
+The local Compose profile binds the gateway listeners to the container network only and publishes neither gateway nor raw Collector OTLP ports to the host. This is not a substitute for production ingress TLS and network-policy verification.
+
 ### OTLP protocol boundary
 
 - Support OTLP/HTTP and OTLP/gRPC only through the authenticated gateway.
