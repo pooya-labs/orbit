@@ -89,8 +89,13 @@ export type TelemetryTracesResponse = TelemetryQueryResponse<TempoTraceSummary[]
 export type TelemetryBackend = "prometheus" | "loki" | "tempo";
 
 export interface DiscoveredTelemetryService {
+  id: string;
   name: string;
   sources: TelemetryBackend[];
+  first_seen_at: string;
+  last_seen_at: string;
+  last_discovered_at: string;
+  resource_attributes: Record<string, unknown>;
 }
 
 export interface TelemetryServicesResponse {
