@@ -51,7 +51,7 @@ OpenTelemetry Collector
 - Request IDs, structured JSON request logs, and panic recovery.
 - `GET /health/live`, `GET /health/ready`, and `GET /api/v1/meta`.
 - `GET /api/v1/services` and `GET /api/v1/incidents?status=...`.
-- `GET /api/v1/telemetry/services` discovers names from Prometheus, Loki, and Tempo, upserts normalized service/source observations in PostgreSQL, and returns the persisted active catalog with discovery timestamps and partial-backend warnings.
+- `GET /api/v1/telemetry/services` discovers names from Prometheus, Loki, and Tempo, upserts normalized service/source observations in PostgreSQL, and returns the persisted active catalog with discovery timestamps and partial-backend warnings. If every telemetry backend is unavailable, it serves the last known PostgreSQL catalog when available.
 - `GET /api/v1/telemetry/metrics`, `/logs`, and `/traces` expose bounded, service-scoped queries against Prometheus, Loki, and Tempo.
 - Data endpoints use explicit JSON envelopes and return safe errors without leaking database details.
 
