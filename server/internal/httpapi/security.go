@@ -118,19 +118,28 @@ func (l *requestRateLimiter) allow(keys []string, now time.Time) bool {
 			}
 		}
 	}
+
+	seen := make(map[string]struct{}, len(keys))
+	missing := 0
 	for _, key := range keys {
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
 		window, exists := l.windows[key]
 		if !exists {
-			if len(l.windows) >= 10000 {
-				return false
-			}
+			missing++
 			continue
 		}
 		if now.Sub(window.start) < time.Minute && window.count >= l.limit {
 			return false
 		}
 	}
-	for _, key := range keys {
+	if len(l.windows)+missing > 10000 {
+		return false
+	}
+
+	for key := range seen {
 		window := l.windows[key]
 		if window.start.IsZero() || now.Sub(window.start) >= time.Minute {
 			window = rateWindow{start: now}
