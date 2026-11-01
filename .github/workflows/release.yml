@@ -48,7 +48,9 @@ jobs:
             - Explicit Demo / API source switch for service and incident inventory.
             - Live telemetry views that query the ORBIT API, with 15m / 1h / 6h / 24h windows, query timestamps, refresh, and loading / empty / error states.
             - Cross-backend service discovery across Prometheus, Loki, and Tempo, with merged names, source provenance, and a shared service selector.
-            - Persisted PostgreSQL telemetry service catalog with normalized service identities, source relationships, first-seen / last-seen / last-discovered timestamps, and JSONB resource attributes.
+            - Persisted PostgreSQL telemetry service catalog with normalized service identities, source relationships, first-seen / last-seen / last-discovered timestamps, bounded JSONB resource attributes, and per-attribute backend provenance.
+            - Cursor-based service-catalog pagination, with a dashboard control to load additional pages.
+            - Allow-listed Prometheus grouping for the demo request-rate metric, independent chart lines per series, and per-series stale-sample / telemetry-gap warnings.
             - English and Persian dashboard localization, persistent language selection, locale-aware formatting, and responsive right-to-left layout.
             - Public creator / project-owner attribution linked to the GitHub profile and source repository.
             - Go API with health, metadata, PostgreSQL-backed service and incident endpoints, plus bounded Prometheus, Loki, and Tempo query endpoints.
@@ -59,10 +61,12 @@ jobs:
             - The public GitHub Pages site hosts the frontend only; it does not host the Go API or telemetry backends.
             - Live telemetry on the hosted site requires a separately hosted HTTPS ORBIT API and telemetry stack, with the Pages origin added to ORBIT_ALLOWED_ORIGINS.
             - The current request-rate metric is the instrumented orbit-telemetry-demo counter. Other discovered services appear in the shared selector, but may not expose that demo-specific metric.
-            - The catalog currently persists discovered service names and backend provenance; richer OpenTelemetry resource attributes will be populated as instrumentation metadata is ingested.
+            - Resource-attribute discovery currently uses a bounded allowlist of Prometheus labels, Loki labels, and Tempo resource tags. Full semantic-convention resource ingestion directly from workload instrumentation remains future work.
+            - Metric grouping is available only for the instrumented demo request-rate counter; arbitrary metric-name discovery and selection are not implemented.
             - The production ORBIT API is not yet self-instrumented.
             - Redis and NATS are provisioned for local development but are not yet wired into application behavior.
-            - Production authentication, high availability, and hardened operational policies remain future work.
+            - The API has no production authentication, workspace isolation, or role-based access control yet; no public state-changing operations are enabled.
+            - M05 incident/alert/SLO workflows and M06 production hardening remain future milestones. Redis and NATS are provisioned locally but are not yet integrated.
 
             This is an early public preview, not a production monitoring service.
         env:
