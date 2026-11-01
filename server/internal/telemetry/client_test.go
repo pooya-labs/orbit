@@ -11,6 +11,51 @@ import (
 	"time"
 )
 
+func TestParseMetricGroupByUsesSafeAllowList(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:  "default dimensions",
+			input: "",
+			want:  []string{"deployment_environment", "instance", "service_version"},
+		},
+		{
+			name:  "aggregate only",
+			input: "none",
+			want:  []string{},
+		},
+		{
+			name:  "trims sorts and removes duplicates",
+			input: " service_version,cloud_region,cloud_region ",
+			want:  []string{"cloud_region", "service_version"},
+		},
+		{
+			name:    "rejects arbitrary Prometheus labels",
+			input:   "__name__",
+			wantErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := ParseMetricGroupBy(test.input)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("ParseMetricGroupBy(%q) error = %v, wantErr %v", test.input, err, test.wantErr)
+			}
+			if test.wantErr {
+				return
+			}
+			if strings.Join(got, ",") != strings.Join(test.want, ",") {
+				t.Fatalf("ParseMetricGroupBy(%q) = %v, want %v", test.input, got, test.want)
+			}
+		})
+	}
+}
+
 func TestParseWindowUsesBoundedChoices(t *testing.T) {
 	for _, name := range []string{"15m", "1h", "6h", "24h"} {
 		if _, err := ParseWindow(name); err != nil {
@@ -74,7 +119,7 @@ func TestMetricsQueriesOnlyFixedPromQLAndReturnsFreshness(t *testing.T) {
 			t.Fatalf("path = %q", r.URL.Path)
 		}
 		query := r.URL.Query()
-		if query.Get("query") != `sum(rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
+		if query.Get("query") != `sum by (service_name) (rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
 			t.Fatalf("unexpected service-scoped PromQL: %q", query.Get("query"))
 		}
 		if query.Get("step") != "1m" || query.Get("timeout") != "5s" || query.Get("limit") != "10" {
@@ -89,11 +134,11 @@ func TestMetricsQueriesOnlyFixedPromQLAndReturnsFreshness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo")
+	result, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Source != "prometheus" || result.Window != "1h" || result.Step != "1m" || result.Query != `sum(rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
+	if result.Source != "prometheus" || result.Window != "1h" || result.Step != "1m" || result.Query != `sum by (service_name) (rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
 		t.Fatalf("unexpected query metadata: %+v", result)
 	}
 	var data []map[string]json.RawMessage
@@ -170,7 +215,7 @@ func TestUnconfiguredBackendReturnsTypedError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo"); err != ErrNotConfigured {
+	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo", nil); err != ErrNotConfigured {
 		t.Fatalf("error = %v, want ErrNotConfigured", err)
 	}
 }
@@ -185,7 +230,7 @@ func TestUpstreamErrorDoesNotBecomeAResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo"); err == nil {
+	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo", nil); err == nil {
 		t.Fatal("expected upstream HTTP error")
 	}
 }
@@ -239,6 +284,49 @@ func TestServicesMergesSourcesAndRejectsInvalidLabels(t *testing.T) {
 	shared := result.Data[1]
 	if len(shared.Sources) != 3 || shared.Sources[0] != "loki" || shared.Sources[1] != "prometheus" || shared.Sources[2] != "tempo" {
 		t.Fatalf("expected merged source provenance for shared-service, got %+v", shared)
+	}
+}
+
+func TestResourceAttributeProvenanceOnlyIncludesBackendsThatObservedService(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/series" {
+			t.Fatalf("unexpected Prometheus path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":[]}`))
+	}))
+	defer prometheus.Close()
+
+	loki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loki/api/v1/series" {
+			t.Fatalf("unexpected Loki path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":[{"service_name":"api-gateway","service_version":"2.1"}]}`))
+	}))
+	defer loki.Close()
+
+	client, err := NewClient(prometheus.URL, loki.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.DiscoverResourceAttributes(context.Background(), QueryWindow{
+		Name: "1h", Duration: time.Hour, Step: "1m",
+	}, "api-gateway")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.SourcesQueried) != 2 || result.SourcesQueried[0] != "loki" || result.SourcesQueried[1] != "prometheus" {
+		t.Fatalf("expected both configured backends to be queried, got %v", result.SourcesQueried)
+	}
+	if result.Attributes["service.name"] != "api-gateway" {
+		t.Fatalf("service.name = %#v, want api-gateway", result.Attributes["service.name"])
+	}
+	if got := result.AttributeSources["service.name"]; len(got) != 1 || got[0] != "loki" {
+		t.Fatalf("empty Prometheus result must not claim service.name provenance, got %v", got)
+	}
+	if got := result.AttributeSources["service.version"]; len(got) != 1 || got[0] != "loki" {
+		t.Fatalf("unexpected service.version provenance: %v", got)
 	}
 }
 

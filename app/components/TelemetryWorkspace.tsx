@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -14,6 +14,7 @@ import {
   listTelemetryLogs,
   listTelemetryTraces,
   listTelemetryServices,
+  getTelemetryServiceAttributes,
 } from "../../lib/orbit/client";
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../../lib/orbit/i18n";
 import type {
@@ -22,6 +23,7 @@ import type {
   TelemetryTracesResponse,
   TelemetryWindow,
   DiscoveredTelemetryService,
+  TelemetryResourceAttributesResponse,
 } from "../../lib/orbit/contracts";
 
 export type TelemetryView = "Metrics" | "Logs" | "Traces";
@@ -32,6 +34,14 @@ const windows: { value: TelemetryWindow; label: string }[] = [
   { value: "6h", label: "6 hours" },
   { value: "24h", label: "24 hours" },
 ];
+
+const metricGroupOptions = [
+  { value: "instance", label: "groupInstance" },
+  { value: "service_version", label: "groupVersion" },
+  { value: "deployment_environment", label: "groupEnvironment" },
+] as const;
+
+const metricSeriesColors = ["#65d9c1", "#8db8e9", "#b6a4eb", "#e6b87d", "#e59c9c"];
 
 function formatClock(timestamp: number | string, language: Language): string {
   const numericTimestamp = typeof timestamp === "string" ? Number(timestamp) : timestamp;
@@ -50,6 +60,12 @@ function formatClock(timestamp: number | string, language: Language): string {
     minute: "2-digit",
     second: "2-digit",
   }).format(date);
+}
+
+function parseStepMilliseconds(step?: string): number {
+  const match = /^(\d+)(s|m)$/.exec(step ?? "");
+  if (!match) return 60_000;
+  return Number(match[1]) * (match[2] === "m" ? 60_000 : 1_000);
 }
 
 function formatRate(value: number, language: Language): string {
@@ -95,10 +111,19 @@ export default function TelemetryWorkspace({
   const tr = (key: TranslationKey) => t(language, key);
   const [windowRange, setWindowRange] = useState<TelemetryWindow>("1h");
   const [selectedService, setSelectedService] = useState("orbit-telemetry-demo");
+  const [metricGroupBy, setMetricGroupBy] = useState<string[]>(["instance", "service_version", "deployment_environment"]);
   const [discoveredServices, setDiscoveredServices] = useState<DiscoveredTelemetryService[]>([]);
   const [serviceWarnings, setServiceWarnings] = useState<string[]>([]);
   const [serviceError, setServiceError] = useState("");
   const [serviceLoading, setServiceLoading] = useState(true);
+  const [serviceCursor, setServiceCursor] = useState<string | null>(null);
+  const [serviceHasMore, setServiceHasMore] = useState(false);
+  const [serviceLoadingMore, setServiceLoadingMore] = useState(false);
+  const servicePageController = useRef<AbortController | null>(null);
+  const serviceDiscoveryController = useRef<AbortController | null>(null);
+  const [resourceAttributes, setResourceAttributes] = useState<TelemetryResourceAttributesResponse | null>(null);
+  const [resourceLoading, setResourceLoading] = useState(true);
+  const [resourceError, setResourceError] = useState("");
   const [metrics, setMetrics] = useState<TelemetryMetricsResponse | null>(null);
   const [logs, setLogs] = useState<TelemetryLogsResponse | null>(null);
   const [traces, setTraces] = useState<TelemetryTracesResponse | null>(null);
@@ -110,16 +135,24 @@ export default function TelemetryWorkspace({
 
 
   useEffect(() => {
-    const controller = new AbortController();
     let mounted = true;
 
     const loadServices = async () => {
+      servicePageController.current?.abort();
+      servicePageController.current = null;
+      setServiceLoadingMore(false);
+
+      serviceDiscoveryController.current?.abort();
+      const controller = new AbortController();
+      serviceDiscoveryController.current = controller;
       setServiceLoading(true);
       setServiceError("");
       try {
         const response = await listTelemetryServices(windowRange, controller.signal, apiBaseUrl);
-        if (!mounted) return;
+        if (!mounted || controller.signal.aborted) return;
         setDiscoveredServices(response.data);
+        setServiceCursor(response.next_cursor ?? null);
+        setServiceHasMore(response.has_more ?? false);
         setServiceWarnings(response.warnings ?? []);
         if (response.data.length > 0) {
           setSelectedService((current) => {
@@ -129,13 +162,16 @@ export default function TelemetryWorkspace({
           });
         }
       } catch (cause) {
-        if (controller.signal.aborted) return;
-        if (mounted) {
-          setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت فهرست سرویس‌ها ناموفق بود." : "Unable to discover telemetry services.");
-          setServiceWarnings([]);
-        }
+        if (controller.signal.aborted || !mounted) return;
+        setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت فهرست سرویس‌ها ناموفق بود." : "Unable to discover telemetry services.");
+        setServiceWarnings([]);
+        setServiceCursor(null);
+        setServiceHasMore(false);
       } finally {
-        if (mounted) setServiceLoading(false);
+        if (mounted && serviceDiscoveryController.current === controller) {
+          serviceDiscoveryController.current = null;
+          setServiceLoading(false);
+        }
       }
     };
 
@@ -143,10 +179,89 @@ export default function TelemetryWorkspace({
     const interval = window.setInterval(() => void loadServices(), 60_000);
     return () => {
       mounted = false;
-      controller.abort();
+      serviceDiscoveryController.current?.abort();
+      serviceDiscoveryController.current = null;
+      servicePageController.current?.abort();
+      servicePageController.current = null;
       window.clearInterval(interval);
     };
   }, [windowRange, apiBaseUrl, reloadKey, language]);
+
+  const loadMoreServices = async () => {
+    if (!serviceCursor || !serviceHasMore || serviceLoadingMore || serviceLoading) return;
+    servicePageController.current?.abort();
+    const controller = new AbortController();
+    servicePageController.current = controller;
+    setServiceLoadingMore(true);
+    try {
+      const response = await listTelemetryServices(windowRange, controller.signal, apiBaseUrl, serviceCursor, 50);
+      if (controller.signal.aborted) return;
+      setDiscoveredServices((current) => {
+        const merged = new Map(current.map((service) => [service.name, service]));
+        for (const service of response.data) merged.set(service.name, service);
+        return Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
+      });
+      setServiceCursor(response.next_cursor ?? null);
+      setServiceHasMore(response.has_more ?? false);
+      setServiceWarnings((current) => Array.from(new Set([...current, ...(response.warnings ?? [])])));
+    } catch (cause) {
+      if (controller.signal.aborted) return;
+      setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "بارگذاری سرویس‌های بیشتر ناموفق بود." : "Unable to load more services.");
+    } finally {
+      if (servicePageController.current === controller) {
+        servicePageController.current = null;
+        setServiceLoadingMore(false);
+      }
+    }
+  };
+
+  const selectedServiceDiscovered = discoveredServices.some(
+    (service) => service.name === selectedService,
+  );
+
+  useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+
+    if (serviceLoading || !selectedServiceDiscovered) {
+      setResourceAttributes(null);
+      setResourceError("");
+      setResourceLoading(false);
+      return () => {
+        mounted = false;
+        controller.abort();
+      };
+    }
+
+    const loadAttributes = async () => {
+      setResourceLoading(true);
+      setResourceAttributes(null);
+      setResourceError("");
+      try {
+        const response = await getTelemetryServiceAttributes(
+          selectedService,
+          windowRange,
+          controller.signal,
+          apiBaseUrl,
+        );
+        if (mounted && !controller.signal.aborted) setResourceAttributes(response);
+      } catch (cause) {
+        if (controller.signal.aborted || !mounted) return;
+        setResourceAttributes(null);
+        setResourceError(cause instanceof Error ? cause.message : tr("resourceAttributeUnavailable"));
+      } finally {
+        if (mounted && !controller.signal.aborted) setResourceLoading(false);
+      }
+    };
+
+    void loadAttributes();
+    const interval = window.setInterval(() => void loadAttributes(), 60_000);
+    return () => {
+      mounted = false;
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [selectedService, selectedServiceDiscovered, serviceLoading, windowRange, apiBaseUrl, reloadKey, language]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -162,7 +277,8 @@ export default function TelemetryWorkspace({
       setError("");
       try {
         if (view === "Metrics") {
-          const response = await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl, selectedService);
+          const groupBy = metricGroupBy.length > 0 ? [...metricGroupBy].sort().join(",") : "none";
+          const response = await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl, selectedService, groupBy);
           if (mounted) setMetrics(response);
         } else if (view === "Logs") {
           const response = await listTelemetryLogs(
@@ -200,29 +316,76 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language]);
+  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy]);
 
-  const metricSamples = useMemo(() => {
+  const metricSeries = useMemo(() => {
     if (!metrics) return [];
-    return metrics.data
-      .flatMap((series) => series.values)
-      .map(([timestamp, value]) => ({ timestamp, value: Number(value) }))
-      .filter((point) => Number.isFinite(point.value))
-      .sort((a, b) => a.timestamp - b.timestamp);
-  }, [metrics]);
+    return metrics.data.map((series, index) => {
+      const points = series.values
+        .map(([timestamp, value]) => ({ timestamp, value: Number(value) }))
+        .filter((point) => Number.isFinite(point.value))
+        .sort((a, b) => a.timestamp - b.timestamp);
+      const dimensions = Object.entries(series.metric)
+        .filter(([key, value]) => key !== "service_name" && value !== "")
+        .sort(([a], [b]) => a.localeCompare(b));
+      const label = dimensions.length > 0
+        ? dimensions.map(([key, value]) => `${key}=${value}`).join(" · ")
+        : tr("groupAggregate");
+      return {
+        key: dimensions.map(([key, value]) => `${key}=${value}`).join("|") || `aggregate-${index}`,
+        label,
+        points,
+      };
+    }).filter((series) => series.points.length > 0);
+  }, [metrics, language]);
 
-  const chartPoints = useMemo(() => {
-    if (metricSamples.length < 2) return "";
-    const values = metricSamples.map((point) => point.value);
-    const min = Math.min(0, ...values);
-    const max = Math.max(...values);
-    const span = max - min || 1;
-    return values.map((value, index) => {
-      const x = 8 + (index / (values.length - 1)) * 584;
-      const y = 108 - ((value - min) / span) * 92;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(" ");
-  }, [metricSamples]);
+  const metricSamples = useMemo(
+    () => metricSeries.flatMap((series) => series.points).sort((a, b) => a.timestamp - b.timestamp),
+    [metricSeries],
+  );
+
+  const chartSeries = useMemo(() => {
+    if (metricSeries.length === 0) return [];
+    const allPoints = metricSeries.flatMap((series) => series.points);
+    const minTimestamp = Math.min(...allPoints.map((point) => point.timestamp));
+    const maxTimestamp = Math.max(...allPoints.map((point) => point.timestamp));
+    const timeSpan = maxTimestamp - minTimestamp || 1;
+    const minValue = Math.min(0, ...allPoints.map((point) => point.value));
+    const maxValue = Math.max(...allPoints.map((point) => point.value));
+    const valueSpan = maxValue - minValue || 1;
+
+    return metricSeries.map((series, index) => ({
+      ...series,
+      color: metricSeriesColors[index % metricSeriesColors.length],
+      points: series.points.map((point) => ({
+        x: 8 + ((point.timestamp - minTimestamp) / timeSpan) * 584,
+        y: 108 - ((point.value - minValue) / valueSpan) * 92,
+      })),
+    }));
+  }, [metricSeries]);
+
+  const metricQuality = useMemo(() => {
+    const allPoints = metricSeries.flatMap((series) => series.points);
+    if (allPoints.length === 0) return { stale: false, hasGaps: false };
+
+    const expectedStepMs = parseStepMilliseconds(metrics?.step);
+    const thresholdMs = Math.max(expectedStepMs * 2.5, 90_000);
+    const stale = metricSeries.some((series) => {
+      const latest = series.points[series.points.length - 1];
+      return latest !== undefined && Date.now() - latest.timestamp * 1_000 > thresholdMs;
+    });
+    const hasGaps = metricSeries.some((series) =>
+      series.points.some((point, index) =>
+        index > 0 && (point.timestamp - series.points[index - 1].timestamp) * 1_000 > thresholdMs,
+      ),
+    );
+    return { stale, hasGaps };
+  }, [metricSeries, metrics?.step]);
+
+  const latestMetricRate = metricSeries.reduce((total, series) => {
+    const latest = series.points[series.points.length - 1];
+    return total + (latest?.value ?? 0);
+  }, 0);
 
   const logRows = useMemo(() => {
     if (!logs) return [];
@@ -280,6 +443,11 @@ export default function TelemetryWorkspace({
               discoveredServices.length > 0 ? `${discoveredServices.length} ${tr("discovered")}` : tr("noDiscoveredServices")}
           </small>
         </label>
+        {serviceHasMore ? (
+          <button className="telemetry-load-more" type="button" onClick={() => void loadMoreServices()} disabled={serviceLoadingMore || serviceLoading}>
+            {serviceLoadingMore ? tr("loadingMoreServices") : tr("loadMoreServices")}
+          </button>
+        ) : null}
         <div className="telemetry-controls">
           <div className="range-switcher" role="group" aria-label={tr("windowLabel")}>
             {windowOptions.map((item) => (
@@ -299,6 +467,31 @@ export default function TelemetryWorkspace({
         <span>{count} {view === "Metrics" ? tr("points") : view === "Logs" ? tr("logEntries") : tr("tracesCount")}</span>
         <span><Clock3 size={12} /> {queriedAt ? `${tr("queried")} ${formatClock(queriedAt, language)}` : tr("waitingFirstQuery")}</span>
       </div>
+      <details className="telemetry-attributes-panel">
+        <summary>
+          <span>{tr("resourceAttributes")}</span>
+          <small>{resourceLoading ? tr("loadingResourceAttributes") : Object.keys(resourceAttributes?.attributes ?? {}).length}</small>
+        </summary>
+        {resourceError ? (
+          <p className="telemetry-attributes-empty" role="status">{resourceError}</p>
+        ) : resourceLoading && !resourceAttributes ? (
+          <p className="telemetry-attributes-empty">{tr("loadingResourceAttributes")}</p>
+        ) : Object.keys(resourceAttributes?.attributes ?? {}).length === 0 ? (
+          <p className="telemetry-attributes-empty">{tr("noResourceAttributes")}</p>
+        ) : (
+          <div className="telemetry-attributes-grid">
+            {Object.entries(resourceAttributes?.attributes ?? {}).sort(([a], [b]) => a.localeCompare(b)).slice(0, 16).map(([key, value]) => (
+              <div className="telemetry-attribute-item" key={key}>
+                <div><code>{key}</code><strong>{typeof value === "string" ? value : JSON.stringify(value)}</strong></div>
+                <small>{(resourceAttributes?.attribute_sources[key] ?? []).join(", ")}</small>
+              </div>
+            ))}
+          </div>
+        )}
+        {resourceAttributes?.warnings && resourceAttributes.warnings.length > 0 ? (
+          <p className="telemetry-attributes-warning">{resourceAttributes.warnings.join(" · ")}</p>
+        ) : null}
+      </details>
 
       {(serviceError || serviceWarnings.length > 0) && (
         <div className="telemetry-service-warning" role="status">
@@ -316,6 +509,55 @@ export default function TelemetryWorkspace({
         </div>
       )}
 
+      {view === "Metrics" && (metricQuality.stale || metricQuality.hasGaps) && (
+        <div className="telemetry-freshness-warning" role="status" aria-live="polite">
+          <Clock3 size={14} />
+          <span>
+            <strong>{tr("metricFreshness")}</strong>
+            {" "}
+            {[
+              metricQuality.stale ? tr("staleMetricWarning") : "",
+              metricQuality.hasGaps ? tr("metricGapWarning") : "",
+            ].filter(Boolean).join(" · ")}
+          </span>
+        </div>
+      )}
+
+      {view === "Metrics" && (
+        <div className="telemetry-grouping-panel" role="group" aria-label={tr("groupBy")}>
+          <span className="telemetry-kicker">{tr("groupBy")}</span>
+          <button
+            type="button"
+            className={metricGroupBy.length === 0 ? "selected" : ""}
+            aria-pressed={metricGroupBy.length === 0}
+            onClick={() => setMetricGroupBy([])}
+          >
+            {tr("groupAggregate")}
+          </button>
+          <button
+            type="button"
+            className={metricGroupBy.length === metricGroupOptions.length && metricGroupOptions.every((item) => metricGroupBy.includes(item.value)) ? "selected" : ""}
+            aria-pressed={metricGroupBy.length === metricGroupOptions.length && metricGroupOptions.every((item) => metricGroupBy.includes(item.value))}
+            onClick={() => setMetricGroupBy(metricGroupOptions.map((item) => item.value))}
+          >
+            {tr("groupDetailed")}
+          </button>
+          {metricGroupOptions.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              className={metricGroupBy.includes(item.value) ? "selected" : ""}
+              aria-pressed={metricGroupBy.includes(item.value)}
+              onClick={() => setMetricGroupBy((current) => current.includes(item.value)
+                ? current.filter((value) => value !== item.value)
+                : [...current, item.value])}
+            >
+              {tr(item.label)}
+            </button>
+          ))}
+        </div>
+      )}
+
       {view === "Metrics" && (
         <div className="panel telemetry-content-panel">
           {loading && !metrics ? <TelemetryLoading language={language} /> : metricSamples.length === 0 ? (
@@ -323,17 +565,36 @@ export default function TelemetryWorkspace({
           ) : (
             <>
               <div className="telemetry-stat-row">
-                <div><span className="telemetry-kicker">{tr("requestRate")}</span><strong>{formatRate(metricSamples[metricSamples.length - 1].value, language)}<small> req/s</small></strong><p>{tr("latestPrometheus")}</p></div>
-                <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("samples")}</span><strong>{metricSamples.length}</strong><p>{tr("acrossWindow")} {windowRange}</p></div>
+                <div><span className="telemetry-kicker">{tr("requestRate")}</span><strong>{formatRate(latestMetricRate, language)}<small> req/s</small></strong><p>{tr("latestPrometheus")}</p></div>
+                <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("samples")}</span><strong>{metricSamples.length}</strong><p>{chartSeries.length} {tr("series")} · {tr("acrossWindow")} {windowRange}</p></div>
                 <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("queryStep")}</span><strong>{metrics?.step ?? "—"}</strong><p>{tr("prometheusResolution")}</p></div>
               </div>
               <div className="telemetry-chart">
-                {chartPoints ? (
-                  <svg viewBox="0 0 600 120" role="img" aria-label={`${tr("requestRate")} · ${windowRange}`}>
-                    <defs><linearGradient id="telemetryMetricFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#65d9c1" stopOpacity=".2" /><stop offset="100%" stopColor="#65d9c1" stopOpacity="0" /></linearGradient></defs>
-                    <path d={`M ${chartPoints.replace(/ /g, " L ")} L 592 116 L 8 116 Z`} fill="url(#telemetryMetricFill)" />
-                    <polyline points={chartPoints} fill="none" stroke="#65d9c1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                {chartSeries.length > 0 ? (
+                  <>
+                    <svg viewBox="0 0 600 120" role="img" aria-label={`${tr("requestRate")} · ${windowRange}`}>
+                      {chartSeries.map((series) => {
+                        const points = series.points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+                        return (
+                          <g key={series.key}>
+                            {series.points.length > 1 ? (
+                              <polyline points={points} fill="none" stroke={series.color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                            ) : (
+                              <circle cx={series.points[0].x} cy={series.points[0].y} r="4" fill={series.color} />
+                            )}
+                          </g>
+                        );
+                      })}
+                    </svg>
+                    <div className="telemetry-series-legend" aria-label={tr("series")}>
+                      {chartSeries.map((series) => (
+                        <span key={series.key}>
+                          <i style={{ backgroundColor: series.color }} />
+                          {series.label}
+                        </span>
+                      ))}
+                    </div>
+                  </>
                 ) : <TelemetryEmpty title={tr("notEnoughSamples")} message={tr("singleSample")} />}
               </div>
               <div className="telemetry-data-footer"><span>{tr("queryLabel")}: <code>{metrics?.query}</code></span><span>{tr("windowLabel")}: {windowRange}</span></div>

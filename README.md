@@ -15,7 +15,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 ## Current implementation
 
 - Responsive Next.js + TypeScript observability workspace with an explicit demo/API source switch and English / Persian language support, including RTL layout.
-- The dashboard reads service/incident inventories and telemetry queries from a configured ORBIT API. Metrics, Logs, and Traces share a live service selector populated from Prometheus, Loki, and Tempo with backend provenance.
+- The dashboard reads service/incident inventories and telemetry queries from a configured ORBIT API. Metrics, Logs, and Traces share a cursor-paginated service selector populated from Prometheus, Loki, and Tempo; the Metrics view supports allow-listed multi-series grouping and timestamp-based stale/gap warnings.
 - Go HTTP API with liveness, readiness, metadata, service/incident inventory, and bounded Prometheus/Loki/Tempo query endpoints.
 - PostgreSQL repository with versioned migrations, clearly marked seed data, and a normalized telemetry service catalog.
 - Docker Compose stack for PostgreSQL, Redis, NATS, and the Go API.
@@ -23,6 +23,13 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 - An instrumented Go demo emits a request metric, trace, and structured log through OTLP/HTTP; CI verifies all three in their backend query APIs.
 - The API provides bounded read endpoints for request-rate metrics, service logs, and trace search, with source and query-time metadata.
 - GitHub Actions for tests, static build, and GitHub Pages deployment.
+
+## Project documentation
+
+- [Roadmap](docs/roadmap.md) — milestones, remaining work, and dependency gates.
+- [Architecture](docs/architecture.md) — current system shape and runtime boundaries.
+- [Project context & handoff](docs/project-context.md) — implementation history, decisions, and the continuity notes for future work.
+- [OIDC security decision](docs/decisions/0001-oidc-access-token-authentication.md) — access-token validation, roles, route policy, and the M05 security gate.
 
 ## Technology
 
@@ -63,7 +70,7 @@ Install Docker Desktop, then from the repository root:
 docker compose up --build
 ```
 
-This starts PostgreSQL, Redis, NATS, and the Go API. On its first start the API applies the versioned SQL migrations (`001_initial` and `002_telemetry_service_catalog`) and inserts five sample services and two sample incidents, each marked with source `demo_seed`.
+This starts PostgreSQL, Redis, NATS, and the Go API. On its first start the API applies the versioned SQL migrations (`001_initial`, `002_telemetry_service_catalog`, and `003_telemetry_resource_attribute_sources`) and inserts five sample services and two sample incidents, each marked with source `demo_seed`.
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -93,11 +100,11 @@ Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/logs?service=orbit-tel
 Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/traces?service=orbit-telemetry-demo&window=1h&limit=20"
 ```
 
-The discovery response merges valid names from Prometheus, Loki, and Tempo, records source provenance, and returns partial results with safe warnings if one backend is unavailable. Discovered service names and backend provenance are upserted into a normalized PostgreSQL catalog. The API returns the persisted catalog with first-seen, last-seen, and last-discovered timestamps, plus a seven-day activity window. If all telemetry backends are unavailable, the API serves the last known PostgreSQL catalog with a warning when cached services exist. The current discovery endpoints provide service names and source provenance; resource attributes are stored as JSONB and can be populated as richer instrumentation metadata becomes available. The API uses fixed, bounded queries instead of accepting arbitrary PromQL or LogQL from callers. Each response includes its source backend, window, query timestamp, and result. Local query interfaces: [Prometheus](http://localhost:9090), [Loki](http://localhost:3100/ready), and [Tempo](http://localhost:3200/ready). Collector health: [http://localhost:13133](http://localhost:13133).
+The discovery response merges valid names from Prometheus, Loki, and Tempo, records source provenance, and returns partial results with safe warnings if one backend is unavailable. Discovered services and source observations are persisted in a normalized PostgreSQL catalog and returned through cursor-based pages with first-seen, last-seen, and last-discovered timestamps. If all telemetry backends are unavailable, the API serves the last known PostgreSQL catalog with a warning when cached services exist. The service-scoped resource-attributes endpoint extracts a bounded allowlist from Prometheus series labels, Loki labels, and Tempo resource tags, preserves per-attribute source provenance, and stores successful observations as JSONB. This is a preview, not yet a complete arbitrary OpenTelemetry resource-attribute ingestion pipeline. The API uses fixed, bounded queries instead of accepting arbitrary PromQL or LogQL from callers.
 
 These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus keeps seven days of metrics and Loki is configured for seven-day log retention; data volumes persist until removed. Stop only these services with `docker compose stop postgres api prometheus loki tempo otel-collector telemetry-demo`.
 
-The local sample service proves end-to-end delivery of all three OTLP signals. The Go API exposes bounded read-only queries to Prometheus, Loki, and Tempo, and the dashboard renders those results in separate Metrics, Logs, and Traces views. Discovered service names and source provenance are now normalized and persisted in PostgreSQL. Full OpenTelemetry resource-attribute extraction is still pending, and the production Go API does not yet export its own telemetry.
+The local sample service proves end-to-end delivery of all three OTLP signals. The Go API exposes bounded read-only queries to Prometheus, Loki, and Tempo, and the dashboard renders those results in separate Metrics, Logs, and Traces views. The v0.10.0 preview adds bounded resource-attribute discovery with per-attribute provenance, cursor pagination, allow-listed multi-series request-rate grouping, and Prometheus sample freshness/gap warnings. Full OpenTelemetry resource-attribute ingestion and production API instrumentation remain open work.
 
 ## Quality checks
 
@@ -132,7 +139,7 @@ See [docs/roadmap.md](docs/roadmap.md), [docs/architecture.md](docs/architecture
 
 ## Release status
 
-The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview added a verified browser source switch between demo fixtures and a configured ORBIT API. The v0.4.0 preview added the optional local OTLP pipeline backed by Prometheus, Loki, and Tempo. The v0.5.0 preview adds an instrumented Go workload and CI verification that metrics, logs, and traces reach their respective backends. The v0.6.0 preview adds bounded ORBIT API read endpoints for Prometheus metrics, Loki logs, and Tempo trace search. The v0.7.0 preview adds live Metrics, Logs, and Traces dashboard views with selectable time windows, 30-second refresh, query timestamps, and explicit loading/empty/error states. The v0.8.0 preview added cross-backend service discovery, source provenance, a shared dynamic service selector, and service-scoped request-rate queries. The v0.9.0 preview adds a persisted PostgreSQL telemetry service catalog, owner attribution, and English / Persian UI localization with RTL support. Production API instrumentation, full resource-attribute ingestion, pagination, multi-series metrics, and stale-data indicators remain future milestones.
+The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview added a verified browser source switch between demo fixtures and a configured ORBIT API. The v0.4.0 preview added the optional local OTLP pipeline backed by Prometheus, Loki, and Tempo. The v0.5.0 preview adds an instrumented Go workload and CI verification that metrics, logs, and traces reach their respective backends. The v0.6.0 preview adds bounded ORBIT API read endpoints for Prometheus metrics, Loki logs, and Tempo trace search. The v0.7.0 preview adds live Metrics, Logs, and Traces dashboard views with selectable time windows, 30-second refresh, query timestamps, and explicit loading/empty/error states. The v0.8.0 preview added cross-backend service discovery, source provenance, a shared dynamic service selector, and service-scoped request-rate queries. The v0.9.0 preview adds a persisted PostgreSQL telemetry service catalog, owner attribution, and English / Persian UI localization with RTL support. The v0.10.0 preview completes the bounded M04 follow-through: resource-attribute discovery with per-attribute backend provenance, cursor-paginated service catalog, allow-listed multi-series request-rate grouping, and per-series Prometheus stale/gap warnings. Full workload-side OpenTelemetry resource ingestion, arbitrary metric-name selection, production API instrumentation, and the M05/M06 operational/security workflows remain future work.
 
 ## License
 

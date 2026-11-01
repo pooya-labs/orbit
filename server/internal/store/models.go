@@ -2,8 +2,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var ErrTelemetryServiceNotFound = errors.New("telemetry service not found")
 
 type Service struct {
 	ID          string     `json:"id"`
@@ -40,12 +43,26 @@ type TelemetryService struct {
 	LastSeenAt          time.Time      `json:"last_seen_at"`
 	LastDiscoveredAt    time.Time      `json:"last_discovered_at"`
 	ResourceAttributes  map[string]any `json:"resource_attributes"`
+	ResourceAttributeSources map[string][]string `json:"resource_attribute_sources"`
+}
+
+type TelemetryServiceCursor struct {
+	Name string
+	ID   string
+}
+
+type TelemetryServicePage struct {
+	Items    []TelemetryService
+	Next     *TelemetryServiceCursor
+	HasMore  bool
 }
 
 type Repository interface {
 	Ping(ctx context.Context) error
 	UpsertTelemetryServices(ctx context.Context, services []TelemetryService) ([]TelemetryService, error)
 	ListTelemetryServices(ctx context.Context, limit int) ([]TelemetryService, error)
+	ListTelemetryServicesPage(ctx context.Context, limit int, cursor *TelemetryServiceCursor) (TelemetryServicePage, error)
+	UpdateTelemetryServiceResourceAttributes(ctx context.Context, name string, attributes map[string]any, sources map[string][]string) error
 	ListServices(ctx context.Context) ([]Service, error)
 	ListIncidents(ctx context.Context, status string) ([]Incident, error)
 	Close()

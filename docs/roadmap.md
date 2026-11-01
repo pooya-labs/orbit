@@ -50,10 +50,23 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 - [x] Discover service names across Prometheus, Loki, and Tempo, merge duplicates, and preserve backend provenance.
 - [x] Persist observed service names and backend provenance in a normalized PostgreSQL catalog.
 - [x] Expose persisted first-seen, last-seen, and last-discovered metadata through the service discovery API.
-- [ ] Populate full OpenTelemetry resource attributes from instrumented workloads.
-- [ ] Add cursor-based pagination and multi-series metric selection.
+- [ ] Populate the full OpenTelemetry resource attribute set from instrumented workloads (the current preview extracts a bounded allowlist of labels and tags from Prometheus, Loki, and Tempo).
+- [x] Persist bounded service resource attributes and per-attribute backend provenance in PostgreSQL.
+- [x] Add validated cursor-based pagination to the service catalog API and dashboard selector.
+- [x] Add allow-listed multi-series grouping and separate line rendering for the request-rate metric; arbitrary metric-name selection remains future work.
 - [x] Render queried telemetry in Metrics, Logs, and Traces dashboard views with loading/empty/error states, query freshness, and backend provenance.
-- [ ] Add stale-data and telemetry-gap indicators based on sample timestamps.
+- [x] Flag stale metric samples and gaps using the actual Prometheus sample timestamps and query step; event-driven logs and traces are not judged against metric scrape intervals.
+
+## Execution order and dependency gates
+
+ORBIT's milestones are not a reason to expose unsafe operations early. The delivery order is:
+
+1. Finish and merge the verified M04 read-path work. Keep complete workload-side OpenTelemetry resource ingestion as an explicit M04 follow-up.
+2. Implement the M06 security gate from [ADR 0001](decisions/0001-oidc-access-token-authentication.md): OIDC discovery, OAuth access-token/JWKS verification, server-side RBAC, actor identity, request limits, and workspace boundary before adding public state-changing operations.
+3. Deliver M05 in slices: incident lifecycle and immutable timeline first; alert rules and notification adapters second; deployment annotations third; SLO/error-budget calculations fourth; audit history across every mutation.
+4. Complete the remaining M06 operational hardening: retention/cardinality controls, load testing, backup/restore, dependency/security review, production deployment, and runbooks.
+
+M05 mutations must not be publicly enabled while the API has no authentication or role enforcement. Local development can keep an explicit non-production mode, but production configuration must fail closed.
 
 ## M05 — Operations workflows
 

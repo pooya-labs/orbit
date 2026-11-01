@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +39,7 @@ func (f *fakeRepository) UpsertTelemetryServices(_ context.Context, services []s
 	for index := range f.catalog {
 		item := &f.catalog[index]
 		if item.ID == "" {
-			item.ID = "catalog-" + item.Name
+			item.ID = "00000000-0000-4000-8000-000000000001"
 		}
 		if item.FirstSeenAt.IsZero() {
 			item.FirstSeenAt = now
@@ -49,6 +51,72 @@ func (f *fakeRepository) UpsertTelemetryServices(_ context.Context, services []s
 		}
 	}
 	return f.catalog, nil
+}
+
+func (f *fakeRepository) ListTelemetryServicesPage(_ context.Context, limit int, cursor *store.TelemetryServiceCursor) (store.TelemetryServicePage, error) {
+	if f.catalogErr != nil {
+		return store.TelemetryServicePage{}, f.catalogErr
+	}
+	items := append([]store.TelemetryService(nil), f.catalog...)
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Name == items[j].Name {
+			return items[i].ID < items[j].ID
+		}
+		return items[i].Name < items[j].Name
+	})
+	filtered := make([]store.TelemetryService, 0, len(items))
+	for _, item := range items {
+		if cursor != nil && (item.Name < cursor.Name || (item.Name == cursor.Name && item.ID <= cursor.ID)) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	page := store.TelemetryServicePage{Items: filtered}
+	if limit > 0 && len(page.Items) > limit {
+		page.HasMore = true
+		page.Items = page.Items[:limit]
+		last := page.Items[len(page.Items)-1]
+		page.Next = &store.TelemetryServiceCursor{Name: last.Name, ID: last.ID}
+	}
+	return page, nil
+}
+
+func (f *fakeRepository) UpdateTelemetryServiceResourceAttributes(_ context.Context, name string, attributes map[string]any, sources map[string][]string) error {
+	if f.catalogErr != nil {
+		return f.catalogErr
+	}
+	for index := range f.catalog {
+		item := &f.catalog[index]
+		if item.Name != name {
+			continue
+		}
+		if item.ResourceAttributes == nil {
+			item.ResourceAttributes = map[string]any{}
+		}
+		for key, value := range attributes {
+			item.ResourceAttributes[key] = value
+		}
+		if item.ResourceAttributeSources == nil {
+			item.ResourceAttributeSources = map[string][]string{}
+		}
+		for key, values := range sources {
+			seen := make(map[string]struct{})
+			for _, existing := range item.ResourceAttributeSources[key] {
+				seen[existing] = struct{}{}
+			}
+			for _, source := range values {
+				seen[source] = struct{}{}
+			}
+			merged := make([]string, 0, len(seen))
+			for source := range seen {
+				merged = append(merged, source)
+			}
+			sort.Strings(merged)
+			item.ResourceAttributeSources[key] = merged
+		}
+		return nil
+	}
+	return store.ErrTelemetryServiceNotFound
 }
 
 func (f *fakeRepository) ListTelemetryServices(_ context.Context, limit int) ([]store.TelemetryService, error) {
@@ -258,7 +326,7 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 			_, _ = w.Write([]byte(`{"status":"success","data":["orbit-telemetry-demo"]}`))
 			return
 		}
-		if r.URL.Path != "/api/v1/query_range" || r.URL.Query().Get("query") != `sum(rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
+		if r.URL.Path != "/api/v1/query_range" || r.URL.Query().Get("query") != `sum by (deployment_environment, instance, service_name, service_version) (rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
 			t.Errorf("unexpected Prometheus request: %s %s", r.URL.Path, r.URL.RawQuery)
 		}
 		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"matrix","result":[{"metric":{},"values":[[1,"0.2"]]}]}}`))
@@ -340,6 +408,75 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	}
 }
 
+func TestTelemetryServicePaginationRejectsMalformedCursor(t *testing.T) {
+	handler := NewHandler(Config{}, nil, testLogger())
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/telemetry/services?cursor=!!!!",
+		nil,
+	))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+	var payload errorResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode invalid cursor response: %v", err)
+	}
+	if payload.Error.Code != "invalid_cursor" || payload.Error.RequestID == "" {
+		t.Fatalf("unexpected invalid cursor response: %+v", payload.Error)
+	}
+}
+
+func TestTelemetryServiceDiscoveryUsesCursorPagination(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":["alpha-api","bravo-worker","charlie-web"]}`))
+	}))
+	defer prometheus.Close()
+
+	client, err := telemetry.NewClient(prometheus.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &fakeRepository{}
+	handler := NewHandler(Config{Telemetry: client}, repository, testLogger())
+
+	firstRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(firstRecorder, httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/telemetry/services?window=1h&limit=2",
+		nil,
+	))
+	if firstRecorder.Code != http.StatusOK {
+		t.Fatalf("first page status = %d, body = %s", firstRecorder.Code, firstRecorder.Body.String())
+	}
+	var first telemetry.ServiceDiscoveryResult
+	if err := json.Unmarshal(firstRecorder.Body.Bytes(), &first); err != nil {
+		t.Fatalf("decode first page: %v", err)
+	}
+	if len(first.Data) != 2 || !first.HasMore || first.NextCursor == "" {
+		t.Fatalf("expected two services and a continuation cursor, got %+v", first)
+	}
+	if first.Data[0].Name != "alpha-api" || first.Data[1].Name != "bravo-worker" {
+		t.Fatalf("unexpected first page ordering: %+v", first.Data)
+	}
+
+	nextRecorder := httptest.NewRecorder()
+	nextURL := "/api/v1/telemetry/services?window=1h&limit=2&cursor=" + url.QueryEscape(first.NextCursor)
+	handler.ServeHTTP(nextRecorder, httptest.NewRequest(http.MethodGet, nextURL, nil))
+	if nextRecorder.Code != http.StatusOK {
+		t.Fatalf("next page status = %d, body = %s", nextRecorder.Code, nextRecorder.Body.String())
+	}
+	var second telemetry.ServiceDiscoveryResult
+	if err := json.Unmarshal(nextRecorder.Body.Bytes(), &second); err != nil {
+		t.Fatalf("decode next page: %v", err)
+	}
+	if len(second.Data) != 1 || second.HasMore || second.NextCursor != "" || second.Data[0].Name != "charlie-web" {
+		t.Fatalf("unexpected second page: %+v", second)
+	}
+}
+
 func TestTelemetryServiceDiscoveryFallsBackToPersistedCatalog(t *testing.T) {
 	failingBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "backend unavailable", http.StatusBadGateway)
@@ -379,6 +516,139 @@ func TestTelemetryServiceDiscoveryFallsBackToPersistedCatalog(t *testing.T) {
 	}
 }
 
+func TestTelemetryServiceResourceAttributesEndpoint(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/series" || r.URL.Query().Get("match[]") != `{service_name="orbit-telemetry-demo"}` {
+			t.Errorf("unexpected Prometheus resource metadata request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":[{"service_name":"orbit-telemetry-demo","service_version":"1.4.2","deployment_environment":"development"}]}`))
+	}))
+	defer prometheus.Close()
+
+	loki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loki/api/v1/series" || r.URL.Query().Get("match[]") != `{service_name="orbit-telemetry-demo"}` {
+			t.Errorf("unexpected Loki resource metadata request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":[{"service_name":"orbit-telemetry-demo","service_version":"1.4.2","container_name":"telemetry-demo"}]}`))
+	}))
+	defer loki.Close()
+
+	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/v2/search/tags":
+			if r.URL.Query().Get("scope") != "resource" || !strings.Contains(r.URL.Query().Get("q"), "resource.service.name") {
+				t.Errorf("unexpected Tempo resource tag query: %s", r.URL.RawQuery)
+			}
+			_, _ = w.Write([]byte(`{"scopes":[{"name":"resource","tags":["service.version","deployment.environment","host.name"]}]}`))
+		case strings.HasPrefix(r.URL.Path, "/api/v2/search/tag/"):
+			if !strings.Contains(r.URL.Query().Get("q"), "resource.service.name") {
+				t.Errorf("Tempo tag values were not service scoped: %s", r.URL.RawQuery)
+			}
+			switch r.URL.Path {
+			case "/api/v2/search/tag/.service.version/values":
+				_, _ = w.Write([]byte(`{"tagValues":[{"type":"string","value":"1.4.2"}]}`))
+			case "/api/v2/search/tag/.deployment.environment/values":
+				_, _ = w.Write([]byte(`{"tagValues":[{"type":"string","value":"development"}]}`))
+			case "/api/v2/search/tag/.host.name/values":
+				_, _ = w.Write([]byte(`{"tagValues":[{"type":"string","value":"node-a"}]}`))
+			default:
+				t.Errorf("unexpected Tempo tag values path: %s", r.URL.Path)
+				http.NotFound(w, r)
+			}
+		default:
+			t.Errorf("unexpected Tempo resource metadata path: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer tempo.Close()
+
+	client, err := telemetry.NewClient(prometheus.URL, loki.URL, tempo.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &fakeRepository{catalog: []store.TelemetryService{{
+		ID: "catalog-orbit-demo",
+		Name: "orbit-telemetry-demo",
+		Sources: []string{"prometheus", "loki", "tempo"},
+	}}}
+	handler := NewHandler(Config{Telemetry: client}, repository, testLogger())
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/telemetry/services/orbit-telemetry-demo/attributes?window=1h",
+		nil,
+	))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("resource attributes status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	var result telemetry.ResourceAttributesResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode resource attributes: %v", err)
+	}
+	if result.Service != "orbit-telemetry-demo" || result.Window != "1h" || len(result.SourcesQueried) != 3 {
+		t.Fatalf("unexpected resource attribute metadata: %+v", result)
+	}
+	for key, want := range map[string]any{
+		"service.name": "orbit-telemetry-demo",
+		"service.version": "1.4.2",
+		"deployment.environment": "development",
+		"container.name": "telemetry-demo",
+		"host.name": "node-a",
+	} {
+		if result.Attributes[key] != want {
+			t.Errorf("attribute %s = %#v, want %#v", key, result.Attributes[key], want)
+		}
+	}
+	serviceVersionSources := result.AttributeSources["service.version"]
+	if len(serviceVersionSources) != 3 || serviceVersionSources[0] != "loki" || serviceVersionSources[1] != "prometheus" || serviceVersionSources[2] != "tempo" {
+		t.Fatalf("unexpected service.version provenance: %v", serviceVersionSources)
+	}
+	if repository.catalog[0].ResourceAttributes["service.version"] != "1.4.2" {
+		t.Fatalf("resource attributes were not persisted: %+v", repository.catalog[0])
+	}
+	if len(repository.catalog[0].ResourceAttributeSources["service.version"]) != 3 {
+		t.Fatalf("attribute provenance was not persisted: %+v", repository.catalog[0].ResourceAttributeSources)
+	}
+}
+
+func TestTelemetryServiceAttributesReturnsNotFoundWhenServiceIsNotCatalogued(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/series" || r.URL.Query().Get("match[]") != `{service_name="unknown-service"}` {
+			t.Errorf("unexpected Prometheus resource query: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":[{"service_name":"unknown-service","service_version":"1.0"}]}`))
+	}))
+	defer prometheus.Close()
+
+	client, err := telemetry.NewClient(prometheus.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandler(Config{Telemetry: client}, &fakeRepository{}, testLogger())
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/telemetry/services/unknown-service/attributes?window=1h",
+		nil,
+	))
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusNotFound, recorder.Body.String())
+	}
+	var payload errorResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode service-not-found response: %v", err)
+	}
+	if payload.Error.Code != "service_not_found" || payload.Error.RequestID == "" {
+		t.Fatalf("unexpected service-not-found response: %+v", payload.Error)
+	}
+}
+
 func TestTelemetryQueryValidationAndUnavailableResponses(t *testing.T) {
 	handler := NewHandler(Config{}, &fakeRepository{}, testLogger())
 
@@ -388,6 +658,7 @@ func TestTelemetryQueryValidationAndUnavailableResponses(t *testing.T) {
 		wantCode   string
 	}{
 		{path: "/api/v1/telemetry/metrics?window=7d", wantStatus: http.StatusBadRequest, wantCode: "invalid_window"},
+		{path: "/api/v1/telemetry/metrics?group_by=__name__", wantStatus: http.StatusBadRequest, wantCode: "invalid_group_by"},
 		{path: "/api/v1/telemetry/metrics?service=bad%20service", wantStatus: http.StatusBadRequest, wantCode: "invalid_service"},
 		{path: "/api/v1/telemetry/logs?service=bad%20service", wantStatus: http.StatusBadRequest, wantCode: "invalid_service"},
 		{path: "/api/v1/telemetry/traces?limit=101", wantStatus: http.StatusBadRequest, wantCode: "invalid_limit"},

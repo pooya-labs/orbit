@@ -51,8 +51,8 @@ OpenTelemetry Collector
 - Request IDs, structured JSON request logs, and panic recovery.
 - `GET /health/live`, `GET /health/ready`, and `GET /api/v1/meta`.
 - `GET /api/v1/services` and `GET /api/v1/incidents?status=...`.
-- `GET /api/v1/telemetry/services` discovers names from Prometheus, Loki, and Tempo, upserts normalized service/source observations in PostgreSQL, and returns the persisted active catalog with discovery timestamps and partial-backend warnings. If every telemetry backend is unavailable, it serves the last known PostgreSQL catalog when available.
-- `GET /api/v1/telemetry/metrics`, `/logs`, and `/traces` expose bounded, service-scoped queries against Prometheus, Loki, and Tempo.
+- `GET /api/v1/telemetry/services` discovers names from Prometheus, Loki, and Tempo, upserts normalized service/source observations in PostgreSQL, and returns the persisted active catalog through validated cursor-based pages with discovery timestamps and partial-backend warnings. The companion service-attributes endpoint exposes a bounded allowlist of observed attributes with per-key backend provenance; this is not yet a full workload-side OpenTelemetry resource ingestion pipeline. If every telemetry backend is unavailable, it serves the last known PostgreSQL catalog when available.
+- `GET /api/v1/telemetry/metrics`, `/logs`, and `/traces` expose bounded, service-scoped queries against Prometheus, Loki, and Tempo. Metrics supports allow-listed dimensions for the demo request-rate series; it does not accept arbitrary PromQL or arbitrary metric names.
 - Data endpoints use explicit JSON envelopes and return safe errors without leaking database details.
 
 ### PostgreSQL
@@ -121,8 +121,8 @@ OpenTelemetry Collector
 - The local OTLP pipeline and a dedicated instrumented demo workload are available; the production Go API is not instrumented yet.
 - ORBIT's API now performs fixed, bounded read queries against Prometheus, Tempo, and Loki (15m–24h windows, capped results, 6-second backend timeout, 2 MiB response cap).
 - The dashboard has separate Metrics, Logs, and Traces views that call the typed query methods, display backend provenance and query timestamps, and support 15m/1h/6h/24h windows with 30-second refresh.
-- A shared service selector reads the active persisted service catalog; each option shows which telemetry stores reported that service.
-- The UI distinguishes loading, empty, and error results; stale-data and missing-interval detection are still pending.
+- A shared service selector reads the active persisted service catalog using cursor pagination; each option shows which telemetry stores reported that service, and a bounded resource-attribute panel displays attribute provenance.
+- The UI distinguishes loading, empty, error, and partial results. Metrics series are rendered independently, and Prometheus sample freshness/gaps are flagged using query-step and sample timestamps; those scrape-interval checks are not applied to event-driven logs or traces.
 - Redis and NATS are available in Compose but are not yet used by the Go API.
 - The Pages deployment is frontend-only. The Go API is local-only, not publicly hosted.
 - The Overview dashboard consumes the service and incident API in API mode; the Metrics/Logs/Traces views consume the bounded telemetry query API and persisted observed service catalog. Full resource-attribute extraction from all telemetry backends remains future work.

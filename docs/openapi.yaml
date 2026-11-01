@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ORBIT API
-  version: 0.9.0
+  version: 0.10.0
   summary: Service inventory and bounded observability query API
   description: |
     ORBIT reads service and incident inventories from PostgreSQL and exposes
@@ -139,6 +139,21 @@ paths:
             type: string
             enum: [15m, 1h, 6h, 24h]
             default: 1h
+        - in: query
+          name: limit
+          required: false
+          description: Maximum number of services to return. Defaults to 50.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - in: query
+          name: cursor
+          required: false
+          description: URL-safe continuation token returned by the previous page.
+          schema:
+            type: string
       responses:
         "200":
           description: Discovered services and their source backends.
@@ -147,13 +162,58 @@ paths:
               schema:
                 $ref: "#/components/schemas/TelemetryServicesResponse"
         "400":
-          description: Unsupported time window.
+          description: Unsupported time window, invalid page size, or malformed continuation cursor.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "503":
           description: All telemetry backends are unavailable, or PostgreSQL catalog persistence/querying failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/telemetry/services/{service}/attributes:
+    get:
+      tags: [Telemetry]
+      operationId: getTelemetryServiceResourceAttributes
+      summary: Discover resource attributes for one telemetry service
+      description: Queries service-scoped series labels and resource tags from configured telemetry backends. Values are bounded, merged, and returned with backend provenance; supported labels are normalized into OpenTelemetry-style attribute names.
+      parameters:
+        - in: path
+          name: service
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        - in: query
+          name: window
+          required: false
+          schema:
+            type: string
+            enum: [15m, 1h, 6h, 24h]
+            default: 1h
+      responses:
+        "200":
+          description: Resource attributes and the backends that reported each attribute.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryResourceAttributesResponse"
+        "400":
+          description: Invalid service identifier or time window.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: The requested service is not present in the persisted telemetry catalog.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: No configured telemetry backend can provide resource attributes, or persistence is unavailable.
           content:
             application/json:
               schema:
@@ -181,6 +241,14 @@ paths:
             type: string
             pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
             default: orbit-telemetry-demo
+        - in: query
+          name: group_by
+          required: false
+          description: Comma-separated allow-list of grouping labels. Use none for one aggregate series; arbitrary PromQL is never accepted.
+          schema:
+            type: string
+            default: instance,service_version,deployment_environment
+            pattern: "^(none|((instance|job|service_version|deployment_environment|container_name|host_name|cloud_region)(,(instance|job|service_version|deployment_environment|container_name|host_name|cloud_region))*))$"
       responses:
         "200":
           description: Prometheus range query result with source and query timestamp.
@@ -318,7 +386,7 @@ components:
           type: integer
     TelemetryServicesResponse:
       type: object
-      required: [source, window, queried_at, sources_queried, data]
+      required: [source, window, queried_at, sources_queried, has_more, data]
       properties:
         source:
           type: string
@@ -339,6 +407,11 @@ components:
           type: array
           items:
             type: string
+        next_cursor:
+          type: string
+          description: URL-safe continuation token for the next catalog page; omitted when no page remains.
+        has_more:
+          type: boolean
         data:
           type: array
           items:
@@ -369,6 +442,45 @@ components:
               resource_attributes:
                 type: object
                 additionalProperties: true
+              resource_attribute_sources:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: string
+                    enum: [prometheus, loki, tempo]
+    TelemetryResourceAttributesResponse:
+      type: object
+      required: [service, window, queried_at, sources_queried, attributes, attribute_sources]
+      properties:
+        service:
+          type: string
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        window:
+          type: string
+          enum: [15m, 1h, 6h, 24h]
+        queried_at:
+          type: string
+          format: date-time
+        sources_queried:
+          type: array
+          items:
+            type: string
+            enum: [prometheus, loki, tempo]
+        warnings:
+          type: array
+          items:
+            type: string
+        attributes:
+          type: object
+          additionalProperties: true
+        attribute_sources:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+              enum: [prometheus, loki, tempo]
     TelemetryMetricsResponse:
       type: object
       required: [source, window, queried_at, query, step, data]
@@ -387,6 +499,11 @@ components:
           description: Fixed service-scoped PromQL expression.
         step:
           type: string
+        group_by:
+          type: array
+          items:
+            type: string
+            enum: [instance, job, service_version, deployment_environment, container_name, host_name, cloud_region]
         data:
           type: array
           items:

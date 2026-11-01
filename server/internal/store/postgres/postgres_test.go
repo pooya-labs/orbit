@@ -61,11 +61,49 @@ func TestPostgresMigrationAndReadModels(t *testing.T) {
 		t.Fatalf("second migration run should be idempotent: %v", err)
 	}
 
+	pagePrefix := fmt.Sprintf("zz-orbit-page-test-%d", time.Now().UnixNano())
+	pageNames := []string{pagePrefix + "-a", pagePrefix + "-b"}
+	_, err = repository.UpsertTelemetryServices(ctx, []store.TelemetryService{
+		{Name: pageNames[0], Sources: []string{"prometheus"}},
+		{Name: pageNames[1], Sources: []string{"loki"}},
+	})
+	if err != nil {
+		t.Fatalf("seed telemetry pagination test services: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cleanupCancel()
+		_, _ = repository.pool.Exec(cleanupCtx,
+			"DELETE FROM telemetry_services WHERE name = ANY($1::text[])",
+			pageNames,
+		)
+	})
+
+	firstPage, err := repository.ListTelemetryServicesPage(ctx, 1, &store.TelemetryServiceCursor{
+		Name: pagePrefix,
+		ID:   "00000000-0000-0000-0000-000000000000",
+	})
+	if err != nil {
+		t.Fatalf("read first telemetry catalog page: %v", err)
+	}
+	if len(firstPage.Items) != 1 || firstPage.Items[0].Name != pageNames[0] || !firstPage.HasMore || firstPage.Next == nil {
+		t.Fatalf("unexpected first telemetry catalog page: %+v", firstPage)
+	}
+
+	secondPage, err := repository.ListTelemetryServicesPage(ctx, 1, firstPage.Next)
+	if err != nil {
+		t.Fatalf("read second telemetry catalog page: %v", err)
+	}
+	if len(secondPage.Items) != 1 || secondPage.Items[0].Name != pageNames[1] || secondPage.HasMore || secondPage.Next != nil {
+		t.Fatalf("unexpected second telemetry catalog page: %+v", secondPage)
+	}
+
 	name := fmt.Sprintf("catalog-test-%d", time.Now().UnixNano())
 	first, err := repository.UpsertTelemetryServices(ctx, []store.TelemetryService{{
 		Name: name,
 		Sources: []string{"prometheus", "loki"},
 		ResourceAttributes: map[string]any{"deployment.environment.name": "test"},
+		ResourceAttributeSources: map[string][]string{"deployment.environment.name": {"prometheus", "tempo"}},
 	}})
 	if err != nil {
 		t.Fatalf("upsert telemetry service: %v", err)
@@ -79,6 +117,7 @@ func TestPostgresMigrationAndReadModels(t *testing.T) {
 		Name: name,
 		Sources: []string{"tempo"},
 		ResourceAttributes: map[string]any{"cloud.region": "test-region"},
+		ResourceAttributeSources: map[string][]string{"deployment.environment.name": {"loki"}, "cloud.region": {"tempo"}},
 	}})
 	if err != nil {
 		t.Fatalf("upsert existing telemetry service: %v", err)
@@ -103,6 +142,12 @@ func TestPostgresMigrationAndReadModels(t *testing.T) {
 	}
 	if found.ResourceAttributes["deployment.environment.name"] != "test" || found.ResourceAttributes["cloud.region"] != "test-region" {
 		t.Fatalf("expected resource attributes to merge across observations: %+v", found.ResourceAttributes)
+	}
+	if got := found.ResourceAttributeSources["deployment.environment.name"]; len(got) != 3 || got[0] != "loki" || got[1] != "prometheus" || got[2] != "tempo" {
+		t.Fatalf("expected attribute provenance to merge across observations, got %v", got)
+	}
+	if got := found.ResourceAttributeSources["cloud.region"]; len(got) != 1 || got[0] != "tempo" {
+		t.Fatalf("unexpected cloud.region provenance: %v", got)
 	}
 	if _, err := repository.pool.Exec(ctx, "DELETE FROM telemetry_services WHERE name = $1", name); err != nil {
 		t.Fatalf("clean up catalog test service: %v", err)

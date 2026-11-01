@@ -10,6 +10,7 @@ import type {
   TelemetryLogsResponse,
   TelemetryTracesResponse,
   TelemetryServicesResponse,
+  TelemetryResourceAttributesResponse,
 } from "./contracts";
 
 export class OrbitApiError extends Error {
@@ -108,8 +109,10 @@ export async function getTelemetryMetrics(
   signal?: AbortSignal,
   baseUrl?: string,
   service = "orbit-telemetry-demo",
+  groupBy?: string,
 ): Promise<TelemetryMetricsResponse> {
   const query = new URLSearchParams({ window, service });
+  if (groupBy !== undefined) query.set("group_by", groupBy);
   return getJSON<TelemetryMetricsResponse>(
     `/api/v1/telemetry/metrics?${query.toString()}`,
     signal,
@@ -121,9 +124,26 @@ export async function listTelemetryServices(
   window: TelemetryWindow = "1h",
   signal?: AbortSignal,
   baseUrl?: string,
+  cursor?: string,
+  limit = 50,
 ): Promise<TelemetryServicesResponse> {
+  const query = new URLSearchParams({ window, limit: String(limit) });
+  if (cursor) query.set("cursor", cursor);
   return getJSON<TelemetryServicesResponse>(
-    `/api/v1/telemetry/services?window=${encodeURIComponent(window)}`,
+    `/api/v1/telemetry/services?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+}
+
+export async function getTelemetryServiceAttributes(
+  service: string,
+  window: TelemetryWindow = "1h",
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<TelemetryResourceAttributesResponse> {
+  return getJSON<TelemetryResourceAttributesResponse>(
+    `/api/v1/telemetry/services/${encodeURIComponent(service)}/attributes?window=${encodeURIComponent(window)}`,
     signal,
     baseUrl,
   );
