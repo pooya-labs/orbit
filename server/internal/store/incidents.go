@@ -12,6 +12,7 @@ var (
 	ErrIncidentMutationForbidden = errors.New("workspace role cannot mutate incidents")
 	ErrIncidentInvalidTransition = errors.New("incident status transition is not allowed")
 	ErrIncidentNoChange = errors.New("incident is already in the requested status")
+	ErrIncidentInvalidInput = errors.New("invalid incident input")
 )
 
 type IncidentTimelineEvent struct {
