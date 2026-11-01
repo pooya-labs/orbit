@@ -17,7 +17,11 @@ type Config struct {
 	AllowedOrigins []string
 	PrometheusURL string
 	LokiURL string
-	TempoURL string
+	TempoURL       string
+	AuthIssuer     string
+	AuthAudience   string
+	AuthRolesClaim string
+	AuthAlgorithms []string
 }
 
 func Load() Config {
