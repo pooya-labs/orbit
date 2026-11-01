@@ -54,8 +54,9 @@ npm run start
 
 ```text
 app/                  Next.js app router, dashboard, global styles
+server/               Go API, configuration, HTTP handlers, tests, Dockerfile
 docs/                 Architecture decisions and development notes
-.github/workflows/    Continuous integration
+.github/workflows/    Go + web continuous integration
 ```
 
 ## Development principles
