@@ -1,0 +1,51 @@
+services:
+  # Optional edge proxy for deployments that have real DNS and an OIDC provider.
+  # The API keeps its OTLP listeners private to this network; only Caddy publishes
+  # 80/443 and the proxy cannot reach the database or telemetry backends.
+  api:
+    environment:
+      ORBIT_ENVIRONMENT: production
+      ORBIT_DATABASE_URL: ${ORBIT_DATABASE_URL:?set ORBIT_DATABASE_URL}
+      ORBIT_OIDC_ISSUER: ${ORBIT_OIDC_ISSUER:?set ORBIT_OIDC_ISSUER}
+      ORBIT_OIDC_AUDIENCE: ${ORBIT_OIDC_AUDIENCE:?set ORBIT_OIDC_AUDIENCE}
+      ORBIT_WORKLOAD_OIDC_ISSUER: ${ORBIT_WORKLOAD_OIDC_ISSUER:?set ORBIT_WORKLOAD_OIDC_ISSUER}
+      ORBIT_WORKLOAD_OIDC_AUDIENCE: ${ORBIT_WORKLOAD_OIDC_AUDIENCE:?set ORBIT_WORKLOAD_OIDC_AUDIENCE}
+      ORBIT_INGESTION_HTTP_ADDR: ":4319"
+      ORBIT_INGESTION_GRPC_ADDR: ":4320"
+      ORBIT_COLLECTOR_OTLP_HTTP_URL: http://otel-collector:4318
+      ORBIT_COLLECTOR_OTLP_GRPC_ENDPOINT: otel-collector:4317
+    networks:
+      - ingress
+
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    profiles: ["production-ingress"]
+    restart: unless-stopped
+    environment:
+      ORBIT_OTLP_HTTP_DOMAIN: ${ORBIT_OTLP_HTTP_DOMAIN:?set ORBIT_OTLP_HTTP_DOMAIN}
+      ORBIT_OTLP_GRPC_DOMAIN: ${ORBIT_OTLP_GRPC_DOMAIN:?set ORBIT_OTLP_GRPC_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/production/Caddyfile:/etc/caddy/Caddyfile:ro
+      - orbit-caddy-data:/data
+      - orbit-caddy-config:/config
+    networks:
+      - ingress
+    depends_on:
+      api:
+        condition: service_started
+
+networks:
+  ingress:
+    driver: bridge
+
+volumes:
+  orbit-caddy-data:
+  orbit-caddy-config:

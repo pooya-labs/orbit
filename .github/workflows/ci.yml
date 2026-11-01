@@ -66,6 +66,40 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose --profile observability config --quiet
 
+      - name: Validate production ingress overlay and network isolation
+        env:
+          ORBIT_DATABASE_URL: postgres://orbit:ci-placeholder@postgres:5432/orbit?sslmode=disable
+          POSTGRES_PASSWORD: ci-placeholder
+          ORBIT_OIDC_ISSUER: https://identity.example.test
+          ORBIT_OIDC_AUDIENCE: orbit-api
+          ORBIT_WORKLOAD_OIDC_ISSUER: https://identity.example.test
+          ORBIT_WORKLOAD_OIDC_AUDIENCE: orbit-otlp
+          ORBIT_OTLP_HTTP_DOMAIN: otlp-http.example.test
+          ORBIT_OTLP_GRPC_DOMAIN: otlp-grpc.example.test
+        run: |
+          docker run --rm \
+            -e ORBIT_OTLP_HTTP_DOMAIN -e ORBIT_OTLP_GRPC_DOMAIN \
+            -v "$PWD/deploy/production/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.10.2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker compose -f docker-compose.yml -f deploy/production/compose.ingress.yaml --profile observability --profile production-ingress config --format json > /tmp/orbit-compose.json
+          python3 - <<'PY'
+          import json
+          with open("/tmp/orbit-compose.json", encoding="utf-8") as handle:
+              config = json.load(handle)
+          services = config["services"]
+          def published(service):
+              return {int(port["target"]) for port in services[service].get("ports", [])}
+          assert published("caddy") == {80, 443}, published("caddy")
+          assert not ({4319, 4320} & published("api")), published("api")
+          assert not published("otel-collector"), published("otel-collector")
+          assert "ingress" in services["api"]["networks"]
+          assert "ingress" in services["caddy"]["networks"]
+          assert "default" not in services["caddy"]["networks"]
+          assert "telemetry-internal" not in services["caddy"]["networks"]
+          assert "ingress" not in services["postgres"]["networks"]
+          assert "telemetry-internal" not in services["caddy"]["networks"]
+          PY
+
       - name: Assert raw OTLP receivers are private-network-only
         run: python3 scripts/check_collector_network.py
 
