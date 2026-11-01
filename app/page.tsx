@@ -412,43 +412,43 @@ export default function Home() {
         <div className="content-wrap">
           <div className="page-heading">
             <div>
-              <div className="eyebrow"><span className="eyebrow-line" /> {telemetryView ? `LIVE ${telemetryView.toUpperCase()}` : "SYSTEM OVERVIEW"} <span className="demo-tag">{sourceMode === "api" ? "API CONNECTED" : "DEMO ENVIRONMENT"}</span></div>
-              <h1>{activeNav === "Overview" ? "Good morning, team." : activeNav}</h1>
-              <p className="page-subtitle">{telemetryView ? `Query ${telemetryView.toLowerCase()} from the connected observability pipeline.` : "Here's what's happening across your infrastructure."}</p>
+              <div className="eyebrow"><span className="eyebrow-line" /> {telemetryView ? `${language === "fa" ? "زنده" : "LIVE"} ${navLabel(language, telemetryView).toUpperCase()}` : tr("systemOverview")} <span className="demo-tag">{sourceMode === "api" ? tr("apiConnected") : tr("demoEnvironment")}</span></div>
+              <h1>{activeNav === "Overview" ? tr("goodMorning") : navLabel(language, activeNav)}</h1>
+              <p className="page-subtitle">{telemetryView ? `Query ${telemetryView.toLowerCase()} from the connected observability pipeline.` : "وضعیت سرویس‌ها و زیرساخت را در یک نگاه ببین."}</p>
             </div>
             <div className="heading-actions">
-              <div className="last-updated"><span className={refreshing ? "pulse-dot" : "idle-dot"} /> {sourceMode === "api" ? `Connected · ${apiMetadata?.environment ?? "API"}` : refreshing ? "Auto-refresh paused in demo" : "Manual refresh mode"}</div>
-              <button className="button-secondary" onClick={() => setRange("24 hours")}><Clock3 size={15} /> Last 24 hours <ChevronDown size={14} /></button>
-              <button className="button-primary" onClick={() => chooseNav("Service map")}><Network size={15} /> Explore topology</button>
+              <div className="last-updated"><span className={refreshing ? "pulse-dot" : "idle-dot"} /> {sourceMode === "api" ? `${tr("connected")} · ${apiMetadata?.environment ?? "API"}` : refreshing ? tr("autoRefreshPaused") : tr("manualRefresh")}</div>
+              <button className="button-secondary" onClick={() => setRange("24 hours")}><Clock3 size={15} /> {tr("last24Hours")} <ChevronDown size={14} /></button>
+              <button className="button-primary" onClick={() => chooseNav("Service map")}><Network size={15} /> {tr("exploreTopology")}</button>
             </div>
           </div>
 
           <div className="notice-strip">
             <div className="notice-icon"><Radio size={16} /></div>
             {sourceMode === "demo" ? (
-              <div><strong>You're viewing a sample environment.</strong><span> Metrics, services, and incidents are illustrative demo data — no production systems are connected.</span></div>
+              <div><strong>در حال مشاهدهٔ یک محیط نمونه هستی.</strong><span> شاخص‌ها، سرویس‌ها و رخدادها داده‌های نمایشی هستند و به هیچ سامانهٔ عملیاتی متصل نیستند.</span></div>
             ) : (
-              <div><strong>Connected to {apiMetadata?.name ?? "ORBIT API"}.</strong><span> Services and incidents are read from {apiMetadata?.environment ?? "the selected API"}; each record keeps its own data-source label.</span></div>
+              <div><strong>{tr("connectedTo")} {apiMetadata?.name ?? "ORBIT API"}.</strong><span> {language === "fa" ? "سرویس‌ها و رخدادها از" : "Services and incidents are read from"} {apiMetadata?.environment ?? (language === "fa" ? "API انتخاب‌شده" : "the selected API")} {language === "fa" ? "خوانده می‌شوند؛ منبع هر رکورد جداگانه مشخص است." : "; each record keeps its own data-source label."}</span></div>
             )}
-            <button onClick={() => setSourcePanelOpen(!sourcePanelOpen)}>{sourceMode === "api" ? "Manage source" : "Connect a source"} <ArrowUpRight size={14} /></button>
+            <button onClick={() => setSourcePanelOpen(!sourcePanelOpen)}>{sourceMode === "api" ? tr("manageSource") : tr("connectSource")} <ArrowUpRight size={14} /></button>
           </div>
 
           {sourcePanelOpen && (
             <section className="panel source-setup" aria-labelledby="source-setup-title">
               <div className="source-setup-copy">
-                <h2 id="source-setup-title">Connect an ORBIT API</h2>
-                <p>Use a read-only API endpoint. For local development, start Docker Compose and use http://localhost:8080.</p>
+                <h2 id="source-setup-title">{tr("connectApiTitle")}</h2>
+                <p>از یک نشانی فقط‌خواندنی API استفاده کن. برای اجرای محلی، Docker Compose را اجرا و http://localhost:8080 را وارد کن.</p>
               </div>
               <form className="source-setup-form" onSubmit={(event) => { event.preventDefault(); void connectSource(); }}>
-                <label htmlFor="orbit-api-url">API base URL</label>
+                <label htmlFor="orbit-api-url">{tr("apiBaseUrl")}</label>
                 <input id="orbit-api-url" type="url" autoComplete="url" spellCheck={false} value={apiUrlInput} onChange={(event) => setApiUrlInput(event.target.value)} placeholder="http://localhost:8080" />
                 <div className="source-setup-actions">
-                  <button className="button-primary" type="submit" disabled={apiStatus === "connecting"}>{apiStatus === "connecting" ? "Connecting…" : "Test and connect"}</button>
-                  {sourceMode === "api" && <button className="button-secondary" type="button" onClick={disconnectSource}>Switch to demo</button>}
+                  <button className="button-primary" type="submit" disabled={apiStatus === "connecting"}>{apiStatus === "connecting" ? tr("connecting") : tr("testConnect")}</button>
+                  {sourceMode === "api" && <button className="button-secondary" type="button" onClick={disconnectSource}>{tr("switchToDemo")}</button>}
                 </div>
               </form>
               {apiError && <p className="source-error" role="alert">{apiError}</p>}
-              {apiStatus === "connected" && <p className="source-success" role="status">Connection verified. {apiServices.length} services and {apiIncidents.length} incidents loaded.</p>}
+              {apiStatus === "connected" && <p className="source-success" role="status">{tr("connectionVerified")} {apiServices.length} services and {apiIncidents.length} incidents loaded.</p>}
             </section>
           )}
 
@@ -459,10 +459,10 @@ export default function Home() {
               <section className="panel telemetry-connect-prompt">
                 <div className="source-placeholder-icon"><Activity size={18} /></div>
                 <div>
-                  <h2>Connect a telemetry source</h2>
-                  <p>Live {telemetryView.toLowerCase()} queries are available after connecting an ORBIT API backed by the local observability stack. Demo fixtures are never presented as live telemetry.</p>
+                  <h2>{tr("connectTelemetryTitle")}</h2>
+                  <p>پس از اتصال به ORBIT API متصل به زیرساخت پایش محلی، امکان دریافت زندهٔ {navLabel(language, telemetryView).toLowerCase()} فراهم می‌شود. داده‌های نمونه هرگز به‌عنوان دادهٔ زنده نمایش داده نمی‌شوند.</p>
                 </div>
-                <button className="button-primary" onClick={() => setSourcePanelOpen(true)}>Connect API source <ArrowUpRight size={14} /></button>
+                <button className="button-primary" onClick={() => setSourcePanelOpen(true)}>{tr("connectApiSource")} <ArrowUpRight size={14} /></button>
               </section>
             )
           ) : (
