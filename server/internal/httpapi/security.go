@@ -11,6 +11,10 @@ import (
 	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 )
 
+type TokenVerifier interface {
+	Verify(context.Context, string) (auth.Principal, error)
+}
+
 type principalContextKey struct{}
 
 func principalFromContext(ctx context.Context) (auth.Principal, bool) {
@@ -18,7 +22,7 @@ func principalFromContext(ctx context.Context) (auth.Principal, bool) {
 	return principal, ok
 }
 
-func withAuthorization(environment string, verifier *auth.Verifier, next http.Handler) http.Handler {
+func withAuthorization(environment string, verifier TokenVerifier, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/meta" || !strings.HasPrefix(r.URL.Path, "/api/v1/") {
 			next.ServeHTTP(w, r)
