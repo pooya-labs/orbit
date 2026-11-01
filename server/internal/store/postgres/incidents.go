@@ -125,25 +125,25 @@ func (r *Repository) CreateWorkspaceIncident(ctx context.Context, input store.Cr
 	input.Description = strings.TrimSpace(input.Description)
 	input.Severity = strings.TrimSpace(input.Severity)
 	if !workspaceIDPattern.MatchString(input.WorkspaceID) {
-		return store.Incident{}, fmt.Errorf("workspace ID must be a UUID")
+		return store.Incident{}, fmt.Errorf("%w: workspace ID must be a UUID", store.ErrIncidentInvalidInput)
 	}
 	if !workspaceIDPattern.MatchString(input.ServiceID) {
 		return store.Incident{}, store.ErrIncidentServiceNotFound
 	}
 	if len(input.Title) < 1 || len(input.Title) > 160 {
-		return store.Incident{}, fmt.Errorf("incident title must contain between 1 and 160 characters")
+		return store.Incident{}, fmt.Errorf("%w: title must contain between 1 and 160 characters", store.ErrIncidentInvalidInput)
 	}
 	if len(input.Description) > 8000 {
-		return store.Incident{}, fmt.Errorf("incident description must not exceed 8000 characters")
+		return store.Incident{}, fmt.Errorf("%w: description exceeds 8000 characters", store.ErrIncidentInvalidInput)
 	}
 	if _, ok := incidentSeverityValues[input.Severity]; !ok {
-		return store.Incident{}, fmt.Errorf("incident severity must be critical, high, medium, or low")
+		return store.Incident{}, fmt.Errorf("%w: severity must be critical, high, medium, or low", store.ErrIncidentInvalidInput)
 	}
 	if err := validateWorkspacePrincipal(input.ActorIssuer, input.ActorSubject); err != nil {
-		return store.Incident{}, err
+		return store.Incident{}, fmt.Errorf("%w: actor principal is invalid: %v", store.ErrIncidentInvalidInput, err)
 	}
 	if err := validateIncidentRequestID(input.RequestID); err != nil {
-		return store.Incident{}, err
+		return store.Incident{}, fmt.Errorf("%w: %v", store.ErrIncidentInvalidInput, err)
 	}
 
 	tx, err := r.pool.Begin(ctx)
@@ -224,22 +224,22 @@ func (r *Repository) TransitionWorkspaceIncident(ctx context.Context, input stor
 	input.ToStatus = strings.TrimSpace(input.ToStatus)
 	input.Comment = strings.TrimSpace(input.Comment)
 	if !workspaceIDPattern.MatchString(input.WorkspaceID) {
-		return store.Incident{}, fmt.Errorf("workspace ID must be a UUID")
+		return store.Incident{}, fmt.Errorf("%w: workspace ID must be a UUID", store.ErrIncidentInvalidInput)
 	}
 	if !workspaceIDPattern.MatchString(input.IncidentID) {
 		return store.Incident{}, store.ErrIncidentNotFound
 	}
 	if _, ok := incidentStatusValues[input.ToStatus]; !ok {
-		return store.Incident{}, fmt.Errorf("incident status must be open, investigating, monitoring, or resolved")
+		return store.Incident{}, fmt.Errorf("%w: status must be open, investigating, monitoring, or resolved", store.ErrIncidentInvalidInput)
 	}
 	if len(input.Comment) > 4000 {
-		return store.Incident{}, fmt.Errorf("incident transition comment must not exceed 4000 characters")
+		return store.Incident{}, fmt.Errorf("%w: transition comment exceeds 4000 characters", store.ErrIncidentInvalidInput)
 	}
 	if err := validateWorkspacePrincipal(input.ActorIssuer, input.ActorSubject); err != nil {
-		return store.Incident{}, err
+		return store.Incident{}, fmt.Errorf("%w: actor principal is invalid: %v", store.ErrIncidentInvalidInput, err)
 	}
 	if err := validateIncidentRequestID(input.RequestID); err != nil {
-		return store.Incident{}, err
+		return store.Incident{}, fmt.Errorf("%w: %v", store.ErrIncidentInvalidInput, err)
 	}
 
 	tx, err := r.pool.Begin(ctx)
