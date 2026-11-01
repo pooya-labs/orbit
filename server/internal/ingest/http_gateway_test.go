@@ -464,3 +464,39 @@ func TestParseWorkspaceSignalPath(t *testing.T) {
 		}
 	}
 }
+
+
+type timeoutHTTPForwarder struct{}
+
+func (timeoutHTTPForwarder) Export(ctx context.Context, _ string, _ []byte) ([]byte, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestHTTPGatewayMapsCollectorForwardTimeoutToGatewayTimeout(t *testing.T) {
+	verifier, grants := validStubs()
+	authorizer, err := NewAuthorizer(verifier, grants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHTTPGateway(authorizer, timeoutHTTPForwarder{}, HTTPGatewayConfig{
+		RequestsPerMinute: 10,
+		ForwardTimeout: 10 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := proto.Marshal(metricRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+testWorkspace+"/v1/metrics", bytes.NewReader(payload))
+	request.Header.Set("Authorization", "Bearer signed-token")
+	request.Header.Set("Content-Type", "application/x-protobuf")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusGatewayTimeout {
+		t.Fatalf("HTTP status = %d, want %d; body=%s", response.Code, http.StatusGatewayTimeout, response.Body.String())
+	}
+}
