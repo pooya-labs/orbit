@@ -319,8 +319,14 @@ func TestWorkspaceMembershipAndAppendOnlyAudit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list workspace audit events: %v", err)
 	}
-	if len(events) != 1 || events[0].ID != event.ID || events[0].Details["source"] != "integration_test" {
+	if len(events) != 2 || events[0].ID != event.ID || events[0].Details["source"] != "integration_test" || events[1].Action != "workspace.created" {
 		t.Fatalf("unexpected workspace audit timeline: %+v", events)
+	}
+	if _, err := repository.AppendWorkspaceAuditEvent(ctx, store.WorkspaceAuditEvent{
+		WorkspaceID: workspace.ID, ActorIssuer: issuer, ActorSubject: "not-a-member",
+		Action: "workspace.changed", ResourceType: "workspace", ResourceID: workspace.ID,
+	}); !errors.Is(err, store.ErrWorkspaceMembershipNotFound) {
+		t.Fatalf("non-member audit append error = %v, want ErrWorkspaceMembershipNotFound", err)
 	}
 
 	if _, err := repository.pool.Exec(ctx, "UPDATE workspace_audit_events SET action = 'workspace.changed' WHERE id = $1::uuid", event.ID); err == nil {
