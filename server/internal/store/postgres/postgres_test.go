@@ -66,6 +66,7 @@ func TestPostgresMigrationAndReadModels(t *testing.T) {
 		Name: name,
 		Sources: []string{"prometheus", "loki"},
 		ResourceAttributes: map[string]any{"deployment.environment.name": "test"},
+		ResourceAttributeSources: map[string][]string{"deployment.environment.name": {"prometheus", "tempo"}},
 	}})
 	if err != nil {
 		t.Fatalf("upsert telemetry service: %v", err)
@@ -79,6 +80,7 @@ func TestPostgresMigrationAndReadModels(t *testing.T) {
 		Name: name,
 		Sources: []string{"tempo"},
 		ResourceAttributes: map[string]any{"cloud.region": "test-region"},
+		ResourceAttributeSources: map[string][]string{"deployment.environment.name": {"loki"}, "cloud.region": {"tempo"}},
 	}})
 	if err != nil {
 		t.Fatalf("upsert existing telemetry service: %v", err)
@@ -103,6 +105,12 @@ func TestPostgresMigrationAndReadModels(t *testing.T) {
 	}
 	if found.ResourceAttributes["deployment.environment.name"] != "test" || found.ResourceAttributes["cloud.region"] != "test-region" {
 		t.Fatalf("expected resource attributes to merge across observations: %+v", found.ResourceAttributes)
+	}
+	if got := found.ResourceAttributeSources["deployment.environment.name"]; len(got) != 3 || got[0] != "loki" || got[1] != "prometheus" || got[2] != "tempo" {
+		t.Fatalf("expected attribute provenance to merge across observations, got %v", got)
+	}
+	if got := found.ResourceAttributeSources["cloud.region"]; len(got) != 1 || got[0] != "tempo" {
+		t.Fatalf("unexpected cloud.region provenance: %v", got)
 	}
 	if _, err := repository.pool.Exec(ctx, "DELETE FROM telemetry_services WHERE name = $1", name); err != nil {
 		t.Fatalf("clean up catalog test service: %v", err)
