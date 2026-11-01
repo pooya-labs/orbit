@@ -419,6 +419,367 @@ func (c *Client) Services(ctx context.Context, window QueryWindow) (ServiceDisco
 	}, nil
 }
 
+
+const (
+	maxResourceAttributeCount  = 32
+	maxResourceAttributeValues = 8
+	maxTempoAttributeWorkers   = 4
+)
+
+type ResourceAttributesResult struct {
+	Service          string              `json:"service"`
+	Window           string              `json:"window"`
+	QueriedAt        time.Time           `json:"queried_at"`
+	SourcesQueried   []string            `json:"sources_queried"`
+	Warnings         []string            `json:"warnings,omitempty"`
+	Attributes       map[string]any     `json:"attributes"`
+	AttributeSources map[string][]string `json:"attribute_sources"`
+}
+
+type attributeBackendResult struct {
+	name       string
+	attributes map[string][]any
+	warnings   []string
+	err        error
+}
+
+type tempoTagValue struct {
+	Type  string          `json:"type"`
+	Value json.RawMessage `json:"value"`
+}
+
+func (c *Client) DiscoverResourceAttributes(ctx context.Context, window QueryWindow, service string) (ResourceAttributesResult, error) {
+	if c == nil || (c.prometheusURL == "" && c.lokiURL == "" && c.tempoURL == "") {
+		return ResourceAttributesResult{}, ErrNotConfigured
+	}
+	if err := ValidateServiceName(service); err != nil {
+		return ResourceAttributesResult{}, err
+	}
+
+	now := c.now().UTC()
+	results := make(chan attributeBackendResult, 3)
+	configured := 0
+	if c.prometheusURL != "" {
+		configured++
+		go func() { results <- c.prometheusResourceAttributes(ctx, window, service) }()
+	}
+	if c.lokiURL != "" {
+		configured++
+		go func() { results <- c.lokiResourceAttributes(ctx, window, service) }()
+	}
+	if c.tempoURL != "" {
+		configured++
+		go func() { results <- c.tempoResourceAttributes(ctx, window, service) }()
+	}
+
+	attributes := make(map[string][]any)
+	sources := make(map[string]map[string]struct{})
+	warnings := make([]string, 0)
+	sourcesQueried := make([]string, 0, configured)
+	successful := 0
+	for range configured {
+		result := <-results
+		sourcesQueried = append(sourcesQueried, result.name)
+		if result.err != nil {
+			warnings = append(warnings, result.name+" resource attribute query unavailable")
+			continue
+		}
+		successful++
+		warnings = append(warnings, result.warnings...)
+		for key, values := range result.attributes {
+			for _, value := range values {
+				mergeResourceAttribute(attributes, sources, key, value, result.name)
+			}
+		}
+	}
+	if successful == 0 {
+		return ResourceAttributesResult{}, errors.New("all configured telemetry backends failed resource attribute discovery")
+	}
+
+	// service.name is authoritative from the selector itself. Record only
+	// backends that successfully answered the service-scoped metadata query.
+	mergeResourceAttribute(attributes, sources, "service.name", service, "catalog")
+	orderedAttributes := make(map[string]any, len(attributes))
+	attributeSources := make(map[string][]string, len(sources))
+	for key, values := range attributes {
+		sort.Slice(values, func(i, j int) bool {
+			left, _ := json.Marshal(values[i])
+			right, _ := json.Marshal(values[j])
+			return string(left) < string(right)
+		})
+		if len(values) == 1 {
+			orderedAttributes[key] = values[0]
+		} else {
+			orderedAttributes[key] = values
+		}
+		for source := range sources[key] {
+			attributeSources[key] = append(attributeSources[key], source)
+		}
+		sort.Strings(attributeSources[key])
+	}
+	sort.Strings(sourcesQueried)
+	sort.Strings(warnings)
+	return ResourceAttributesResult{
+		Service: service, Window: window.Name, QueriedAt: now,
+		SourcesQueried: sourcesQueried, Warnings: warnings,
+		Attributes: orderedAttributes, AttributeSources: attributeSources,
+	}, nil
+}
+
+func (c *Client) prometheusResourceAttributes(ctx context.Context, window QueryWindow, service string) attributeBackendResult {
+	result := attributeBackendResult{name: "prometheus", attributes: make(map[string][]any)}
+	now := c.now().UTC()
+	values := url.Values{}
+	values.Add("match[]", fmt.Sprintf("{service_name=%q}", service))
+	values.Set("start", now.Add(-window.Duration).Format(time.RFC3339Nano))
+	values.Set("end", now.Format(time.RFC3339Nano))
+	values.Set("limit", "100")
+	raw, err := c.getRaw(ctx, c.prometheusURL, "/api/v1/series", values)
+	if err != nil {
+		result.err = fmt.Errorf("query Prometheus series metadata: %w", err)
+		return result
+	}
+	var payload struct {
+		Status string              `json:"status"`
+		Data   []map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil || payload.Status != "success" {
+		result.err = errors.New("decode Prometheus series metadata")
+		return result
+	}
+	for _, series := range payload.Data {
+		for key, value := range series {
+			if normalized := normalizePromResourceLabel(key); normalized != "" {
+				mergeResourceAttribute(result.attributes, nil, normalized, value, "")
+			}
+		}
+	}
+	return result
+}
+
+func (c *Client) lokiResourceAttributes(ctx context.Context, window QueryWindow, service string) attributeBackendResult {
+	result := attributeBackendResult{name: "loki", attributes: make(map[string][]any)}
+	now := c.now().UTC()
+	values := url.Values{}
+	values.Add("match[]", fmt.Sprintf("{service_name=%q}", service))
+	values.Set("start", strconv.FormatInt(now.Add(-window.Duration).UnixNano(), 10))
+	values.Set("end", strconv.FormatInt(now.UnixNano(), 10))
+	raw, err := c.getRaw(ctx, c.lokiURL, "/loki/api/v1/series", values)
+	if err != nil {
+		result.err = fmt.Errorf("query Loki series metadata: %w", err)
+		return result
+	}
+	var payload struct {
+		Status string              `json:"status"`
+		Data   []map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil || payload.Status != "success" {
+		result.err = errors.New("decode Loki series metadata")
+		return result
+	}
+	for _, series := range payload.Data {
+		for key, value := range series {
+			if normalized := normalizeLokiResourceLabel(key); normalized != "" {
+				mergeResourceAttribute(result.attributes, nil, normalized, value, "")
+			}
+		}
+	}
+	return result
+}
+
+func (c *Client) tempoResourceAttributes(ctx context.Context, window QueryWindow, service string) attributeBackendResult {
+	result := attributeBackendResult{name: "tempo", attributes: make(map[string][]any)}
+	now := c.now().UTC()
+	query := fmt.Sprintf("{resource.service.name=%q}", service)
+	values := url.Values{}
+	values.Set("scope", "resource")
+	values.Set("q", query)
+	values.Set("start", strconv.FormatInt(now.Add(-window.Duration).Unix(), 10))
+	values.Set("end", strconv.FormatInt(now.Unix(), 10))
+	values.Set("limit", strconv.Itoa(maxResourceAttributeCount))
+	raw, err := c.getRaw(ctx, c.tempoURL, "/api/v2/search/tags", values)
+	if err != nil {
+		result.err = fmt.Errorf("query Tempo resource tag names: %w", err)
+		return result
+	}
+	var payload struct {
+		Scopes []struct {
+			Name string   `json:"name"`
+			Tags []string `json:"tags"`
+		} `json:"scopes"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		result.err = fmt.Errorf("decode Tempo resource tag names: %w", err)
+		return result
+	}
+	tagNames := make([]string, 0, maxResourceAttributeCount)
+	for _, scope := range payload.Scopes {
+		if scope.Name != "resource" {
+			continue
+		}
+		for _, tag := range scope.Tags {
+			if tag == "service.name" || !resourceTagNamePattern.MatchString(tag) {
+				continue
+			}
+			tagNames = append(tagNames, tag)
+			if len(tagNames) == maxResourceAttributeCount {
+				break
+			}
+		}
+	}
+	sort.Strings(tagNames)
+	if len(tagNames) == maxResourceAttributeCount {
+		result.warnings = append(result.warnings, "tempo resource attributes capped at 32 keys")
+	}
+	if len(tagNames) == 0 {
+		return result
+	}
+
+	type tagResult struct {
+		name   string
+		values []any
+		err    error
+	}
+	tasks := make(chan string)
+	tagResults := make(chan tagResult, len(tagNames))
+	workerCount := min(maxTempoAttributeWorkers, len(tagNames))
+	var workers sync.WaitGroup
+	for range workerCount {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for tag := range tasks {
+				tagQuery := url.Values{}
+				tagQuery.Set("q", query)
+				tagQuery.Set("start", strconv.FormatInt(now.Add(-window.Duration).Unix(), 10))
+				tagQuery.Set("end", strconv.FormatInt(now.Unix(), 10))
+				tagQuery.Set("limit", strconv.Itoa(maxResourceAttributeValues))
+				endpoint := "/api/v2/search/tag/" + url.PathEscape(tag) + "/values"
+				body, requestErr := c.getRaw(ctx, c.tempoURL, endpoint, tagQuery)
+				if requestErr != nil {
+					tagResults <- tagResult{name: tag, err: requestErr}
+					continue
+				}
+				var response struct {
+					TagValues []tempoTagValue `json:"tagValues"`
+				}
+				if decodeErr := json.Unmarshal(body, &response); decodeErr != nil {
+					tagResults <- tagResult{name: tag, err: decodeErr}
+					continue
+				}
+				decoded := make([]any, 0, len(response.TagValues))
+				for _, item := range response.TagValues {
+					var value any
+					if len(item.Value) == 0 || string(item.Value) == "null" {
+						continue
+					}
+					if err := json.Unmarshal(item.Value, &value); err != nil {
+						continue
+					}
+					decoded = append(decoded, value)
+				}
+				tagResults <- tagResult{name: tag, values: decoded}
+			}
+		}()
+	}
+	go func() {
+		for _, tag := range tagNames {
+			tasks <- tag
+		}
+		close(tasks)
+	}()
+	workers.Wait()
+	close(tagResults)
+
+	for item := range tagResults {
+		if item.err != nil {
+			result.warnings = append(result.warnings, "tempo resource attribute value unavailable for "+item.name)
+			continue
+		}
+		for _, value := range item.values {
+			mergeResourceAttribute(result.attributes, nil, item.name, value, "")
+		}
+	}
+	return result
+}
+
+var resourceTagNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
+
+func normalizePromResourceLabel(name string) string {
+	switch name {
+	case "__name__", "service_name", "job", "instance":
+		return ""
+	case "service_version":
+		return "service.version"
+	case "deployment_environment":
+		return "deployment.environment"
+	case "host_name":
+		return "host.name"
+	case "cloud_provider":
+		return "cloud.provider"
+	case "cloud_region":
+		return "cloud.region"
+	case "cloud_availability_zone":
+		return "cloud.availability_zone"
+	case "k8s_namespace_name":
+		return "k8s.namespace.name"
+	case "k8s_pod_name":
+		return "k8s.pod.name"
+	case "container_name":
+		return "container.name"
+	default:
+		return ""
+	}
+}
+
+func normalizeLokiResourceLabel(name string) string {
+	if normalized := normalizePromResourceLabel(name); normalized != "" {
+		return normalized
+	}
+	switch name {
+	case "service_name":
+		return "service.name"
+	case "job", "instance", "filename", "level":
+		return "loki.labels." + name
+	}
+	return ""
+}
+
+func mergeResourceAttribute(
+	attributes map[string][]any,
+	sources map[string]map[string]struct{},
+	key string,
+	value any,
+	source string,
+) {
+	if key == "" || key == "service.name" && value == nil {
+		return
+	}
+	if len(attributes) >= maxResourceAttributeCount {
+		if _, exists := attributes[key]; !exists {
+			return
+		}
+	}
+	values := attributes[key]
+	for _, existing := range values {
+		left, _ := json.Marshal(existing)
+		right, _ := json.Marshal(value)
+		if string(left) == string(right) {
+			goto sourceMerge
+		}
+	}
+	if len(values) < maxResourceAttributeValues {
+		attributes[key] = append(values, value)
+	}
+sourceMerge:
+	if sources != nil && source != "" {
+		if sources[key] == nil {
+			sources[key] = make(map[string]struct{})
+		}
+		sources[key][source] = struct{}{}
+	}
+}
+
 func (c *Client) get(ctx context.Context, baseURL, path string, values url.Values) (upstreamEnvelope, error) {
 	body, err := c.getRaw(ctx, baseURL, path, values)
 	if err != nil {
