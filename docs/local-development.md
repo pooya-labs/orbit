@@ -61,7 +61,7 @@ docker compose down -v
 
 ```powershell
 cd server
-go mod download
+go mod tidy
 go test -race ./...
 go vet ./...
 go run ./cmd/orbit-api
