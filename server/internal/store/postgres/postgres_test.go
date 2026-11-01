@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -174,7 +175,7 @@ func TestSharedRateLimitWindowUsesAtomicCountersAndExpiresOldBuckets(t *testing.
 	oldKey := fmt.Sprintf("%064x", time.Now().UnixNano()+11)
 	if _, err := repository.pool.Exec(ctx, `
 		INSERT INTO api_rate_limit_windows (bucket_start, key_hash, request_count, expires_at)
-		VALUES ($1, $2, 9, $1 + INTERVAL '2 minutes')
+		VALUES ($1::timestamptz, $2, 9, $1::timestamptz + INTERVAL '2 minutes')
 	`, oldBucket, oldKey); err != nil {
 		t.Fatalf("insert expired rate-limit bucket: %v", err)
 	}
@@ -191,6 +192,43 @@ func TestSharedRateLimitWindowUsesAtomicCountersAndExpiresOldBuckets(t *testing.
 		t.Fatalf("unexpected shared counts: first=%d second=%d other=%d", first, second, other)
 	}
 
+	// Multiple concurrent API instances must still receive unique atomic counts.
+	const concurrentRequests = 24
+	concurrentKey := fmt.Sprintf("%064x", time.Now().UnixNano()+14)
+	counts := make(chan int64, concurrentRequests)
+	errors := make(chan error, concurrentRequests)
+	var workers sync.WaitGroup
+	for range concurrentRequests {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			count, incrementErr := repository.IncrementRateLimitWindow(ctx, concurrentKey)
+			if incrementErr != nil {
+				errors <- incrementErr
+				return
+			}
+			counts <- count
+		}()
+	}
+	workers.Wait()
+	close(counts)
+	close(errors)
+	for incrementErr := range errors {
+		t.Fatalf("concurrent shared increment: %v", incrementErr)
+	}
+	seenCounts := make(map[int64]struct{}, concurrentRequests)
+	for count := range counts {
+		seenCounts[count] = struct{}{}
+	}
+	if len(seenCounts) != concurrentRequests {
+		t.Fatalf("concurrent counter returned %d unique counts, want %d", len(seenCounts), concurrentRequests)
+	}
+	for expected := int64(1); expected <= concurrentRequests; expected++ {
+		if _, ok := seenCounts[expected]; !ok {
+			t.Fatalf("concurrent counter omitted atomic value %d", expected)
+		}
+	}
+
 	var oldRows int
 	if err := repository.pool.QueryRow(ctx,
 		"SELECT COUNT(*) FROM api_rate_limit_windows WHERE key_hash = $1", oldKey,
@@ -202,7 +240,7 @@ func TestSharedRateLimitWindowUsesAtomicCountersAndExpiresOldBuckets(t *testing.
 		defer cleanupCancel()
 		_, _ = repository.pool.Exec(cleanupCtx,
 			"DELETE FROM api_rate_limit_windows WHERE key_hash = ANY($1::char(64)[])",
-			[]string{keyA, keyB, oldKey},
+			[]string{keyA, keyB, oldKey, concurrentKey},
 		)
 	})
 }
