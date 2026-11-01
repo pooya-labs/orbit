@@ -338,3 +338,96 @@ func TestAuthenticatedOTLPGatewaysRejectProducerWorkspaceSpoofingForEverySignal(
 		})
 	}
 }
+
+
+// addMixedResourceWithForgedWorkspaceAttribute builds a multi-resource OTLP
+// batch whose first resource is ordinary but whose later resource attempts to
+// claim a different workspace. The gateway must reject the entire batch.
+func addMixedResourceWithForgedWorkspaceAttribute(t *testing.T, message proto.Message, forgedWorkspaceID string) {
+	t.Helper()
+	attribute := &commonv1.KeyValue{
+		Key: WorkspaceAttribute,
+		Value: &commonv1.AnyValue{
+			Value: &commonv1.AnyValue_StringValue{StringValue: forgedWorkspaceID},
+		},
+	}
+	switch request := message.(type) {
+	case *metricsv1.ExportMetricsServiceRequest:
+		second := proto.Clone(request.ResourceMetrics[0]).(*metricspb.ResourceMetrics)
+		second.Resource = &resourcev1.Resource{Attributes: []*commonv1.KeyValue{attribute}}
+		request.ResourceMetrics = append(request.ResourceMetrics, second)
+	case *logsv1.ExportLogsServiceRequest:
+		second := proto.Clone(request.ResourceLogs[0]).(*logspb.ResourceLogs)
+		second.Resource = &resourcev1.Resource{Attributes: []*commonv1.KeyValue{attribute}}
+		request.ResourceLogs = append(request.ResourceLogs, second)
+	case *tracesv1.ExportTraceServiceRequest:
+		second := proto.Clone(request.ResourceSpans[0]).(*tracespb.ResourceSpans)
+		second.Resource = &resourcev1.Resource{Attributes: []*commonv1.KeyValue{attribute}}
+		request.ResourceSpans = append(request.ResourceSpans, second)
+	default:
+		t.Fatalf("unsupported OTLP request type %T", message)
+	}
+}
+
+func TestAuthenticatedOTLPGatewaysRejectMixedWorkspaceResourceBatches(t *testing.T) {
+	repository, workspaceA, workspaceB, _, verifier := openGatewayIntegrationRepository(t)
+	authorizer, err := NewAuthorizer(verifier, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpForwarder := &forwarderStub{}
+	httpHandler, err := NewHTTPGateway(authorizer, httpForwarder, HTTPGatewayConfig{
+		RequestsPerMinute: 100,
+		ForwardTimeout: 2 * time.Second,
+		RateLimitStore: repository,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grpcForwarder := &grpcForwarderStub{}
+	grpcGateway := &GRPCGateway{
+		authorizer: authorizer,
+		forwarder: grpcForwarder,
+		limiter: newWorkspaceRateLimiter(100),
+		sharedLimiter: repository,
+		timeout: 2 * time.Second,
+		concurrency: make(chan struct{}, maxConcurrentGRPCExports),
+	}
+
+	for _, signal := range []string{"metrics", "logs", "traces"} {
+		t.Run(signal, func(t *testing.T) {
+			message := integrationOTLPRequest(t, signal)
+			addMixedResourceWithForgedWorkspaceAttribute(t, message, workspaceB.ID)
+			payload, err := proto.Marshal(message)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/v1/workspaces/"+workspaceA.ID+"/v1/"+signal,
+				bytes.NewReader(payload),
+			)
+			request.Header.Set("Authorization", "Bearer integration-workload-token")
+			request.Header.Set("Content-Type", "application/x-protobuf")
+			response := httptest.NewRecorder()
+			httpHandler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("HTTP mixed-resource export status = %d, want 400; body=%s", response.Code, response.Body.String())
+			}
+			if httpForwarder.calls != 0 {
+				t.Fatalf("mixed-resource %s payload reached HTTP Collector forwarder", signal)
+			}
+
+			grpcErr := callIntegrationGRPCMessage(grpcGateway, workspaceA.ID, signal, message)
+			if status.Code(grpcErr) != codes.InvalidArgument {
+				t.Fatalf("gRPC mixed-resource export code = %s, want InvalidArgument; err=%v", status.Code(grpcErr), grpcErr)
+			}
+			if grpcForwarder.metricsCalls != 0 || grpcForwarder.logsCalls != 0 || grpcForwarder.tracesCalls != 0 {
+				t.Fatalf("mixed-resource %s payload reached gRPC Collector forwarder: metrics=%d logs=%d traces=%d",
+					signal, grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
+			}
+		})
+	}
+}
