@@ -80,11 +80,11 @@ M05 acceptance requires API and database tests, lifecycle-transition tests, work
 
 The detailed proposed design is recorded in [ADR 0001 — OIDC access-token validation and API authorization](decisions/0001-oidc-access-token-authentication.md). It deliberately distinguishes OAuth access tokens from OIDC ID tokens and sets a Go 1.24-compatible JOSE dependency constraint.
 
-The initial server-side authentication gate is implemented in `main` (`977ce49`) and CI-verified. It validates OIDC access-token signatures and claims against issuer discovery/JWKS, applies viewer/operator/administrator route policy, rejects missing credentials in staging/production, bounds request bodies and token sizes, and enforces process-local per-IP/per-subject limits.
+The initial server-side authentication gate is implemented in `main` (`977ce49`) and CI-verified. It validates OIDC access-token signatures and claims against issuer discovery/JWKS, applies viewer/operator/administrator route policy, rejects missing credentials in staging/production, bounds request bodies and token sizes, and enforces PostgreSQL-backed shared per-IP/per-subject limits (`db45843`).
 
 The remaining security work before multi-user or M05 operations deployment is:
 
-- real OIDC provider registration, callback/CORS/audience end-to-end verification, and provider token revocation/global logout (provider-neutral browser PKCE is isolated on draft PR #12);
+- real OIDC provider registration, callback/CORS/audience end-to-end verification, and provider token revocation/global logout (provider-neutral browser PKCE is isolated on PR #12);
 - workspace/tenant membership and database scoping;
 - actor identity and transactional audit records for every state-changing operation;
 - CI-verified shared PostgreSQL rate limiting (currently under development on a separate branch) and bounded backend concurrency for horizontally scaled deployments;
@@ -98,9 +98,9 @@ The GitHub account also contains separate portfolio projects (Pooya.OS, AuraPuls
 
 ## 9. M06 security handoff
 
-The initial server-side OIDC access-token and RBAC gate is merged in `main` as `977ce49` and passed CI run `41288773472`. Its tests cover signature tampering, RS256/ES256, issuer/audience/time-claim failures, unknown `kid` and JWKS rotation, role enforcement, CORS Authorization preflight, request limits, and startup failure when staging/production OIDC settings are absent. This completes only the API resource-server foundation, not all of M06. Browser PKCE/token lifecycle, workspace membership and tenant-scoped queries, shared rate limiting, secrets, retention, production deployment, and runbooks remain open.
+The initial server-side OIDC access-token and RBAC gate is merged in `main` as `977ce49` and passed CI run `41288773472`. Its tests cover signature tampering, RS256/ES256, issuer/audience/time-claim failures, unknown `kid` and JWKS rotation, role enforcement, CORS Authorization preflight, request limits, and startup failure when staging/production OIDC settings are absent. This completes only the API resource-server foundation, not all of M06. Browser PKCE/token lifecycle, workspace membership and tenant-scoped queries, real-provider browser PKCE integration, workspace membership enforcement and tenant-scoped queries, secrets, retention, production deployment, and runbooks remain open.
 
-The API currently accepts access tokens only through `Authorization: Bearer`; it never reads credentials from URLs or browser storage. A provider-neutral static-dashboard PKCE client is under review on draft PR #12. It is not deployed and has no real issuer/client configured yet.
+The API currently accepts access tokens only through `Authorization: Bearer`; it never reads credentials from URLs or browser storage. A provider-neutral static-dashboard PKCE client is under review on PR #12. It is not deployed and has no real issuer/client configured yet.
 
 ## 10. Continuity rule
 
