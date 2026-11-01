@@ -96,4 +96,16 @@ These are product-level contracts, not final database schemas. Their exact types
 
 ## Current implementation status
 
-The repository currently contains the first responsive web workspace and illustrative fixture values. The Go API, storage, collectors, and live data path are planned, not implemented.
+Implemented:
+- Responsive Next.js workspace with clearly labelled illustrative fixture values.
+- Go HTTP API process with liveness, readiness, and metadata endpoints.
+- Request IDs, structured request logs, panic recovery, server timeouts, and graceful shutdown.
+- Unit tests for the initial HTTP contract.
+
+Not implemented yet:
+- Database or cache connections.
+- Authentication and workspace authorization.
+- OTLP ingestion, telemetry storage, or live metrics/traces/logs.
+- External dependency probes in the readiness endpoint.
+
+The API foundation is intentionally small and standard-library-only. Additional infrastructure will be introduced when it has a concrete consumer and testable contract.
