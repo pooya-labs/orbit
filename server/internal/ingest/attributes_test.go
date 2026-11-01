@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
 	metricsv1 "go.opentelemetry.io/proto/otlp/metrics/v1"
 	resourcev1 "go.opentelemetry.io/proto/otlp/resource/v1"
@@ -59,12 +61,13 @@ func TestAttributeWorkspaceRejectsProducerTenantAttributes(t *testing.T) {
 			resource := &resourcev1.Resource{Attributes: []*commonv1.KeyValue{
 				stringAttribute(key, "attacker-workspace"),
 			}}
+			before := proto.Clone(resource)
 			err := AttributeWorkspace(resource, canonicalWorkspace)
 			if !errors.Is(err, ErrReservedTenantAttribute) {
 				t.Fatalf("AttributeWorkspace() error = %v, want ErrReservedTenantAttribute", err)
 			}
-			if got := attributeValue(resource, WorkspaceAttribute); got != "" {
-				t.Fatalf("canonical attribute injected after rejection: %q", got)
+			if !proto.Equal(resource, before) {
+				t.Fatal("request was mutated after a reserved tenant attribute was rejected")
 			}
 		})
 	}
