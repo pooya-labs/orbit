@@ -288,3 +288,82 @@ func TestNewCollectorGRPCForwarderValidatesEndpoint(t *testing.T) {
 		}
 	}
 }
+
+
+type timeoutGRPCForwarder struct{}
+
+func (timeoutGRPCForwarder) ExportMetrics(ctx context.Context, _ *metricsv1.ExportMetricsServiceRequest) (*metricsv1.ExportMetricsServiceResponse, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+func (timeoutGRPCForwarder) ExportLogs(ctx context.Context, _ *logsv1.ExportLogsServiceRequest) (*logsv1.ExportLogsServiceResponse, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+func (timeoutGRPCForwarder) ExportTraces(ctx context.Context, _ *tracesv1.ExportTraceServiceRequest) (*tracesv1.ExportTraceServiceResponse, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestGRPCGatewayFailsClosedWhenSharedRateLimitStoreIsUnavailable(t *testing.T) {
+	verifier, grants := validStubs()
+	authorizer, err := NewAuthorizer(verifier, grants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forwarder := &grpcForwarderStub{}
+	gateway := &GRPCGateway{
+		authorizer: authorizer,
+		forwarder: forwarder,
+		limiter: newWorkspaceRateLimiter(10),
+		sharedLimiter: &rateLimitStoreStub{err: errors.New("database unavailable")},
+		timeout: time.Second,
+		concurrency: make(chan struct{}, maxConcurrentGRPCExports),
+	}
+	request := &metricsv1.ExportMetricsServiceRequest{ResourceMetrics: []*metricspb.ResourceMetrics{{Resource: &resourcev1.Resource{}}}}
+	_, err = (&metricsGRPCService{gateway: gateway}).Export(
+		grpcWorkloadContext([]string{testWorkspace}, []string{"Bearer signed-token"}), request,
+	)
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("shared rate-limit store error code = %s, want Unavailable; err=%v", status.Code(err), err)
+	}
+	if forwarder.metricsCalls != 0 {
+		t.Fatal("request reached Collector while shared rate-limit store was unavailable")
+	}
+}
+
+func TestGRPCGatewayMapsCollectorFailureAndForwardTimeout(t *testing.T) {
+	request := &metricsv1.ExportMetricsServiceRequest{ResourceMetrics: []*metricspb.ResourceMetrics{{Resource: &resourcev1.Resource{}}}}
+	ctx := grpcWorkloadContext([]string{testWorkspace}, []string{"Bearer signed-token"})
+
+	t.Run("collector unavailable", func(t *testing.T) {
+		gateway, forwarder := newTestGRPCGateway()
+		forwarder.err = errors.New("collector unavailable")
+		_, err := (&metricsGRPCService{gateway: gateway}).Export(ctx, request)
+		if status.Code(err) != codes.Unavailable {
+			t.Fatalf("Collector failure code = %s, want Unavailable; err=%v", status.Code(err), err)
+		}
+		if forwarder.metricsCalls != 1 {
+			t.Fatalf("Collector calls = %d, want 1", forwarder.metricsCalls)
+		}
+	})
+
+	t.Run("forward timeout", func(t *testing.T) {
+		verifier, grants := validStubs()
+		authorizer, err := NewAuthorizer(verifier, grants)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gateway := &GRPCGateway{
+			authorizer: authorizer,
+			forwarder: timeoutGRPCForwarder{},
+			limiter: newWorkspaceRateLimiter(10),
+			timeout: 10 * time.Millisecond,
+			concurrency: make(chan struct{}, maxConcurrentGRPCExports),
+		}
+		_, err = (&metricsGRPCService{gateway: gateway}).Export(ctx, request)
+		if status.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("forward timeout code = %s, want DeadlineExceeded; err=%v", status.Code(err), err)
+		}
+	})
+}
