@@ -3,17 +3,97 @@ package httpapi
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 )
+
+var telemetryServiceCursorIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}package httpapi
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/pooya16pg-spec/orbit/server/internal/store"
+	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
+)
+
+)
+
+func encodeTelemetryServiceCursor(cursor *store.TelemetryServiceCursor) string {
+	if cursor == nil {
+		return ""
+	}
+	value := cursor.Name + "\n" + cursor.ID
+	return base64.RawURLEncoding.EncodeToString([]byte(value))
+}
+
+func decodeTelemetryServiceCursor(value string) (*store.TelemetryServiceCursor, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return nil, fmt.Errorf("cursor must be a valid URL-safe token")
+	}
+	parts := strings.SplitN(string(decoded), "\n", 2)
+	if len(parts) != 2 || telemetry.ValidateServiceName(parts[0]) != nil {
+		return nil, fmt.Errorf("cursor is invalid")
+	}
+	if parts[1] != "" && !telemetryServiceCursorIDPattern.MatchString(parts[1]) {
+		return nil, fmt.Errorf("cursor identifier is invalid")
+	}
+	return &store.TelemetryServiceCursor{Name: parts[0], ID: parts[1]}, nil
+}
+
+func paginateDiscoveredServices(
+	services []telemetry.DiscoveredService,
+	limit int,
+	cursor *store.TelemetryServiceCursor,
+) ([]telemetry.DiscoveredService, *store.TelemetryServiceCursor, bool) {
+	sort.Slice(services, func(i, j int) bool {
+		if services[i].Name == services[j].Name {
+			return services[i].ID < services[j].ID
+		}
+		return services[i].Name < services[j].Name
+	})
+	items := make([]telemetry.DiscoveredService, 0, len(services))
+	for _, service := range services {
+		if cursor != nil {
+			if service.Name < cursor.Name || (service.Name == cursor.Name && service.ID <= cursor.ID) {
+				continue
+			}
+		}
+		items = append(items, service)
+	}
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+		last := items[len(items)-1]
+		return items, &store.TelemetryServiceCursor{Name: last.Name, ID: last.ID}, true
+	}
+	return items, nil, false
+}
 
 type Config struct {
 	Version        string
