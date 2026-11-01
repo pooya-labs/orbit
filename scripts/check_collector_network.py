@@ -45,7 +45,7 @@ def main() -> int:
         raise RuntimeError("exactly one internal telemetry network must be configured")
     private_network = next(iter(private_networks))
 
-    required_services = {"api", "otel-collector", "prometheus", "loki", "tempo", "telemetry-demo"}
+    required_services = {"api", "otel-collector", "prometheus", "loki", "tempo", "telemetry-demo", "telemetry-smoke"}
     for name in required_services:
         service = services.get(name)
         if not isinstance(service, dict):
