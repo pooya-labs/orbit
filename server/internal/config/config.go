@@ -27,7 +27,7 @@ type Config struct {
 func Load() Config {
 	return Config{
 		HTTPAddr:       valueOrDefault("ORBIT_HTTP_ADDR", ":8080"),
-		Environment:    valueOrDefault("ORBIT_ENVIRONMENT", "development"),
+		Environment:    valueOrDefault("ORBIT_ENVIRONMENT", "production"),
 		Version:        valueOrDefault("ORBIT_VERSION", "0.10.0"),
 		DatabaseURL:    strings.TrimSpace(os.Getenv("ORBIT_DATABASE_URL")),
 		AllowedOrigins: commaSeparated(os.Getenv("ORBIT_ALLOWED_ORIGINS")),
@@ -76,7 +76,7 @@ func (c Config) AuthenticationEnabled() bool {
 func (c Config) Validate() error {
 	environment := strings.ToLower(strings.TrimSpace(c.Environment))
 	if environment == "" {
-		environment = "development"
+		environment = "production"
 	}
 	issuer := strings.TrimSpace(c.AuthIssuer)
 	audience := strings.TrimSpace(c.AuthAudience)
@@ -89,7 +89,7 @@ func (c Config) Validate() error {
 	if issuer == "" || audience == "" {
 		return fmt.Errorf("ORBIT_AUTH_ISSUER and ORBIT_AUTH_AUDIENCE must be configured together")
 	}
-	if strings.ContainsAny(audience, "\r\n") {
+	if len(audience) > 512 || strings.ContainsAny(audience, " \t\r\n") {
 		return fmt.Errorf("ORBIT_AUTH_AUDIENCE is invalid")
 	}
 
