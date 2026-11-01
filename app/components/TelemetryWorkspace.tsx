@@ -215,9 +215,23 @@ export default function TelemetryWorkspace({
     }
   };
 
+  const selectedServiceDiscovered = discoveredServices.some(
+    (service) => service.name === selectedService,
+  );
+
   useEffect(() => {
-    const controller = new AbortController();
     let mounted = true;
+    const controller = new AbortController();
+
+    if (serviceLoading || !selectedServiceDiscovered) {
+      setResourceAttributes(null);
+      setResourceError("");
+      setResourceLoading(false);
+      return () => {
+        mounted = false;
+        controller.abort();
+      };
+    }
 
     const loadAttributes = async () => {
       setResourceLoading(true);
@@ -230,15 +244,13 @@ export default function TelemetryWorkspace({
           controller.signal,
           apiBaseUrl,
         );
-        if (mounted) setResourceAttributes(response);
+        if (mounted && !controller.signal.aborted) setResourceAttributes(response);
       } catch (cause) {
-        if (controller.signal.aborted) return;
-        if (mounted) {
-          setResourceAttributes(null);
-          setResourceError(cause instanceof Error ? cause.message : tr("resourceAttributeUnavailable"));
-        }
+        if (controller.signal.aborted || !mounted) return;
+        setResourceAttributes(null);
+        setResourceError(cause instanceof Error ? cause.message : tr("resourceAttributeUnavailable"));
       } finally {
-        if (mounted) setResourceLoading(false);
+        if (mounted && !controller.signal.aborted) setResourceLoading(false);
       }
     };
 
@@ -249,7 +261,7 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [selectedService, windowRange, apiBaseUrl, reloadKey, language]);
+  }, [selectedService, selectedServiceDiscovered, serviceLoading, windowRange, apiBaseUrl, reloadKey, language]);
 
   useEffect(() => {
     const controller = new AbortController();
