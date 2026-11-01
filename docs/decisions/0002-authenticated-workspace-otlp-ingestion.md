@@ -7,7 +7,7 @@
 
 ## Context
 
-The local OpenTelemetry Collector currently accepts OTLP over gRPC and HTTP without authentication. Docker Compose binds its published ports to loopback for local development, but this is not a production ingestion boundary.
+The local OpenTelemetry Collector accepts OTLP over gRPC and HTTP without authentication. The Compose observability profile now keeps the collector and telemetry backends on an internal Docker network and does not publish raw OTLP receiver ports to the host. This is a local-development network boundary, not an authenticated production ingestion gateway.
 
 Workspace-scoped query endpoints require the canonical `orbit_workspace_id` Prometheus label, Loki label, and `orbit.workspace.id` Tempo resource attribute. A query selector alone does not prove that the producer was entitled to write data under that workspace. An OTLP producer can submit arbitrary resource attributes, including a forged workspace identifier. Trusting that value would let one tenant inject telemetry into another tenant's namespace.
 
@@ -72,7 +72,7 @@ Workspace grants must be checked server-side on every ingestion authorization de
 2. [x] Add an ingestion-specific verifier configuration with a dedicated audience; do not weaken or repurpose the human API audience (strict RFC 9068 `at+jwt` profile and explicit `nbf` requirement merged in PR #22).
 3. Implement the OTLP gateway for both HTTP and gRPC. Resolve verified workload identity and workspace grants before accepting data.
 4. Strip producer tenant attributes and inject the canonical workspace ID into all signals. Reject conflicts and mixed-tenant batches.
-5. Restrict the Collector to private gateway-to-collector traffic and close public access to raw OTLP/backend ports.
+5. [x] Isolate the local Compose telemetry services on an internal Docker network and remove host-published raw OTLP ports (PR #26). Production gateway-to-collector network policy and deployment firewall rules remain outstanding.
 6. Add integration tests that submit valid, invalid, revoked, cross-workspace, forged-attribute, mixed-batch, and oversized requests for metrics, logs, and traces.
 7. Verify that a workload authorized for workspace A cannot write data visible under workspace B, even when it supplies B's identifier.
 8. Run end-to-end tests through Prometheus, Loki, Tempo, and the workspace-scoped ORBIT query endpoints.
