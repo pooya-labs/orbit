@@ -6,21 +6,20 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rsa"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const (
@@ -111,14 +110,6 @@ type jwkDocument struct {
 	Crv     string   `json:"crv"`
 	X       string   `json:"x"`
 	Y       string   `json:"y"`
-}
-
-type jwtHeader struct {
-	Algorithm string   `json:"alg"`
-	KeyID     string   `json:"kid"`
-	Type      string   `json:"typ"`
-	Critical  []string `json:"crit"`
-	B64       *bool    `json:"b64"`
 }
 
 func NewVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
@@ -375,168 +366,88 @@ func (v *Verifier) Verify(ctx context.Context, serialized string) (Principal, er
 	if serialized == "" || len(serialized) > maxBearerTokenBytes {
 		return Principal{}, errors.New("bearer token is empty or exceeds the 16 KiB limit")
 	}
-	parts := strings.Split(serialized, ".")
-	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
-		return Principal{}, errors.New("bearer token is not a compact signed JWT")
+
+	parsed, err := jwt.Parse(serialized, func(token *jwt.Token) (any, error) {
+		algorithm := token.Method.Alg()
+		if algorithm != "RS256" && algorithm != "ES256" {
+			return nil, errors.New("JWT signing algorithm is not allowed")
+		}
+		if tokenType, present := token.Header["typ"]; present {
+			value, ok := tokenType.(string)
+			if !ok || (value != "JWT" && value != "at+JWT" && value != "at+jwt") {
+				return nil, errors.New("JWT type is not an access-token type")
+			}
+		}
+		keyID, ok := token.Header["kid"].(string)
+		if !ok || keyID == "" {
+			return nil, errors.New("JWT is missing its key ID")
+		}
+		return v.keyFor(ctx, keyID, algorithm)
+	},
+		jwt.WithValidMethods([]string{"RS256", "ES256"}),
+		jwt.WithIssuer(v.issuer),
+		jwt.WithAudience(v.audience),
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuedAt(),
+		jwt.WithLeeway(v.skew),
+		jwt.WithJSONNumber(),
+		jwt.WithStrictDecoding(),
+	)
+	if err != nil || parsed == nil || !parsed.Valid {
+		return Principal{}, errors.New("access token signature or registered claims are invalid")
 	}
 
-	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return Principal{}, errors.New("JWT header is not valid base64url")
+	claims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		return Principal{}, errors.New("access token claims have an unsupported representation")
 	}
-	var header jwtHeader
-	if err := json.Unmarshal(headerBytes, &header); err != nil {
-		return Principal{}, errors.New("JWT header is invalid JSON")
-	}
-	if len(header.Critical) > 0 || (header.B64 != nil && !*header.B64) {
-		return Principal{}, errors.New("JWT critical or unencoded-payload extensions are not supported")
-	}
-	if header.Type != "" && header.Type != "JWT" && header.Type != "at+JWT" && header.Type != "at+jwt" {
-		return Principal{}, errors.New("JWT type is not an access-token type")
-	}
-	if header.KeyID == "" {
-		return Principal{}, errors.New("JWT is missing its key ID")
-	}
-	if header.Algorithm != "RS256" && header.Algorithm != "ES256" {
-		return Principal{}, errors.New("JWT signing algorithm is not allowed")
-	}
-
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return Principal{}, errors.New("JWT payload is not valid base64url")
-	}
-	claims := make(map[string]json.RawMessage)
-	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
-		return Principal{}, errors.New("JWT payload is invalid JSON")
-	}
-
-	issuer, err := stringClaim(claims, "iss", true)
-	if err != nil || issuer != v.issuer {
-		return Principal{}, errors.New("JWT issuer does not match the configured issuer")
-	}
-	subject, err := stringClaim(claims, "sub", true)
+	subject, err := claims.GetSubject()
 	if err != nil || strings.TrimSpace(subject) == "" {
-		return Principal{}, errors.New("JWT subject is missing or invalid")
+		return Principal{}, errors.New("access token subject is missing or invalid")
 	}
-	audiences, err := stringListClaim(claims, "aud", true)
-	if err != nil || !contains(audiences, v.audience) {
-		return Principal{}, errors.New("JWT audience does not include the ORBIT API")
+	issuedAt, err := claims.GetIssuedAt()
+	if err != nil || issuedAt == nil {
+		return Principal{}, errors.New("access token issued-at claim is missing or invalid")
 	}
-
-	issuedAt, err := numericDateClaim(claims, "iat", true)
-	if err != nil {
-		return Principal{}, errors.New("JWT issued-at claim is missing or invalid")
+	expiresAt, err := claims.GetExpirationTime()
+	if err != nil || expiresAt == nil || !expiresAt.After(issuedAt.Time) {
+		return Principal{}, errors.New("access token expiration is missing or not later than issued-at")
 	}
-	expiresAt, err := numericDateClaim(claims, "exp", true)
-	if err != nil {
-		return Principal{}, errors.New("JWT expiration claim is missing or invalid")
-	}
-	notBefore, err := numericDateClaim(claims, "nbf", false)
-	if err != nil {
-		return Principal{}, errors.New("JWT not-before claim is invalid")
-	}
-
-	now := time.Now()
-	if issuedAt.After(now.Add(v.skew)) {
-		return Principal{}, errors.New("JWT issued-at claim is in the future")
-	}
-	if !expiresAt.After(now.Add(-v.skew)) {
-		return Principal{}, errors.New("JWT has expired")
-	}
-	if !expiresAt.After(issuedAt) {
-		return Principal{}, errors.New("JWT expiration must be later than issued-at")
-	}
-	if !notBefore.IsZero() && notBefore.After(now.Add(v.skew)) {
-		return Principal{}, errors.New("JWT is not yet valid")
+	issuer, err := claims.GetIssuer()
+	if err != nil || issuer != v.issuer {
+		return Principal{}, errors.New("access token issuer does not match configuration")
 	}
 
 	roles, err := parseRoles(claims, v.rolesClaim)
 	if err != nil {
-		return Principal{}, errors.New("JWT role claim is invalid")
+		return Principal{}, errors.New("access token role claim is invalid")
 	}
-
-	publicKey, err := v.keyFor(ctx, header.KeyID, header.Algorithm)
-	if err != nil {
-		return Principal{}, err
-	}
-	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
-	if err != nil {
-		return Principal{}, errors.New("JWT signature is not valid base64url")
-	}
-	signingInput := []byte(parts[0] + "." + parts[1])
-	digest := sha256.Sum256(signingInput)
-	if err := verifyJWTSignature(publicKey, header.Algorithm, digest[:], signature); err != nil {
-		return Principal{}, errors.New("JWT signature verification failed")
-	}
-
 	return Principal{Issuer: issuer, Subject: subject, Roles: roles}, nil
 }
 
-func stringClaim(claims map[string]json.RawMessage, name string, required bool) (string, error) {
-	raw, ok := claims[name]
-	if !ok {
-		if required {
-			return "", fmt.Errorf("missing claim %q", name)
-		}
-		return "", nil
-	}
-	var value string
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return "", err
-	}
-	return value, nil
-}
-
-func stringListClaim(claims map[string]json.RawMessage, name string, required bool) ([]string, error) {
-	raw, ok := claims[name]
-	if !ok {
-		if required {
-			return nil, fmt.Errorf("missing claim %q", name)
-		}
+func parseRoles(claims jwt.MapClaims, claimName string) ([]string, error) {
+	raw, exists := claims[claimName]
+	if !exists {
 		return nil, nil
-	}
-	var single string
-	if err := json.Unmarshal(raw, &single); err == nil {
-		return []string{single}, nil
 	}
 	var values []string
-	if err := json.Unmarshal(raw, &values); err != nil {
-		return nil, err
-	}
-	return values, nil
-}
-
-func numericDateClaim(claims map[string]json.RawMessage, name string, required bool) (time.Time, error) {
-	raw, ok := claims[name]
-	if !ok {
-		if required {
-			return time.Time{}, fmt.Errorf("missing claim %q", name)
+	switch typed := raw.(type) {
+	case string:
+		values = []string{typed}
+	case []string:
+		values = typed
+	case []any:
+		for _, value := range typed {
+			role, ok := value.(string)
+			if !ok {
+				return nil, errors.New("role values must be strings")
+			}
+			values = append(values, role)
 		}
-		return time.Time{}, nil
+	default:
+		return nil, errors.New("role claim must be a string or string array")
 	}
-	var number json.Number
-	decoder := json.NewDecoder(strings.NewReader(string(raw)))
-	decoder.UseNumber()
-	if err := decoder.Decode(&number); err != nil {
-		return time.Time{}, err
-	}
-	seconds, err := strconv.ParseFloat(number.String(), 64)
-	if err != nil || math.IsNaN(seconds) || math.IsInf(seconds, 0) ||
-		seconds > 253402300799 || seconds < -62135596800 {
-		return time.Time{}, errors.New("numeric date is out of range")
-	}
-	whole, fraction := math.Modf(seconds)
-	return time.Unix(int64(whole), int64(fraction*float64(time.Second))).UTC(), nil
-}
 
-func parseRoles(claims map[string]json.RawMessage, claimName string) ([]string, error) {
-	if _, ok := claims[claimName]; !ok {
-		return nil, nil
-	}
-	values, err := stringListClaim(claims, claimName, true)
-	if err != nil {
-		return nil, err
-	}
 	allowed := map[string]struct{}{
 		"viewer": {}, "operator": {}, "administrator": {},
 	}
@@ -553,26 +464,4 @@ func parseRoles(claims map[string]json.RawMessage, claimName string) ([]string, 
 		roles = append(roles, role)
 	}
 	return roles, nil
-}
-
-func verifyJWTSignature(key crypto.PublicKey, algorithm string, digest, signature []byte) error {
-	switch publicKey := key.(type) {
-	case *rsa.PublicKey:
-		if algorithm != "RS256" {
-			return errors.New("RSA keys can only verify RS256 tokens")
-		}
-		return rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, digest, signature)
-	case *ecdsa.PublicKey:
-		if algorithm != "ES256" || len(signature) != 64 {
-			return errors.New("ES256 signature must contain 64 raw bytes")
-		}
-		r := new(big.Int).SetBytes(signature[:32])
-		s := new(big.Int).SetBytes(signature[32:])
-		if !ecdsa.Verify(publicKey, digest, r, s) {
-			return errors.New("invalid ES256 signature")
-		}
-		return nil
-	default:
-		return errors.New("unsupported JWT verification key")
-	}
 }
