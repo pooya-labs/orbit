@@ -100,8 +100,13 @@ type upstreamEnvelope struct {
 }
 
 type DiscoveredService struct {
-	Name    string   `json:"name"`
-	Sources []string `json:"sources"`
+	ID                 string         `json:"id,omitempty"`
+	Name               string         `json:"name"`
+	Sources            []string       `json:"sources"`
+	FirstSeenAt        time.Time      `json:"first_seen_at,omitempty"`
+	LastSeenAt         time.Time      `json:"last_seen_at,omitempty"`
+	LastDiscoveredAt   time.Time      `json:"last_discovered_at,omitempty"`
+	ResourceAttributes map[string]any `json:"resource_attributes,omitempty"`
 }
 
 type ServiceDiscoveryResult struct {
