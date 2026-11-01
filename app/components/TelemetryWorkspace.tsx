@@ -146,7 +146,7 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [windowRange, apiBaseUrl, reloadKey]);
+  }, [windowRange, apiBaseUrl, reloadKey, language]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -200,7 +200,7 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService]);
+  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language]);
 
   const metricSamples = useMemo(() => {
     if (!metrics) return [];
