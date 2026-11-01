@@ -117,6 +117,6 @@ Then continue on a feature branch, update tests and docs with implementation, an
 
 The shared PostgreSQL rate limiter is merged in `db45843`. The provider-neutral browser PKCE client remains isolated on PR #12 until a real identity provider is configured and the browser-to-API flow is tested.
 
-The next workspace foundation is being developed on `feature/m06-workspace-audit-foundation`. Migration 005 introduces workspaces, issuer+subject-based memberships, one-owner-per-workspace enforcement, and append-only workspace audit events. Repository operations create a workspace and its owner membership atomically, resolve a principal's memberships, and append/read bounded audit events.
+Migration 005 introduces workspaces, issuer+subject-based memberships, one-owner-per-workspace enforcement, and append-only workspace audit events. Repository operations create a workspace and its owner membership atomically, resolve a principal's memberships, and append/read bounded audit events. Authenticated workspace create/list, membership lookup, and membership-checked audit-read endpoints are being added on `feature/m06-workspace-api-membership`.
 
 This schema and repository layer alone does **not** make ORBIT multi-tenant. Existing service, incident, and telemetry queries are still global. Do not expose workspace creation or claim tenant isolation until every data query and mutation is scoped to a verified workspace membership, existing records are safely assigned, and cross-workspace denial tests pass.
