@@ -131,3 +131,8 @@ OpenTelemetry Collector
 - Redis and NATS are available in Compose but are not yet used by the Go API.
 - The Pages deployment is frontend-only. The Go API is local-only, not publicly hosted.
 - The Overview dashboard consumes the service and incident API in API mode; the Metrics/Logs/Traces views consume the bounded telemetry query API and persisted observed service catalog. Full resource-attribute extraction from all telemetry backends remains future work.
+
+
+### Legacy route deployment boundary
+
+Unscoped inventory and telemetry read endpoints are development-only. Staging and production must return a non-disclosing 404 for legacy global reads; workspace-scoped reads require verified membership. This gate does not partition Prometheus, Loki, or Tempo data and does not make telemetry ingestion tenant-aware.
