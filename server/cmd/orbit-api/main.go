@@ -30,7 +30,6 @@ func main() {
 	}
 
 	var authVerifier httpapi.TokenVerifier
-	var humanVerifier *auth.Verifier
 	if cfg.OIDCIssuer != "" {
 		authCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		verifier, err := auth.NewVerifier(authCtx, auth.Config{
@@ -42,7 +41,6 @@ func main() {
 			logger.Error("OIDC authentication initialization failed", "error", err)
 			os.Exit(1)
 		}
-		humanVerifier = verifier
 		authVerifier = verifier
 		defer verifier.Close()
 	}
@@ -247,5 +245,4 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("ORBIT API stopped")
-	_ = humanVerifier
 }
