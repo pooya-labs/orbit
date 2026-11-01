@@ -124,6 +124,7 @@ func workloadAdminHandler(repository *fakeWorkloadAdminRepository, roles ...stri
 	}}
 	return NewHandler(Config{
 		Environment: "production", AuthVerifier: verifier,
+		AllowedOrigins: []string{"https://dashboard.example"},
 		RateLimitPerMinute: 100,
 	}, repository, testLogger())
 }
@@ -245,8 +246,13 @@ func TestWorkloadAdminCORSAllowsMutationMethods(t *testing.T) {
 	request.Header.Set("Access-Control-Request-Method", "PATCH")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusForbidden {
-		// The test handler intentionally has no allowed origins; CORS must deny unknown origins.
-		return
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("CORS preflight status = %d, want 204; body=%s", response.Code, response.Body.String())
+	}
+	allowed := response.Header().Get("Access-Control-Allow-Methods")
+	for _, method := range []string{"PUT", "PATCH", "DELETE"} {
+		if !strings.Contains(allowed, method) {
+			t.Fatalf("CORS allowed methods %q do not include %s", allowed, method)
+		}
 	}
 }
