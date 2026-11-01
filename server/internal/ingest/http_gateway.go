@@ -221,7 +221,7 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 func parseWorkspaceSignalPath(path string) (workspaceID, signal string, ok bool) {
 	parts := strings.Split(path, "/")
 	if len(parts) != 6 || parts[0] != "" || parts[1] != "v1" ||
-		parts[2] != "workspaces" || parts[4] != "v1" {
+		parts[2] != "workspaces" || parts[3] == "" || parts[4] != "v1" {
 		return "", "", false
 	}
 	switch parts[5] {
