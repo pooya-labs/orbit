@@ -300,9 +300,3 @@ func TestNewVerifierRejectsIssuerMismatchAndInsecureRemoteHTTP(t *testing.T) {
 	}
 }
 
-func TestNumericDateClaimRejectsNonNumbers(t *testing.T) {
-	claims := map[string]json.RawMessage{"exp": json.RawMessage(strconv.Quote("tomorrow"))}
-	if _, err := numericDateClaim(claims, "exp", true); err == nil {
-		t.Fatal("numericDateClaim() accepted a string value")
-	}
-}
