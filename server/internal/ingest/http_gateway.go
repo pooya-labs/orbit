@@ -208,7 +208,11 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	responseBody, err := g.forwarder.Export(forwardCtx, signal, encoded)
 	if err != nil {
-		http.Error(w, "OTLP collector is temporarily unavailable", http.StatusBadGateway)
+		if errors.Is(forwardCtx.Err(), context.DeadlineExceeded) {
+			http.Error(w, "OTLP collector export timed out", http.StatusGatewayTimeout)
+		} else {
+			http.Error(w, "OTLP collector is temporarily unavailable", http.StatusBadGateway)
+		}
 		return
 	}
 	if len(responseBody) > maxOTLPRequestBytes {
