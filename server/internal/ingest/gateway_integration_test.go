@@ -736,3 +736,129 @@ func TestWorkloadGrantAndIdentityRevocationApplyAcrossGatewayReplicas(t *testing
 			httpForwarderA.calls, grpcForwarderB.metricsCalls+grpcForwarderB.logsCalls+grpcForwarderB.tracesCalls)
 	}
 }
+
+
+// blockingHTTPForwarder and blockingGRPCForwarder expose the authorization-to-
+// forwarding boundary so the in-flight revocation contract can be tested.
+type blockingHTTPForwarder struct {
+	entered chan struct{}
+	release chan struct{}
+	calls atomic.Int64
+}
+
+func (f *blockingHTTPForwarder) Export(ctx context.Context, _ string, _ []byte) ([]byte, error) {
+	f.calls.Add(1)
+	select { case f.entered <- struct{}{}: default: }
+	select {
+	case <-f.release:
+		return proto.Marshal(&metricsv1.ExportMetricsServiceResponse{})
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+type blockingGRPCForwarder struct {
+	entered chan struct{}
+	release chan struct{}
+	calls atomic.Int64
+}
+
+func (f *blockingGRPCForwarder) wait(ctx context.Context) error {
+	f.calls.Add(1)
+	select { case f.entered <- struct{}{}: default: }
+	select {
+	case <-f.release: return nil
+	case <-ctx.Done(): return ctx.Err()
+	}
+}
+func (f *blockingGRPCForwarder) ExportMetrics(ctx context.Context, _ *metricsv1.ExportMetricsServiceRequest) (*metricsv1.ExportMetricsServiceResponse, error) {
+	if err := f.wait(ctx); err != nil { return nil, err }; return &metricsv1.ExportMetricsServiceResponse{}, nil
+}
+func (f *blockingGRPCForwarder) ExportLogs(ctx context.Context, _ *logsv1.ExportLogsServiceRequest) (*logsv1.ExportLogsServiceResponse, error) {
+	if err := f.wait(ctx); err != nil { return nil, err }; return &logsv1.ExportLogsServiceResponse{}, nil
+}
+func (f *blockingGRPCForwarder) ExportTraces(ctx context.Context, _ *tracesv1.ExportTraceServiceRequest) (*tracesv1.ExportTraceServiceResponse, error) {
+	if err := f.wait(ctx); err != nil { return nil, err }; return &tracesv1.ExportTraceServiceResponse{}, nil
+}
+
+// Authorization is linearized when the shared repository confirms the grant.
+// An export already admitted to the Collector may finish after a later revoke
+// commits; requests authorized after that commit must be denied.
+func TestInFlightExportMayFinishButPostCommitRequestsAreDenied(t *testing.T) {
+	t.Run("http", func(t *testing.T) {
+		repository, workspace, _, identity, verifier := openGatewayIntegrationRepository(t)
+		authorizer, err := NewAuthorizer(verifier, repository)
+		if err != nil { t.Fatal(err) }
+		forwarder := &blockingHTTPForwarder{entered: make(chan struct{}, 1), release: make(chan struct{})}
+		handler, err := NewHTTPGateway(authorizer, forwarder, HTTPGatewayConfig{
+			RequestsPerMinute: 100, ForwardTimeout: 10 * time.Second, RateLimitStore: repository,
+		})
+		if err != nil { t.Fatal(err) }
+		payload, err := proto.Marshal(integrationOTLPRequest(t, "metrics"))
+		if err != nil { t.Fatal(err) }
+		makeRequest := func() *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+workspace.ID+"/v1/metrics", bytes.NewReader(payload))
+			req.Header.Set("Authorization", "Bearer integration-workload-token")
+			req.Header.Set("Content-Type", "application/x-protobuf")
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+			return recorder
+		}
+		result := make(chan *httptest.ResponseRecorder, 1)
+		go func() { result <- makeRequest() }()
+		select {
+		case <-forwarder.entered:
+		case <-time.After(5 * time.Second): t.Fatal("HTTP request did not reach Collector forwarder")
+		}
+		actorIssuer := "https://identity.example/"
+		actorSubject := "otlp-gateway-integration-" + strings.TrimPrefix(identity.Subject, "collector-")
+		revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err = repository.SetWorkloadIdentityStatus(revokeCtx, identity.ID, actorIssuer, actorSubject, "revoked")
+		cancel()
+		if err != nil { t.Fatalf("revoke identity during HTTP export: %v", err) }
+		close(forwarder.release)
+		select {
+		case response := <-result:
+			if response.Code != http.StatusOK { t.Fatalf("in-flight HTTP export = %d, want 200", response.Code) }
+		case <-time.After(5 * time.Second): t.Fatal("in-flight HTTP export did not finish")
+		}
+		if response := makeRequest(); response.Code != http.StatusForbidden {
+			t.Fatalf("post-commit HTTP export = %d, want 403", response.Code)
+		}
+		if got := forwarder.calls.Load(); got != 1 { t.Fatalf("HTTP forwarder calls = %d, want 1", got) }
+	})
+
+	t.Run("grpc", func(t *testing.T) {
+		repository, workspace, _, identity, verifier := openGatewayIntegrationRepository(t)
+		authorizer, err := NewAuthorizer(verifier, repository)
+		if err != nil { t.Fatal(err) }
+		forwarder := &blockingGRPCForwarder{entered: make(chan struct{}, 1), release: make(chan struct{})}
+		gateway := &GRPCGateway{
+			authorizer: authorizer, forwarder: forwarder, limiter: newWorkspaceRateLimiter(100),
+			sharedLimiter: repository, timeout: 10 * time.Second,
+			concurrency: make(chan struct{}, maxConcurrentGRPCExports),
+		}
+		result := make(chan error, 1)
+		go func() { result <- callIntegrationGRPCExport(gateway, workspace.ID, "metrics") }()
+		select {
+		case <-forwarder.entered:
+		case <-time.After(5 * time.Second): t.Fatal("gRPC request did not reach Collector forwarder")
+		}
+		actorIssuer := "https://identity.example/"
+		actorSubject := "otlp-gateway-integration-" + strings.TrimPrefix(identity.Subject, "collector-")
+		revokeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err = repository.SetWorkloadIdentityStatus(revokeCtx, identity.ID, actorIssuer, actorSubject, "revoked")
+		cancel()
+		if err != nil { t.Fatalf("revoke identity during gRPC export: %v", err) }
+		close(forwarder.release)
+		select {
+		case err := <-result:
+			if err != nil { t.Fatalf("in-flight gRPC export should finish: %v", err) }
+		case <-time.After(5 * time.Second): t.Fatal("in-flight gRPC export did not finish")
+		}
+		if err := callIntegrationGRPCExport(gateway, workspace.ID, "metrics"); status.Code(err) != codes.PermissionDenied {
+			t.Fatalf("post-commit gRPC export code = %s, want PermissionDenied; err=%v", status.Code(err), err)
+		}
+		if got := forwarder.calls.Load(); got != 1 { t.Fatalf("gRPC forwarder calls = %d, want 1", got) }
+	})
+}
