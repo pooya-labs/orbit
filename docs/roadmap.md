@@ -116,7 +116,7 @@ The test establishes read-after-commit revocation for requests authorized after 
 - [x] Establish the authorization boundary: an export already authorized and admitted to the Collector forwarder may finish after a later revocation commit; authorization beginning after the commit must fail closed and must not be forwarded.
 - [x] Verify gateway admission-capacity behavior under saturation for OTLP/HTTP and OTLP/gRPC (PR #51; merged and CI-passing). The tests prove a second request is rejected while the single admission slot is occupied, is not forwarded, and the admitted request completes after capacity is released.
 - [x] Verify gRPC fail-closed behavior when the shared rate-limit store is unavailable, map Collector failures to Unavailable, and map forward deadlines to DeadlineExceeded (PR #53; merged and CI-passing).
-- [ ] Add broader burst/load coverage, HTTP forward-timeout mapping (PR #54 pending), database outages/timeouts, and explicit backpressure tests.
+- [ ] Add broader burst/load coverage, HTTP forward-timeout mapping (PR #54 merged and CI-passing), database outages/timeouts, and explicit backpressure tests.
 - [ ] Verify production ingress TLS termination, trusted-proxy behavior, firewall/NetworkPolicy restrictions, and Collector/backend isolation.
 - [ ] Configure and end-to-end verify a real OIDC provider for browser PKCE, including callback, state/nonce, issuer/audience validation, and key rotation.
 - [ ] Complete dependency/secrets review, telemetry retention/cardinality controls, backup/restore, deployment and incident-response runbooks.
@@ -139,4 +139,4 @@ PR #53 is merged into `main` (squash merge commit `13cd7b4927b2259b10b5dd94824a7
 
 The gRPC gateway now has explicit tests proving that an unavailable shared rate-limit store fails closed with `Unavailable` and does not forward telemetry, Collector failures map to `Unavailable`, and a forward deadline maps to `DeadlineExceeded`. This is deterministic protocol/error-contract coverage; broader outage and load behavior remains open.
 
-PR #54 is open and adds matching HTTP deadline behavior: Collector forward timeouts should return HTTP 504 rather than the generic 502 used for other Collector failures. Do not mark this HTTP change complete until its CI passes and it is merged.
+PR #54 is merged with passing CI. Collector forward timeouts now return HTTP 504 Gateway Timeout rather than the generic 502 used for other Collector failures.
