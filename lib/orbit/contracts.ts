@@ -96,6 +96,7 @@ export interface DiscoveredTelemetryService {
   last_seen_at?: string;
   last_discovered_at?: string;
   resource_attributes?: Record<string, unknown>;
+  resource_attribute_sources?: Record<string, TelemetryBackend[]>;
 }
 
 export interface TelemetryServicesResponse {
@@ -105,4 +106,14 @@ export interface TelemetryServicesResponse {
   sources_queried: TelemetryBackend[];
   warnings?: string[];
   data: DiscoveredTelemetryService[];
+}
+
+export interface TelemetryResourceAttributesResponse {
+  service: string;
+  window: TelemetryWindow;
+  queried_at: string;
+  sources_queried: TelemetryBackend[];
+  warnings?: string[];
+  attributes: Record<string, unknown>;
+  attribute_sources: Record<string, TelemetryBackend[]>;
 }
