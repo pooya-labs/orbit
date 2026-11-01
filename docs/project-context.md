@@ -35,7 +35,7 @@ The version labels above describe the progression documented by the project; the
 - **Telemetry query APIs stay bounded and read-only.** Windows, result counts, dimensions, and query expressions are validated. Never accept arbitrary PromQL or LogQL directly from the browser.
 - **M04 attribute extraction is still a preview.** It maps an allowlist of labels/tags into OpenTelemetry-style names. It does not yet ingest the complete resource-attribute set directly from workload SDKs or the Collector.
 - **Redis and NATS are provisioned but not yet integrated into application behavior.** Do not claim caching or event delivery until the API actually uses them and tests cover those paths.
-- **M06 API security foundation:** OIDC access-token verification through issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and process-local per-IP/per-subject rate limits are merged in `main` (`977ce49`) and CI-verified. A shared PostgreSQL fixed-window rate limiter is under development on `feature/m06-shared-postgres-rate-limit`; staging and production will require PostgreSQL so rate limiting cannot silently fall back to per-process memory.
+- **M06 API security foundation:** OIDC access-token verification through issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and PostgreSQL-backed shared per-IP/per-subject rate limits are merged in `main` (`977ce49`) and CI-verified. A shared PostgreSQL fixed-window rate limiter is under development on `feature/m06-shared-postgres-rate-limit`; staging and production will require PostgreSQL so rate limiting cannot silently fall back to per-process memory.
 - **Security work still open:** real browser OIDC provider registration and end-to-end browser/API verification, token revocation/global logout, workspace membership and tenant-scoped database queries, completion of shared PostgreSQL rate-limit acceptance, transactional audit records for M05 operations, and production deployment controls. Until workspace scoping exists, the API must not be advertised as multi-tenant.
 
 ## 4. Established UX and engineering decisions
@@ -111,3 +111,12 @@ When resuming work, start with:
 4. the latest GitHub Actions run and open PRs for verified code state.
 
 Then continue on a feature branch, update tests and docs with implementation, and keep the public Pages deployment unchanged until the relevant PR is merged and deployment CI succeeds.
+
+
+## 11. Workspace and audit foundation (M06)
+
+The shared PostgreSQL rate limiter is merged in `db45843`. The provider-neutral browser PKCE client remains isolated on draft PR #12 until a real identity provider is configured and the browser-to-API flow is tested.
+
+The next workspace foundation is being developed on `feature/m06-workspace-audit-foundation`. Migration 005 introduces workspaces, issuer+subject-based memberships, one-owner-per-workspace enforcement, and append-only workspace audit events. Repository operations create a workspace and its owner membership atomically, resolve a principal's memberships, and append/read bounded audit events.
+
+This schema and repository layer alone does **not** make ORBIT multi-tenant. Existing service, incident, and telemetry queries are still global. Do not expose workspace creation or claim tenant isolation until every data query and mutation is scoped to a verified workspace membership, existing records are safely assigned, and cross-workspace denial tests pass.
