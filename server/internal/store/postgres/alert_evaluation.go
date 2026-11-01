@@ -341,7 +341,7 @@ func (r *Repository) clearAlertRuleStateTx(ctx context.Context, tx pgx.Tx, rule 
 	if err != nil {
 		return fmt.Errorf("lock alert rule state before clearing: %w", err)
 	}
-	if state != "normal" {
+	if eventType != "" {
 		if err := appendAlertEvaluationEventTx(ctx, tx, rule, eventType, lastValue, occurredAt,
 			map[string]any{"previous_state": state, "state": "normal"}); err != nil {
 			return err
