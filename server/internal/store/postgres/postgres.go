@@ -105,11 +105,23 @@ func (r *Repository) IncrementRateLimitWindow(ctx context.Context, keyHash strin
 }
 
 func (r *Repository) Migrate(ctx context.Context) error {
-	if _, err := r.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+	ledgerTx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin migration ledger transaction: %w", err)
+	}
+	if _, err := ledgerTx.Exec(ctx, "SELECT pg_advisory_xact_lock(1330795073, 1)"); err != nil {
+		_ = ledgerTx.Rollback(ctx)
+		return fmt.Errorf("lock migration ledger: %w", err)
+	}
+	if _, err := ledgerTx.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
 		version TEXT PRIMARY KEY,
 		applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	)`); err != nil {
+		_ = ledgerTx.Rollback(ctx)
 		return fmt.Errorf("create migration ledger: %w", err)
+	}
+	if err := ledgerTx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit migration ledger transaction: %w", err)
 	}
 
 	migrations := []struct {
@@ -130,6 +142,12 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		tx, err := r.pool.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("begin %s migration transaction: %w", item.version, err)
+		}
+		// Serialize schema checks and DDL across API replicas and parallel
+		// test packages. The transaction-scoped lock is released on commit or rollback.
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(1330795073, 1)"); err != nil {
+			_ = tx.Rollback(ctx)
+			return fmt.Errorf("lock schema migration %s: %w", item.version, err)
 		}
 		var applied bool
 		if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)", item.version).Scan(&applied); err != nil {

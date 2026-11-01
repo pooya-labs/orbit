@@ -93,6 +93,19 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
+	// Reserve bounded capacity before token verification or database access so
+	// concurrent invalid/valid requests cannot fan out unbounded auth work.
+	select {
+	case g.concurrency <- struct{}{}:
+		defer func() { <-g.concurrency }()
+	case <-r.Context().Done():
+		http.Error(w, "request canceled", http.StatusRequestTimeout)
+		return
+	default:
+		http.Error(w, "OTLP gateway is at capacity", http.StatusServiceUnavailable)
+		return
+	}
 	decision, err := g.authorizer.Authorize(r.Context(), r.Header.Values("Authorization"), workspaceID, signal)
 	if err != nil {
 		switch {
@@ -146,17 +159,6 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.ContentLength > maxOTLPRequestBytes {
 		http.Error(w, "OTLP request exceeds the 4 MiB limit", http.StatusRequestEntityTooLarge)
-		return
-	}
-
-	select {
-	case g.concurrency <- struct{}{}:
-		defer func() { <-g.concurrency }()
-	case <-r.Context().Done():
-		http.Error(w, "request canceled", http.StatusRequestTimeout)
-		return
-	default:
-		http.Error(w, "OTLP gateway is at capacity", http.StatusServiceUnavailable)
 		return
 	}
 

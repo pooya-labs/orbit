@@ -192,6 +192,28 @@ func TestGRPCGatewayMapsAuthorizationAndDependencyFailures(t *testing.T) {
 	}
 }
 
+
+func TestGRPCGatewayBoundsAdmissionBeforeTokenAndDatabaseWork(t *testing.T) {
+	gateway, forwarder := newTestGRPCGateway()
+	verifier := gateway.authorizer.verifier.(*verifierStub)
+	grants := gateway.authorizer.grants.(*grantStub)
+	gateway.concurrency = make(chan struct{}, 1)
+	gateway.concurrency <- struct{}{}
+	request := &metricsv1.ExportMetricsServiceRequest{
+		ResourceMetrics: []*metricspb.ResourceMetrics{{Resource: &resourcev1.Resource{}}},
+	}
+	_, err := (&metricsGRPCService{gateway: gateway}).Export(
+		grpcWorkloadContext([]string{testWorkspace}, []string{"Bearer signed-token"}),
+		request,
+	)
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("gRPC code = %s, want ResourceExhausted; err=%v", status.Code(err), err)
+	}
+	if verifier.calls != 0 || grants.calls != 0 || forwarder.metricsCalls != 0 {
+		t.Fatalf("saturated gateway performed auth/database/forwarding work: verifier=%d grants=%d forwarder=%d", verifier.calls, grants.calls, forwarder.metricsCalls)
+	}
+}
+
 func TestGRPCGatewayEnforcesPayloadSizeAndSharedRateLimit(t *testing.T) {
 	gateway, forwarder := newTestGRPCGateway()
 	oversized := &metricsv1.ExportMetricsServiceRequest{

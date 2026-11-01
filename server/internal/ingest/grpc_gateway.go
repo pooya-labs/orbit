@@ -71,6 +71,7 @@ func NewGRPCGatewayServer(authorizer *Authorizer, forwarder GRPCForwarder, cfg G
 	server := grpc.NewServer(
 		grpc.MaxRecvMsgSize(maxOTLPRequestBytes),
 		grpc.MaxSendMsgSize(maxOTLPRequestBytes),
+		grpc.MaxConcurrentStreams(maxConcurrentGRPCExports),
 	)
 	metricsv1.RegisterMetricsServiceServer(server, &metricsGRPCService{gateway: gateway})
 	logsv1.RegisterLogsServiceServer(server, &logsGRPCService{gateway: gateway})
@@ -103,6 +104,17 @@ func (g *GRPCGateway) authorize(ctx context.Context, signal string) (Decision, e
 	}
 }
 
+func (g *GRPCGateway) acquire(ctx context.Context) (func(), error) {
+	select {
+	case g.concurrency <- struct{}{}:
+		return func() { <-g.concurrency }, nil
+	case <-ctx.Done():
+		return nil, status.FromContextError(ctx.Err()).Err()
+	default:
+		return nil, status.Error(codes.ResourceExhausted, "OTLP gRPC gateway is at capacity")
+	}
+}
+
 func (g *GRPCGateway) beginExport(ctx context.Context, decision Decision) (context.Context, context.CancelFunc, error) {
 	rateKey := "workload:" + decision.IdentityID + ":" + decision.WorkspaceID + ":" + decision.Signal
 	rateCtx, rateCancel := context.WithTimeout(ctx, 750*time.Millisecond)
@@ -114,18 +126,8 @@ func (g *GRPCGateway) beginExport(ctx context.Context, decision Decision) (conte
 	if !allowed {
 		return nil, nil, status.Error(codes.ResourceExhausted, "workload telemetry rate limit exceeded")
 	}
-	select {
-	case g.concurrency <- struct{}{}:
-	case <-ctx.Done():
-		return nil, nil, status.FromContextError(ctx.Err()).Err()
-	default:
-		return nil, nil, status.Error(codes.ResourceExhausted, "OTLP gRPC gateway is at capacity")
-	}
 	forwardCtx, cancel := context.WithTimeout(ctx, g.timeout)
-	return forwardCtx, func() {
-		cancel()
-		<-g.concurrency
-	}, nil
+	return forwardCtx, cancel, nil
 }
 
 type metricsGRPCService struct {
@@ -137,6 +139,11 @@ func (s *metricsGRPCService) Export(ctx context.Context, request *metricsv1.Expo
 	if request == nil {
 		return nil, status.Error(codes.InvalidArgument, "OTLP metrics request is required")
 	}
+	release, err := s.gateway.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	decision, err := s.gateway.authorize(ctx, "metrics")
 	if err != nil {
 		return nil, err
@@ -175,6 +182,11 @@ func (s *logsGRPCService) Export(ctx context.Context, request *logsv1.ExportLogs
 	if request == nil {
 		return nil, status.Error(codes.InvalidArgument, "OTLP logs request is required")
 	}
+	release, err := s.gateway.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	decision, err := s.gateway.authorize(ctx, "logs")
 	if err != nil {
 		return nil, err
@@ -213,6 +225,11 @@ func (s *tracesGRPCService) Export(ctx context.Context, request *tracesv1.Export
 	if request == nil {
 		return nil, status.Error(codes.InvalidArgument, "OTLP traces request is required")
 	}
+	release, err := s.gateway.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	decision, err := s.gateway.authorize(ctx, "traces")
 	if err != nil {
 		return nil, err

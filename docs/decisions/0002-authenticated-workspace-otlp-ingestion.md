@@ -49,7 +49,7 @@ The local Compose profile binds the gateway listeners to the container network o
 ### OTLP protocol boundary
 
 - Support OTLP/HTTP and OTLP/gRPC only through the authenticated gateway.
-- Enforce request/body limits, per-credential and per-workspace rate limits, bounded concurrent requests, timeouts, and backpressure.
+- Enforce request/body limits, per-credential and per-workspace rate limits, bounded concurrent requests admitted before token verification/database work, timeouts, and backpressure. The gRPC server also caps concurrent streams per connection.
 - Return protocol-appropriate authentication/authorization errors; do not leak whether another workspace or credential exists.
 - Propagate request/correlation identifiers without accepting them as identity.
 - Keep the existing loopback-only unauthenticated Compose profile explicitly development-only. It must not be reused as a production deployment template.

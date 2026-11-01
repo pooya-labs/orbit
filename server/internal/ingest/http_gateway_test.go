@@ -402,6 +402,35 @@ func TestHTTPGatewayFailsClosedWhenSharedRateLimitStoreIsUnavailable(t *testing.
 	}
 }
 
+
+func TestHTTPGatewayBoundsAdmissionBeforeTokenAndDatabaseWork(t *testing.T) {
+	verifier, grants := validStubs()
+	authorizer, err := NewAuthorizer(verifier, grants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forwarder := &forwarderStub{}
+	gateway := &HTTPGateway{
+		authorizer: authorizer,
+		forwarder: forwarder,
+		limiter: newWorkspaceRateLimiter(10),
+		timeout: time.Second,
+		concurrency: make(chan struct{}, 1),
+	}
+	gateway.concurrency <- struct{}{}
+	request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+testWorkspace+"/v1/metrics", strings.NewReader("{}"))
+	request.Header.Set("Authorization", "Bearer signed-token")
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	gateway.serveHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("HTTP status = %d, want 503", response.Code)
+	}
+	if verifier.calls != 0 || grants.calls != 0 || forwarder.calls != 0 {
+		t.Fatalf("saturated gateway performed auth/database/forwarding work: verifier=%d grants=%d forwarder=%d", verifier.calls, grants.calls, forwarder.calls)
+	}
+}
+
 func TestWorkspaceRateLimiterIsScopedAndBounded(t *testing.T) {
 	limiter := newWorkspaceRateLimiter(1)
 	now := time.Now()
