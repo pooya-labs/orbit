@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 )
 
@@ -172,4 +171,3 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, lo
 	})
 }
 
-var _ = auth.Principal{}
