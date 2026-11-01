@@ -31,7 +31,11 @@ const windows: { value: TelemetryWindow; label: string }[] = [
 ];
 
 function formatClock(timestamp: number | string): string {
-  const value = typeof timestamp === "number" ? timestamp : Number(timestamp);
+  const value = typeof timestamp === "number"
+    ? timestamp
+    : /^\\d+$/.test(timestamp)
+      ? Number(timestamp)
+      : Date.parse(timestamp);
   if (!Number.isFinite(value)) return "Time unavailable";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Time unavailable";
