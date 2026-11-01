@@ -329,6 +329,9 @@ func TestWorkspaceMembershipAndAppendOnlyAudit(t *testing.T) {
 	if _, err := repository.pool.Exec(ctx, "DELETE FROM workspace_audit_events WHERE id = $1::uuid", event.ID); err == nil {
 		t.Fatal("audit event delete succeeded; expected append-only trigger to reject it")
 	}
+	if _, err := repository.pool.Exec(ctx, "TRUNCATE workspace_audit_events"); err == nil {
+		t.Fatal("audit event truncate succeeded; expected append-only trigger to reject it")
+	}
 	if _, err := repository.AppendWorkspaceAuditEvent(ctx, store.WorkspaceAuditEvent{
 		WorkspaceID: workspace.ID, ActorIssuer: issuer, ActorSubject: subject,
 		Action: "workspace.created", ResourceType: "workspace",
