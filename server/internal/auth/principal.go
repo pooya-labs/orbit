@@ -1,6 +1,9 @@
 package auth
 
-import "slices"
+import (
+	"context"
+	"slices"
+)
 
 const (
 	RoleViewer        = "viewer"
@@ -33,4 +36,23 @@ func (p Principal) HasRole(role string) bool {
 	default:
 		return false
 	}
+}
+
+
+type principalContextKey struct{}
+
+// TokenVerifier verifies bearer access tokens against the configured issuer and audience.
+type TokenVerifier interface {
+	Verify(ctx context.Context, rawToken string) (Principal, error)
+}
+
+// ContextWithPrincipal attaches a verified identity to a request context.
+func ContextWithPrincipal(ctx context.Context, principal Principal) context.Context {
+	return context.WithValue(ctx, principalContextKey{}, principal)
+}
+
+// PrincipalFromContext returns the identity established by authentication middleware.
+func PrincipalFromContext(ctx context.Context) (Principal, bool) {
+	principal, ok := ctx.Value(principalContextKey{}).(Principal)
+	return principal, ok
 }
