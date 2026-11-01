@@ -158,7 +158,7 @@ PR #58 is merged into `main` (squash merge commit `fd7c7d23d952bdb6f08250c2dcd69
 
 The new HTTP and gRPC tests inject transient failures into the workload-grant repository, shared rate-limit store, and Collector forwarder. They verify that authorization/rate-limit database failures fail closed without forwarding, Collector failures map to the established transport status, and a subsequent request succeeds through the same gateway instance after the dependency is restored.
 
-These are deterministic in-process fault-injection tests. They do not simulate an actual PostgreSQL restart, TCP partition, Collector process restart, or recovery under sustained traffic. Broader burst/load, real infrastructure fault injection, and backpressure behavior remain open. Production tenant ingestion remains disabled.
+These are deterministic in-process fault-injection tests. PR #62 separately adds real local TCP listener stop/restart coverage for both production Collector forwarders; it does not simulate Docker/container orchestration, packet loss, PostgreSQL process restarts, or sustained-load recovery. Broader burst/load, real PostgreSQL fault injection, network partition testing, and backpressure behavior remain open. Production tenant ingestion remains disabled.
 
 
 ## M06 PR #60 — default gateway burst-capacity boundary
@@ -166,3 +166,12 @@ These are deterministic in-process fault-injection tests. They do not simulate a
 PR #60 is merged into `main` (squash merge commit `cb85c0afea6647ecc59b9fe59e499ce8383fc526`). CI run `41355534531` passed all three jobs. New synchronized tests hold all 64 default HTTP or gRPC admission slots inside blocking Collector forwarders, then verify additional HTTP requests receive 503 and additional gRPC requests receive ResourceExhausted without reaching the forwarder. After capacity is released, all admitted requests complete and the active-forward count returns to zero.
 
 This verifies the configured in-process admission boundary under a deterministic burst. It is not a throughput benchmark or sustained production load test; broader load, network/process fault injection, and backpressure remain open.
+
+
+## M06 PR #62 — real Collector listener restart recovery
+
+PR #62 is merged into `main` (squash merge commit `534f6d02c04616a5d27831460b24fd87db8bfade`). CI run `41357122909` passed all three jobs: Go API tests/build (including race tests), web typecheck/production build, and the local telemetry pipeline end-to-end smoke test.
+
+The new HTTP test starts a real local TCP OTLP/HTTP endpoint behind the production Collector HTTP forwarder, verifies success, stops the listener and verifies the gateway returns 502, restarts a listener on the same address, and verifies the same long-lived gateway/forwarder succeeds again. The gRPC test performs the equivalent listener stop/restart using a real gRPC Collector server and the production gRPC forwarder; the same client connection eventually reconnects and succeeds.
+
+This validates process-local TCP listener recovery and client reconnection behavior. It does not simulate container orchestration, packet loss or network partitions, database process restarts, cross-zone failures, or recovery under sustained load. Real PostgreSQL restart/fault injection, longer-duration load and backpressure, and production deployment verification remain open. Production tenant ingestion remains disabled.
