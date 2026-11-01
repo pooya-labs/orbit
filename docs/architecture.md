@@ -141,3 +141,8 @@ Unscoped inventory and telemetry read endpoints are development-only. Staging an
 ### Workspace-scoped telemetry query contract
 
 The workspace API exposes separate metrics, logs, and traces query routes under `/api/v1/workspaces/{workspaceID}/telemetry/*`. Every request verifies the caller's workspace membership before contacting a backend. Prometheus and Loki selectors and Tempo TraceQL include the workspace UUID as `orbit_workspace_id` / `resource.orbit.workspace.id`; there is deliberately no fallback to unscoped queries. Telemetry producers must attach the canonical workspace resource attribute, and ingestion must authenticate/authorize the producer's workspace assignment. Until that ingestion trust boundary is implemented and tested, these query routes return only data that carries the workspace label and must not be treated as proof that the ingestion path is tenant-safe.
+
+
+### Workspace operations: incidents and alert-rule definitions
+
+The API now provides workspace-scoped incident lifecycle mutations with an append-only incident timeline and transactional workspace audit. Alert-rule definitions are stored per workspace in PostgreSQL and can be listed, created, updated, enabled/disabled, or deleted through authenticated workspace routes. Mutation roles are owner, administrator, and operator; workspace members can read definitions. The initial alert metric allowlist is intentionally limited to the demo `request_rate` counter, with bounded operators and evaluation windows. A scheduler/evaluator, alert-instance state machine, multi-replica deduplication, and notification delivery are not implemented yet; persisted rules must not be mistaken for active alerts.
