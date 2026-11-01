@@ -468,31 +468,31 @@ export default function Home() {
           ) : (
             <>
 {sourceMode === "demo" ? (
-          <section className="metrics-grid" aria-label="Key metrics">
-            <MetricCard label="REQUESTS / MIN" value="24.8k" change="12.6%" direction="down" detail="vs. previous period" icon={Activity} accent="cyan" />
-            <MetricCard label="P95 LATENCY" value={<>142<span>ms</span></>} change="8.2%" direction="down" detail="vs. previous period" icon={Zap} accent="violet" />
-            <MetricCard label="ERROR RATE" value={<>0.24<span>%</span></>} change="0.04%" direction="up" detail="vs. previous period" icon={AlertTriangle} accent="amber" />
-            <MetricCard label="ACTIVE SERVICES" value={<>12<span>/ 14</span></>} change="2 degraded" direction="up" detail="across 3 regions" icon={Boxes} accent="green" />
+          <section className="metrics-grid" aria-label={tr("keyMetrics")}>
+            <MetricCard label={tr("requestsPerMinute")} value="24.8k" change="12.6%" direction="down" detail={tr("vsPrevious")} icon={Activity} accent="cyan" />
+            <MetricCard label={tr("p95Latency")} value={<>142<span>ms</span></>} change="8.2%" direction="down" detail={tr("vsPrevious")} icon={Zap} accent="violet" />
+            <MetricCard label={tr("errorRate")} value={<>0.24<span>%</span></>} change="0.04%" direction="up" detail={tr("vsPrevious")} icon={AlertTriangle} accent="amber" />
+            <MetricCard label={tr("activeServices")} value={<>12<span>/ 14</span></>} change={"2 " + tr("degraded")} direction="up" detail={tr("acrossRegions")} icon={Boxes} accent="green" />
           </section>
           ) : null}
 
 {sourceMode === "demo" ? (
           <section className="panel traffic-panel">
             <div className="panel-header">
-              <div><div className="panel-title-line"><h2>Traffic & performance</h2><span className="live-indicator"><i /> SAMPLE</span></div><p>Incoming request volume across all services</p></div>
+              <div><div className="panel-title-line"><h2>{tr("trafficPerformance")}</h2><span className="live-indicator"><i /> {tr("sample")}</span></div><p>{tr("incomingRequests")}</p></div>
               <div className="range-switcher" role="group" aria-label="Chart time range">
                 {["1 hour", "6 hours", "24 hours"].map((item) => <button key={item} className={range === item ? "selected" : ""} onClick={() => setRange(item)}>{item}</button>)}
               </div>
             </div>
             <div className="chart-summary">
-              <div><strong>18,429</strong><span>req / min</span></div>
+              <div><strong>18,429</strong><span>{tr("requestPerMinute")}</span></div>
               <div className="chart-summary-change"><ArrowUpRight size={14} /> 6.4% <span>compared to prior period</span></div>
             </div>
             <div className="chart-wrap">
               <div className="chart-y-labels"><span>30k</span><span>20k</span><span>10k</span><span>0</span></div>
               <div className="chart-plot">
                 <div className="chart-grid-lines"><i /><i /><i /><i /></div>
-                <svg className="traffic-chart" viewBox="0 0 598 140" preserveAspectRatio="none" role="img" aria-label="Illustrative request volume trend">
+                <svg className="traffic-chart" viewBox="0 0 598 140" preserveAspectRatio="none" role="img" aria-label={tr("illustrativeTrend")}>
                   <defs><linearGradient id="trafficFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#65d9c1" stopOpacity=".22" /><stop offset="100%" stopColor="#65d9c1" stopOpacity="0" /></linearGradient></defs>
                   <polygon points={chartArea} fill="url(#trafficFill)" />
                   <polyline points={chartPoints} fill="none" stroke="#65d9c1" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
@@ -501,7 +501,7 @@ export default function Home() {
                 <div className="chart-x-labels"><span>09:00</span><span>09:10</span><span>09:20</span><span>09:30</span><span>09:40</span><span>09:50</span><span>10:00</span></div>
               </div>
             </div>
-            <div className="chart-legend"><span><i className="legend-line" /> Requests / min</span><span><i className="legend-dash" /> Previous period</span><span className="chart-footnote">Illustrative telemetry · {range}</span></div>
+            <div className="chart-legend"><span><i className="legend-line" /> {tr("requestsPerMin")}</span><span><i className="legend-dash" /> {tr("previousPeriod")}</span><span className="chart-footnote">{tr("illustrativeTelemetry")} · {range}</span></div>
           </section>
           ) : null}
 
