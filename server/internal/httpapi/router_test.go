@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sort"
 	"strings"
 	"testing"
@@ -404,6 +405,55 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	}
 	if catalog.Data[0].ID == "" || catalog.Data[0].FirstSeenAt.IsZero() || catalog.Data[0].LastDiscoveredAt.IsZero() {
 		t.Fatalf("expected persisted catalog metadata in response, got %+v", catalog.Data[0])
+	}
+}
+
+func TestTelemetryServiceDiscoveryUsesCursorPagination(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":["alpha-api","bravo-worker","charlie-web"]}`))
+	}))
+	defer prometheus.Close()
+
+	client, err := telemetry.NewClient(prometheus.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &fakeRepository{}
+	handler := NewHandler(Config{Telemetry: client}, repository, testLogger())
+
+	firstRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(firstRecorder, httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/telemetry/services?window=1h&limit=2",
+		nil,
+	))
+	if firstRecorder.Code != http.StatusOK {
+		t.Fatalf("first page status = %d, body = %s", firstRecorder.Code, firstRecorder.Body.String())
+	}
+	var first telemetry.ServiceDiscoveryResult
+	if err := json.Unmarshal(firstRecorder.Body.Bytes(), &first); err != nil {
+		t.Fatalf("decode first page: %v", err)
+	}
+	if len(first.Data) != 2 || !first.HasMore || first.NextCursor == "" {
+		t.Fatalf("expected two services and a continuation cursor, got %+v", first)
+	}
+	if first.Data[0].Name != "alpha-api" || first.Data[1].Name != "bravo-worker" {
+		t.Fatalf("unexpected first page ordering: %+v", first.Data)
+	}
+
+	nextRecorder := httptest.NewRecorder()
+	nextURL := "/api/v1/telemetry/services?window=1h&limit=2&cursor=" + url.QueryEscape(first.NextCursor)
+	handler.ServeHTTP(nextRecorder, httptest.NewRequest(http.MethodGet, nextURL, nil))
+	if nextRecorder.Code != http.StatusOK {
+		t.Fatalf("next page status = %d, body = %s", nextRecorder.Code, nextRecorder.Body.String())
+	}
+	var second telemetry.ServiceDiscoveryResult
+	if err := json.Unmarshal(nextRecorder.Body.Bytes(), &second); err != nil {
+		t.Fatalf("decode next page: %v", err)
+	}
+	if len(second.Data) != 1 || second.HasMore || second.NextCursor != "" || second.Data[0].Name != "charlie-web" {
+		t.Fatalf("unexpected second page: %+v", second)
 	}
 }
 
