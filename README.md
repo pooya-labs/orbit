@@ -2,6 +2,8 @@
 
 **Distributed Systems Intelligence & Observability**
 
+**Project owner & maintainer:** [@pooya16pg-spec](https://github.com/pooya16pg-spec) · [Source repository](https://github.com/pooya16pg-spec/orbit)
+
 ORBIT is an engineering-first observability platform for understanding the health, behavior, and reliability of distributed services.
 
 ## Live preview
@@ -12,10 +14,10 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 
 ## Current implementation
 
-- Responsive Next.js + TypeScript observability workspace with an explicit demo/API source switch.
+- Responsive Next.js + TypeScript observability workspace with an explicit demo/API source switch and English / Persian language support, including RTL layout.
 - The dashboard reads service/incident inventories and telemetry queries from a configured ORBIT API. Metrics, Logs, and Traces share a live service selector populated from Prometheus, Loki, and Tempo with backend provenance.
 - Go HTTP API with liveness, readiness, metadata, service/incident inventory, and bounded Prometheus/Loki/Tempo query endpoints.
-- PostgreSQL repository with a versioned initial migration and clearly marked seed data.
+- PostgreSQL repository with versioned migrations, clearly marked seed data, and a normalized telemetry service catalog.
 - Docker Compose stack for PostgreSQL, Redis, NATS, and the Go API.
 - Optional local OpenTelemetry Collector → Prometheus, Tempo, and Loki pipeline.
 - An instrumented Go demo emits a request metric, trace, and structured log through OTLP/HTTP; CI verifies all three in their backend query APIs.
@@ -91,7 +93,7 @@ Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/logs?service=orbit-tel
 Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/traces?service=orbit-telemetry-demo&window=1h&limit=20"
 ```
 
-The discovery response merges valid names from Prometheus, Loki, and Tempo, records source provenance, and returns partial results with safe warnings if one backend is unavailable. These discovered names are shown in the UI selector but are not yet persisted as normalized PostgreSQL service records. The API uses fixed, bounded queries instead of accepting arbitrary PromQL or LogQL from callers. Each response includes its source backend, window, query timestamp, and result. Local query interfaces: [Prometheus](http://localhost:9090), [Loki](http://localhost:3100/ready), and [Tempo](http://localhost:3200/ready). Collector health: [http://localhost:13133](http://localhost:13133).
+The discovery response merges valid names from Prometheus, Loki, and Tempo, records source provenance, and returns partial results with safe warnings if one backend is unavailable. Discovered service names and backend provenance are upserted into a normalized PostgreSQL catalog. The API returns the persisted catalog with first-seen, last-seen, and last-discovered timestamps, plus a seven-day activity window. The current discovery endpoints provide service names and source provenance; resource attributes are stored as JSONB and can be populated as richer instrumentation metadata becomes available. The API uses fixed, bounded queries instead of accepting arbitrary PromQL or LogQL from callers. Each response includes its source backend, window, query timestamp, and result. Local query interfaces: [Prometheus](http://localhost:9090), [Loki](http://localhost:3100/ready), and [Tempo](http://localhost:3200/ready). Collector health: [http://localhost:13133](http://localhost:13133).
 
 These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus keeps seven days of metrics and Loki is configured for seven-day log retention; data volumes persist until removed. Stop only these services with `docker compose stop postgres api prometheus loki tempo otel-collector telemetry-demo`.
 
@@ -130,7 +132,7 @@ See [docs/roadmap.md](docs/roadmap.md), [docs/architecture.md](docs/architecture
 
 ## Release status
 
-The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview added a verified browser source switch between demo fixtures and a configured ORBIT API. The v0.4.0 preview added the optional local OTLP pipeline backed by Prometheus, Loki, and Tempo. The v0.5.0 preview adds an instrumented Go workload and CI verification that metrics, logs, and traces reach their respective backends. The v0.6.0 preview adds bounded ORBIT API read endpoints for Prometheus metrics, Loki logs, and Tempo trace search. The v0.7.0 preview adds live Metrics, Logs, and Traces dashboard views with selectable time windows, 30-second refresh, query timestamps, and explicit loading/empty/error states. The v0.8.0 preview adds cross-backend service discovery, source provenance, a shared dynamic service selector, and service-scoped request-rate queries. Persisting normalized telemetry resources into the PostgreSQL service catalog and production API instrumentation remain future milestones.
+The v0.1.0 public preview introduced the dashboard. The v0.2.0 backend foundation added PostgreSQL-backed service/incident APIs, OpenAPI, a typed client, and Docker Compose. The v0.3.0 preview added a verified browser source switch between demo fixtures and a configured ORBIT API. The v0.4.0 preview added the optional local OTLP pipeline backed by Prometheus, Loki, and Tempo. The v0.5.0 preview adds an instrumented Go workload and CI verification that metrics, logs, and traces reach their respective backends. The v0.6.0 preview adds bounded ORBIT API read endpoints for Prometheus metrics, Loki logs, and Tempo trace search. The v0.7.0 preview adds live Metrics, Logs, and Traces dashboard views with selectable time windows, 30-second refresh, query timestamps, and explicit loading/empty/error states. The v0.8.0 preview added cross-backend service discovery, source provenance, a shared dynamic service selector, and service-scoped request-rate queries. The v0.9.0 preview adds a persisted PostgreSQL telemetry service catalog, owner attribution, and English / Persian UI localization with RTL support. Production API instrumentation, full resource-attribute ingestion, pagination, multi-series metrics, and stale-data indicators remain future milestones.
 
 ## License
 
