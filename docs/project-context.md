@@ -35,8 +35,8 @@ The version labels above describe the progression documented by the project; the
 - **Telemetry query APIs stay bounded and read-only.** Windows, result counts, dimensions, and query expressions are validated. Never accept arbitrary PromQL or LogQL directly from the browser.
 - **M04 attribute extraction is still a preview.** It maps an allowlist of labels/tags into OpenTelemetry-style names. It does not yet ingest the complete resource-attribute set directly from workload SDKs or the Collector.
 - **Redis and NATS are provisioned but not yet integrated into application behavior.** Do not claim caching or event delivery until the API actually uses them and tests cover those paths.
-- **M06 API security foundation:** OIDC access-token verification through issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and PostgreSQL-backed shared per-IP/per-subject rate limits are merged in `main` (`977ce49`) and CI-verified. The shared PostgreSQL fixed-window rate limiter is merged; staging and production require PostgreSQL so rate limiting cannot silently fall back to per-process memory.
-- **Security work still open:** real browser OIDC provider registration and end-to-end browser/API verification, token revocation/global logout, workspace membership and tenant-scoped database queries, transactional audit records for M05 operations, and production deployment controls. Until workspace scoping exists, the API must not be advertised as multi-tenant.
+- **M06 API and browser security foundation:** OIDC access-token verification through issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and PostgreSQL-backed shared per-IP/per-subject rate limits are merged and CI-verified. The provider-neutral browser Authorization Code + PKCE (S256) client is implemented in PR #12: state/nonce and ID-token signature/issuer/audience validation are enforced, API calls receive an in-memory Bearer token, and access/refresh tokens are not persisted. The browser sign-in controls stay hidden unless a real issuer and public client are configured at build time.
+- **Security and production work still open:** real OIDC provider registration and browser/API end-to-end verification (including callback URI, token-endpoint CORS and API audience), provider token revocation/global logout, real DNS/ACME and host/network policy validation, telemetry retention/cardinality, dependency/secrets review, backup/restore, and operational runbooks. Workspace membership, workspace-scoped data reads, authenticated workspace-aware OTLP ingestion and transactional audit for incident/alert-rule-definition mutations are implemented; production tenant ingestion remains disabled until environment-level gates pass.
 
 ## 4. Established UX and engineering decisions
 
@@ -84,7 +84,7 @@ The initial server-side authentication gate is implemented in `main` (`977ce49`)
 
 The remaining security work before multi-user or M05 operations deployment is:
 
-- real OIDC provider registration, callback/CORS/audience end-to-end verification, and provider token revocation/global logout (provider-neutral browser PKCE is isolated on PR #12);
+- real OIDC provider registration, callback/CORS/audience end-to-end verification, and provider token revocation/global logout (the provider-neutral PKCE client is implemented in PR #12 but is not configured for the public site);
 - workspace/tenant membership and database scoping;
 - actor identity and transactional audit records for every state-changing operation;
 - bounded backend concurrency for horizontally scaled deployments;
@@ -98,9 +98,9 @@ The GitHub account also contains separate portfolio projects (Pooya.OS, AuraPuls
 
 ## 9. M06 security handoff
 
-The initial server-side OIDC access-token and RBAC gate is merged in `main` as `977ce49` and passed CI run `41288773472`. Its tests cover signature tampering, RS256/ES256, issuer/audience/time-claim failures, unknown `kid` and JWKS rotation, role enforcement, CORS Authorization preflight, request limits, and startup failure when staging/production OIDC settings are absent. This completes only the API resource-server foundation, not all of M06. Browser PKCE/token lifecycle, workspace membership and tenant-scoped queries, real-provider browser PKCE integration, workspace membership enforcement and tenant-scoped queries, secrets, retention, production deployment, and runbooks remain open.
+The initial server-side OIDC access-token and RBAC gate is merged and CI-verified. The provider-neutral browser Authorization Code + PKCE implementation is in PR #12; it adds S256, state/nonce validation, ID-token signature/issuer/audience verification and an in-memory token lifecycle. A real issuer/client, callback and token-endpoint CORS, API audience alignment, provider revocation/global logout, production deployment, retention, dependency/secrets review, backup/restore and runbooks remain open.
 
-The API currently accepts access tokens only through `Authorization: Bearer`; it never reads credentials from URLs or browser storage. A provider-neutral static-dashboard PKCE client is under review on PR #12. It is not deployed and has no real issuer/client configured yet.
+The API accepts access tokens only through `Authorization: Bearer`; it never reads credentials from URLs or persistent browser storage. PR #12 adds the static-dashboard PKCE client. The short-lived PKCE verifier/state/nonce transaction uses `sessionStorage`; access and refresh tokens remain in JavaScript memory. A reload clears the session. No real issuer/client is configured yet, so the public preview does not show sign-in controls by default.
 
 ## 10. Continuity rule
 
@@ -115,7 +115,7 @@ Then continue on a feature branch, update tests and docs with implementation, an
 
 ## 11. Workspace and audit foundation (M06)
 
-The shared PostgreSQL rate limiter is merged in `db45843`. The provider-neutral browser PKCE client remains isolated on PR #12 until a real identity provider is configured and the browser-to-API flow is tested.
+The shared PostgreSQL rate limiter is merged. The provider-neutral browser PKCE implementation is in PR #12; public sign-in remains disabled until a real identity provider, public client, callback URL, CORS policy and API audience are configured and verified.
 
 Migration 005 introduces workspaces, issuer+subject-based memberships, one-owner-per-workspace enforcement, and append-only workspace audit events. Repository operations create a workspace and its owner membership atomically, resolve a principal's memberships, and append/read bounded audit events. Authenticated workspace create/list, membership lookup, and membership-checked audit-read endpoints are being added on `feature/m06-workspace-api-membership`.
 

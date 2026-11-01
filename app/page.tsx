@@ -7,6 +7,7 @@ import { chartArea, chartPoints, demoIncidents, demoServices } from "../lib/orbi
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../lib/orbit/i18n";
 import type { ReactNode } from "react";
 import TelemetryWorkspace, { type TelemetryView } from "./components/TelemetryWorkspace";
+import AuthControls from "./components/AuthControls";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -430,6 +431,8 @@ export default function Home() {
               {sourceMode === "api" ? <RefreshCw size={16} /> : refreshing ? <Pause size={16} /> : <Play size={16} />}
             </button>
             <button className="icon-button notification-button" aria-label={tr("notifications")}><Bell size={17} /><i /></button>
+            <div className="topbar-divider" />
+            <AuthControls language={language} />
             <div className="topbar-divider" />
             <button
               type="button"

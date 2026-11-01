@@ -900,3 +900,31 @@ html[data-theme="light"] .telemetry-spinner { border-color: #dce5e9; border-top-
 @media (prefers-reduced-motion: reduce) {
   .theme-toggle { transition: none !important; }
 }
+
+
+/* Optional browser OIDC controls and callback surface. */
+.auth-controls { display:inline-flex; align-items:center; justify-content:flex-end; gap:7px; min-width:0; }
+.auth-user { display:inline-block; max-width:126px; overflow:hidden; color:#9aadb3; font:9px "DM Mono",monospace; text-overflow:ellipsis; white-space:nowrap; }
+.auth-button { min-height:28px; padding:0 10px; border:1px solid rgba(101,217,193,.26); border-radius:6px; color:#b9e4d9; background:rgba(24,54,48,.42); font-size:9px; white-space:nowrap; cursor:pointer; }
+.auth-button:hover { border-color:rgba(101,217,193,.5); background:rgba(24,54,48,.7); }
+.auth-button:disabled { opacity:.6; cursor:progress; }
+.auth-error { max-width:180px; color:#e49a8e; font-size:9px; line-height:1.35; }
+.auth-callback { min-height:100vh; display:grid; place-items:center; padding:24px; color:#d9e4e8; background:#090d12; }
+.auth-callback-card { width:min(100%,460px); padding:28px; border:1px solid #25343b; border-radius:12px; background:#111a20; text-align:center; }
+.auth-callback-card h1 { margin:0 0 9px; font-size:18px; }
+.auth-callback-card p { margin:0; color:#91a1a8; font-size:12px; line-height:1.65; overflow-wrap:anywhere; }
+.auth-callback-card [role="alert"] { margin-top:12px; color:#e49a8e; }
+.auth-callback-spinner { width:26px; height:26px; margin:0 auto 18px; border:2px solid #33444a; border-top-color:#65d9c1; border-radius:50%; animation:orbit-auth-spin .8s linear infinite; }
+@keyframes orbit-auth-spin { to { transform:rotate(360deg); } }
+html[data-theme="light"] .auth-user { color:#687a83; }
+html[data-theme="light"] .auth-button { border-color:#cce5df; color:#176f62; background:#eef8f5; }
+html[data-theme="light"] .auth-button:hover { border-color:#9ccfc2; background:#e3f3ee; }
+html[data-theme="light"] .auth-callback { color:#263a43; background:#f4f8f9; }
+html[data-theme="light"] .auth-callback-card { border-color:#dce5e9; background:#fff; }
+html[data-theme="light"] .auth-callback-card p { color:#788992; }
+@media (max-width:760px) {
+  .auth-user { max-width:88px; }
+  .auth-button { min-height:30px; padding:0 8px; }
+  .auth-error { display:none; }
+}
+@media (prefers-reduced-motion:reduce) { .auth-callback-spinner { animation:none; } }
