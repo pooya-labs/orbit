@@ -16,7 +16,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 
 - Responsive Next.js + TypeScript observability workspace with an explicit demo/API source switch and English / Persian language support, including RTL layout.
 - The dashboard reads service/incident inventories and telemetry queries from a configured ORBIT API. Metrics, Logs, and Traces share a cursor-paginated service selector populated from Prometheus, Loki, and Tempo; the Metrics view supports allow-listed multi-series grouping and timestamp-based stale/gap warnings.
-- Go HTTP API with liveness, readiness, metadata, service/incident inventory, workspace-scoped incident lifecycle mutations, immutable incident timelines, and bounded Prometheus/Loki/Tempo query endpoints.
+- Go HTTP API with liveness, readiness, metadata, service/incident inventory, workspace-scoped incident lifecycle and alert-rule definition APIs, immutable incident timelines, and bounded Prometheus/Loki/Tempo query endpoints.
 - PostgreSQL repository with versioned migrations, clearly marked seed data, and a normalized telemetry service catalog.
 - Docker Compose stack for PostgreSQL, Redis, NATS, and the Go API.
 - Optional local OpenTelemetry Collector → Prometheus, Tempo, and Loki pipeline.
@@ -163,3 +163,8 @@ The PostgreSQL-backed HTTP and gRPC integration tests define the in-flight revoc
 ## M05 backend update — PR #66
 
 The first M05 slice is merged: authenticated workspace-scoped incident creation and status transitions, immutable timeline events, and atomic workspace audit writes. See the [PR #66 implementation](https://github.com/pooya16pg-spec/orbit/pull/66), [M05 roadmap](docs/roadmap.md), and [OpenAPI contract](docs/openapi.yaml). The dashboard incident operations UI, alerting, deployment annotations, and SLO workflows remain in progress.
+
+
+## M05 alert-rule definitions — PR #69
+
+Workspace members can list alert rule definitions; owners, administrators, and operators can create, update, enable/disable, and delete them. Definitions are workspace-scoped and every mutation is audited transactionally. The initial metric allowlist is limited to `request_rate`. Scheduled evaluation and notification delivery have not been implemented yet; see [the M05 roadmap](docs/roadmap.md).
