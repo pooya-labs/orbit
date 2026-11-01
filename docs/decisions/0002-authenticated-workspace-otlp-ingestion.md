@@ -151,3 +151,12 @@ This provides deterministic recovery-contract coverage, not real process/network
 PR #60 is merged into `main` (squash merge commit `cb85c0afea6647ecc59b9fe59e499ce8383fc526`). CI run `41355534531` passed Go race tests/build, web typecheck/build, and the local telemetry pipeline smoke test. Tests fill all 64 default HTTP/gRPC admission slots using blocking Collector forwarders, verify additional requests fail with the transport-specific capacity status before forwarding, then release all admitted requests and verify they complete with no capacity leak.
 
 The tests prove the configured in-process cap and deterministic rejection behavior, not sustained throughput, real infrastructure fault recovery, or backpressure behavior at production load.
+
+
+## ADR 0002 — PR #62 real Collector listener recovery
+
+PR #62 is merged into `main` (squash merge commit `534f6d02c04616a5d27831460b24fd87db8bfade`). CI run `41357122909` passed Go race tests/build, web typecheck/production build, and the telemetry end-to-end smoke test.
+
+HTTP and gRPC recovery tests now use real local TCP Collector listeners with the production forwarder implementations. Each test establishes a successful export, stops the Collector listener, verifies the live gateway cannot export while the listener is down, restarts the listener on the same address, and verifies the same gateway and forwarder succeed after reconnect.
+
+This establishes listener stop/restart recovery in-process. It does not establish recovery from container orchestration, packet loss/network partitions, PostgreSQL process restarts, or sustained production load. These remain open validation gates; production tenant ingestion remains disabled.
