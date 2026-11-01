@@ -326,6 +326,82 @@ func TestHTTPGatewayMapsAuthorizationFailuresAndCollectorErrors(t *testing.T) {
 	}
 }
 
+
+type rateLimitStoreStub struct {
+	count int64
+	key string
+	err error
+}
+
+func (s *rateLimitStoreStub) IncrementRateLimitWindow(_ context.Context, keyHash string) (int64, error) {
+	s.key = keyHash
+	if s.err != nil {
+		return 0, s.err
+	}
+	s.count++
+	return s.count, nil
+}
+
+func TestHTTPGatewayUsesSharedHashedWorkloadRateLimit(t *testing.T) {
+	verifier, grants := validStubs()
+	authorizer, _ := NewAuthorizer(verifier, grants)
+	shared := &rateLimitStoreStub{}
+	forwarder := &forwarderStub{}
+	handler, err := NewHTTPGateway(authorizer, forwarder, HTTPGatewayConfig{
+		RequestsPerMinute: 1,
+		RateLimitStore: shared,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := proto.Marshal(metricRequest())
+	send := func() *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+testWorkspace+"/v1/metrics", bytes.NewReader(payload))
+		request.Header.Set("Authorization", "Bearer signed-token")
+		request.Header.Set("Content-Type", "application/x-protobuf")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	if response := send(); response.Code != http.StatusOK {
+		t.Fatalf("first request status = %d, body=%s", response.Code, response.Body.String())
+	}
+	if len(shared.key) != 64 || shared.key == "workload:"+testIdentity+":"+testWorkspace+":metrics" {
+		t.Fatalf("shared limiter key was not SHA-256 hashed: %q", shared.key)
+	}
+	if response := send(); response.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request status = %d, want 429", response.Code)
+	}
+	if forwarder.calls != 1 {
+		t.Fatalf("Collector calls = %d, want exactly 1", forwarder.calls)
+	}
+}
+
+func TestHTTPGatewayFailsClosedWhenSharedRateLimitStoreIsUnavailable(t *testing.T) {
+	verifier, grants := validStubs()
+	authorizer, _ := NewAuthorizer(verifier, grants)
+	forwarder := &forwarderStub{}
+	handler, err := NewHTTPGateway(authorizer, forwarder, HTTPGatewayConfig{
+		RequestsPerMinute: 10,
+		RateLimitStore: &rateLimitStoreStub{err: errors.New("database unavailable")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := proto.Marshal(metricRequest())
+	request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+testWorkspace+"/v1/metrics", bytes.NewReader(payload))
+	request.Header.Set("Authorization", "Bearer signed-token")
+	request.Header.Set("Content-Type", "application/x-protobuf")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("HTTP status = %d, want 503", response.Code)
+	}
+	if forwarder.calls != 0 {
+		t.Fatal("request reached Collector while shared rate-limit store was unavailable")
+	}
+}
+
 func TestWorkspaceRateLimiterIsScopedAndBounded(t *testing.T) {
 	limiter := newWorkspaceRateLimiter(1)
 	now := time.Now()
