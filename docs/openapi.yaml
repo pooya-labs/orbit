@@ -1,11 +1,12 @@
 openapi: 3.1.0
 info:
   title: ORBIT API
-  version: 0.2.0
-  summary: Service health and incident inventory API
+  version: 0.6.0
+  summary: Service inventory and bounded observability query API
   description: |
-    Initial ORBIT read API. Service and incident records currently come from
-    explicitly labelled demo seed rows until telemetry ingestion is implemented.
+    ORBIT reads service and incident inventories from PostgreSQL and exposes
+    bounded, source-labelled query endpoints for Prometheus metrics, Loki logs,
+    and Tempo trace search. The current metrics query is the local demo request counter.
 servers:
   - url: http://localhost:8080
     description: Local Docker Compose API
@@ -14,6 +15,7 @@ tags:
   - name: Metadata
   - name: Services
   - name: Incidents
+  - name: Telemetry
 paths:
   /health/live:
     get:
@@ -121,8 +123,267 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/telemetry/metrics:
+    get:
+      tags: [Telemetry]
+      operationId: queryTelemetryMetrics
+      summary: Query the bounded ORBIT demo request-rate metric
+      description: Runs a fixed PromQL expression. Arbitrary PromQL is not accepted.
+      parameters:
+        - in: query
+          name: window
+          required: false
+          description: Maximum query window. Defaults to 1h.
+          schema:
+            type: string
+            enum: [15m, 1h, 6h, 24h]
+            default: 1h
+      responses:
+        "200":
+          description: Prometheus range query result with source and query timestamp.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryMetricsResponse"
+        "400":
+          description: Unsupported time window.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Prometheus is not configured or temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/telemetry/logs:
+    get:
+      tags: [Telemetry]
+      operationId: queryTelemetryLogs
+      summary: Query recent logs for a service
+      description: Uses a bounded LogQL service selector. Arbitrary LogQL is not accepted.
+      parameters:
+        - in: query
+          name: window
+          required: false
+          schema:
+            type: string
+            enum: [15m, 1h, 6h, 24h]
+            default: 1h
+        - in: query
+          name: service
+          required: false
+          description: Safe service identifier. Defaults to orbit-telemetry-demo.
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            default: orbit-telemetry-demo
+        - in: query
+          name: limit
+          required: false
+          description: Maximum number of returned log entries.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Loki log streams with source and query timestamp.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryLogsResponse"
+        "400":
+          description: Invalid query window, service name, or result limit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Loki is not configured or temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/telemetry/traces:
+    get:
+      tags: [Telemetry]
+      operationId: queryTelemetryTraces
+      summary: Search traces for a service
+      description: Uses a bounded Tempo service.name tag search.
+      parameters:
+        - in: query
+          name: window
+          required: false
+          schema:
+            type: string
+            enum: [15m, 1h, 6h, 24h]
+            default: 1h
+        - in: query
+          name: service
+          required: false
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            default: orbit-telemetry-demo
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Tempo trace summaries with source and query timestamp.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryTracesResponse"
+        "400":
+          description: Invalid query window, service name, or result limit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Tempo is not configured or temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
+
+    TelemetryQueryMeta:
+      type: object
+      required: [window, queried_at]
+      properties:
+        window:
+          type: string
+          enum: [15m, 1h, 6h, 24h]
+        queried_at:
+          type: string
+          format: date-time
+        service:
+          type: string
+        limit:
+          type: integer
+    TelemetryMetricsResponse:
+      type: object
+      required: [source, window, queried_at, query, step, data]
+      properties:
+        source:
+          type: string
+          const: prometheus
+        window:
+          type: string
+          enum: [15m, 1h, 6h, 24h]
+        queried_at:
+          type: string
+          format: date-time
+        query:
+          type: string
+          const: "sum(rate(orbit_demo_requests_total[5m]))"
+        step:
+          type: string
+        data:
+          type: array
+          items:
+            type: object
+            required: [metric, values]
+            properties:
+              metric:
+                type: object
+                additionalProperties:
+                  type: string
+              values:
+                type: array
+                items:
+                  type: array
+                  prefixItems:
+                    - type: number
+                    - type: string
+                  minItems: 2
+                  maxItems: 2
+    TelemetryLogsResponse:
+      type: object
+      required: [source, window, queried_at, query, service, limit, data]
+      properties:
+        source:
+          type: string
+          const: loki
+        window:
+          type: string
+          enum: [15m, 1h, 6h, 24h]
+        queried_at:
+          type: string
+          format: date-time
+        query:
+          type: string
+        service:
+          type: string
+        limit:
+          type: integer
+        data:
+          type: array
+          items:
+            type: object
+            required: [stream, values]
+            properties:
+              stream:
+                type: object
+                additionalProperties:
+                  type: string
+              values:
+                type: array
+                items:
+                  type: array
+                  prefixItems:
+                    - type: string
+                    - type: string
+                  minItems: 2
+                  maxItems: 2
+    TelemetryTracesResponse:
+      type: object
+      required: [source, window, queried_at, query, service, limit, data]
+      properties:
+        source:
+          type: string
+          const: tempo
+        window:
+          type: string
+          enum: [15m, 1h, 6h, 24h]
+        queried_at:
+          type: string
+          format: date-time
+        query:
+          type: string
+        service:
+          type: string
+        limit:
+          type: integer
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              traceID:
+                type: string
+              rootServiceName:
+                type: string
+              rootTraceName:
+                type: string
+              startTimeUnixNano:
+                type: string
+              durationMs:
+                type: number
+
     StatusResponse:
       type: object
       required: [status]
