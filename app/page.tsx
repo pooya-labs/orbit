@@ -390,7 +390,7 @@ export default function Home() {
             <div>
               <div className="eyebrow"><span className="eyebrow-line" /> {telemetryView ? `LIVE ${telemetryView.toUpperCase()}` : "SYSTEM OVERVIEW"} <span className="demo-tag">{sourceMode === "api" ? "API CONNECTED" : "DEMO ENVIRONMENT"}</span></div>
               <h1>{activeNav === "Overview" ? "Good morning, team." : activeNav}</h1>
-              <p className="page-subtitle">{telemetryView ? `Query ${telemetryView.toLowerCase()} from the connected observability pipeline.` : "Here&apos;s what&apos;s happening across your infrastructure."}</p>
+              <p className="page-subtitle">{telemetryView ? `Query ${telemetryView.toLowerCase()} from the connected observability pipeline.` : "Here's what's happening across your infrastructure."}</p>
             </div>
             <div className="heading-actions">
               <div className="last-updated"><span className={refreshing ? "pulse-dot" : "idle-dot"} /> {sourceMode === "api" ? `Connected · ${apiMetadata?.environment ?? "API"}` : refreshing ? "Auto-refresh paused in demo" : "Manual refresh mode"}</div>
