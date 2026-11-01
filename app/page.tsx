@@ -35,6 +35,8 @@ import {
   RefreshCw,
   Search,
   Server,
+  Sun,
+  Moon,
   Settings2,
   ShieldCheck,
   Signal,
@@ -220,6 +222,8 @@ function MetricCard({
 export default function Home() {
   const [activeNav, setActiveNav] = useState("Overview");
   const [language, setLanguage] = useState<Language>("en");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [themeReady, setThemeReady] = useState(false);
   const tr = (key: TranslationKey) => t(language, key);
   const [range, setRange] = useState("1 hour");
   const [search, setSearch] = useState("");
@@ -240,10 +244,14 @@ export default function Home() {
   useEffect(() => {
     try {
       const savedLanguage = window.localStorage.getItem("orbit.language");
+      const savedTheme = window.localStorage.getItem("orbit.theme");
       if (savedLanguage === "en" || savedLanguage === "fa") setLanguage(savedLanguage);
+      if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
       else if (window.navigator.language.toLowerCase().startsWith("fa")) setLanguage("fa");
     } catch {
-      // Language selection remains available when storage is disabled.
+      // Language and theme controls remain available when storage is disabled.
+    } finally {
+      setThemeReady(true);
     }
   }, []);
 
@@ -252,6 +260,17 @@ export default function Home() {
     root.lang = language;
     root.dir = language === "fa" ? "rtl" : "ltr";
   }, [language]);
+
+  useEffect(() => {
+    if (!themeReady) return;
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    try {
+      window.localStorage.setItem("orbit.theme", theme);
+    } catch {
+      // Theme still applies for the current session when storage is unavailable.
+    }
+  }, [theme, themeReady]);
 
   useEffect(() => {
     try {
@@ -343,7 +362,7 @@ export default function Home() {
       : null;
 
   return (
-    <main className="app-shell" dir={language === "fa" ? "rtl" : "ltr"} lang={language}>
+    <main className="app-shell" data-theme={theme} dir={language === "fa" ? "rtl" : "ltr"} lang={language}>
       {mobileNavOpen && <button className="mobile-scrim" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)} />}
       <aside className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
         <div className="brand-lockup">
@@ -412,6 +431,16 @@ export default function Home() {
             </button>
             <button className="icon-button notification-button" aria-label={tr("notifications")}><Bell size={17} /><i /></button>
             <div className="topbar-divider" />
+            <button
+              type="button"
+              className="icon-button theme-toggle"
+              aria-label={theme === "dark" ? (language === "fa" ? "فعال‌کردن حالت روشن" : "Switch to light theme") : (language === "fa" ? "فعال‌کردن حالت تیره" : "Switch to dark theme")}
+              title={theme === "dark" ? (language === "fa" ? "حالت روشن" : "Light theme") : (language === "fa" ? "حالت تیره" : "Dark theme")}
+              aria-pressed={theme === "light"}
+              onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+            >
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
             <div className="language-switch" role="group" aria-label={tr("language")}>
               <button type="button" className={language === "en" ? "selected" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button>
               <button type="button" className={language === "fa" ? "selected" : ""} aria-pressed={language === "fa"} onClick={() => changeLanguage("fa")}>فارسی</button>
