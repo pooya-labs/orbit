@@ -249,8 +249,13 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 	})
 
 
-	if telemetryClient != nil {
+	// Keep the routes registered when telemetry is unavailable so authorized
+	// workspace members receive a dependency error rather than a misleading 404.
 		registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/metrics", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+		if telemetryClient == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Workspace telemetry backends are not configured")
+			return
+		}
 			window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
 			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_window",err.Error()); return }
 			service := r.URL.Query().Get("service")
@@ -262,6 +267,10 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			writeJSON(w,http.StatusOK,result)
 		})
 		registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/logs", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+		if telemetryClient == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Workspace telemetry backends are not configured")
+			return
+		}
 			window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
 			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_window",err.Error()); return }
 			service := r.URL.Query().Get("service")
@@ -273,6 +282,10 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			writeJSON(w,http.StatusOK,result)
 		})
 		registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/traces", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+		if telemetryClient == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Workspace telemetry backends are not configured")
+			return
+		}
 			window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
 			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_window",err.Error()); return }
 			service := r.URL.Query().Get("service")
@@ -283,7 +296,6 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			if err != nil { writeTelemetryError(w,r,logger,"Workspace Tempo",err); return }
 			writeJSON(w,http.StatusOK,result)
 		})
-	}
 
 }
 
