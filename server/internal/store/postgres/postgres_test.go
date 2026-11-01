@@ -460,4 +460,5 @@ func TestWorkloadIdentityWorkspaceGrantAuthorization(t *testing.T) {
  if _,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceA.ID,"metrics");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("revoked grant should be denied, got %v",err)}
  if err:=repository.SetWorkloadIdentityStatus(ctx,identity.ID,actorIssuer,actorSubject,"revoked");err!=nil{t.Fatalf("revoke workload identity: %v",err)}
  if _,err:=repository.AuthorizeWorkloadTelemetry(ctx,identity.Issuer,identity.Subject,workspaceA.ID,"metrics");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("revoked identity should be denied, got %v",err)}
+ if err:=repository.SetWorkloadIdentityStatus(ctx,identity.ID,actorIssuer,actorSubject,"active");!errors.Is(err,store.ErrWorkloadAuthorizationDenied){t.Fatalf("revoked identity must not be re-enabled, got %v",err)}
 }
