@@ -97,7 +97,7 @@ The GitHub account also contains separate portfolio projects (Pooya.OS, AuraPuls
 
 ## 9. M06 security handoff
 
-The `feature/m06-oidc-auth-security-gate` branch contains the initial API security implementation. Its acceptance checks must include signature-tampering, unsupported algorithms, issuer/audience/time-claim failures, unknown `kid` and JWKS rotation, role escalation attempts, CORS Authorization preflight, request limits, and startup failure when staging/production OIDC settings are absent. Do not mark M06 complete or expose the API publicly until CI is green and browser authentication, workspace isolation, shared rate limiting, secrets, retention, and runbooks are addressed.
+The initial server-side OIDC access-token and RBAC gate is merged in `main` as `977ce49` and passed CI run `41288773472`. Its tests cover signature tampering, RS256/ES256, issuer/audience/time-claim failures, unknown `kid` and JWKS rotation, role enforcement, CORS Authorization preflight, request limits, and startup failure when staging/production OIDC settings are absent. This completes only the API resource-server foundation, not all of M06. Browser PKCE/token lifecycle, workspace membership and tenant-scoped queries, shared rate limiting, secrets, retention, production deployment, and runbooks remain open.
 
 The API currently accepts access tokens only through `Authorization: Bearer`; it never reads credentials from URLs or browser storage. The static dashboard does not yet implement PKCE, so connecting that dashboard to an auth-protected API is a later frontend milestone.
 
