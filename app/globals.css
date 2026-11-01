@@ -508,3 +508,54 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
   .app-shell[dir="rtl"] .telemetry-connect-prompt .button-primary { margin-left: 0; margin-right: 52px; }
   .owner-credit { width: 100%; }
 }
+
+
+/* Resource attributes: bounded, service-scoped OpenTelemetry metadata */
+.telemetry-attributes-panel {
+  margin: 12px 0 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: rgba(14, 21, 27, .62);
+  overflow: hidden;
+}
+.telemetry-attributes-panel > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  color: #c2d0d5;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+.telemetry-attributes-panel > summary::-webkit-details-marker { display: none; }
+.telemetry-attributes-panel > summary::after { content: "+"; color: #8b9ca5; font: 16px "DM Mono", monospace; }
+.telemetry-attributes-panel[open] > summary::after { content: "−"; }
+.telemetry-attributes-panel > summary small { margin-left: auto; color: #7e929b; font: 10px "DM Mono", monospace; }
+.telemetry-attributes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+.telemetry-attribute-item {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(145, 166, 176, .12);
+  border-radius: 6px;
+  background: rgba(5, 10, 14, .32);
+}
+.telemetry-attribute-item > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.telemetry-attribute-item code { color: #7faeaa; font: 9px "DM Mono", monospace; overflow-wrap: anywhere; }
+.telemetry-attribute-item strong { color: #d5e0e2; font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
+.telemetry-attribute-item small { display: block; margin-top: 7px; color: #73868e; font: 9px "DM Mono", monospace; }
+.telemetry-attributes-empty, .telemetry-attributes-warning { margin: 0; padding: 0 14px 12px; color: #84949b; font-size: 11px; }
+.telemetry-attributes-warning { color: #c1a77a; }
+.app-shell[dir="rtl"] .telemetry-attributes-panel > summary { text-align: right; }
+.app-shell[dir="rtl"] .telemetry-attributes-panel > summary small { margin-left: 0; margin-right: auto; }
+.app-shell[dir="rtl"] .telemetry-attribute-item { text-align: right; }
+@media (max-width: 700px) {
+  .telemetry-attributes-grid { grid-template-columns: 1fr; }
+}
