@@ -83,11 +83,11 @@ Workspace grants must be checked server-side on every ingestion authorization de
 
 1. [x] Add workload identity, workspace grant, and audit schema/repository methods with transactional grant changes (PR #21). Rejected authorization decisions are now appended to the audit log without storing credentials or telemetry payloads (PR #23).
 2. [x] Add an ingestion-specific verifier configuration with a dedicated audience; do not weaken or repurpose the human API audience (strict RFC 9068 `at+jwt` profile and explicit `nbf` requirement merged in PR #22).
-3. [x] Implement OTLP/HTTP and OTLP/gRPC transport handlers with per-request workload verification and workspace/signal grant checks (PRs #28 and #29). Dedicated runtime listeners and verifier wiring are being added separately.
-4. [x] Reject producer-supplied reserved tenant attributes at all traversed OTLP attribute scopes and inject the canonical authorized workspace ID for all three signals (PR #27). Mixed-batch and cross-workspace integration tests remain outstanding.
+3. [x] Implement OTLP/HTTP and OTLP/gRPC transport handlers with per-request workload verification and workspace/signal grant checks (PRs #28 and #29); dedicated runtime listeners and a separate strict workload verifier are wired in `server/cmd/orbit-api`.
+4. [x] Reject producer-supplied reserved tenant attributes at all traversed OTLP attribute scopes and inject the canonical authorized workspace ID for all three signals (PR #27). PostgreSQL-backed integration tests verify cross-workspace and revocation denial for all signals over HTTP/gRPC; PR #36 adds forged-attribute integration coverage for all three signals over both transports (pending CI). Mixed-batch coverage remains open.
 5. [x] Isolate the local Compose telemetry services on an internal Docker network and remove host-published raw OTLP ports (PR #26). Production gateway-to-collector network policy and deployment firewall rules remain outstanding.
-6. Add integration tests that submit valid, invalid, revoked, cross-workspace, forged-attribute, mixed-batch, and oversized requests for metrics, logs, and traces.
-7. Verify that a workload authorized for workspace A cannot write data visible under workspace B, even when it supplies B's identifier.
+6. [ ] Complete integration tests for valid, invalid, revoked, cross-workspace, forged-attribute, mixed-batch, and oversized requests for metrics, logs, and traces. Valid, revoked, cross-workspace, and forged-attribute coverage is implemented or under CI review; mixed-batch coverage remains open.
+7. [ ] Verify end-to-end that a workload authorized for workspace A cannot write data visible under workspace B, even when it supplies B's identifier. Gateway-level denial tests exist; backend-to-query visibility verification remains open.
 8. Run end-to-end tests through Prometheus, Loki, Tempo, and the workspace-scoped ORBIT query endpoints.
 9. Add load, rate-limit, revocation-latency, backup/restore, and deployment-network-policy tests before enabling production ingestion.
 

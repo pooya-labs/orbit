@@ -15,6 +15,7 @@ import (
 	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/store/postgres"
+	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
 	logsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	metricsv1 "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	tracesv1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -231,5 +232,109 @@ func TestAuthenticatedOTLPGatewaysEnforceRealWorkspaceGrants(t *testing.T) {
 	}
 	if err := callIntegrationGRPCExport(grpcGateway, workspaceA.ID, "metrics"); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("revoked workload gRPC code = %s, want PermissionDenied; err=%v", status.Code(err), err)
+	}
+}
+
+
+// addForgedWorkspaceAttribute simulates an untrusted producer attempting to
+// choose its own tenant. The gateway must reject the payload before forwarding.
+func addForgedWorkspaceAttribute(t *testing.T, message proto.Message, forgedWorkspaceID string) {
+	t.Helper()
+	attribute := &commonv1.KeyValue{
+		Key: WorkspaceAttribute,
+		Value: &commonv1.AnyValue{
+			Value: &commonv1.AnyValue_StringValue{StringValue: forgedWorkspaceID},
+		},
+	}
+	switch request := message.(type) {
+	case *metricsv1.ExportMetricsServiceRequest:
+		request.ResourceMetrics[0].Resource.Attributes = append(request.ResourceMetrics[0].Resource.Attributes, attribute)
+	case *logsv1.ExportLogsServiceRequest:
+		request.ResourceLogs[0].Resource.Attributes = append(request.ResourceLogs[0].Resource.Attributes, attribute)
+	case *tracesv1.ExportTraceServiceRequest:
+		request.ResourceSpans[0].Resource.Attributes = append(request.ResourceSpans[0].Resource.Attributes, attribute)
+	default:
+		t.Fatalf("unsupported OTLP request type %T", message)
+	}
+}
+
+func callIntegrationGRPCMessage(gateway *GRPCGateway, workspaceID, signal string, message proto.Message) error {
+	ctx := grpcWorkloadContext([]string{workspaceID}, []string{"Bearer integration-workload-token"})
+	switch request := message.(type) {
+	case *metricsv1.ExportMetricsServiceRequest:
+		_, err := (&metricsGRPCService{gateway: gateway}).Export(ctx, request)
+		return err
+	case *logsv1.ExportLogsServiceRequest:
+		_, err := (&logsGRPCService{gateway: gateway}).Export(ctx, request)
+		return err
+	case *tracesv1.ExportTraceServiceRequest:
+		_, err := (&tracesGRPCService{gateway: gateway}).Export(ctx, request)
+		return err
+	default:
+		return fmt.Errorf("unsupported OTLP signal %q (%T)", signal, message)
+	}
+}
+
+func TestAuthenticatedOTLPGatewaysRejectProducerWorkspaceSpoofingForEverySignal(t *testing.T) {
+	repository, workspaceA, workspaceB, _, verifier := openGatewayIntegrationRepository(t)
+	authorizer, err := NewAuthorizer(verifier, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpForwarder := &forwarderStub{}
+	httpHandler, err := NewHTTPGateway(authorizer, httpForwarder, HTTPGatewayConfig{
+		RequestsPerMinute: 100,
+		ForwardTimeout: 2 * time.Second,
+		RateLimitStore: repository,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	grpcForwarder := &grpcForwarderStub{}
+	grpcGateway := &GRPCGateway{
+		authorizer: authorizer,
+		forwarder: grpcForwarder,
+		limiter: newWorkspaceRateLimiter(100),
+		sharedLimiter: repository,
+		timeout: 2 * time.Second,
+		concurrency: make(chan struct{}, maxConcurrentGRPCExports),
+	}
+
+	for _, signal := range []string{"metrics", "logs", "traces"} {
+		t.Run(signal, func(t *testing.T) {
+			message := integrationOTLPRequest(t, signal)
+			addForgedWorkspaceAttribute(t, message, workspaceB.ID)
+			payload, err := proto.Marshal(message)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/v1/workspaces/"+workspaceA.ID+"/v1/"+signal,
+				bytes.NewReader(payload),
+			)
+			request.Header.Set("Authorization", "Bearer integration-workload-token")
+			request.Header.Set("Content-Type", "application/x-protobuf")
+			response := httptest.NewRecorder()
+			httpHandler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("HTTP spoofed export status = %d, want 400; body=%s", response.Code, response.Body.String())
+			}
+			if httpForwarder.calls != 0 {
+				t.Fatalf("spoofed %s payload reached HTTP Collector forwarder", signal)
+			}
+
+			grpcErr := callIntegrationGRPCMessage(grpcGateway, workspaceA.ID, signal, message)
+			if status.Code(grpcErr) != codes.InvalidArgument {
+				t.Fatalf("gRPC spoofed export code = %s, want InvalidArgument; err=%v", status.Code(grpcErr), grpcErr)
+			}
+			if grpcForwarder.metricsCalls != 0 || grpcForwarder.logsCalls != 0 || grpcForwarder.tracesCalls != 0 {
+				t.Fatalf("spoofed %s payload reached gRPC Collector forwarder: metrics=%d logs=%d traces=%d",
+					signal, grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
+			}
+		})
 	}
 }
