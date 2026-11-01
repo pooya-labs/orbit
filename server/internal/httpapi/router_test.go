@@ -38,7 +38,7 @@ func (f *fakeRepository) UpsertTelemetryServices(_ context.Context, services []s
 	for index := range f.catalog {
 		item := &f.catalog[index]
 		if item.ID == "" {
-			item.ID = "catalog-" + item.Name
+			item.ID = "00000000-0000-4000-8000-000000000001"
 		}
 		if item.FirstSeenAt.IsZero() {
 			item.FirstSeenAt = now
