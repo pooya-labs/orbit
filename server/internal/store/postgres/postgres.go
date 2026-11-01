@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,7 +22,8 @@ import (
 var migrationFiles embed.FS
 
 type Repository struct {
-	pool *pgxpool.Pool
+	pool                 *pgxpool.Pool
+	lastRateLimitCleanup atomic.Int64
 }
 
 func Open(ctx context.Context, databaseURL string) (*Repository, error) {
@@ -64,6 +66,44 @@ func (r *Repository) Ping(ctx context.Context) error {
 	return r.pool.Ping(ctx)
 }
 
+
+func (r *Repository) IncrementRateLimitWindow(ctx context.Context, keyHash string) (int64, error) {
+	if len(keyHash) != 64 {
+		return 0, fmt.Errorf("rate-limit key hash must be a SHA-256 hex digest")
+	}
+	for _, char := range keyHash {
+		if !(char >= '0' && char <= '9') && !(char >= 'a' && char <= 'f') {
+			return 0, fmt.Errorf("rate-limit key hash must be lowercase hexadecimal")
+		}
+	}
+
+	cleanupSlot := time.Now().UTC().Unix() / 300
+	previousSlot := r.lastRateLimitCleanup.Load()
+	if cleanupSlot > previousSlot && r.lastRateLimitCleanup.CompareAndSwap(previousSlot, cleanupSlot) {
+		if _, err := r.pool.Exec(ctx, `DELETE FROM api_rate_limit_windows WHERE expires_at <= NOW()`); err != nil {
+			r.lastRateLimitCleanup.CompareAndSwap(cleanupSlot, previousSlot)
+			return 0, fmt.Errorf("prune expired API rate-limit windows: %w", err)
+		}
+	}
+
+	var count int64
+	err := r.pool.QueryRow(ctx, `
+		WITH current_window AS (
+			SELECT date_trunc('minute', NOW()) AS bucket_start
+		)
+		INSERT INTO api_rate_limit_windows (bucket_start, key_hash, request_count, expires_at)
+		SELECT bucket_start, $1, 1, bucket_start + INTERVAL '2 minutes'
+		FROM current_window
+		ON CONFLICT (bucket_start, key_hash) DO UPDATE SET
+			request_count = api_rate_limit_windows.request_count + 1
+		RETURNING request_count
+	`, keyHash).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("increment shared API rate-limit window: %w", err)
+	}
+	return count, nil
+}
+
 func (r *Repository) Migrate(ctx context.Context) error {
 	if _, err := r.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
 		version TEXT PRIMARY KEY,
@@ -79,6 +119,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		{version: "001_initial", file: "migrations/001_initial.sql"},
 		{version: "002_telemetry_service_catalog", file: "migrations/002_telemetry_service_catalog.sql"},
 		{version: "003_telemetry_resource_attribute_sources", file: "migrations/003_telemetry_resource_attribute_sources.sql"},
+		{version: "004_shared_api_rate_limits", file: "migrations/004_shared_api_rate_limits.sql"},
 	}
 
 	for _, item := range migrations {

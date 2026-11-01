@@ -153,3 +153,56 @@ func TestPostgresMigrationAndReadModels(t *testing.T) {
 		t.Fatalf("clean up catalog test service: %v", err)
 	}
 }
+
+
+func TestSharedRateLimitWindowUsesAtomicCountersAndExpiresOldBuckets(t *testing.T) {
+	databaseURL := os.Getenv("ORBIT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("ORBIT_TEST_DATABASE_URL is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	repository, err := Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open repository: %v", err)
+	}
+	defer repository.Close()
+
+	now := time.Now().UTC().Truncate(time.Minute)
+	oldBucket := now.Add(-10 * time.Minute)
+	oldKey := fmt.Sprintf("%064x", time.Now().UnixNano()+11)
+	if _, err := repository.pool.Exec(ctx, `
+		INSERT INTO api_rate_limit_windows (bucket_start, key_hash, request_count, expires_at)
+		VALUES ($1, $2, 9, $1 + INTERVAL '2 minutes')
+	`, oldBucket, oldKey); err != nil {
+		t.Fatalf("insert expired rate-limit bucket: %v", err)
+	}
+
+	keyA := fmt.Sprintf("%064x", time.Now().UnixNano()+12)
+	keyB := fmt.Sprintf("%064x", time.Now().UnixNano()+13)
+	first, err := repository.IncrementRateLimitWindow(ctx, keyA)
+	if err != nil { t.Fatalf("first shared increment: %v", err) }
+	second, err := repository.IncrementRateLimitWindow(ctx, keyA)
+	if err != nil { t.Fatalf("second shared increment: %v", err) }
+	other, err := repository.IncrementRateLimitWindow(ctx, keyB)
+	if err != nil { t.Fatalf("independent shared increment: %v", err) }
+	if first != 1 || second != 2 || other != 1 {
+		t.Fatalf("unexpected shared counts: first=%d second=%d other=%d", first, second, other)
+	}
+
+	var oldRows int
+	if err := repository.pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM api_rate_limit_windows WHERE key_hash = $1", oldKey,
+	).Scan(&oldRows); err != nil { t.Fatalf("check expired bucket cleanup: %v", err) }
+	if oldRows != 0 { t.Fatalf("expired bucket remains in database: %d rows", oldRows) }
+
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cleanupCancel()
+		_, _ = repository.pool.Exec(cleanupCtx,
+			"DELETE FROM api_rate_limit_windows WHERE key_hash = ANY($1::char(64)[])",
+			[]string{keyA, keyB, oldKey},
+		)
+	})
+}
