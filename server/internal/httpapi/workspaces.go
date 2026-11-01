@@ -35,6 +35,59 @@ type workspaceAuditResponse struct {
 	Data []store.WorkspaceAuditEvent `json:"data"`
 }
 
+type incidentCreateRequest struct {
+	Title string `json:"title"`
+	Description string `json:"description"`
+	ServiceID string `json:"service_id"`
+	Severity string `json:"severity"`
+}
+
+type incidentTransitionRequest struct {
+	Status string `json:"status"`
+	Comment string `json:"comment"`
+}
+
+type incidentResponse struct {
+	Data store.Incident `json:"data"`
+}
+
+type incidentTimelineResponse struct {
+	Data []store.IncidentTimelineEvent `json:"data"`
+}
+
+func decodeIncidentJSON(w http.ResponseWriter, r *http.Request, destination any) error {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16*1024))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(destination); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return errors.New("request body must contain exactly one JSON object")
+	}
+	return nil
+}
+
+func incidentError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, operation string, err error) {
+	switch {
+	case errors.Is(err, store.ErrWorkspaceMembershipNotFound),
+		errors.Is(err, store.ErrIncidentNotFound),
+		errors.Is(err, store.ErrIncidentServiceNotFound):
+		writeError(w, r, http.StatusNotFound, "incident_resource_not_found", "The workspace, incident, or service was not found")
+	case errors.Is(err, store.ErrIncidentMutationForbidden):
+		writeError(w, r, http.StatusForbidden, "incident_mutation_forbidden", "Your workspace role cannot change incidents")
+	case errors.Is(err, store.ErrIncidentInvalidTransition),
+		errors.Is(err, store.ErrIncidentNoChange):
+		writeError(w, r, http.StatusConflict, "incident_transition_conflict", "The requested incident status transition is not allowed")
+	case errors.Is(err, store.ErrIncidentInvalidInput),
+		strings.Contains(err.Error(), "UUID"),
+		strings.Contains(err.Error(), "principal"):
+		writeError(w, r, http.StatusBadRequest, "invalid_incident", "Incident fields or identifiers are invalid")
+	default:
+		logger.Error(operation, "error", err, "request_id", r.Header.Get("X-Request-ID"))
+		writeError(w, r, http.StatusServiceUnavailable, "incident_operation_unavailable", "The incident operation is temporarily unavailable")
+	}
+}
+
 func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, telemetryClient *telemetry.Client, logger *slog.Logger) {
 	workspaceRepository, ok := repository.(store.WorkspaceRepository)
 	if !ok || workspaceRepository == nil {
@@ -224,6 +277,120 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			return
 		}
 		writeJSON(w, http.StatusOK, incidentsResponse{Data: items})
+	})
+
+	// Keep incident lifecycle routes registered even when the repository
+	// implementation does not expose the transactional mutation contract.
+	incidentLifecycle, incidentLifecycleAvailable := repository.(store.IncidentLifecycleRepository)
+	incidentUnavailable := func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, r, http.StatusServiceUnavailable, "incident_lifecycle_unavailable", "Incident lifecycle storage is not available")
+	}
+	mux.HandleFunc("POST /api/v1/workspaces/{workspaceID}/incidents", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !incidentLifecycleAvailable || incidentLifecycle == nil {
+			incidentUnavailable(w, r)
+			return
+		}
+		var input incidentCreateRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_incident", "Incident fields must be a single valid JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		incident, err := incidentLifecycle.CreateWorkspaceIncident(ctx, store.CreateWorkspaceIncidentInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			Title: input.Title,
+			Description: input.Description,
+			ServiceID: input.ServiceID,
+			Severity: input.Severity,
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil {
+			incidentError(w, r, logger, "create workspace incident failed", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, incidentResponse{Data: incident})
+	})
+
+	mux.HandleFunc("PATCH /api/v1/workspaces/{workspaceID}/incidents/{incidentID}/status", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !incidentLifecycleAvailable || incidentLifecycle == nil {
+			incidentUnavailable(w, r)
+			return
+		}
+		var input incidentTransitionRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_incident_transition", "Status and optional comment must be a single valid JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		incident, err := incidentLifecycle.TransitionWorkspaceIncident(ctx, store.TransitionWorkspaceIncidentInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			IncidentID: r.PathValue("incidentID"),
+			ToStatus: input.Status,
+			Comment: input.Comment,
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil {
+			incidentError(w, r, logger, "transition workspace incident failed", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, incidentResponse{Data: incident})
+	})
+
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/incidents/{incidentID}/timeline", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !incidentLifecycleAvailable || incidentLifecycle == nil {
+			incidentUnavailable(w, r)
+			return
+		}
+		limit := 50
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			switch raw {
+			case "10":
+				limit = 10
+			case "25":
+				limit = 25
+			case "50":
+				limit = 50
+			case "100":
+				limit = 100
+			default:
+				writeError(w, r, http.StatusBadRequest, "invalid_limit", "limit must be 10, 25, 50, or 100")
+				return
+			}
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		events, err := incidentLifecycle.ListWorkspaceIncidentTimeline(ctx,
+			r.PathValue("workspaceID"), r.PathValue("incidentID"),
+			principal.Issuer, principal.Subject, limit)
+		if err != nil {
+			incidentError(w, r, logger, "list workspace incident timeline failed", err)
+			return
+		}
+		if events == nil {
+			events = []store.IncidentTimelineEvent{}
+		}
+		writeJSON(w, http.StatusOK, incidentTimelineResponse{Data: events})
 	})
 
 	registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/services", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
