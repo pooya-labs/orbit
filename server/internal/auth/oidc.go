@@ -356,13 +356,16 @@ func (v *Verifier) keyFor(ctx context.Context, keyID, algorithm string) (crypto.
 	defer v.mu.Unlock()
 
 	now := time.Now()
+	refreshed := false
 	if !now.Before(v.keysExpireAt) {
 		if err := v.refreshKeysLocked(ctx); err != nil {
 			return nil, fmt.Errorf("refresh OIDC signing keys: %w", err)
 		}
+		v.lastUnknownKeyFetch = now
+		refreshed = true
 	}
 	key, ok := v.keys[keyID]
-	if !ok && (v.lastUnknownKeyFetch.IsZero() || now.Sub(v.lastUnknownKeyFetch) >= forcedRefreshInterval) {
+	if !ok && !refreshed && (v.lastUnknownKeyFetch.IsZero() || now.Sub(v.lastUnknownKeyFetch) >= forcedRefreshInterval) {
 		v.lastUnknownKeyFetch = now
 		if err := v.refreshKeysLocked(ctx); err != nil {
 			return nil, fmt.Errorf("refresh OIDC signing keys for unknown key ID: %w", err)
