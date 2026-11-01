@@ -47,7 +47,10 @@ def wait_for(label: str, probe: Any) -> None:
 
 def main() -> int:
     try:
-        emitted = get_json(f"{DEMO_URL}/emit")
+        emitted = {}
+        for _ in range(3):
+            emitted = get_json(f"{DEMO_URL}/emit")
+            time.sleep(0.5)
         trace_id = emitted.get("trace_id")
         if emitted.get("status") != "accepted" or not isinstance(trace_id, str) or len(trace_id) != 32:
             raise RuntimeError(f"demo service returned an invalid trace identifier: {emitted}")
