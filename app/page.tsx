@@ -107,22 +107,23 @@ function formatAge(timestamp: string, language: Language): string {
 function toIncidentRow(
   item: IncidentSummary,
   services: ServiceSummary[],
+  language: Language,
 ): IncidentRow {
   const service = services.find((candidate) => candidate.id === item.service_id);
   return {
     id: item.id,
     title: item.title,
     serviceName: item.service_name,
-    region: service?.region ?? "region unavailable",
+    region: service?.region ?? t(language, "regionUnavailable"),
     severityLabel: item.severity.toUpperCase(),
     severityTone: item.severity === "critical" || item.severity === "high" ? "critical" : "warning",
     statusLabel: item.status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
-    timeAgo: formatAge(item.started_at),
+    timeAgo: formatAge(item.started_at, language),
     source: item.source,
   };
 }
 
-function toDemoIncidentRow(item: (typeof demoIncidents)[number]): IncidentRow {
+function toDemoIncidentRow(item: (typeof demoIncidents)[number], language: Language): IncidentRow {
   return {
     id: item.id,
     title: item.title,
@@ -131,7 +132,7 @@ function toDemoIncidentRow(item: (typeof demoIncidents)[number]): IncidentRow {
     severityLabel: item.severity.toUpperCase(),
     severityTone: item.severity === "critical" ? "critical" : "warning",
     statusLabel: item.status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
-    timeAgo: formatAge(item.startedAt),
+    timeAgo: formatAge(item.startedAt, language),
     source: item.source,
   };
 }
@@ -309,10 +310,10 @@ export default function Home() {
     if (sourceMode === "api") {
       return apiIncidents
         .filter((incident) => incident.status !== "resolved")
-        .map((incident) => toIncidentRow(incident, apiServices));
+        .map((incident) => toIncidentRow(incident, apiServices, language));
     }
-    return demoIncidents.map(toDemoIncidentRow);
-  }, [sourceMode, apiIncidents, apiServices]);
+    return demoIncidents.map((incident) => toDemoIncidentRow(incident, language));
+  }, [sourceMode, apiIncidents, apiServices, language]);
 
   const disconnectSource = () => {
     setSourceMode("demo");
@@ -331,29 +332,29 @@ export default function Home() {
       : null;
 
   return (
-    <main className="app-shell">
-      {mobileNavOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
+    <main className="app-shell" dir={language === "fa" ? "rtl" : "ltr"} lang={language}>
+      {mobileNavOpen && <button className="mobile-scrim" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)} />}
       <aside className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
         <div className="brand-lockup">
           <div className="brand-mark"><span /><span /><span /></div>
           <div className="brand-wordmark">ORBIT<span>.</span><small>OBSERVABILITY</small></div>
-          <button className="icon-button sidebar-close" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)}><X size={18} /></button>
+          <button className="icon-button sidebar-close" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)}><X size={18} /></button>
         </div>
 
         <button className="workspace-switcher">
           <div className="workspace-avatar">N</div>
-          <div className="workspace-copy"><strong>Northstar Systems</strong><span>Production workspace</span></div>
+          <div className="workspace-copy"><strong>ORBIT</strong><span>{language === "fa" ? "فضای کاری شخصی" : "Personal workspace"}</span></div>
           <ChevronDown size={15} className="muted-icon" />
         </button>
 
         <div className="sidebar-scroll">
           {navGroups.map((group) => (
             <div className="nav-group" key={group.label}>
-              <div className="nav-group-label">{group.label}</div>
+              <div className="nav-group-label">{group.label === "OBSERVE" ? tr("observe") : group.label === "INVESTIGATE" ? tr("investigate") : tr("deliver")}</div>
               {group.items.map(({ label, icon: Icon, count, alert }) => (
                 <button key={label} className={`nav-item ${activeNav === label ? "active" : ""}`} onClick={() => chooseNav(label)}>
                   <Icon size={17} strokeWidth={1.75} />
-                  <span>{label}</span>
+                  <span>{navLabel(language, label)}</span>
                   {count && <span className={`nav-count ${alert ? "nav-alert" : ""}`}>{count}</span>}
                 </button>
               ))}
@@ -363,15 +364,15 @@ export default function Home() {
 
         <div className="sidebar-bottom">
           <div className="usage-card">
-            <div className="usage-heading"><span>Telemetry volume</span><span>68%</span></div>
+            <div className="usage-heading"><span>{tr("telemetryVolume")}</span><span>68%</span></div>
             <div className="usage-track"><span /></div>
             <p>6.8 GB <span>of 10 GB monthly</span></p>
           </div>
-          <button className="nav-item"><Settings2 size={17} /><span>Settings</span></button>
-          <button className="nav-item"><CircleHelp size={17} /><span>Help & support</span><ExternalLink size={12} className="nav-external" /></button>
+          <button className="nav-item"><Settings2 size={17} /><span>{tr("settings")}</span></button>
+          <button className="nav-item"><CircleHelp size={17} /><span>{tr("helpSupport")}</span><ExternalLink size={12} className="nav-external" /></button>
           <div className="profile-row">
             <div className="profile-avatar">PG</div>
-            <div className="profile-copy"><strong>Platform team</strong><span>platform@northstar.dev</span></div>
+            <div className="profile-copy"><strong>Pooya</strong><a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a></div>
             <MoreHorizontal size={18} className="muted-icon" />
           </div>
         </div>
@@ -380,27 +381,31 @@ export default function Home() {
       <section className="main-panel">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}><Menu size={19} /></button>
-            <div className="breadcrumbs"><span>Workspace</span><span className="crumb-separator">/</span><strong>{activeNav}</strong></div>
-            <span className="environment-pill"><span /> PRODUCTION</span>
+            <button className="icon-button mobile-menu" aria-label={tr("openNavigation")} onClick={() => setMobileNavOpen(true)}><Menu size={19} /></button>
+            <div className="breadcrumbs"><span>{tr("workspace")}</span><span className="crumb-separator">/</span><strong>{navLabel(language, activeNav)}</strong></div>
+            <span className="environment-pill"><span /> {tr("production")}</span>
           </div>
           <div className="topbar-actions">
             <label className="global-search">
               <Search size={15} />
-              <input aria-label="Search services" placeholder="Search services..." value={search} onChange={(event) => setSearch(event.target.value)} />
+              <input aria-label={tr("searchServicesLabel")} placeholder={tr("searchServices")} value={search} onChange={(event) => setSearch(event.target.value)} />
               <kbd>/</kbd>
             </label>
             <button
               className={`icon-button refresh-button ${sourceMode === "api" ? "is-on" : refreshing ? "is-on" : ""}`}
-              aria-label={sourceMode === "api" ? "Refresh API data" : refreshing ? "Pause demo refresh" : "Resume demo refresh"}
-              title={sourceMode === "api" ? "Refresh API data" : refreshing ? "Pause demo refresh" : "Resume demo refresh"}
+              aria-label={sourceMode === "api" ? tr("refreshApi") : refreshing ? tr("pauseRefresh") : tr("resumeRefresh")}
+              title={sourceMode === "api" ? tr("refreshApi") : refreshing ? tr("pauseRefresh") : tr("resumeRefresh")}
               onClick={() => sourceMode === "api" ? void connectSource() : setRefreshing(!refreshing)}
             >
               {sourceMode === "api" ? <RefreshCw size={16} /> : refreshing ? <Pause size={16} /> : <Play size={16} />}
             </button>
-            <button className="icon-button notification-button" aria-label="Notifications"><Bell size={17} /><i /></button>
+            <button className="icon-button notification-button" aria-label={tr("notifications")}><Bell size={17} /><i /></button>
             <div className="topbar-divider" />
-            <button className="help-button"><CircleHelp size={16} /><span>Docs</span></button>
+            <div className="language-switch" role="group" aria-label={tr("language")}>
+              <button type="button" className={language === "en" ? "selected" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button>
+              <button type="button" className={language === "fa" ? "selected" : ""} aria-pressed={language === "fa"} onClick={() => changeLanguage("fa")}>فارسی</button>
+            </div>
+            <button className="help-button"><CircleHelp size={16} /><span>{tr("docs")}</span></button>
           </div>
         </header>
 
