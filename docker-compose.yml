@@ -70,7 +70,6 @@ services:
       - ./deploy/observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     # Raw OTLP receivers are reachable only from the isolated Docker network.
     # The authenticated gateway will be the only production ingress path.
-    ports:
     networks:
       - telemetry-internal
     depends_on:
