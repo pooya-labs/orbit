@@ -162,7 +162,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/TelemetryServicesResponse"
         "400":
-          description: Unsupported time window.
+          description: Unsupported time window, invalid page size, or malformed continuation cursor.
           content:
             application/json:
               schema:
@@ -206,8 +206,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: The requested service is not present in the persisted telemetry catalog.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "503":
-          description: No configured telemetry backend can provide resource attributes.
+          description: No configured telemetry backend can provide resource attributes, or persistence is unavailable.
           content:
             application/json:
               schema:
