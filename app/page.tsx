@@ -243,6 +243,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const root = document.documentElement;
+    root.lang = language;
+    root.dir = language === "fa" ? "rtl" : "ltr";
+  }, [language]);
+
+  useEffect(() => {
     try {
       const savedUrl = window.localStorage.getItem("orbit.apiBaseUrl");
       if (savedUrl) setApiUrlInput(savedUrl);
