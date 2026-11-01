@@ -1,8 +1,8 @@
-# ORBIT — Initial Architecture
+# ORBIT — System Architecture
 
 ## Product boundary
 
-ORBIT is an observability control plane, not an application-specific monitoring dashboard. It should ingest standards-based telemetry, preserve source context, and let operators move between service health, metrics, traces, logs, incidents, and deployments.
+ORBIT is an observability control plane, not an application-specific monitoring dashboard. It will ingest standards-based telemetry, preserve source context, and let operators move between service health, metrics, traces, logs, incidents, and deployments.
 
 ## Target system shape
 
@@ -11,7 +11,7 @@ Instrumented services
       |
       | OpenTelemetry SDK / OTLP
       v
-OTel Collector tier
+OpenTelemetry Collector
       |
       +------ Metrics ------> Prometheus
       |
@@ -19,7 +19,7 @@ OTel Collector tier
       |
       +------ Logs ---------> Loki
       |
-      +------ Events -------> NATS
+      +------ Events -------> NATS JetStream
                                 |
                                 v
                          ORBIT Go API
@@ -35,54 +35,66 @@ OTel Collector tier
                          Next.js workspace
 ```
 
-## Service responsibilities
+## Current implementation
 
 ### Web workspace
 
-- Presents service inventory, topology, dashboards, incidents, and deployment context.
-- Reads through a typed API client; it must not query telemetry stores directly from the browser.
-- Uses WebSocket updates only for state that benefits from push delivery.
-- Marks stale, missing, demo, and live data distinctly.
+- Next.js App Router, React, TypeScript, and a responsive dark observability interface.
+- Static export to GitHub Pages at `/orbit/`.
+- Current chart, KPI cards, service inventory, and incidents are illustrative demo fixtures.
+- Demo provenance is visible in the UI. The public page does not call the local API.
 
 ### Go API
 
-- Owns authentication, workspace boundaries, service metadata, alert configuration, and query orchestration.
-- Exposes versioned REST endpoints and a small number of event streams.
-- Validates tenant/workspace scope before querying telemetry backends.
-- Does not become a proxy for arbitrary unbounded PromQL or LogQL input.
+- Standard-library HTTP server with bounded read/write/idle timeouts and graceful shutdown.
+- Request IDs, structured JSON request logs, and panic recovery.
+- `GET /health/live`, `GET /health/ready`, and `GET /api/v1/meta`.
+- `GET /api/v1/services` and `GET /api/v1/incidents?status=...`.
+- Data endpoints use explicit JSON envelopes and return safe errors without leaking database details.
 
-### Ingestion
+### PostgreSQL
 
-- Accepts OTLP through an OpenTelemetry Collector.
-- Keeps ingestion credentials separate from dashboard/browser credentials.
-- Applies resource normalization, redaction, and retention policy before storage.
+- pgx connection pool with bounded pool settings.
+- Versioned SQL migration ledger and transactional first migration.
+- Service and incident read models with indexed status, environment, and timestamp columns.
+- Initial data is deliberately tagged `demo_seed`; it is not observed production telemetry.
 
-### Storage
+### Local infrastructure
 
-- PostgreSQL: users, workspaces, service catalog, alert rules, incidents, deployment annotations, and audit events.
-- Redis: short-lived cache, rate-limit counters, and ephemeral coordination.
-- Prometheus, Tempo, and Loki: purpose-built time-series, trace, and log storage.
-- NATS: internal event distribution where asynchronous fan-out is needed.
+- Docker Compose provisions PostgreSQL, Redis, NATS JetStream, and the Go API.
+- Redis and NATS are provisioned but not yet wired into application code.
+- Docker ports are bound to localhost for local development.
+
+## Data model
+
+### services
+
+- `id`: UUID primary key
+- `name`, `description`
+- `environment`, `region`
+- `status`: operational, degraded, incident, unknown
+- `latency_p95_ms`, `error_rate`
+- `last_seen_at`, `source`
+- `created_at`, `updated_at`
+
+### incidents
+
+- `id`: UUID primary key
+- `title`, `description`
+- `service_id`: foreign key to services
+- `severity`: critical, high, medium, low
+- `status`: open, investigating, monitoring, resolved
+- `started_at`, `updated_at`, `resolved_at`, `source`
 
 ## API conventions
 
 - Prefix public endpoints with `/api/v1`.
-- Use UTC timestamps in RFC 3339 format.
-- Include stable IDs and explicit pagination cursors.
-- Return structured errors with a machine-readable `code`, safe `message`, and request ID.
-- Keep units explicit: duration in milliseconds, byte counts in bytes, rates with a named time base.
+- Use UTC timestamps in RFC 3339 / JSON time format.
+- Return arrays in a `data` envelope.
+- Return errors in an `error` envelope with machine-readable `code`, safe `message`, and `request_id`.
+- Bound all database calls with request-scoped timeouts.
+- Keep units explicit: duration in milliseconds, rates as decimal fractions, bytes in bytes.
 - Never mix demo fixtures with live data without an explicit source label.
-
-## Initial service contracts
-
-The first backend milestone should introduce these read models:
-
-- `ServiceSummary`: id, name, environment, team, region, health, last_seen_at, source.
-- `ServiceMetric`: service_id, metric_name, value, unit, observed_at, aggregation_window, source.
-- `IncidentSummary`: id, title, severity, status, started_at, affected_services.
-- `DeploymentMarker`: id, service_id, version, environment, deployed_at, outcome.
-
-These are product-level contracts, not final database schemas. Their exact types and validation rules will be settled alongside the Go API.
 
 ## Security and reliability requirements
 
@@ -90,22 +102,14 @@ These are product-level contracts, not final database schemas. Their exact types
 - Secrets stay in environment variables or a dedicated secret manager, never in source control.
 - Avoid logging tokens, credentials, or sensitive payload bodies.
 - Enforce query timeouts, payload limits, and per-workspace rate limits.
-- Health endpoints must distinguish liveness from readiness.
+- Readiness must verify required dependencies; liveness must remain a process-level check.
 - Every asynchronous operation should carry correlation context.
 - Retention and cardinality limits must be explicit to prevent uncontrolled telemetry cost.
 
-## Current implementation status
+## Current limitations
 
-Implemented:
-- Responsive Next.js workspace with clearly labelled illustrative fixture values.
-- Go HTTP API process with liveness, readiness, and metadata endpoints.
-- Request IDs, structured request logs, panic recovery, server timeouts, and graceful shutdown.
-- Unit tests for the initial HTTP contract.
-
-Not implemented yet:
-- Database or cache connections.
-- Authentication and workspace authorization.
-- OTLP ingestion, telemetry storage, or live metrics/traces/logs.
-- External dependency probes in the readiness endpoint.
-
-The API foundation is intentionally small and standard-library-only. Additional infrastructure will be introduced when it has a concrete consumer and testable contract.
+- No authentication, workspace isolation, or user management.
+- No OTLP ingestion or connection to Prometheus, Tempo, or Loki.
+- Redis and NATS are available in Compose but are not yet used by the Go API.
+- The Pages deployment is frontend-only. The Go API is local-only, not publicly hosted.
+- The dashboard remains a demo preview and does not yet consume the new database endpoints.
