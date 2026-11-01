@@ -291,6 +291,9 @@ func TestCORSPreflightAllowsConfiguredOrigin(t *testing.T) {
 	if !strings.Contains(recorder.Header().Get("Access-Control-Allow-Methods"), "GET") {
 		t.Fatal("expected GET to be allowed")
 	}
+	if !strings.Contains(recorder.Header().Get("Access-Control-Allow-Headers"), "Authorization") {
+		t.Fatal("expected Authorization to be allowed for authenticated API requests")
+	}
 }
 
 func TestCORSPreflightRejectsUnknownOrigin(t *testing.T) {
