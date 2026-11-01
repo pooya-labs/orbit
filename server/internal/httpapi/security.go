@@ -59,7 +59,7 @@ func withAuthorization(environment string, verifier TokenVerifier, next http.Han
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			requiredRole = "operator"
 		}
-		if strings.HasPrefix(r.URL.Path, "/api/v1/admin/") {
+		if r.URL.Path == "/api/v1/admin" || strings.HasPrefix(r.URL.Path, "/api/v1/admin/") {
 			requiredRole = "administrator"
 		}
 		if !principal.HasRole(requiredRole) {
