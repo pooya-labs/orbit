@@ -48,3 +48,39 @@ export interface ApiErrorPayload {
 export interface DataEnvelope<T> {
   data: T[];
 }
+
+
+export type TelemetryWindow = "15m" | "1h" | "6h" | "24h";
+
+export interface TelemetryQueryResponse<T> {
+  source: "prometheus" | "loki" | "tempo";
+  window: TelemetryWindow;
+  queried_at: string;
+  query?: string;
+  step?: string;
+  service?: string;
+  limit?: number;
+  data: T;
+}
+
+export interface PrometheusRangeSeries {
+  metric: Record<string, string>;
+  values: [number, string][];
+}
+
+export interface LokiLogStream {
+  stream: Record<string, string>;
+  values: [string, string][];
+}
+
+export interface TempoTraceSummary {
+  traceID: string;
+  rootServiceName: string;
+  rootTraceName: string;
+  startTimeUnixNano: string;
+  durationMs: number;
+}
+
+export type TelemetryMetricsResponse = TelemetryQueryResponse<PrometheusRangeSeries[]>;
+export type TelemetryLogsResponse = TelemetryQueryResponse<LokiLogStream[]>;
+export type TelemetryTracesResponse = TelemetryQueryResponse<TempoTraceSummary[]>;
