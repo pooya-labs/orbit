@@ -203,9 +203,14 @@ func NewVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
 
 // NewIngestionVerifier creates a verifier for workload access tokens. It
 // requires the RFC 9068 access-token type and an explicit not-before claim.
-// Callers must configure a dedicated ingestion audience distinct from the
-// human dashboard/API audience.
-func NewIngestionVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
+// humanAudience is supplied explicitly so a configuration mistake cannot
+// silently reuse the human dashboard/API audience for machine credentials.
+func NewIngestionVerifier(ctx context.Context, cfg Config, humanAudience string) (*Verifier, error) {
+	cfg.Audience = strings.TrimSpace(cfg.Audience)
+	humanAudience = strings.TrimSpace(humanAudience)
+	if humanAudience == "" || cfg.Audience == "" || cfg.Audience == humanAudience {
+		return nil, errors.New("workload ingestion audience must be configured and distinct from the human API audience")
+	}
 	cfg.RequiredTokenType = "at+jwt"
 	cfg.RequireNotBefore = true
 	return NewVerifier(ctx, cfg)
