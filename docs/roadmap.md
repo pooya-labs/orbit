@@ -82,7 +82,7 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 
 - [x] Merge and CI-verify OIDC discovery/JWKS access-token verification and server-side viewer/operator/administrator route enforcement (`977ce49`; CI includes Go race tests, web build, and the OTLP end-to-end smoke test).
 - [x] Implement provider-neutral browser Authorization Code + PKCE, state/nonce checks, memory-only access/refresh tokens, and API Bearer-token injection (draft PR #12; provider configuration and production rollout remain open).
-- [ ] Complete tenant-scoped repository queries for services, incidents, and telemetry before enabling multi-user data access. Workspace creation/listing, membership lookup, and membership-checked audit reads are being added on a separate feature branch; existing inventory and telemetry queries remain global and must not be presented as tenant-isolated.
+- [ ] Complete tenant-scoped repository queries for services, incidents, and telemetry before enabling multi-user data access. Migration 006 assigns legacy records to a dedicated legacy workspace and adds workspace ownership/indexes; new membership-checked workspace-scoped read endpoints and cross-workspace repository tests are under CI review. Legacy routes remain for backward compatibility and are not tenant-isolated.
 - [x] Merge and CI-verify the shared PostgreSQL rate limiter for horizontally scaled API instances (`db45843`); staging/production require PostgreSQL and the limiter stores only hashed short-lived keys.
 - [ ] Add retention policies and cardinality guardrails for telemetry and API state.
 - [ ] Load tests for ingestion and dashboard queries.
