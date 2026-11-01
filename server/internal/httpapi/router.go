@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 )
@@ -88,10 +89,12 @@ func paginateDiscoveredServices(
 }
 
 type Config struct {
-	Version        string
-	Environment    string
-	AllowedOrigins []string
-	Telemetry      *telemetry.Client
+	Version          string
+	Environment      string
+	AllowedOrigins   []string
+	Telemetry        *telemetry.Client
+	AuthVerifier     *auth.Verifier
+	RateLimitPerMinute int
 }
 
 type statusResponse struct {
@@ -423,8 +426,12 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 	})
 
 	var handler http.Handler = mux
+	handler = withAuthorization(cfg.Environment, cfg.AuthVerifier, handler)
+	handler = withBodyLimit(1<<20, handler)
+	handler = withRateLimit(cfg.RateLimitPerMinute, handler)
 	handler = withRequestLogging(logger, handler)
 	handler = withRequestID(handler)
+	handler = withSecurityHeaders(handler)
 	handler = withRecovery(logger, handler)
 	handler = withCORS(cfg.AllowedOrigins, handler)
 	return handler
@@ -459,7 +466,7 @@ func withCORS(origins []string, next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, X-Request-ID")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Request-ID")
 			w.Header().Set("Access-Control-Max-Age", "600")
 			w.WriteHeader(http.StatusNoContent)
 			return
