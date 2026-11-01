@@ -109,10 +109,10 @@ export async function getTelemetryMetrics(
   signal?: AbortSignal,
   baseUrl?: string,
   service = "orbit-telemetry-demo",
-  groupBy?: string[],
+  groupBy?: string,
 ): Promise<TelemetryMetricsResponse> {
   const query = new URLSearchParams({ window, service });
-  if (groupBy) query.set("group_by", groupBy.join(","));
+  if (groupBy !== undefined) query.set("group_by", groupBy);
   return getJSON<TelemetryMetricsResponse>(
     `/api/v1/telemetry/metrics?${query.toString()}`,
     signal,
