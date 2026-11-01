@@ -19,27 +19,6 @@ import (
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 )
 
-var telemetryServiceCursorIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}package httpapi
-
-import (
-	"context"
-	"crypto/rand"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"log/slog"
-	"net/http"
-	"regexp"
-	"sort"
-	"strings"
-	"time"
-
-	"github.com/pooya16pg-spec/orbit/server/internal/store"
-	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
-)
-
-)
 
 func encodeTelemetryServiceCursor(cursor *store.TelemetryServiceCursor) string {
 	if cursor == nil {
