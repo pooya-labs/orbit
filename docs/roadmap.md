@@ -22,8 +22,9 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 - [x] Add versioned initial migration and schema migration ledger.
 - [x] Add service and incident read endpoints.
 - [x] Add PostgreSQL-backed integration tests in CI.
-- [ ] Publish OpenAPI 3.1 contract.
-- [ ] Add typed frontend API client and a separate demo-data provider.
+- [x] Publish OpenAPI 3.1 contract.
+- [x] Add typed frontend API client and explicit API error types.
+- [ ] Add a separate demo-data provider and connect the dashboard through a source switch.
 - [ ] Connect the public dashboard to a hosted API after backend deployment and CORS/auth design.
 
 ## M03 — Local platform
