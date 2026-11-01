@@ -79,6 +79,7 @@ type QueryResult struct {
 	Query     string          `json:"query,omitempty"`
 	Step      string          `json:"step,omitempty"`
 	Service   string          `json:"service,omitempty"`
+	GroupBy   []string        `json:"group_by,omitempty"`
 	Limit     int             `json:"limit,omitempty"`
 	Data      json.RawMessage `json:"data"`
 }
