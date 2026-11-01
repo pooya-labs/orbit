@@ -8,10 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"net/url"
-	"math/big"
 	"regexp"
 	"strings"
 	"sync"
@@ -73,7 +73,7 @@ type tokenClaims struct {
 // NewVerifier performs OIDC discovery and fetches the initial JWKS before the API starts.
 // A missing or invalid issuer/JWKS document is a startup error, so non-development deployments fail closed.
 func NewVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
-	issuer := strings.TrimRight(strings.TrimSpace(cfg.Issuer), "/")
+	issuer := strings.TrimSpace(cfg.Issuer)
 	audience := strings.TrimSpace(cfg.Audience)
 	if issuer == "" || audience == "" {
 		return nil, errors.New("OIDC issuer and audience are required")
@@ -124,7 +124,7 @@ func NewVerifier(ctx context.Context, cfg Config) (*Verifier, error) {
 		},
 	}
 
-	discoveryURL := issuerURL.String() + "/.well-known/openid-configuration"
+	discoveryURL := strings.TrimRight(issuerURL.String(), "/") + "/.well-known/openid-configuration"
 	discoveryBody, err := fetchBounded(ctx, client, discoveryURL, maxDiscoveryBytes)
 	if err != nil {
 		return nil, fmt.Errorf("OIDC discovery failed: %w", err)
@@ -216,7 +216,7 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (Principal, erro
 	}
 	_, err = jwt.Parse(
 		[]byte(rawToken),
-		jwt.WithKeySet(singleKeySet, jws.WithRequireKid(true), jws.WithInferAlgorithmFromKey(true)),
+		jwt.WithKeySet(singleKeySet, jws.WithRequireKid(true)),
 		jwt.WithIssuer(v.issuer),
 		jwt.WithAudience(v.audience),
 		jwt.WithRequiredClaim(jwt.IssuerKey),
@@ -273,13 +273,8 @@ func (v *Verifier) lookupKey(ctx context.Context, keyID string) (jwk.Key, error)
 		}
 		v.lastUnknownRefresh = now
 	}
-	oldKeys := v.keys
 	if err := v.refreshLocked(ctx); err != nil {
-		if oldKeys != nil {
-			if key, ok := oldKeys.LookupKeyID(keyID); ok {
-				return key, nil
-			}
-		}
+		// Never accept a key from an expired JWKS after a failed refresh.
 		return nil, err
 	}
 	if key, ok := v.keys.LookupKeyID(keyID); ok {
@@ -369,9 +364,8 @@ func validateSigningKey(key jwk.Key, algorithm string) error {
 	default:
 		return errors.New("unsupported signing algorithm")
 	}
-	for _, privateField := range []string{"d", "p", "q", "dp", "dq", "qi", "k"} {
-		var value string
-		if err := key.Get(privateField, &value); err == nil && value != "" {
+	for _, privateField := range []string{"d", "p", "q", "dp", "dq", "qi", "k", "oth"} {
+		if key.Has(privateField) {
 			return errors.New("JWKS must not contain private key material")
 		}
 	}
