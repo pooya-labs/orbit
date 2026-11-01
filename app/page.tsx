@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   AlertTriangle,
@@ -103,11 +104,11 @@ function MetricCard({
   accent,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   change: string;
   direction: "up" | "down";
   detail: string;
-  icon: typeof Activity;
+  icon: LucideIcon;
   accent: string;
 }) {
   return (
@@ -245,9 +246,9 @@ export default function Home() {
 
           <section className="metrics-grid" aria-label="Key metrics">
             <MetricCard label="REQUESTS / MIN" value="24.8k" change="12.6%" direction="down" detail="vs. previous period" icon={Activity} accent="cyan" />
-            <MetricCard label="P95 LATENCY" value="142<span>ms</span>" change="8.2%" direction="down" detail="vs. previous period" icon={Zap} accent="violet" />
-            <MetricCard label="ERROR RATE" value="0.24<span>%</span>" change="0.04%" direction="up" detail="vs. previous period" icon={AlertTriangle} accent="amber" />
-            <MetricCard label="ACTIVE SERVICES" value="12<span>/ 14</span>" change="2 degraded" direction="up" detail="across 3 regions" icon={Boxes} accent="green" />
+            <MetricCard label="P95 LATENCY" value={<>142<span>ms</span></>} change="8.2%" direction="down" detail="vs. previous period" icon={Zap} accent="violet" />
+            <MetricCard label="ERROR RATE" value={<>0.24<span>%</span></>} change="0.04%" direction="up" detail="vs. previous period" icon={AlertTriangle} accent="amber" />
+            <MetricCard label="ACTIVE SERVICES" value={<>12<span>/ 14</span></>} change="2 degraded" direction="up" detail="across 3 regions" icon={Boxes} accent="green" />
           </section>
 
           <section className="panel traffic-panel">
