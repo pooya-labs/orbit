@@ -67,6 +67,14 @@ func (r *Repository) CreateWorkspace(ctx context.Context, input store.CreateWork
 	`, workspace.ID, input.OwnerIssuer, input.OwnerSubject); err != nil {
 		return store.Workspace{}, fmt.Errorf("create workspace owner membership: %w", err)
 	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO workspace_audit_events (
+			workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, details
+		)
+		VALUES ($1::uuid, $2, $3, 'workspace.created', 'workspace', $1, '{}'::jsonb)
+	`, workspace.ID, input.OwnerIssuer, input.OwnerSubject); err != nil {
+		return store.Workspace{}, fmt.Errorf("record workspace creation audit event: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return store.Workspace{}, fmt.Errorf("commit workspace creation: %w", err)
 	}
@@ -161,10 +169,17 @@ func (r *Repository) AppendWorkspaceAuditEvent(ctx context.Context, event store.
 			workspace_id, actor_issuer, actor_subject, action,
 			resource_type, resource_id, request_id, details
 		)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8::jsonb)
+		SELECT $1::uuid, $2, $3, $4, $5, $6, $7, $8::jsonb
+		WHERE EXISTS (
+			SELECT 1 FROM workspace_memberships
+			WHERE workspace_id = $1::uuid AND user_issuer = $2 AND user_subject = $3
+		)
 		RETURNING id::text, created_at
 	`, event.WorkspaceID, event.ActorIssuer, event.ActorSubject, event.Action,
 		event.ResourceType, event.ResourceID, event.RequestID, string(details)).Scan(&event.ID, &event.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.WorkspaceAuditEvent{}, store.ErrWorkspaceMembershipNotFound
+	}
 	if err != nil {
 		return store.WorkspaceAuditEvent{}, fmt.Errorf("append workspace audit event: %w", err)
 	}
