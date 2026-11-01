@@ -79,7 +79,7 @@ Stop containers with `docker compose down`. To delete local database/cache volum
 The telemetry backends are optional and do not start during a normal `docker compose up`:
 
 ```powershell
-docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo
+docker compose --profile observability up -d postgres api prometheus loki tempo otel-collector telemetry-demo
 ```
 
 The `telemetry-demo` service is an instrumented Go workload. Trigger one request with `curl.exe http://localhost:8081/emit`; it emits a request counter, a trace (the response includes its trace ID), and a structured log. You can also point another workload at `http://localhost:4318` (OTLP/HTTP) or `localhost:4317` (OTLP/gRPC). The Collector routes metrics to Prometheus, traces to Tempo, and logs to Loki. Once the stack is ready, the Go API exposes bounded read-only query endpoints (allowed windows: 15m, 1h, 6h, 24h):
@@ -108,7 +108,7 @@ go vet ./...
 go build ./cmd/orbit-api
 ```
 
-GitHub Actions runs web typecheck/build, Go tests against a real PostgreSQL service container, and a Docker Compose smoke test for the optional local telemetry backends.
+GitHub Actions runs web typecheck/build, Go tests against a real PostgreSQL service container, and a Docker Compose smoke test that verifies all three OTLP signals both in their backends and through the ORBIT API.
 
 ## Repository map
 
