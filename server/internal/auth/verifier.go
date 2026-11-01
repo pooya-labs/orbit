@@ -11,11 +11,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/lestrrat-go/jwx/v3/jws"
 	"github.com/lestrrat-go/jwx/v3/jwt"
@@ -66,9 +66,8 @@ type Verifier struct {
 }
 
 type tokenClaims struct {
-	Issuer  string          `json:"iss"`
-	Subject string          `json:"sub"`
-	Roles   json.RawMessage `json:"-"`
+	Issuer  string `json:"iss"`
+	Subject string `json:"sub"`
 }
 
 // NewVerifier performs OIDC discovery and fetches the initial JWKS before the API starts.
@@ -217,7 +216,7 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (Principal, erro
 		return Principal{}, ErrInvalidToken
 	}
 	_ = keySet // lookupKey returns the trusted set as a freshness guard; the token is verified against exactly one selected key.
-	parsed, err := jwt.Parse(
+	_, err = jwt.Parse(
 		[]byte(rawToken),
 		jwt.WithKeySet(singleKeySet, jws.WithRequireKid(true), jws.WithInferAlgorithmFromKey(true)),
 		jwt.WithIssuer(v.issuer),
@@ -237,16 +236,9 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (Principal, erro
 	if err != nil || claims.Issuer != v.issuer || strings.TrimSpace(claims.Subject) == "" {
 		return Principal{}, ErrInvalidToken
 	}
-	var roles []string
-	if err := parsed.Get(v.rolesClaim, &roles); err != nil && !errors.Is(err, jwt.ErrInvalidClaim) {
-		// A missing role claim grants no role; a malformed claim is rejected below through the payload decoder.
-		roles = nil
-	}
-	if roles == nil {
-		roles, err = decodeRoles(rawToken, v.rolesClaim)
-		if err != nil {
-			return Principal{}, ErrInvalidToken
-		}
+	roles, err := decodeRoles(rawToken, v.rolesClaim)
+	if err != nil {
+		return Principal{}, ErrInvalidToken
 	}
 	allowedRoles := make([]string, 0, len(roles))
 	seen := make(map[string]struct{}, len(roles))
@@ -260,6 +252,13 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (Principal, erro
 		}
 	}
 	return Principal{Issuer: claims.Issuer, Subject: claims.Subject, Roles: allowedRoles}, nil
+}
+
+// Close releases idle HTTP connections held by the verifier.
+func (v *Verifier) Close() {
+	if v != nil && v.client != nil {
+		v.client.CloseIdleConnections()
+	}
 }
 
 func (v *Verifier) lookupKey(ctx context.Context, keyID string) (jwk.Set, jwk.Key, error) {
