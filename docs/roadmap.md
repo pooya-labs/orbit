@@ -31,7 +31,7 @@ The browser dashboard can now read service and incident inventories from a confi
 
 ## M03 — Local platform
 
-The optional `observability` profile now accepts OTLP over gRPC/HTTP and routes metrics to Prometheus, traces to Tempo, and logs to Loki. The pipeline is infrastructure only: the Go API is not instrumented yet, and the dashboard does not query these backends.
+The optional `observability` profile now accepts OTLP over gRPC/HTTP and routes metrics to Prometheus, traces to Tempo, and logs to Loki. GitHub Actions starts the four backends and verifies their readiness plus the Collector scrape target. This milestone delivers local infrastructure only: the Go API is not instrumented yet, and the dashboard does not query these backends.
 
 - [x] Add Docker Compose for PostgreSQL, Redis, and NATS JetStream.
 - [x] Add the Go API container and database readiness dependency.
