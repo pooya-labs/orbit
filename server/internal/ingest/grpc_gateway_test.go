@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"time"
 
 	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
@@ -178,7 +180,7 @@ func TestGRPCGatewayMapsAuthorizationAndDependencyFailures(t *testing.T) {
 	}
 
 	gateway, forwarder = newTestGRPCGateway()
-	gateway.authorizer.grants.(*grantStub).err = ErrWorkloadAuthorizationDenied
+	gateway.authorizer.grants.(*grantStub).err = store.ErrWorkloadAuthorizationDenied
 	_, err = (&metricsGRPCService{gateway: gateway}).Export(
 		grpcWorkloadContext([]string{testWorkspace}, []string{"Bearer signed-token"}), request,
 	)
