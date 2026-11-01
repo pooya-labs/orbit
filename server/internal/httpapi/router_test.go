@@ -230,6 +230,11 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	defer prometheus.Close()
 
 	loki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/loki/api/v1/label/service_name/values" {
+			_, _ = w.Write([]byte(`{"status":"success","data":["orbit-telemetry-demo"]}`))
+			return
+		}
 		if r.URL.Path != "/loki/api/v1/query_range" || r.URL.Query().Get("query") != `{service_name="orbit-telemetry-demo"}` {
 			t.Errorf("unexpected Loki request: %s %s", r.URL.Path, r.URL.RawQuery)
 		}
