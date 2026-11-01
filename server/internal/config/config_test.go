@@ -21,7 +21,7 @@ func TestCommaSeparatedOriginsEmpty(t *testing.T) {
 
 
 func TestLoadReadsOptionalTelemetryEndpoints(t *testing.T) {
-	t.Setenv("ORBIT_VERSION", "0.8.0")
+	t.Setenv("ORBIT_VERSION", "0.9.0")
 	t.Setenv("ORBIT_PROMETHEUS_URL", " http://prometheus:9090 ")
 	t.Setenv("ORBIT_LOKI_URL", "http://loki:3100")
 	t.Setenv("ORBIT_TEMPO_URL", "http://tempo:3200")
