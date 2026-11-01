@@ -1,3 +1,35 @@
+
+func TestConcurrentRepositoryOpenSerializesMigrations(t *testing.T) {
+	databaseURL := os.Getenv("ORBIT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("ORBIT_TEST_DATABASE_URL is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	const workers = 3
+	errorsByWorker := make(chan error, workers)
+	var wait sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			repository, err := Open(ctx, databaseURL)
+			if err == nil {
+				repository.Close()
+			}
+			errorsByWorker <- err
+		}()
+	}
+	wait.Wait()
+	close(errorsByWorker)
+	for err := range errorsByWorker {
+		if err != nil {
+			t.Fatalf("concurrent repository Open() failed: %v", err)
+		}
+	}
+}
+
 package postgres
 
 import (
