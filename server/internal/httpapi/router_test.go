@@ -326,7 +326,7 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 			_, _ = w.Write([]byte(`{"status":"success","data":["orbit-telemetry-demo"]}`))
 			return
 		}
-		if r.URL.Path != "/api/v1/query_range" || r.URL.Query().Get("query") != `sum(rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
+		if r.URL.Path != "/api/v1/query_range" || r.URL.Query().Get("query") != `sum by (deployment_environment, instance, service_name, service_version) (rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
 			t.Errorf("unexpected Prometheus request: %s %s", r.URL.Path, r.URL.RawQuery)
 		}
 		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"matrix","result":[{"metric":{},"values":[[1,"0.2"]]}]}}`))
