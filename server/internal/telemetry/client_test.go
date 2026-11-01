@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
