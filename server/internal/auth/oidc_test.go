@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"math/big"
@@ -238,7 +239,7 @@ func TestVerifyRejectsInvalidClaimsAndSignatures(t *testing.T) {
 	t.Run("tampered signature", func(t *testing.T) {
 		token := signRS256Token(t, privateKey, "rsa-1", testClaims(provider.issuer))
 		parts := strings.Split(token, ".")
-		parts[1] = base64.RawURLEncoding.EncodeToString([]byte(`{"iss":"changed"}`))
+		parts[2] = base64.RawURLEncoding.EncodeToString([]byte("invalid-signature"))
 		if _, err := verifier.Verify(context.Background(), strings.Join(parts, ".")); err == nil {
 			t.Fatal("Verify() accepted a modified JWT payload")
 		}
