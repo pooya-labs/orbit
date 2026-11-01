@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -119,6 +119,8 @@ export default function TelemetryWorkspace({
   const [serviceCursor, setServiceCursor] = useState<string | null>(null);
   const [serviceHasMore, setServiceHasMore] = useState(false);
   const [serviceLoadingMore, setServiceLoadingMore] = useState(false);
+  const servicePageController = useRef<AbortController | null>(null);
+  const serviceDiscoveryController = useRef<AbortController | null>(null);
   const [resourceAttributes, setResourceAttributes] = useState<TelemetryResourceAttributesResponse | null>(null);
   const [resourceLoading, setResourceLoading] = useState(true);
   const [resourceError, setResourceError] = useState("");
@@ -133,15 +135,21 @@ export default function TelemetryWorkspace({
 
 
   useEffect(() => {
-    const controller = new AbortController();
     let mounted = true;
 
     const loadServices = async () => {
+      servicePageController.current?.abort();
+      servicePageController.current = null;
+      setServiceLoadingMore(false);
+
+      serviceDiscoveryController.current?.abort();
+      const controller = new AbortController();
+      serviceDiscoveryController.current = controller;
       setServiceLoading(true);
       setServiceError("");
       try {
         const response = await listTelemetryServices(windowRange, controller.signal, apiBaseUrl);
-        if (!mounted) return;
+        if (!mounted || controller.signal.aborted) return;
         setDiscoveredServices(response.data);
         setServiceCursor(response.next_cursor ?? null);
         setServiceHasMore(response.has_more ?? false);
@@ -154,15 +162,16 @@ export default function TelemetryWorkspace({
           });
         }
       } catch (cause) {
-        if (controller.signal.aborted) return;
-        if (mounted) {
-          setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت فهرست سرویس‌ها ناموفق بود." : "Unable to discover telemetry services.");
-          setServiceWarnings([]);
-          setServiceCursor(null);
-          setServiceHasMore(false);
-        }
+        if (controller.signal.aborted || !mounted) return;
+        setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت فهرست سرویس‌ها ناموفق بود." : "Unable to discover telemetry services.");
+        setServiceWarnings([]);
+        setServiceCursor(null);
+        setServiceHasMore(false);
       } finally {
-        if (mounted) setServiceLoading(false);
+        if (mounted && serviceDiscoveryController.current === controller) {
+          serviceDiscoveryController.current = null;
+          setServiceLoading(false);
+        }
       }
     };
 
@@ -170,17 +179,23 @@ export default function TelemetryWorkspace({
     const interval = window.setInterval(() => void loadServices(), 60_000);
     return () => {
       mounted = false;
-      controller.abort();
+      serviceDiscoveryController.current?.abort();
+      serviceDiscoveryController.current = null;
+      servicePageController.current?.abort();
+      servicePageController.current = null;
       window.clearInterval(interval);
     };
   }, [windowRange, apiBaseUrl, reloadKey, language]);
 
   const loadMoreServices = async () => {
-    if (!serviceCursor || !serviceHasMore || serviceLoadingMore) return;
+    if (!serviceCursor || !serviceHasMore || serviceLoadingMore || serviceLoading) return;
+    servicePageController.current?.abort();
     const controller = new AbortController();
+    servicePageController.current = controller;
     setServiceLoadingMore(true);
     try {
       const response = await listTelemetryServices(windowRange, controller.signal, apiBaseUrl, serviceCursor, 50);
+      if (controller.signal.aborted) return;
       setDiscoveredServices((current) => {
         const merged = new Map(current.map((service) => [service.name, service]));
         for (const service of response.data) merged.set(service.name, service);
@@ -188,11 +203,15 @@ export default function TelemetryWorkspace({
       });
       setServiceCursor(response.next_cursor ?? null);
       setServiceHasMore(response.has_more ?? false);
-      setServiceWarnings(response.warnings ?? []);
+      setServiceWarnings((current) => Array.from(new Set([...current, ...(response.warnings ?? [])])));
     } catch (cause) {
+      if (controller.signal.aborted) return;
       setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "بارگذاری سرویس‌های بیشتر ناموفق بود." : "Unable to load more services.");
     } finally {
-      setServiceLoadingMore(false);
+      if (servicePageController.current === controller) {
+        servicePageController.current = null;
+        setServiceLoadingMore(false);
+      }
     }
   };
 
@@ -202,6 +221,7 @@ export default function TelemetryWorkspace({
 
     const loadAttributes = async () => {
       setResourceLoading(true);
+      setResourceAttributes(null);
       setResourceError("");
       try {
         const response = await getTelemetryServiceAttributes(
