@@ -1020,3 +1020,41 @@ func TestWorkspaceTelemetryQueriesRequireMembershipAndBackendTenantMatcher(t *te
 	}
 	if prometheusCalls != 1 || lokiCalls != 1 || tempoCalls != 1 { t.Fatal("non-member request reached a telemetry backend") }
 }
+
+
+func TestAuthenticatedOTLPHandlerIsMountedOutsideSmallJSONBodyLimit(t *testing.T) {
+	const workspaceID = "00000000-0000-4000-8000-000000000001"
+	const payloadSize = (1 << 20) + 128
+	var received int
+	ingestion := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "gateway body read failed: "+err.Error(), http.StatusRequestEntityTooLarge)
+			return
+		}
+		received = len(body)
+		w.WriteHeader(http.StatusAccepted)
+	})
+	handler := NewHandler(Config{OTLPIngestionHandler: ingestion}, &fakeRepository{}, testLogger())
+	request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+workspaceID+"/v1/metrics", strings.NewReader(strings.Repeat("x", payloadSize)))
+	request.Header.Set("Authorization", "Bearer workload-token")
+	request.Header.Set("Content-Type", "application/x-protobuf")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("HTTP status = %d, want 202; body=%s", response.Code, response.Body.String())
+	}
+	if received != payloadSize {
+		t.Fatalf("gateway received %d bytes, want %d", received, payloadSize)
+	}
+}
+
+func TestOTLPIngestionRouteIsNotRegisteredWhenDisabled(t *testing.T) {
+	handler := NewHandler(Config{}, &fakeRepository{}, testLogger())
+	request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/00000000-0000-4000-8000-000000000001/v1/metrics", strings.NewReader("{}"))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("HTTP status = %d, want 404", response.Code)
+	}
+}
