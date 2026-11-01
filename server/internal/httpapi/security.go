@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/base64"
 	"net"
 	"net/http"
 	"strings"
@@ -186,7 +187,7 @@ func withSubjectRateLimit(limit int, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		key := "subject:" + principal.Issuer + "|" + principal.Subject
+		key := "subject:" + base64.RawURLEncoding.EncodeToString([]byte(principal.Issuer)) + "." + base64.RawURLEncoding.EncodeToString([]byte(principal.Subject))
 		if !limiter.allow([]string{key}, time.Now()) {
 			w.Header().Set("Retry-After", "60")
 			writeError(w, r, http.StatusTooManyRequests, "rate_limit_exceeded", "The authenticated subject request limit has been reached; retry shortly")
