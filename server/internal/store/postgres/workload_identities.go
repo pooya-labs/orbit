@@ -73,20 +73,45 @@ func (r *Repository) SetWorkloadWorkspaceGrant(ctx context.Context,in store.Work
  return nil
 }
 
-func (r *Repository) AuthorizeWorkloadTelemetry(ctx context.Context,issuer,subject,workspaceID,signal string)(store.WorkloadIdentity,error){
- if err:=validateWorkloadPrincipal(issuer,subject);err!=nil{return store.WorkloadIdentity{},err}
- if !workspaceIDPattern.MatchString(workspaceID)||!workloadSignalPattern.MatchString(signal){return store.WorkloadIdentity{},store.ErrWorkloadAuthorizationDenied}
- var out store.WorkloadIdentity
- err:=r.pool.QueryRow(ctx,`
- SELECT wi.id::text,wi.issuer,wi.subject,wi.display_name,wi.status,wi.expires_at,wi.created_at,wi.updated_at,wi.revoked_at
- FROM workload_identities wi JOIN workload_workspace_grants wg ON wg.workload_identity_id=wi.id
- WHERE wi.issuer=$1 AND wi.subject=$2 AND wi.status='active'
- AND (wi.expires_at IS NULL OR wi.expires_at>NOW())
- AND wg.workspace_id=$3::uuid AND wg.signal=$4 AND wg.revoked_at IS NULL
- `,issuer,subject,workspaceID,signal).Scan(&out.ID,&out.Issuer,&out.Subject,&out.DisplayName,&out.Status,&out.ExpiresAt,&out.CreatedAt,&out.UpdatedAt,&out.RevokedAt)
- if errors.Is(err,pgx.ErrNoRows){return store.WorkloadIdentity{},store.ErrWorkloadAuthorizationDenied}
- if err!=nil{return store.WorkloadIdentity{},fmt.Errorf("authorize workload telemetry: %w",err)}
- return out,nil
+func (r *Repository) AuthorizeWorkloadTelemetry(ctx context.Context, issuer, subject, workspaceID, signal string) (store.WorkloadIdentity, error) {
+	if err := validateWorkloadPrincipal(issuer, subject); err != nil {
+		return store.WorkloadIdentity{}, err
+	}
+	if !workspaceIDPattern.MatchString(workspaceID) || !workloadSignalPattern.MatchString(signal) {
+		return store.WorkloadIdentity{}, store.ErrWorkloadAuthorizationDenied
+	}
+
+	var out store.WorkloadIdentity
+	err := r.pool.QueryRow(ctx, `
+		SELECT wi.id::text, wi.issuer, wi.subject, wi.display_name, wi.status,
+		       wi.expires_at, wi.created_at, wi.updated_at, wi.revoked_at
+		FROM workload_identities wi
+		JOIN workload_workspace_grants wg ON wg.workload_identity_id = wi.id
+		WHERE wi.issuer = $1 AND wi.subject = $2 AND wi.status = 'active'
+		  AND (wi.expires_at IS NULL OR wi.expires_at > NOW())
+		  AND wg.workspace_id = $3::uuid AND wg.signal = $4 AND wg.revoked_at IS NULL
+	`, issuer, subject, workspaceID, signal).Scan(
+		&out.ID, &out.Issuer, &out.Subject, &out.DisplayName, &out.Status,
+		&out.ExpiresAt, &out.CreatedAt, &out.UpdatedAt, &out.RevokedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Persist a minimal denial event. Do not store bearer tokens, payloads,
+		// or caller-supplied tenant attributes in the audit trail.
+		_, auditErr := r.pool.Exec(ctx, `
+			INSERT INTO workload_identity_audit_events (
+				workspace_id, actor_issuer, actor_subject, action, details
+			) VALUES ($1::uuid, $2, $3, 'workload.authorization.denied',
+				jsonb_build_object('signal', $4, 'reason', 'identity_or_grant_not_authorized'))
+		`, workspaceID, issuer, subject, signal)
+		if auditErr != nil {
+			return store.WorkloadIdentity{}, fmt.Errorf("audit denied workload authorization: %w", auditErr)
+		}
+		return store.WorkloadIdentity{}, store.ErrWorkloadAuthorizationDenied
+	}
+	if err != nil {
+		return store.WorkloadIdentity{}, fmt.Errorf("authorize workload telemetry: %w", err)
+	}
+	return out, nil
 }
 
 func (r *Repository) SetWorkloadIdentityStatus(ctx context.Context,id,actorIssuer,actorSubject,status string)error{
