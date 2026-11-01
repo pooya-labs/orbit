@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
-	"sync"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
