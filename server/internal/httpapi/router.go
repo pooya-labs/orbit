@@ -314,7 +314,7 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 			result.Warnings = append(result.Warnings, "PostgreSQL resource attribute persistence unavailable")
 		} else if len(result.Attributes) > 0 {
 			if persistErr := repository.UpdateTelemetryServiceResourceAttributes(ctx, service, result.Attributes, result.AttributeSources); persistErr != nil {
-				if strings.Contains(persistErr.Error(), "telemetry service not found") {
+				if errors.Is(persistErr, store.ErrTelemetryServiceNotFound) {
 					writeError(w, r, http.StatusNotFound, "service_not_found", "The service is not present in the persisted telemetry catalog")
 					return
 				}
