@@ -123,3 +123,10 @@ PR #50 is merged into `main` (squash merge commit `45680118f44c3cd35f64214072085
 The authorization decision is linearized when the shared PostgreSQL repository confirms the workload grant. An export that has already passed authorization and entered the Collector forwarder may complete even if identity revocation commits while that export is in flight. A request whose authorization begins after the revocation commit must be denied and must not reach the forwarder. The contract applies to OTLP/HTTP and OTLP/gRPC.
 
 This is not cancellation, rollback, or recall of telemetry already admitted to the Collector. Operators requiring stronger interruption semantics would need a separately designed and tested downstream cancellation/drain mechanism. The in-flight test covers identity revocation; grant/identity revocation latency under broader load and operational failure conditions remains part of the production hardening work. Production ingestion remains disabled until TLS/network policy, load/failure testing, real-provider PKCE, and runbooks are complete.
+
+
+## ADR 0002 — PR #53 gRPC dependency and timeout verification
+
+PR #53 is merged into `main` (squash merge commit `13cd7b4927b2259b10b5dd94824a70ee11541069`). CI run `41353731713` passed Go API tests/build, web typecheck/production build, and the local telemetry pipeline end-to-end smoke test. Tests verify that an unavailable shared rate-limit store fails closed with gRPC `Unavailable` and no Collector forwarding, ordinary Collector forwarding errors map to `Unavailable`, and a forward context deadline maps to `DeadlineExceeded`.
+
+PR #54 is merged with passing CI and makes the corresponding OTLP/HTTP deadline contract explicit as HTTP 504 Gateway Timeout. HTTP and gRPC now have explicit timeout status coverage. These deterministic tests do not establish complete production database/Collector outage, saturation, or recovery behavior.
