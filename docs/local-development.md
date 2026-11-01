@@ -57,6 +57,27 @@ Delete container data too (destructive):
 docker compose down -v
 ```
 
+## Start the optional observability backends
+
+The Collector, Prometheus, Loki, and Tempo are opt-in so a normal development session stays lightweight:
+
+```powershell
+docker compose --profile observability up -d prometheus loki tempo otel-collector
+```
+
+| Service | Local endpoint |
+| --- | --- |
+| OTLP/HTTP receiver | http://localhost:4318 |
+| OTLP/gRPC receiver | localhost:4317 |
+| Collector health | http://localhost:13133 |
+| Prometheus | http://localhost:9090 |
+| Loki readiness | http://localhost:3100/ready |
+| Tempo readiness | http://localhost:3200/ready |
+
+The Collector routes OTLP metrics to Prometheus, traces to Tempo, and logs to Loki. All ports bind to loopback and the backends have no authentication; do not expose them outside your development machine. Prometheus and Loki retain seven days of data in named volumes. Stop these services with `docker compose stop prometheus loki tempo otel-collector`.
+
+The Go API and the sample workload are not instrumented yet, and the dashboard does not query these backends. That is intentionally tracked as the next telemetry milestone.
+
 ## Connect the local dashboard to the API
 
 With `docker compose up --build` running, open the dashboard at `http://localhost:3000` and choose **Connect a source**. Enter `http://localhost:8080` and click **Test and connect**. ORBIT verifies `/api/v1/meta`, `/api/v1/services`, and `/api/v1/incidents` before switching the dashboard to API mode. The URL is saved in browser local storage and can be changed from the same source panel.
