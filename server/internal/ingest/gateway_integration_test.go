@@ -514,3 +514,58 @@ func TestAuthenticatedOTLPGatewaysRejectOversizedRequestsForEverySignal(t *testi
 		})
 	}
 }
+
+
+func TestSharedWorkloadRateLimitIsAtomicAcrossGatewayInstancesAndTransports(t *testing.T) {
+	repository, workspaceA, _, _, verifier := openGatewayIntegrationRepository(t)
+	authorizer, err := NewAuthorizer(verifier, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpForwarder := &forwarderStub{}
+	httpGateway, err := NewHTTPGateway(authorizer, httpForwarder, HTTPGatewayConfig{
+		RequestsPerMinute: 1,
+		ForwardTimeout: 2 * time.Second,
+		RateLimitStore: repository,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grpcForwarder := &grpcForwarderStub{}
+	grpcGateway := &GRPCGateway{
+		authorizer: authorizer,
+		forwarder: grpcForwarder,
+		limiter: newWorkspaceRateLimiter(1),
+		sharedLimiter: repository,
+		timeout: 2 * time.Second,
+		concurrency: make(chan struct{}, maxConcurrentGRPCExports),
+	}
+
+	payload, err := proto.Marshal(integrationOTLPRequest(t, "metrics"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+workspaceA.ID+"/v1/metrics", bytes.NewReader(payload))
+	request.Header.Set("Authorization", "Bearer integration-workload-token")
+	request.Header.Set("Content-Type", "application/x-protobuf")
+	response := httptest.NewRecorder()
+	httpGateway.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("first gateway HTTP request status = %d, want 200; body=%s", response.Code, response.Body.String())
+	}
+	if httpForwarder.calls != 1 {
+		t.Fatalf("first gateway Collector calls = %d, want 1", httpForwarder.calls)
+	}
+
+	// A separate gateway instance and transport must observe the same
+	// PostgreSQL-backed identity/workspace/signal rate-limit window.
+	err = callIntegrationGRPCExport(grpcGateway, workspaceA.ID, "metrics")
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("second gateway gRPC code = %s, want ResourceExhausted; err=%v", status.Code(err), err)
+	}
+	if grpcForwarder.metricsCalls != 0 || grpcForwarder.logsCalls != 0 || grpcForwarder.tracesCalls != 0 {
+		t.Fatalf("rate-limited gRPC request reached Collector: metrics=%d logs=%d traces=%d",
+			grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
+	}
+}
