@@ -192,41 +192,37 @@ func TestSharedRateLimitWindowUsesAtomicCountersAndExpiresOldBuckets(t *testing.
 		t.Fatalf("unexpected shared counts: first=%d second=%d other=%d", first, second, other)
 	}
 
-	// Multiple concurrent API instances must still receive unique atomic counts.
+	// Multiple concurrent API instances must not lose counter increments. Sum
+	// across the two adjacent minute buckets so a test that crosses a minute
+	// boundary remains deterministic.
 	const concurrentRequests = 24
 	concurrentKey := fmt.Sprintf("%064x", time.Now().UnixNano()+14)
-	counts := make(chan int64, concurrentRequests)
-	errors := make(chan error, concurrentRequests)
 	var workers sync.WaitGroup
+	errors := make(chan error, concurrentRequests)
 	for range concurrentRequests {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
-			count, incrementErr := repository.IncrementRateLimitWindow(ctx, concurrentKey)
+			_, incrementErr := repository.IncrementRateLimitWindow(ctx, concurrentKey)
 			if incrementErr != nil {
 				errors <- incrementErr
-				return
 			}
-			counts <- count
 		}()
 	}
 	workers.Wait()
-	close(counts)
 	close(errors)
 	for incrementErr := range errors {
 		t.Fatalf("concurrent shared increment: %v", incrementErr)
 	}
-	seenCounts := make(map[int64]struct{}, concurrentRequests)
-	for count := range counts {
-		seenCounts[count] = struct{}{}
+	var concurrentTotal int64
+	if err := repository.pool.QueryRow(ctx,
+		"SELECT COALESCE(SUM(request_count), 0) FROM api_rate_limit_windows WHERE key_hash = $1",
+		concurrentKey,
+	).Scan(&concurrentTotal); err != nil {
+		t.Fatalf("read concurrent counter total: %v", err)
 	}
-	if len(seenCounts) != concurrentRequests {
-		t.Fatalf("concurrent counter returned %d unique counts, want %d", len(seenCounts), concurrentRequests)
-	}
-	for expected := int64(1); expected <= concurrentRequests; expected++ {
-		if _, ok := seenCounts[expected]; !ok {
-			t.Fatalf("concurrent counter omitted atomic value %d", expected)
-		}
+	if concurrentTotal != concurrentRequests {
+		t.Fatalf("concurrent counter total = %d, want %d", concurrentTotal, concurrentRequests)
 	}
 
 	var oldRows int
