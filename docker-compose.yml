@@ -71,8 +71,6 @@ services:
     # Raw OTLP receivers are reachable only from the isolated Docker network.
     # The authenticated gateway will be the only production ingress path.
     ports:
-      - "127.0.0.1:9464:9464"
-      - "127.0.0.1:13133:13133"
     networks:
       - telemetry-internal
     depends_on:
@@ -94,7 +92,6 @@ services:
       - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - orbit-prometheus-data:/prometheus
     ports:
-      - "127.0.0.1:9090:9090"
     networks:
       - telemetry-internal
     depends_on:
@@ -110,7 +107,6 @@ services:
       - ./deploy/observability/loki.yaml:/etc/loki/local-config.yaml:ro
       - orbit-loki-data:/loki
     ports:
-      - "127.0.0.1:3100:3100"
     networks:
       - telemetry-internal
 
@@ -123,7 +119,6 @@ services:
       - ./deploy/observability/tempo.yaml:/etc/tempo.yaml:ro
       - orbit-tempo-data:/var/tempo
     ports:
-      - "127.0.0.1:3200:3200"
     networks:
       - telemetry-internal
 
@@ -136,7 +131,6 @@ services:
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     ports:
-      - "127.0.0.1:8081:8081"
     networks:
       - telemetry-internal
     depends_on:
@@ -148,6 +142,23 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
+
+  telemetry-smoke:
+    image: python:3.13-alpine
+    profiles: ["observability"]
+    working_dir: /workspace
+    entrypoint: ["python"]
+    volumes:
+      - ./scripts:/workspace/scripts:ro
+    networks:
+      - telemetry-internal
+    depends_on:
+      otel-collector:
+        condition: service_started
+      telemetry-demo:
+        condition: service_started
+      api:
+        condition: service_started
 
 networks:
   telemetry-internal:
