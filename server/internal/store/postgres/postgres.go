@@ -327,7 +327,7 @@ func (r *Repository) UpdateTelemetryServiceResourceAttributes(
 		FOR UPDATE
 	`, name).Scan(&serviceID, &existingJSON)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("telemetry service not found")
+		return store.ErrTelemetryServiceNotFound
 	}
 	if err != nil {
 		return fmt.Errorf("read telemetry service for attribute update: %w", err)
