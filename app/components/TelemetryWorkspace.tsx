@@ -15,6 +15,7 @@ import {
   listTelemetryTraces,
   listTelemetryServices,
 } from "../../lib/orbit/client";
+import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../../lib/orbit/i18n";
 import type {
   TelemetryLogsResponse,
   TelemetryMetricsResponse,
@@ -32,17 +33,17 @@ const windows: { value: TelemetryWindow; label: string }[] = [
   { value: "24h", label: "24 hours" },
 ];
 
-function formatClock(timestamp: number | string): string {
+function formatClock(timestamp: number | string, language: Language): string {
   const numericTimestamp = typeof timestamp === "string" ? Number(timestamp) : timestamp;
   const value = typeof timestamp === "number"
     ? timestamp
     : timestamp.trim() !== "" && Number.isFinite(numericTimestamp)
       ? numericTimestamp
       : Date.parse(timestamp);
-  if (!Number.isFinite(value)) return "Time unavailable";
+  if (!Number.isFinite(value)) return t(language, "timeUnavailable");
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Time unavailable";
-  return new Intl.DateTimeFormat(undefined, {
+  if (Number.isNaN(date.getTime())) return t(language, "timeUnavailable");
+  return new Intl.DateTimeFormat(formatLocale(language), {
     month: "short",
     day: "2-digit",
     hour: "2-digit",
@@ -51,10 +52,11 @@ function formatClock(timestamp: number | string): string {
   }).format(date);
 }
 
-function formatRate(value: number): string {
+function formatRate(value: number, language: Language): string {
   if (!Number.isFinite(value)) return "—";
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)}k`;
-  return value.toFixed(value >= 10 ? 1 : 2);
+  const formatter = new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: value >= 10 ? 1 : 2, minimumFractionDigits: value >= 10 ? 1 : 2 });
+  if (Math.abs(value) >= 1000) return `${formatter.format(value / 1000)}k`;
+  return formatter.format(value);
 }
 
 function nanoTimestamp(value: string): number {
@@ -72,11 +74,11 @@ function TelemetryEmpty({ title, message }: { title: string; message: string }) 
   );
 }
 
-function TelemetryLoading() {
+function TelemetryLoading({ language }: { language: Language }) {
   return (
     <div className="telemetry-loading" role="status" aria-live="polite">
       <span className="telemetry-spinner" />
-      <span>Querying telemetry backends…</span>
+      <span>{t(language, "liveQuery")} {language === "fa" ? "از زیرساخت‌های تله‌متری…" : "telemetry backends…"}</span>
     </div>
   );
 }
@@ -84,10 +86,13 @@ function TelemetryLoading() {
 export default function TelemetryWorkspace({
   view,
   apiBaseUrl,
+  language,
 }: {
   view: TelemetryView;
   apiBaseUrl: string;
+  language: Language;
 }) {
+  const tr = (key: TranslationKey) => t(language, key);
   const [windowRange, setWindowRange] = useState<TelemetryWindow>("1h");
   const [selectedService, setSelectedService] = useState("orbit-telemetry-demo");
   const [discoveredServices, setDiscoveredServices] = useState<DiscoveredTelemetryService[]>([]);
@@ -101,6 +106,7 @@ export default function TelemetryWorkspace({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const windowOptions = windows.map((item) => ({ ...item, label: language === "fa" ? (item.value === "15m" ? "۱۵ دقیقه" : item.value === "1h" ? "۱ ساعت" : item.value === "6h" ? "۶ ساعت" : "۲۴ ساعت") : item.label }));
 
 
   useEffect(() => {
@@ -125,7 +131,7 @@ export default function TelemetryWorkspace({
       } catch (cause) {
         if (controller.signal.aborted) return;
         if (mounted) {
-          setServiceError(cause instanceof Error ? cause.message : "Unable to discover telemetry services.");
+          setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت فهرست سرویس‌ها ناموفق بود." : "Unable to discover telemetry services.");
           setServiceWarnings([]);
         }
       } finally {
@@ -140,7 +146,7 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [windowRange, apiBaseUrl, reloadKey]);
+  }, [windowRange, apiBaseUrl, reloadKey, language]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -176,7 +182,7 @@ export default function TelemetryWorkspace({
       } catch (cause) {
         if (controller.signal.aborted) return;
         if (mounted) {
-          setError(cause instanceof Error ? cause.message : "Unable to query telemetry.");
+          setError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت داده‌های تله‌متری ناموفق بود." : "Unable to query telemetry.");
         }
       } finally {
         if (mounted) {
@@ -194,7 +200,7 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService]);
+  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language]);
 
   const metricSamples = useMemo(() => {
     if (!metrics) return [];
@@ -249,17 +255,17 @@ export default function TelemetryWorkspace({
             {view === "Metrics" ? <Activity size={18} /> : view === "Logs" ? <FileText size={18} /> : <Workflow size={18} />}
           </span>
           <div>
-            <h2 id="telemetry-title">{view}</h2>
-            <p>Live query · {backend} · {selectedService}</p>
+            <h2 id="telemetry-title">{navLabel(language, view)}</h2>
+            <p>{tr("liveQuery")} · {backend} · {selectedService}</p>
           </div>
         </div>
         <label className="telemetry-service-select">
-          <span>SERVICE</span>
+          <span>{tr("service")}</span>
           <select
             value={selectedService}
             onChange={(event) => setSelectedService(event.target.value)}
             disabled={serviceLoading || discoveredServices.length === 0}
-            aria-label="Select telemetry service"
+            aria-label={tr("selectService")}
           >
             {discoveredServices.length > 0
               ? discoveredServices.map((service) => (
@@ -270,67 +276,67 @@ export default function TelemetryWorkspace({
               : <option value={selectedService}>{selectedService} · default</option>}
           </select>
           <small>
-            {serviceLoading ? "Discovering services…" :
-              discoveredServices.length > 0 ? `${discoveredServices.length} discovered` : "No discovered services"}
+            {serviceLoading ? tr("discoveringServices") :
+              discoveredServices.length > 0 ? `${discoveredServices.length} ${tr("discovered")}` : tr("noDiscoveredServices")}
           </small>
         </label>
         <div className="telemetry-controls">
-          <div className="range-switcher" role="group" aria-label="Telemetry time range">
-            {windows.map((item) => (
+          <div className="range-switcher" role="group" aria-label={tr("windowLabel")}>
+            {windowOptions.map((item) => (
               <button key={item.value} className={windowRange === item.value ? "selected" : ""} aria-pressed={windowRange === item.value} onClick={() => setWindowRange(item.value)}>
                 {item.label}
               </button>
             ))}
           </div>
-          <button className="icon-button" onClick={() => setReloadKey((value) => value + 1)} disabled={refreshing} aria-label="Refresh telemetry" title="Refresh telemetry">
+          <button className="icon-button" onClick={() => setReloadKey((value) => value + 1)} disabled={refreshing} aria-label={tr("refresh")} title={tr("refresh")}>
             <RefreshCw size={15} className={refreshing ? "telemetry-refreshing" : ""} />
           </button>
         </div>
       </div>
 
       <div className="telemetry-meta-row">
-        <span><i className="telemetry-live-dot" /> SOURCE: {backend}</span>
-        <span>{count} {view === "Metrics" ? "points" : view === "Logs" ? "log entries" : "traces"}</span>
-        <span><Clock3 size={12} /> {queriedAt ? `Queried ${formatClock(queriedAt)}` : "Waiting for first query"}</span>
+        <span><i className="telemetry-live-dot" /> {tr("sourceLabel")}: {backend}</span>
+        <span>{count} {view === "Metrics" ? tr("points") : view === "Logs" ? tr("logEntries") : tr("tracesCount")}</span>
+        <span><Clock3 size={12} /> {queriedAt ? `${tr("queried")} ${formatClock(queriedAt, language)}` : tr("waitingFirstQuery")}</span>
       </div>
 
       {(serviceError || serviceWarnings.length > 0) && (
         <div className="telemetry-service-warning" role="status">
           <AlertCircle size={14} />
-          <span>{serviceError || `Partial service discovery: ${serviceWarnings.join(", ")}`}</span>
-          <button className="text-action" onClick={() => setReloadKey((value) => value + 1)}>Retry</button>
+          <span>{serviceError || `${language === "fa" ? "شناسایی سرویس‌ها ناقص است:" : "Partial service discovery:"} ${serviceWarnings.join(", ")}`}</span>
+          <button className="text-action" onClick={() => setReloadKey((value) => value + 1)}>{tr("retry")}</button>
         </div>
       )}
 
       {error && (
         <div className="telemetry-error" role="alert">
           <AlertCircle size={16} />
-          <div><strong>Telemetry query failed</strong><span>{error}</span></div>
-          <button className="text-action" onClick={() => setReloadKey((value) => value + 1)}>Retry</button>
+          <div><strong>{tr("queryFailed")}</strong><span>{error}</span></div>
+          <button className="text-action" onClick={() => setReloadKey((value) => value + 1)}>{tr("retry")}</button>
         </div>
       )}
 
       {view === "Metrics" && (
         <div className="panel telemetry-content-panel">
-          {loading && !metrics ? <TelemetryLoading /> : metricSamples.length === 0 ? (
-            <TelemetryEmpty title="No metric samples in this window" message={`No request-rate samples were found for ${selectedService} in this window. The current API exposes the ORBIT demo request counter.`} />
+          {loading && !metrics ? <TelemetryLoading language={language} /> : metricSamples.length === 0 ? (
+            <TelemetryEmpty title={tr("noMetricSamplesTitle")} message={language === "fa" ? tr("noMetricSamplesMessage").replace("این سرویس", selectedService) : tr("noMetricSamplesMessage").replace("this service", selectedService)} />
           ) : (
             <>
               <div className="telemetry-stat-row">
-                <div><span className="telemetry-kicker">REQUEST RATE</span><strong>{formatRate(metricSamples[metricSamples.length - 1].value)}<small> req/s</small></strong><p>Latest value returned by Prometheus</p></div>
-                <div className="telemetry-stat-secondary"><span className="telemetry-kicker">SAMPLES</span><strong>{metricSamples.length}</strong><p>Across {windowRange}</p></div>
-                <div className="telemetry-stat-secondary"><span className="telemetry-kicker">QUERY STEP</span><strong>{metrics?.step ?? "—"}</strong><p>Prometheus resolution</p></div>
+                <div><span className="telemetry-kicker">{tr("requestRate")}</span><strong>{formatRate(metricSamples[metricSamples.length - 1].value, language)}<small> req/s</small></strong><p>{tr("latestPrometheus")}</p></div>
+                <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("samples")}</span><strong>{metricSamples.length}</strong><p>{tr("acrossWindow")} {windowRange}</p></div>
+                <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("queryStep")}</span><strong>{metrics?.step ?? "—"}</strong><p>{tr("prometheusResolution")}</p></div>
               </div>
               <div className="telemetry-chart">
                 {chartPoints ? (
-                  <svg viewBox="0 0 600 120" role="img" aria-label="Request rate over the selected time window">
+                  <svg viewBox="0 0 600 120" role="img" aria-label={`${tr("requestRate")} · ${windowRange}`}>
                     <defs><linearGradient id="telemetryMetricFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#65d9c1" stopOpacity=".2" /><stop offset="100%" stopColor="#65d9c1" stopOpacity="0" /></linearGradient></defs>
                     <path d={`M ${chartPoints.replace(/ /g, " L ")} L 592 116 L 8 116 Z`} fill="url(#telemetryMetricFill)" />
                     <polyline points={chartPoints} fill="none" stroke="#65d9c1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                ) : <TelemetryEmpty title="Not enough samples to draw a trend" message="Prometheus returned a single point. More scrapes will create a trend line." />}
+                ) : <TelemetryEmpty title={tr("notEnoughSamples")} message={tr("singleSample")} />}
               </div>
-              <div className="telemetry-data-footer"><span>Query: <code>{metrics?.query}</code></span><span>Window: {windowRange}</span></div>
+              <div className="telemetry-data-footer"><span>{tr("queryLabel")}: <code>{metrics?.query}</code></span><span>{tr("windowLabel")}: {windowRange}</span></div>
             </>
           )}
         </div>
@@ -338,16 +344,16 @@ export default function TelemetryWorkspace({
 
       {view === "Logs" && (
         <div className="panel telemetry-content-panel">
-          {loading && !logs ? <TelemetryLoading /> : logRows.length === 0 ? (
-            <TelemetryEmpty title="No logs found" message={`No logs were found for ${selectedService} in this window.`} />
+          {loading && !logs ? <TelemetryLoading language={language} /> : logRows.length === 0 ? (
+            <TelemetryEmpty title={tr("noLogsTitle")} message={language === "fa" ? tr("noLogsMessage").replace("این سرویس", selectedService) : tr("noLogsMessage").replace("this service", selectedService)} />
           ) : (
             <div className="telemetry-log-list">
               {logRows.map((entry, index) => (
                 <article className="telemetry-log-row" key={`${entry.timestamp}-${index}`}>
-                  <time>{formatClock(Number(entry.timestamp) / 1_000_000)}</time>
-                  <span className="telemetry-log-level">INFO</span>
+                  <time>{formatClock(Number(entry.timestamp) / 1_000_000, language)}</time>
+                  <span className="telemetry-log-level">{language === "fa" ? "اطلاعات" : "INFO"}</span>
                   <code>{entry.line}</code>
-                  <small>{entry.labels.service_name ?? "unknown-service"}</small>
+                  <small>{entry.labels.service_name ?? (language === "fa" ? "سرویس نامشخص" : "unknown-service")}</small>
                 </article>
               ))}
             </div>
@@ -357,21 +363,21 @@ export default function TelemetryWorkspace({
 
       {view === "Traces" && (
         <div className="panel telemetry-content-panel">
-          {loading && !traces ? <TelemetryLoading /> : traceRows.length === 0 ? (
-            <TelemetryEmpty title="No traces found" message={`No traces were found for ${selectedService} in this window.`} />
+          {loading && !traces ? <TelemetryLoading language={language} /> : traceRows.length === 0 ? (
+            <TelemetryEmpty title={tr("noTracesTitle")} message={language === "fa" ? tr("noTracesMessage").replace("این سرویس", selectedService) : tr("noTracesMessage").replace("this service", selectedService)} />
           ) : (
             <div className="telemetry-trace-list">
               {traceRows.map((trace) => (
                 <article className="telemetry-trace-row" key={trace.traceID}>
                   <div className="telemetry-trace-icon"><Workflow size={16} /></div>
                   <div className="telemetry-trace-main">
-                    <strong>{trace.rootTraceName || "Trace"}</strong>
-                    <span>{trace.rootServiceName || "unknown-service"}</span>
+                    <strong>{trace.rootTraceName || (language === "fa" ? "ردیابی" : "Trace")}</strong>
+                    <span>{trace.rootServiceName || (language === "fa" ? "سرویس نامشخص" : "unknown-service")}</span>
                     <code>{trace.traceID}</code>
                   </div>
                   <div className="telemetry-trace-side">
-                    <strong>{Number.isFinite(trace.durationMs) ? `${trace.durationMs.toFixed(1)} ms` : "—"}</strong>
-                    <span>{trace.startTimeUnixNano ? formatClock(nanoTimestamp(trace.startTimeUnixNano)) : "Time unavailable"}</span>
+                    <strong>{Number.isFinite(trace.durationMs) ? `${new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 1 }).format(trace.durationMs)} ms` : "—"}</strong>
+                    <span>{trace.startTimeUnixNano ? formatClock(nanoTimestamp(trace.startTimeUnixNano), language) : t(language, "timeUnavailable")}</span>
                   </div>
                 </article>
               ))}
@@ -381,8 +387,8 @@ export default function TelemetryWorkspace({
       )}
 
       <div className="telemetry-source-note">
-        <span>Data source: {backend}</span>
-        <span>Auto-refresh every 30 seconds · API timestamps preserved</span>
+        <span>{tr("dataSource")}: {backend}</span>
+        <span>{tr("autoRefresh")}</span>
       </div>
     </section>
   );

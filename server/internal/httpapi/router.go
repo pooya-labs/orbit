@@ -130,12 +130,80 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 		defer cancel()
 		result, err := cfg.Telemetry.Services(ctx, window)
 		if err != nil {
-			writeTelemetryError(w, r, logger, "Telemetry service discovery", err)
+			logger.Warn("telemetry discovery failed; attempting persisted catalog fallback", "error", err, "request_id", r.Header.Get("X-Request-ID"))
+			if repository == nil {
+				writeTelemetryError(w, r, logger, "Telemetry service discovery", err)
+				return
+			}
+			persisted, listErr := repository.ListTelemetryServices(ctx, 250)
+			if listErr != nil {
+				logger.Error("read persisted telemetry catalog after discovery failure", "error", listErr, "request_id", r.Header.Get("X-Request-ID"))
+				writeError(w, r, http.StatusServiceUnavailable, "catalog_query_failed", "Telemetry service catalog is temporarily unavailable")
+				return
+			}
+			if len(persisted) == 0 {
+				writeTelemetryError(w, r, logger, "Telemetry service discovery", err)
+				return
+			}
+			result = telemetry.ServiceDiscoveryResult{
+				Source:        "postgres_catalog",
+				Window:        window.Name,
+				QueriedAt:     time.Now().UTC(),
+				SourcesQueried: []string{},
+				Warnings:      []string{"Telemetry backends are unavailable; showing the last known PostgreSQL catalog"},
+				Data:          make([]telemetry.DiscoveredService, 0, len(persisted)),
+			}
+			for _, item := range persisted {
+				result.Data = append(result.Data, telemetry.DiscoveredService{
+					ID:                 item.ID,
+					Name:               item.Name,
+					Sources:            item.Sources,
+					FirstSeenAt:        item.FirstSeenAt,
+					LastSeenAt:         item.LastSeenAt,
+					LastDiscoveredAt:   item.LastDiscoveredAt,
+					ResourceAttributes: item.ResourceAttributes,
+				})
+			}
+			writeJSON(w, http.StatusOK, result)
 			return
+		}
+		if repository == nil {
+			result.Warnings = append(result.Warnings, "PostgreSQL catalog persistence unavailable")
+		} else {
+			observations := make([]store.TelemetryService, 0, len(result.Data))
+			for _, discovered := range result.Data {
+				observations = append(observations, store.TelemetryService{
+					Name:               discovered.Name,
+					Sources:            discovered.Sources,
+					ResourceAttributes: discovered.ResourceAttributes,
+				})
+			}
+			if _, persistErr := repository.UpsertTelemetryServices(ctx, observations); persistErr != nil {
+				logger.Error("persist telemetry service catalog failed", "error", persistErr, "request_id", r.Header.Get("X-Request-ID"))
+				writeError(w, r, http.StatusServiceUnavailable, "catalog_persistence_failed", "Telemetry service catalog is temporarily unavailable")
+				return
+			}
+			persisted, listErr := repository.ListTelemetryServices(ctx, 250)
+			if listErr != nil {
+				logger.Error("read persisted telemetry service catalog failed", "error", listErr, "request_id", r.Header.Get("X-Request-ID"))
+				writeError(w, r, http.StatusServiceUnavailable, "catalog_query_failed", "Telemetry service catalog is temporarily unavailable")
+				return
+			}
+			result.Data = make([]telemetry.DiscoveredService, 0, len(persisted))
+			for _, item := range persisted {
+				result.Data = append(result.Data, telemetry.DiscoveredService{
+					ID:                 item.ID,
+					Name:               item.Name,
+					Sources:            item.Sources,
+					FirstSeenAt:        item.FirstSeenAt,
+					LastSeenAt:         item.LastSeenAt,
+					LastDiscoveredAt:   item.LastDiscoveredAt,
+					ResourceAttributes: item.ResourceAttributes,
+				})
+			}
 		}
 		writeJSON(w, http.StatusOK, result)
 	})
-
 	mux.HandleFunc("GET /api/v1/telemetry/metrics", func(w http.ResponseWriter, r *http.Request) {
 		window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
 		if err != nil {

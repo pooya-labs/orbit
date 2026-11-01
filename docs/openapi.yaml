@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ORBIT API
-  version: 0.8.0
+  version: 0.9.0
   summary: Service inventory and bounded observability query API
   description: |
     ORBIT reads service and incident inventories from PostgreSQL and exposes
@@ -129,7 +129,7 @@ paths:
       tags: [Telemetry]
       operationId: discoverTelemetryServices
       summary: Discover service names across configured telemetry backends
-      description: Queries Prometheus, Loki, and Tempo concurrently, merges duplicate service names, and preserves backend provenance. Partial backend failures are returned as warnings when at least one backend succeeds.
+      description: Queries Prometheus, Loki, and Tempo concurrently, merges duplicate service names, and, when PostgreSQL is configured, persists observations and backend provenance before returning the active catalog. Services and source observations not seen for seven days are omitted. If every backend is unavailable, the API returns the last known PostgreSQL catalog with a warning when cached services exist. Without PostgreSQL, the response contains the current discovery result and a warning. Partial backend failures are returned as warnings when at least one backend succeeds.
       parameters:
         - in: query
           name: window
@@ -153,7 +153,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "503":
-          description: All configured telemetry backends are unavailable.
+          description: All telemetry backends are unavailable, or PostgreSQL catalog persistence/querying failed.
           content:
             application/json:
               schema:
@@ -322,7 +322,8 @@ components:
       properties:
         source:
           type: string
-          const: telemetry_backends
+          enum: [telemetry_backends, postgres_catalog]
+          description: postgres_catalog indicates a last-known-data fallback while all telemetry backends are unavailable.
         window:
           type: string
           enum: [15m, 1h, 6h, 24h]
@@ -344,13 +345,30 @@ components:
             type: object
             required: [name, sources]
             properties:
+              id:
+                type: string
+                format: uuid
               name:
                 type: string
+                pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
               sources:
                 type: array
+                uniqueItems: true
                 items:
                   type: string
                   enum: [prometheus, loki, tempo]
+              first_seen_at:
+                type: string
+                format: date-time
+              last_seen_at:
+                type: string
+                format: date-time
+              last_discovered_at:
+                type: string
+                format: date-time
+              resource_attributes:
+                type: object
+                additionalProperties: true
     TelemetryMetricsResponse:
       type: object
       required: [source, window, queried_at, query, step, data]

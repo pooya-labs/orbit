@@ -2,9 +2,13 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/pooya16pg-spec/orbit/server/internal/store"
+
 )
 
 func TestPostgresMigrationAndReadModels(t *testing.T) {
@@ -55,5 +59,52 @@ func TestPostgresMigrationAndReadModels(t *testing.T) {
 
 	if err := repository.Migrate(ctx); err != nil {
 		t.Fatalf("second migration run should be idempotent: %v", err)
+	}
+
+	name := fmt.Sprintf("catalog-test-%d", time.Now().UnixNano())
+	first, err := repository.UpsertTelemetryServices(ctx, []store.TelemetryService{{
+		Name: name,
+		Sources: []string{"prometheus", "loki"},
+		ResourceAttributes: map[string]any{"deployment.environment.name": "test"},
+	}})
+	if err != nil {
+		t.Fatalf("upsert telemetry service: %v", err)
+	}
+	if len(first) != 1 || first[0].ID == "" || first[0].FirstSeenAt.IsZero() || len(first[0].Sources) != 2 {
+		t.Fatalf("unexpected persisted telemetry service: %+v", first)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	second, err := repository.UpsertTelemetryServices(ctx, []store.TelemetryService{{
+		Name: name,
+		Sources: []string{"tempo"},
+		ResourceAttributes: map[string]any{"cloud.region": "test-region"},
+	}})
+	if err != nil {
+		t.Fatalf("upsert existing telemetry service: %v", err)
+	}
+	if len(second) != 1 || second[0].ID != first[0].ID || !second[0].FirstSeenAt.Equal(first[0].FirstSeenAt) {
+		t.Fatalf("upsert should preserve ID and first-seen timestamp: first=%+v second=%+v", first[0], second)
+	}
+
+	catalog, err := repository.ListTelemetryServices(ctx, 250)
+	if err != nil {
+		t.Fatalf("list persisted telemetry services: %v", err)
+	}
+	var found *store.TelemetryService
+	for index := range catalog {
+		if catalog[index].Name == name {
+			found = &catalog[index]
+			break
+		}
+	}
+	if found == nil || len(found.Sources) != 3 {
+		t.Fatalf("expected persisted catalog to retain all three observed sources; got %+v", found)
+	}
+	if found.ResourceAttributes["deployment.environment.name"] != "test" || found.ResourceAttributes["cloud.region"] != "test-region" {
+		t.Fatalf("expected resource attributes to merge across observations: %+v", found.ResourceAttributes)
+	}
+	if _, err := repository.pool.Exec(ctx, "DELETE FROM telemetry_services WHERE name = $1", name); err != nil {
+		t.Fatalf("clean up catalog test service: %v", err)
 	}
 }

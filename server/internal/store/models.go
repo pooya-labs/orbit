@@ -32,8 +32,20 @@ type Incident struct {
 	Source      string     `json:"source"`
 }
 
+type TelemetryService struct {
+	ID                  string         `json:"id"`
+	Name                string         `json:"name"`
+	Sources             []string       `json:"sources"`
+	FirstSeenAt         time.Time      `json:"first_seen_at"`
+	LastSeenAt          time.Time      `json:"last_seen_at"`
+	LastDiscoveredAt    time.Time      `json:"last_discovered_at"`
+	ResourceAttributes  map[string]any `json:"resource_attributes"`
+}
+
 type Repository interface {
 	Ping(ctx context.Context) error
+	UpsertTelemetryServices(ctx context.Context, services []TelemetryService) ([]TelemetryService, error)
+	ListTelemetryServices(ctx context.Context, limit int) ([]TelemetryService, error)
 	ListServices(ctx context.Context) ([]Service, error)
 	ListIncidents(ctx context.Context, status string) ([]Incident, error)
 	Close()

@@ -21,14 +21,14 @@ func TestCommaSeparatedOriginsEmpty(t *testing.T) {
 
 
 func TestLoadReadsOptionalTelemetryEndpoints(t *testing.T) {
-	t.Setenv("ORBIT_VERSION", "0.8.0")
+	t.Setenv("ORBIT_VERSION", "0.9.0")
 	t.Setenv("ORBIT_PROMETHEUS_URL", " http://prometheus:9090 ")
 	t.Setenv("ORBIT_LOKI_URL", "http://loki:3100")
 	t.Setenv("ORBIT_TEMPO_URL", "http://tempo:3200")
 
 	got := Load()
-	if got.Version != "0.8.0" {
-		t.Fatalf("version = %q, want 0.8.0", got.Version)
+	if got.Version != "0.9.0" {
+		t.Fatalf("version = %q, want 0.9.0", got.Version)
 	}
 	if got.PrometheusURL != "http://prometheus:9090" || got.LokiURL != "http://loki:3100" || got.TempoURL != "http://tempo:3200" {
 		t.Fatalf("unexpected telemetry URLs: %+v", got)

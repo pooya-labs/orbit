@@ -20,11 +20,47 @@ import (
 type fakeRepository struct {
 	services  []store.Service
 	incidents []store.Incident
+	catalog   []store.TelemetryService
 	pingErr   error
 	listErr   error
+	catalogErr error
 }
 
 func (f *fakeRepository) Ping(context.Context) error { return f.pingErr }
+
+func (f *fakeRepository) UpsertTelemetryServices(_ context.Context, services []store.TelemetryService) ([]store.TelemetryService, error) {
+	if f.catalogErr != nil {
+		return nil, f.catalogErr
+	}
+	now := time.Now().UTC()
+	f.catalog = append([]store.TelemetryService(nil), services...)
+	for index := range f.catalog {
+		item := &f.catalog[index]
+		if item.ID == "" {
+			item.ID = "catalog-" + item.Name
+		}
+		if item.FirstSeenAt.IsZero() {
+			item.FirstSeenAt = now
+		}
+		item.LastSeenAt = now
+		item.LastDiscoveredAt = now
+		if item.ResourceAttributes == nil {
+			item.ResourceAttributes = map[string]any{}
+		}
+	}
+	return f.catalog, nil
+}
+
+func (f *fakeRepository) ListTelemetryServices(_ context.Context, limit int) ([]store.TelemetryService, error) {
+	if f.catalogErr != nil {
+		return nil, f.catalogErr
+	}
+	if limit > 0 && len(f.catalog) > limit {
+		return append([]store.TelemetryService(nil), f.catalog[:limit]...), nil
+	}
+	return append([]store.TelemetryService(nil), f.catalog...), nil
+}
+
 func (f *fakeRepository) ListServices(context.Context) ([]store.Service, error) {
 	return f.services, f.listErr
 }
@@ -263,7 +299,8 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewHandler(Config{Telemetry: client}, &fakeRepository{}, testLogger())
+	repository := &fakeRepository{}
+	handler := NewHandler(Config{Telemetry: client}, repository, testLogger())
 
 	for _, path := range []string{
 		"/api/v1/telemetry/metrics?window=1h&service=orbit-telemetry-demo",
@@ -294,6 +331,51 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	}
 	if len(catalog.Data) != 1 || catalog.Data[0].Name != "orbit-telemetry-demo" || len(catalog.Data[0].Sources) != 3 {
 		t.Fatalf("unexpected merged service catalog: %+v", catalog)
+	}
+	if len(repository.catalog) != 1 || repository.catalog[0].Name != "orbit-telemetry-demo" || len(repository.catalog[0].Sources) != 3 {
+		t.Fatalf("expected service discovery to persist merged backend observations, got %+v", repository.catalog)
+	}
+	if catalog.Data[0].ID == "" || catalog.Data[0].FirstSeenAt.IsZero() || catalog.Data[0].LastDiscoveredAt.IsZero() {
+		t.Fatalf("expected persisted catalog metadata in response, got %+v", catalog.Data[0])
+	}
+}
+
+func TestTelemetryServiceDiscoveryFallsBackToPersistedCatalog(t *testing.T) {
+	failingBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "backend unavailable", http.StatusBadGateway)
+	}))
+	defer failingBackend.Close()
+
+	client, err := telemetry.NewClient(failingBackend.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	repository := &fakeRepository{catalog: []store.TelemetryService{{
+		ID:               "catalog-orbit-demo",
+		Name:             "orbit-telemetry-demo",
+		Sources:          []string{"prometheus", "loki", "tempo"},
+		FirstSeenAt:      now.Add(-time.Hour),
+		LastSeenAt:       now.Add(-time.Minute),
+		LastDiscoveredAt: now.Add(-time.Minute),
+		ResourceAttributes: map[string]any{"deployment.environment.name": "test"},
+	}}}
+	handler := NewHandler(Config{Telemetry: client}, repository, testLogger())
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/telemetry/services?window=1h", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("fallback status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var result telemetry.ServiceDiscoveryResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode persisted fallback: %v", err)
+	}
+	if result.Source != "postgres_catalog" || len(result.Data) != 1 || result.Data[0].Name != "orbit-telemetry-demo" {
+		t.Fatalf("unexpected persisted fallback response: %+v", result)
+	}
+	if len(result.Warnings) == 0 || result.Data[0].ID != "catalog-orbit-demo" || len(result.Data[0].Sources) != 3 {
+		t.Fatalf("fallback response omitted warning or persisted metadata: %+v", result)
 	}
 }
 

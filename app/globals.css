@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700;800&display=swap");
 
 :root {
   color-scheme: dark;
@@ -448,4 +448,63 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 @media (max-width: 700px) {
   .telemetry-service-select { width: 100%; max-width: none; }
   .telemetry-service-select select { height: 38px; }
+}
+
+
+/* v0.9.0 — Persian localization, RTL layout, and public creator attribution */
+.language-switch { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 6px; background: #0e151b; }
+.language-switch button { min-width: 32px; height: 25px; padding: 0 7px; border: 0; border-radius: 4px; color: #8796a0; background: transparent; font: 9px "DM Mono", monospace; }
+.language-switch button.selected { color: #c6e9df; background: #1a302d; }
+.profile-copy a, .owner-credit a { color: #8dcfbd; text-decoration: none; }
+.profile-copy a { font: 9px "DM Mono", monospace; }
+.profile-copy a:hover, .owner-credit a:hover { color: #b1f0df; text-decoration: underline; }
+.owner-credit { color: #87959e; }
+.owner-credit strong { color: #a8b6bd; }
+.app-shell[dir="rtl"] { direction: rtl; font-family: "Vazirmatn", Tahoma, sans-serif; }
+.app-shell[dir="rtl"] button,
+.app-shell[dir="rtl"] input,
+.app-shell[dir="rtl"] select { font-family: inherit; }
+.app-shell[dir="rtl"] .sidebar { inset: 0 0 0 auto; border-right: 0; border-left: 1px solid var(--line-soft); }
+.app-shell[dir="rtl"] .main-panel { margin-left: 0; margin-right: 246px; }
+.app-shell[dir="rtl"] .nav-item { text-align: right; }
+.app-shell[dir="rtl"] .nav-item.active { box-shadow: inset -2px 0 0 var(--mint); }
+.app-shell[dir="rtl"] .workspace-switcher { text-align: right; }
+.app-shell[dir="rtl"] .nav-external { margin-left: 0; margin-right: auto; }
+.app-shell[dir="rtl"] .metric-sparkline { right: auto; left: 14px; }
+.app-shell[dir="rtl"] .metric-value span { margin-left: 0; margin-right: 2px; }
+.app-shell[dir="rtl"] .global-search { direction: rtl; }
+.app-shell[dir="rtl"] .global-search input { text-align: right; direction: rtl; }
+.app-shell[dir="rtl"] .chart-summary { margin-left: 0; margin-right: 34px; }
+.app-shell[dir="rtl"] .chart-legend { padding-left: 0; padding-right: 34px; }
+.app-shell[dir="rtl"] .chart-footnote { margin-left: 0; margin-right: auto; }
+.app-shell[dir="rtl"] .service-table-head,
+.app-shell[dir="rtl"] .service-row { direction: rtl; text-align: right; }
+.app-shell[dir="rtl"] .telemetry-log-row { direction: rtl; }
+.app-shell[dir="rtl"] .telemetry-log-row small { text-align: left; }
+.app-shell[dir="rtl"] .telemetry-trace-side { text-align: left; }
+.app-shell[dir="rtl"] .telemetry-meta-row,
+.app-shell[dir="rtl"] .telemetry-source-note { direction: rtl; }
+.app-shell[dir="rtl"] .telemetry-data-footer { direction: rtl; }
+.app-shell[dir="rtl"] .page-footer { flex-wrap: wrap; direction: rtl; letter-spacing: 0; font-family: "Vazirmatn", Tahoma, sans-serif; }
+.app-shell[dir="rtl"] .page-footer > span { gap: 8px; }
+.app-shell[dir="rtl"] .page-footer .footer-version { direction: ltr; }
+.app-shell[dir="rtl"] .telemetry-view-title p,
+.app-shell[dir="rtl"] .telemetry-kicker,
+.app-shell[dir="rtl"] .telemetry-log-row time,
+.app-shell[dir="rtl"] .telemetry-log-row code,
+.app-shell[dir="rtl"] .telemetry-trace-main code { font-family: "DM Mono", monospace; }
+.app-shell[dir="rtl"] .telemetry-service-select > span { letter-spacing: 0; font-family: "Vazirmatn", Tahoma, sans-serif; }
+.app-shell[dir="rtl"] .telemetry-service-select select { direction: rtl; font-family: "DM Mono", "Vazirmatn", monospace; }
+@media (max-width: 1050px) {
+  .app-shell[dir="rtl"] .main-panel { margin-right: 220px; }
+}
+@media (max-width: 760px) {
+  .app-shell[dir="rtl"] .sidebar { transform: translateX(100%); box-shadow: -18px 0 45px rgba(0,0,0,.35); }
+  .app-shell[dir="rtl"] .sidebar.sidebar-open { transform: translateX(0); }
+  .app-shell[dir="rtl"] .main-panel { margin: 0; }
+  .app-shell[dir="rtl"] .metric-sparkline { left: 10px; }
+  .app-shell[dir="rtl"] .chart-summary { margin-right: 24px; }
+  .app-shell[dir="rtl"] .chart-legend { padding-right: 24px; }
+  .app-shell[dir="rtl"] .telemetry-connect-prompt .button-primary { margin-left: 0; margin-right: 52px; }
+  .owner-credit { width: 100%; }
 }
