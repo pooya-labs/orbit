@@ -342,9 +342,9 @@ func (r *Repository) ListWorkspaceIncidentTimeline(
 	if err := r.pool.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1 FROM workspace_memberships
-			WHERE workspace_id = $1::uuid AND user_issuer = $3 AND user_subject = $4
+			WHERE workspace_id = $1::uuid AND user_issuer = $2 AND user_subject = $3
 		)
-	`, workspaceID, incidentID, actorIssuer, actorSubject).Scan(&member); err != nil {
+	`, workspaceID, actorIssuer, actorSubject).Scan(&member); err != nil {
 		return nil, fmt.Errorf("verify incident timeline membership: %w", err)
 	}
 	if !member {
