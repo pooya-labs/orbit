@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"strings"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -13,8 +14,9 @@ import (
 )
 
 type Config struct {
-	Version     string
-	Environment string
+	Version        string
+	Environment    string
+	AllowedOrigins []string
 }
 
 type statusResponse struct {
@@ -115,7 +117,41 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 	handler = withRequestLogging(logger, handler)
 	handler = withRequestID(handler)
 	handler = withRecovery(logger, handler)
+	handler = withCORS(cfg.AllowedOrigins, handler)
 	return handler
+}
+
+func withCORS(origins []string, next http.Handler) http.Handler {
+	allowed := make(map[string]struct{}, len(origins))
+	for _, origin := range origins {
+		origin = strings.TrimSpace(origin)
+		if origin != "" {
+			allowed[origin] = struct{}{}
+		}
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if r.Method == http.MethodOptions {
+			if _, ok := allowed[origin]; !ok || origin == "" {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, X-Request-ID")
+			w.Header().Set("Access-Control-Max-Age", "600")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if _, ok := allowed[origin]; ok && origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func validIncidentStatus(status string) bool {
