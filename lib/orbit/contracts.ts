@@ -99,7 +99,7 @@ export interface DiscoveredTelemetryService {
 }
 
 export interface TelemetryServicesResponse {
-  source: "telemetry_backends";
+  source: "telemetry_backends" | "postgres_catalog";
   window: TelemetryWindow;
   queried_at: string;
   sources_queried: TelemetryBackend[];
