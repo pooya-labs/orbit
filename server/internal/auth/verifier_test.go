@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"sync"
+	"strings"
 	"testing"
 	"time"
 )
@@ -21,6 +22,7 @@ type testOIDCServer struct {
 	mu     sync.RWMutex
 	jwks   []byte
 	issuer string
+	jwksStatus int
 }
 
 func newTestOIDCServer(t *testing.T, privateKey *rsa.PrivateKey, kid string) *testOIDCServer {
@@ -31,13 +33,18 @@ func newTestOIDCServer(t *testing.T, privateKey *rsa.PrivateKey, kid string) *te
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"issuer": state.issuer,
-			"jwks_uri": state.issuer + "/jwks",
+			"jwks_uri": strings.TrimRight(state.issuer, "/") + "/jwks",
 		})
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		state.mu.RLock()
 		body := append([]byte(nil), state.jwks...)
+		status := state.jwksStatus
 		state.mu.RUnlock()
+		if status != 0 {
+			http.Error(w, http.StatusText(status), status)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(body)
 	})
@@ -49,18 +56,27 @@ func newTestOIDCServer(t *testing.T, privateKey *rsa.PrivateKey, kid string) *te
 }
 
 func (s *testOIDCServer) setKey(t *testing.T, privateKey *rsa.PrivateKey, kid string) {
+	s.setKeyWithAlgorithm(t, privateKey, kid, true)
+}
+
+func (s *testOIDCServer) setKeyWithoutAlgorithm(t *testing.T, privateKey *rsa.PrivateKey, kid string) {
+	s.setKeyWithAlgorithm(t, privateKey, kid, false)
+}
+
+func (s *testOIDCServer) setKeyWithAlgorithm(t *testing.T, privateKey *rsa.PrivateKey, kid string, includeAlgorithm bool) {
 	t.Helper()
 	exponent := big.NewInt(int64(privateKey.PublicKey.E)).Bytes()
-	body, err := json.Marshal(map[string]any{
-		"keys": []map[string]any{{
-			"kty": "RSA",
-			"kid": kid,
-			"alg": "RS256",
-			"use": "sig",
-			"n": base64.RawURLEncoding.EncodeToString(privateKey.PublicKey.N.Bytes()),
-			"e": base64.RawURLEncoding.EncodeToString(exponent),
-		}},
-	})
+	key := map[string]any{
+		"kty": "RSA",
+		"kid": kid,
+		"use": "sig",
+		"n": base64.RawURLEncoding.EncodeToString(privateKey.PublicKey.N.Bytes()),
+		"e": base64.RawURLEncoding.EncodeToString(exponent),
+	}
+	if includeAlgorithm {
+		key["alg"] = "RS256"
+	}
+	body, err := json.Marshal(map[string]any{"keys": []map[string]any{key}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,6 +235,43 @@ func TestVerifierRejectsInvalidClaimsAndUntrustedHeaders(t *testing.T) {
 				t.Fatal("expected token to be rejected")
 			}
 		})
+	}
+}
+
+
+func TestVerifierSupportsIssuerWithTrailingSlashAndJWKSWithoutAlg(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer := newTestOIDCServer(t, key, "rotation-1")
+	issuer.issuer = strings.TrimRight(issuer.issuer, "/") + "/"
+	issuer.setKeyWithoutAlgorithm(t, key, "rotation-1")
+	verifier := issuer.verifier(t)
+	token := signedAccessToken(t, key, "rotation-1", validClaims(issuer.issuer), nil)
+	if _, err := verifier.Verify(t.Context(), token); err != nil {
+		t.Fatalf("Verify with exact trailing-slash issuer and JWKS key without alg: %v", err)
+	}
+}
+
+func TestVerifierRejectsExpiredJWKSWhenRefreshFails(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer := newTestOIDCServer(t, key, "rotation-1")
+	verifier := issuer.verifier(t)
+	token := signedAccessToken(t, key, "rotation-1", validClaims(issuer.issuer), nil)
+
+	verifier.mu.Lock()
+	verifier.expiresAt = time.Now().Add(-time.Second)
+	verifier.mu.Unlock()
+	issuer.mu.Lock()
+	issuer.jwksStatus = http.StatusServiceUnavailable
+	issuer.mu.Unlock()
+
+	if _, err := verifier.Verify(t.Context(), token); err == nil {
+		t.Fatal("must not verify using an expired JWKS after refresh failure")
 	}
 }
 
