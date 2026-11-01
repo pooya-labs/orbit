@@ -62,7 +62,7 @@ docker compose down -v
 The Collector, Prometheus, Loki, and Tempo are opt-in so a normal development session stays lightweight:
 
 ```powershell
-docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo
+docker compose --profile observability up -d postgres api prometheus loki tempo otel-collector telemetry-demo
 ```
 
 | Service | Local endpoint |
@@ -94,7 +94,7 @@ Allowed windows are `15m`, `1h`, `6h`, and `24h`. Log/trace service names are re
 
 With `docker compose up --build` running, open the dashboard at `http://localhost:3000` and choose **Connect a source**. Enter `http://localhost:8080` and click **Test and connect**. ORBIT verifies `/api/v1/meta`, `/api/v1/services`, and `/api/v1/incidents` before switching the dashboard to API mode. The URL is saved in browser local storage and can be changed from the same source panel.
 
-The Go API allows the GitHub Pages origin and local development origins through `ORBIT_ALLOWED_ORIGINS`. If you use a different dashboard origin, add that exact origin to the allowlist and restart the API. The API now exposes read-only metrics, log, and trace endpoints (documented below), but the dashboard deliberately hides sample metric cards while API mode is active until real telemetry rendering is implemented.
+The Go API allows the GitHub Pages origin and local development origins through `ORBIT_ALLOWED_ORIGINS`. If you use a different dashboard origin, add that exact origin to the allowlist and restart the API. The API now exposes read-only metrics, log, and trace endpoints (documented above), but the dashboard deliberately hides sample metric cards while API mode is active until real telemetry rendering is implemented.
 
 ## Run Go tests directly
 
