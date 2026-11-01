@@ -217,10 +217,14 @@ func TestUnknownRouteIsNotFound(t *testing.T) {
 
 func TestTelemetryQueryEndpoints(t *testing.T) {
 	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/query_range" || r.URL.Query().Get("query") != "sum(rate(orbit_demo_requests_total[5m]))" {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/v1/label/service_name/values" {
+			_, _ = w.Write([]byte(`{"status":"success","data":["orbit-telemetry-demo"]}`))
+			return
+		}
+		if r.URL.Path != "/api/v1/query_range" || r.URL.Query().Get("query") != `sum(rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
 			t.Errorf("unexpected Prometheus request: %s %s", r.URL.Path, r.URL.RawQuery)
 		}
-		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"matrix","result":[{"metric":{},"values":[[1,"0.2"]]}]}}`))
 	}))
 	defer prometheus.Close()
@@ -238,10 +242,14 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	defer loki.Close()
 
 	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/search/tag/service.name/values" {
+			_, _ = w.Write([]byte(`{"tagValues":["orbit-telemetry-demo"]}`))
+			return
+		}
 		if r.URL.Path != "/api/search" || r.URL.Query().Get("tags") != "service.name=orbit-telemetry-demo" {
 			t.Errorf("unexpected Tempo request: %s %s", r.URL.Path, r.URL.RawQuery)
 		}
-		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"traces":[{"traceID":"1234567890abcdef1234567890abcdef","rootServiceName":"orbit-telemetry-demo","durationMs":8}]}`))
 	}))
 	defer tempo.Close()
@@ -253,7 +261,7 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 	handler := NewHandler(Config{Telemetry: client}, &fakeRepository{}, testLogger())
 
 	for _, path := range []string{
-		"/api/v1/telemetry/metrics?window=1h",
+		"/api/v1/telemetry/metrics?window=1h&service=orbit-telemetry-demo",
 		"/api/v1/telemetry/logs?window=1h&service=orbit-telemetry-demo&limit=9",
 		"/api/v1/telemetry/traces?window=1h&service=orbit-telemetry-demo&limit=7",
 	} {
@@ -270,6 +278,18 @@ func TestTelemetryQueryEndpoints(t *testing.T) {
 			t.Fatalf("%s returned incomplete telemetry metadata: %+v", path, payload)
 		}
 	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/telemetry/services?window=1h", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("service discovery status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var catalog telemetry.ServiceDiscoveryResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &catalog); err != nil {
+		t.Fatalf("decode service discovery response: %v", err)
+	}
+	if len(catalog.Data) != 1 || catalog.Data[0].Name != "orbit-telemetry-demo" || len(catalog.Data[0].Sources) != 3 {
+		t.Fatalf("unexpected merged service catalog: %+v", catalog)
+	}
 }
 
 func TestTelemetryQueryValidationAndUnavailableResponses(t *testing.T) {
@@ -281,6 +301,7 @@ func TestTelemetryQueryValidationAndUnavailableResponses(t *testing.T) {
 		wantCode   string
 	}{
 		{path: "/api/v1/telemetry/metrics?window=7d", wantStatus: http.StatusBadRequest, wantCode: "invalid_window"},
+		{path: "/api/v1/telemetry/metrics?service=bad%20service", wantStatus: http.StatusBadRequest, wantCode: "invalid_service"},
 		{path: "/api/v1/telemetry/logs?service=bad%20service", wantStatus: http.StatusBadRequest, wantCode: "invalid_service"},
 		{path: "/api/v1/telemetry/traces?limit=101", wantStatus: http.StatusBadRequest, wantCode: "invalid_limit"},
 		{path: "/api/v1/telemetry/metrics?window=1h", wantStatus: http.StatusServiceUnavailable, wantCode: "telemetry_unavailable"},
