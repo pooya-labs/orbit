@@ -212,7 +212,9 @@ func TestAuthenticatedOTLPGatewaysEnforceRealWorkspaceGrants(t *testing.T) {
 
 	actorIssuer := "https://identity.example/"
 	actorSubject := "otlp-gateway-integration-" + strings.TrimPrefix(identity.Subject, "collector-")
-	if err := repository.SetWorkloadIdentityStatus(context.Background(), identity.ID, actorIssuer, actorSubject, "revoked"); err != nil {
+	revokeCtx, revokeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer revokeCancel()
+	if err := repository.SetWorkloadIdentityStatus(revokeCtx, identity.ID, actorIssuer, actorSubject, "revoked"); err != nil {
 		t.Fatalf("revoke workload identity: %v", err)
 	}
 	payload, err := proto.Marshal(integrationOTLPRequest(t, "metrics"))
