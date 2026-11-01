@@ -358,8 +358,10 @@ export default function TelemetryWorkspace({
 
     const expectedStepMs = parseStepMilliseconds(metrics?.step);
     const thresholdMs = Math.max(expectedStepMs * 2.5, 90_000);
-    const latestTimestampMs = Math.max(...allPoints.map((point) => point.timestamp)) * 1_000;
-    const stale = Date.now() - latestTimestampMs > thresholdMs;
+    const stale = metricSeries.some((series) => {
+      const latest = series.points[series.points.length - 1];
+      return latest !== undefined && Date.now() - latest.timestamp * 1_000 > thresholdMs;
+    });
     const hasGaps = metricSeries.some((series) =>
       series.points.some((point, index) =>
         index > 0 && (point.timestamp - series.points[index - 1].timestamp) * 1_000 > thresholdMs,
