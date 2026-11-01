@@ -60,7 +60,7 @@ func (c Config) Validate() error {
 	}
 	for _, char := range c.OIDCRolesClaim {
 		if !(char >= 'a' && char <= 'z') && !(char >= 'A' && char <= 'Z') &&
-			!(char >= '0' && char <= '9') && char != '_' && char != '-' && char != '.' {
+			!(char >= '0' && char <= '9') && char != '_' && char != '-' {
 			return fmt.Errorf("ORBIT_OIDC_ROLES_CLAIM contains an unsupported character")
 		}
 	}
