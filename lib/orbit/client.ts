@@ -21,14 +21,21 @@ export class OrbitApiError extends Error {
   }
 }
 
-const apiBaseUrl = (process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "")
-  .trim()
-  .replace(/\/+$/, "");
+function resolveApiBaseUrl(override?: string): string {
+  return (override ?? process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "")
+    .trim()
+    .replace(/\/+$/, "");
+}
 
-async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
+async function getJSON<T>(
+  path: string,
+  signal?: AbortSignal,
+  baseUrlOverride?: string,
+): Promise<T> {
+  const apiBaseUrl = resolveApiBaseUrl(baseUrlOverride);
   if (!apiBaseUrl) {
     throw new OrbitApiError(
-      "The ORBIT API endpoint is not configured for this build.",
+      "The ORBIT API endpoint is not configured. Enter an API URL or configure NEXT_PUBLIC_ORBIT_API_URL.",
       0,
       "api_not_configured",
     );
@@ -47,7 +54,7 @@ async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
     if (error instanceof DOMException && error.name === "AbortError") {
       throw error;
     }
-    throw new OrbitApiError("The ORBIT API could not be reached.", 0, "network_error");
+    throw new OrbitApiError("The ORBIT API could not be reached. Check the URL, network, and CORS allowlist.", 0, "network_error");
   }
 
   const payload: unknown = await response.json().catch(() => null);
@@ -67,23 +74,25 @@ async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   return payload as T;
 }
 
-export async function getMetadata(signal?: AbortSignal): Promise<ApiMetadata> {
-  return getJSON<ApiMetadata>("/api/v1/meta", signal);
+export async function getMetadata(signal?: AbortSignal, baseUrl?: string): Promise<ApiMetadata> {
+  return getJSON<ApiMetadata>("/api/v1/meta", signal, baseUrl);
 }
 
-export async function listServices(signal?: AbortSignal): Promise<ServiceSummary[]> {
-  const response = await getJSON<DataEnvelope<ServiceSummary>>("/api/v1/services", signal);
+export async function listServices(signal?: AbortSignal, baseUrl?: string): Promise<ServiceSummary[]> {
+  const response = await getJSON<DataEnvelope<ServiceSummary>>("/api/v1/services", signal, baseUrl);
   return response.data;
 }
 
 export async function listIncidents(
   status?: IncidentStatus,
   signal?: AbortSignal,
+  baseUrl?: string,
 ): Promise<IncidentSummary[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   const response = await getJSON<DataEnvelope<IncidentSummary>>(
     `/api/v1/incidents${query}`,
     signal,
+    baseUrl,
   );
   return response.data;
 }
