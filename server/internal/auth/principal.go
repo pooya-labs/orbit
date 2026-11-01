@@ -20,7 +20,7 @@ type Principal struct {
 
 // ActorID is a stable, issuer-scoped identity; email and display names are deliberately excluded.
 func (p Principal) ActorID() string {
-	return p.Issuer + "|" + p.Subject
+	return p.Issuer + "\x00" + p.Subject
 }
 
 // HasRole applies the role hierarchy used by ORBIT: operators and administrators inherit viewer access.
