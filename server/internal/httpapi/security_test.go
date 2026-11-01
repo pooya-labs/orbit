@@ -149,7 +149,7 @@ func TestRateLimitMiddlewareReturnsRetryAfter(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	handler := withRateLimit(1, next)
+	handler := withIPRateLimit(1, next)
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
 	request.RemoteAddr = "192.0.2.10:43210"
 
@@ -192,5 +192,33 @@ func TestBodyLimitAndSecurityHeaders(t *testing.T) {
 		if got := recorder.Header().Get(name); got != want {
 			t.Errorf("%s = %q, want %q", name, got, want)
 		}
+	}
+}
+
+func TestSubjectRateLimitAppliesAfterAuthenticationAcrossClientIPs(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	handler := withSubjectRateLimit(1, next)
+	principal := auth.Principal{
+		Issuer: "https://identity.example", Subject: "same-user", Roles: []string{"viewer"},
+	}
+
+	firstRequest := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
+	firstRequest.RemoteAddr = "192.0.2.11:10001"
+	firstRequest = firstRequest.WithContext(context.WithValue(firstRequest.Context(), principalContextKey{}, principal))
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, firstRequest)
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("first request status = %d, want %d", first.Code, http.StatusNoContent)
+	}
+
+	secondRequest := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
+	secondRequest.RemoteAddr = "192.0.2.12:10002"
+	secondRequest = secondRequest.WithContext(context.WithValue(secondRequest.Context(), principalContextKey{}, principal))
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, secondRequest)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request status = %d, want %d", second.Code, http.StatusTooManyRequests)
 	}
 }
