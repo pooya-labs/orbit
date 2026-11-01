@@ -13,6 +13,69 @@ func TestCommaSeparatedOriginsTrimsAndDeduplicates(t *testing.T) {
 	}
 }
 
+func TestLoadReadsOIDCConfigurationDefaults(t *testing.T) {
+	t.Setenv("ORBIT_AUTH_ISSUER", " https://issuer.example ")
+	t.Setenv("ORBIT_AUTH_AUDIENCE", " orbit-api ")
+	t.Setenv("ORBIT_AUTH_ROLES_CLAIM", "")
+	t.Setenv("ORBIT_AUTH_ALGORITHMS", " ")
+
+	got := Load()
+	if got.AuthIssuer != "https://issuer.example" || got.AuthAudience != "orbit-api" {
+		t.Fatalf("unexpected OIDC configuration: %+v", got)
+	}
+	if got.AuthRolesClaim != "roles" || !reflect.DeepEqual(got.AuthAlgorithms, []string{"RS256", "ES256"}) {
+		t.Fatalf("unexpected OIDC defaults: %+v", got)
+	}
+}
+
+func TestValidateRequiresAuthenticationOutsideDevelopment(t *testing.T) {
+	for _, environment := range []string{"staging", "production", "test"} {
+		cfg := Config{Environment: environment}
+		if err := cfg.Validate(); err == nil {
+			t.Fatalf("expected %s without OIDC configuration to fail closed", environment)
+		}
+	}
+}
+
+func TestValidateAllowsOnlyLoopbackHTTPInDevelopment(t *testing.T) {
+	cfg := Config{
+		Environment: "development",
+		AuthIssuer: "http://127.0.0.1:4567",
+		AuthAudience: "orbit-api",
+		AuthRolesClaim: "roles",
+		AuthAlgorithms: []string{"RS256"},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("loopback development issuer should be allowed: %v", err)
+	}
+	cfg.AuthIssuer = "http://issuer.example"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("non-loopback HTTP issuer must be rejected")
+	}
+}
+
+func TestValidateRejectsUnsafeOIDCAlgorithmsAndPartialConfiguration(t *testing.T) {
+	base := Config{
+		Environment: "production",
+		AuthIssuer: "https://issuer.example",
+		AuthAudience: "orbit-api",
+		AuthRolesClaim: "roles",
+		AuthAlgorithms: []string{"RS256"},
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid production OIDC configuration: %v", err)
+	}
+	base.AuthAlgorithms = []string{"HS256"}
+	if err := base.Validate(); err == nil {
+		t.Fatal("symmetric signing algorithms must be rejected")
+	}
+	base.AuthAlgorithms = []string{"RS256"}
+	base.AuthAudience = ""
+	if err := base.Validate(); err == nil {
+		t.Fatal("partial OIDC configuration must be rejected")
+	}
+}
+
 func TestCommaSeparatedOriginsEmpty(t *testing.T) {
 	if got := commaSeparated(" , "); len(got) != 0 {
 		t.Fatalf("commaSeparated() = %#v, want empty list", got)
