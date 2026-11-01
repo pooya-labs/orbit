@@ -63,7 +63,7 @@ Install Docker Desktop, then from the repository root:
 docker compose up --build
 ```
 
-This starts PostgreSQL, Redis, NATS, and the Go API. On its first start the API applies the versioned SQL migrations (`001_initial` and `002_telemetry_service_catalog`) and inserts five sample services and two sample incidents, each marked with source `demo_seed`.
+This starts PostgreSQL, Redis, NATS, and the Go API. On its first start the API applies the versioned SQL migrations (`001_initial`, `002_telemetry_service_catalog`, and `003_telemetry_resource_attribute_sources`) and inserts five sample services and two sample incidents, each marked with source `demo_seed`.
 
 | Endpoint | Purpose |
 | --- | --- |
