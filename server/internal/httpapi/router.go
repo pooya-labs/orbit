@@ -204,6 +204,43 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 		}
 		writeJSON(w, http.StatusOK, result)
 	})
+	mux.HandleFunc("GET /api/v1/telemetry/services/{service}/attributes", func(w http.ResponseWriter, r *http.Request) {
+		window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_window", err.Error())
+			return
+		}
+		service := r.PathValue("service")
+		if err := telemetry.ValidateServiceName(service); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_service", err.Error())
+			return
+		}
+		if cfg.Telemetry == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Telemetry backends are not configured")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		result, err := cfg.Telemetry.DiscoverResourceAttributes(ctx, window, service)
+		if err != nil {
+			writeTelemetryError(w, r, logger, "Telemetry resource attributes", err)
+			return
+		}
+		if repository == nil {
+			result.Warnings = append(result.Warnings, "PostgreSQL resource attribute persistence unavailable")
+		} else if len(result.Attributes) > 0 {
+			if persistErr := repository.UpdateTelemetryServiceResourceAttributes(ctx, service, result.Attributes, result.AttributeSources); persistErr != nil {
+				if strings.Contains(persistErr.Error(), "telemetry service not found") {
+					writeError(w, r, http.StatusNotFound, "service_not_found", "The service is not present in the persisted telemetry catalog")
+					return
+				}
+				logger.Error("persist telemetry resource attributes failed", "error", persistErr, "request_id", r.Header.Get("X-Request-ID"))
+				writeError(w, r, http.StatusServiceUnavailable, "resource_attribute_persistence_failed", "Telemetry resource attributes could not be persisted")
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, result)
+	})
 	mux.HandleFunc("GET /api/v1/telemetry/metrics", func(w http.ResponseWriter, r *http.Request) {
 		window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
 		if err != nil {
