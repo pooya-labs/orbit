@@ -284,7 +284,7 @@ export default function TelemetryWorkspace({
                   <div className="telemetry-trace-icon"><Workflow size={16} /></div>
                   <div className="telemetry-trace-main">
                     <strong>{trace.rootTraceName || "Trace"}</strong>
-                    <span>{trace.rootServiceName || trace.service || "unknown-service"}</span>
+                    <span>{trace.rootServiceName || "unknown-service"}</span>
                     <code>{trace.traceID}</code>
                   </div>
                   <div className="telemetry-trace-side">
