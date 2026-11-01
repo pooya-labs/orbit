@@ -488,3 +488,77 @@ func otherWorkspaceID(current, first, second string) string {
 	}
 	return first
 }
+
+
+func TestWorkspaceRequestRateUsesBoundedInstantPromQL(t *testing.T) {
+	const workspaceID = "00000000-0000-4000-8000-000000000001"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/query" {
+			t.Errorf("request path = %q, want /api/v1/query", r.URL.Path)
+		}
+		want := `sum(rate(orbit_demo_requests_total{orbit_workspace_id="00000000-0000-4000-8000-000000000001",service_name="checkout"}[300s]))`
+		if got := r.URL.Query().Get("query"); got != want {
+			t.Errorf("PromQL = %q, want %q", got, want)
+		}
+		if r.URL.Query().Get("time") == "" || r.URL.Query().Get("timeout") != "5s" {
+			t.Errorf("instant query parameters are incomplete: %v", r.URL.Query())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1762000000.0,"42.75"]}]}}`))
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, available, err := client.WorkspaceRequestRate(context.Background(), workspaceID, "checkout", 300)
+	if err != nil || !available || value != 42.75 {
+		t.Fatalf("request rate = %v, available=%v, err=%v; want 42.75 and available", value, available, err)
+	}
+}
+
+func TestWorkspaceRequestRateAggregatesAllWorkspaceServices(t *testing.T) {
+	const workspaceID = "00000000-0000-4000-8000-000000000001"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		want := `sum(rate(orbit_demo_requests_total{orbit_workspace_id="00000000-0000-4000-8000-000000000001"}[60s]))`
+		if got := r.URL.Query().Get("query"); got != want {
+			t.Errorf("PromQL = %q, want %q", got, want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[]}}`))
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, available, err := client.WorkspaceRequestRate(context.Background(), workspaceID, "", 60)
+	if err != nil || available || value != 0 {
+		t.Fatalf("missing series = %v, available=%v, err=%v; want unavailable without error", value, available, err)
+	}
+}
+
+func TestWorkspaceRequestRateRejectsUnscopedOrInvalidQueriesBeforeBackendCall(t *testing.T) {
+	client, err := NewClient("http://127.0.0.1:1", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const workspaceID = "00000000-0000-4000-8000-000000000001"
+	for _, test := range []struct {
+		name string
+		workspace string
+		service string
+		window int
+	}{
+		{name: "invalid workspace", workspace: "not-a-uuid", window: 300},
+		{name: "invalid service", workspace: workspaceID, service: "{bad}", window: 300},
+		{name: "unsupported window", workspace: workspaceID, service: "checkout", window: 120},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, _, err := client.WorkspaceRequestRate(context.Background(), test.workspace, test.service, test.window); err == nil {
+				t.Fatal("expected request-rate query validation error")
+			}
+		})
+	}
+}
+
