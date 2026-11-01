@@ -13,12 +13,14 @@ import {
   getTelemetryMetrics,
   listTelemetryLogs,
   listTelemetryTraces,
+  listTelemetryServices,
 } from "../../lib/orbit/client";
 import type {
   TelemetryLogsResponse,
   TelemetryMetricsResponse,
   TelemetryTracesResponse,
   TelemetryWindow,
+  DiscoveredTelemetryService,
 } from "../../lib/orbit/contracts";
 
 export type TelemetryView = "Metrics" | "Logs" | "Traces";
@@ -87,6 +89,11 @@ export default function TelemetryWorkspace({
   apiBaseUrl: string;
 }) {
   const [windowRange, setWindowRange] = useState<TelemetryWindow>("1h");
+  const [selectedService, setSelectedService] = useState("orbit-telemetry-demo");
+  const [discoveredServices, setDiscoveredServices] = useState<DiscoveredTelemetryService[]>([]);
+  const [serviceWarnings, setServiceWarnings] = useState<string[]>([]);
+  const [serviceError, setServiceError] = useState("");
+  const [serviceLoading, setServiceLoading] = useState(true);
   const [metrics, setMetrics] = useState<TelemetryMetricsResponse | null>(null);
   const [logs, setLogs] = useState<TelemetryLogsResponse | null>(null);
   const [traces, setTraces] = useState<TelemetryTracesResponse | null>(null);
@@ -94,6 +101,46 @@ export default function TelemetryWorkspace({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let mounted = true;
+
+    const loadServices = async () => {
+      setServiceLoading(true);
+      setServiceError("");
+      try {
+        const response = await listTelemetryServices(windowRange, controller.signal, apiBaseUrl);
+        if (!mounted) return;
+        setDiscoveredServices(response.data);
+        setServiceWarnings(response.warnings ?? []);
+        if (response.data.length > 0) {
+          setSelectedService((current) => {
+            if (response.data.some((service) => service.name === current)) return current;
+            const demo = response.data.find((service) => service.name === "orbit-telemetry-demo");
+            return demo?.name ?? response.data[0].name;
+          });
+        }
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        if (mounted) {
+          setServiceError(cause instanceof Error ? cause.message : "Unable to discover telemetry services.");
+          setServiceWarnings([]);
+        }
+      } finally {
+        if (mounted) setServiceLoading(false);
+      }
+    };
+
+    void loadServices();
+    const interval = window.setInterval(() => void loadServices(), 60_000);
+    return () => {
+      mounted = false;
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [windowRange, apiBaseUrl, reloadKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -105,11 +152,11 @@ export default function TelemetryWorkspace({
       setError("");
       try {
         if (view === "Metrics") {
-          const response = await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl);
+          const response = await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl, selectedService);
           if (mounted) setMetrics(response);
         } else if (view === "Logs") {
           const response = await listTelemetryLogs(
-            { window: windowRange, service: "orbit-telemetry-demo", limit: 50 },
+            { window: windowRange, service: selectedService, limit: 50 },
             controller.signal,
             apiBaseUrl,
           );
@@ -143,7 +190,7 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [view, windowRange, apiBaseUrl, reloadKey]);
+  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService]);
 
   const metricSamples = useMemo(() => {
     if (!metrics) return [];
@@ -199,9 +246,30 @@ export default function TelemetryWorkspace({
           </span>
           <div>
             <h2 id="telemetry-title">{view}</h2>
-            <p>Live query · {backend} · orbit-telemetry-demo</p>
+            <p>Live query · {backend} · {selectedService}</p>
           </div>
         </div>
+        <label className="telemetry-service-select">
+          <span>SERVICE</span>
+          <select
+            value={selectedService}
+            onChange={(event) => setSelectedService(event.target.value)}
+            disabled={serviceLoading || discoveredServices.length === 0}
+            aria-label="Select telemetry service"
+          >
+            {discoveredServices.length > 0
+              ? discoveredServices.map((service) => (
+                  <option key={service.name} value={service.name}>
+                    {service.name} · {service.sources.join(", ")}
+                  </option>
+                ))
+              : <option value={selectedService}>{selectedService} · default</option>}
+          </select>
+          <small>
+            {serviceLoading ? "Discovering services…" :
+              discoveredServices.length > 0 ? `${discoveredServices.length} discovered` : "No discovered services"}
+          </small>
+        </label>
         <div className="telemetry-controls">
           <div className="range-switcher" role="group" aria-label="Telemetry time range">
             {windows.map((item) => (
@@ -222,6 +290,14 @@ export default function TelemetryWorkspace({
         <span><Clock3 size={12} /> {queriedAt ? `Queried ${formatClock(queriedAt)}` : "Waiting for first query"}</span>
       </div>
 
+      {(serviceError || serviceWarnings.length > 0) && (
+        <div className="telemetry-service-warning" role="status">
+          <AlertCircle size={14} />
+          <span>{serviceError || `Partial service discovery: ${serviceWarnings.join(", ")}`}</span>
+          <button className="text-action" onClick={() => setReloadKey((value) => value + 1)}>Retry</button>
+        </div>
+      )}
+
       {error && (
         <div className="telemetry-error" role="alert">
           <AlertCircle size={16} />
@@ -233,7 +309,7 @@ export default function TelemetryWorkspace({
       {view === "Metrics" && (
         <div className="panel telemetry-content-panel">
           {loading && !metrics ? <TelemetryLoading /> : metricSamples.length === 0 ? (
-            <TelemetryEmpty title="No metric samples in this window" message="Generate traffic from the instrumented demo service, then refresh. The current API exposes its request-rate counter." />
+            <TelemetryEmpty title="No metric samples in this window" message={`No request-rate samples were found for ${selectedService} in this window. The current API exposes the ORBIT demo request counter.`} />
           ) : (
             <>
               <div className="telemetry-stat-row">
@@ -259,7 +335,7 @@ export default function TelemetryWorkspace({
       {view === "Logs" && (
         <div className="panel telemetry-content-panel">
           {loading && !logs ? <TelemetryLoading /> : logRows.length === 0 ? (
-            <TelemetryEmpty title="No logs found" message="Generate a request at the telemetry demo /emit endpoint and refresh this view." />
+            <TelemetryEmpty title="No logs found" message={`No logs were found for ${selectedService} in this window.`} />
           ) : (
             <div className="telemetry-log-list">
               {logRows.map((entry, index) => (
@@ -278,7 +354,7 @@ export default function TelemetryWorkspace({
       {view === "Traces" && (
         <div className="panel telemetry-content-panel">
           {loading && !traces ? <TelemetryLoading /> : traceRows.length === 0 ? (
-            <TelemetryEmpty title="No traces found" message="Send a request through the instrumented demo workload and refresh this view." />
+            <TelemetryEmpty title="No traces found" message={`No traces were found for ${selectedService} in this window.`} />
           ) : (
             <div className="telemetry-trace-list">
               {traceRows.map((trace) => (
