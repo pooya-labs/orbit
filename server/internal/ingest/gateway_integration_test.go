@@ -631,3 +631,108 @@ func (f *concurrentMetricsForwarder) Export(_ context.Context, signal string, _ 
 	f.calls.Add(1)
 	return proto.Marshal(&metricsv1.ExportMetricsServiceResponse{})
 }
+
+
+func TestWorkloadGrantAndIdentityRevocationApplyAcrossGatewayReplicas(t *testing.T) {
+	repository, workspaceA, _, identity, verifier := openGatewayIntegrationRepository(t)
+	actorIssuer := "https://identity.example/"
+	actorSubject := "otlp-gateway-integration-" + strings.TrimPrefix(identity.Subject, "collector-")
+
+	newAuthorizer := func() *Authorizer {
+		a, err := NewAuthorizer(verifier, repository)
+		if err != nil { t.Fatal(err) }
+		return a
+	}
+	newHTTP := func() (http.Handler, *forwarderStub) {
+		forwarder := &forwarderStub{}
+		handler, err := NewHTTPGateway(newAuthorizer(), forwarder, HTTPGatewayConfig{
+			RequestsPerMinute: 1000, ForwardTimeout: 2 * time.Second, RateLimitStore: repository,
+		})
+		if err != nil { t.Fatal(err) }
+		return handler, forwarder
+	}
+	newGRPC := func() (*GRPCGateway, *grpcForwarderStub) {
+		forwarder := &grpcForwarderStub{}
+		gateway := &GRPCGateway{
+			authorizer: newAuthorizer(), forwarder: forwarder,
+			limiter: newWorkspaceRateLimiter(1000), sharedLimiter: repository,
+			timeout: 2 * time.Second, concurrency: make(chan struct{}, maxConcurrentGRPCExports),
+		}
+		return gateway, forwarder
+	}
+
+	// Four independent gateway/authorizer instances model two HTTP and two
+	// gRPC replicas. None shares process-local authorization state.
+	httpA, httpForwarderA := newHTTP()
+	httpB, httpForwarderB := newHTTP()
+	grpcA, grpcForwarderA := newGRPC()
+	grpcB, grpcForwarderB := newGRPC()
+
+	sendHTTP := func(handler http.Handler, workspaceID, signal string) int {
+		t.Helper()
+		payload, err := proto.Marshal(integrationOTLPRequest(t, signal))
+		if err != nil { t.Fatal(err) }
+		request := httptest.NewRequest(http.MethodPost, "/v1/workspaces/"+workspaceID+"/v1/"+signal, bytes.NewReader(payload))
+		request.Header.Set("Authorization", "Bearer integration-workload-token")
+		request.Header.Set("Content-Type", "application/x-protobuf")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response.Code
+	}
+
+	// Revoke each individual signal grant on the database while traffic is
+	// routed to different gateway replicas and transports.
+	for _, signal := range []string{"metrics", "logs", "traces"} {
+		t.Run("grant-revocation-"+signal, func(t *testing.T) {
+			if code := sendHTTP(httpA, workspaceA.ID, signal); code != http.StatusOK {
+				t.Fatalf("HTTP replica A before revoke = %d, want 200", code)
+			}
+			if err := callIntegrationGRPCExport(grpcB, workspaceA.ID, signal); err != nil {
+				t.Fatalf("gRPC replica B before revoke: %v", err)
+			}
+			if err := repository.SetWorkloadWorkspaceGrant(context.Background(), store.WorkloadGrantInput{
+				IdentityID: identity.ID, WorkspaceID: workspaceA.ID, Signal: signal,
+				ActorIssuer: actorIssuer, ActorSubject: actorSubject,
+			}, false); err != nil { t.Fatalf("revoke %s grant: %v", signal, err) }
+
+			if code := sendHTTP(httpB, workspaceA.ID, signal); code != http.StatusForbidden {
+				t.Fatalf("HTTP replica B after grant revoke = %d, want 403", code)
+			}
+			if err := callIntegrationGRPCExport(grpcA, workspaceA.ID, signal); status.Code(err) != codes.PermissionDenied {
+				t.Fatalf("gRPC replica A after grant revoke = %s, want PermissionDenied; err=%v", status.Code(err), err)
+			}
+
+			if err := repository.SetWorkloadWorkspaceGrant(context.Background(), store.WorkloadGrantInput{
+				IdentityID: identity.ID, WorkspaceID: workspaceA.ID, Signal: signal,
+				ActorIssuer: actorIssuer, ActorSubject: actorSubject,
+			}, true); err != nil { t.Fatalf("restore %s grant for identity-revocation phase: %v", signal, err) }
+		})
+	}
+
+	// Identity revocation must invalidate every signal on all independent
+	// replicas, not merely the instance that handled the admin mutation.
+	if err := repository.SetWorkloadIdentityStatus(context.Background(), identity.ID, actorIssuer, actorSubject, "revoked"); err != nil {
+		t.Fatalf("revoke workload identity: %v", err)
+	}
+	httpBefore := httpForwarderB.calls
+	grpcBefore := grpcForwarderA.metricsCalls + grpcForwarderA.logsCalls + grpcForwarderA.tracesCalls
+	for _, signal := range []string{"metrics", "logs", "traces"} {
+		if code := sendHTTP(httpB, workspaceA.ID, signal); code != http.StatusForbidden {
+			t.Errorf("HTTP replica B %s after identity revoke = %d, want 403", signal, code)
+		}
+		if err := callIntegrationGRPCExport(grpcA, workspaceA.ID, signal); status.Code(err) != codes.PermissionDenied {
+			t.Errorf("gRPC replica A %s after identity revoke = %s, want PermissionDenied; err=%v", signal, status.Code(err), err)
+		}
+	}
+	if httpForwarderB.calls != httpBefore {
+		t.Fatalf("HTTP replica B forwarded %d revoked requests", httpForwarderB.calls-httpBefore)
+	}
+	grpcAfter := grpcForwarderA.metricsCalls + grpcForwarderA.logsCalls + grpcForwarderA.tracesCalls
+	if grpcAfter != grpcBefore {
+		t.Fatalf("gRPC replica A forwarded %d revoked requests", grpcAfter-grpcBefore)
+	}
+	if httpForwarderA.calls != 3 || grpcForwarderB.metricsCalls+grpcForwarderB.logsCalls+grpcForwarderB.tracesCalls != 3 {
+		t.Fatalf("pre-revocation controls did not forward expected requests: HTTP A=%d, gRPC B=%d",
+			httpForwarderA.calls, grpcForwarderB.metricsCalls+grpcForwarderB.logsCalls+grpcForwarderB.tracesCalls)
+	}
+}
