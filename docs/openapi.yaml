@@ -322,7 +322,8 @@ components:
       properties:
         source:
           type: string
-          const: telemetry_backends
+          enum: [telemetry_backends, postgres_catalog]
+          description: postgres_catalog indicates a last-known-data fallback while all telemetry backends are unavailable.
         window:
           type: string
           enum: [15m, 1h, 6h, 24h]
