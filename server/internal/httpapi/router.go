@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 )
@@ -88,10 +89,12 @@ func paginateDiscoveredServices(
 }
 
 type Config struct {
-	Version        string
-	Environment    string
-	AllowedOrigins []string
-	Telemetry      *telemetry.Client
+	Version                string
+	Environment            string
+	AllowedOrigins         []string
+	Telemetry              *telemetry.Client
+	Authenticator          auth.TokenVerifier
+	RequireAuthentication  bool
 }
 
 type statusResponse struct {
@@ -423,6 +426,7 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 	})
 
 	var handler http.Handler = mux
+	handler = withAuthorization(cfg.Authenticator, cfg.RequireAuthentication, handler)
 	handler = withRequestLogging(logger, handler)
 	handler = withRequestID(handler)
 	handler = withRecovery(logger, handler)
@@ -438,6 +442,50 @@ func writeTelemetryError(w http.ResponseWriter, r *http.Request, logger *slog.Lo
 	}
 	logger.Error("telemetry query failed", "backend", backend, "error", err, "request_id", r.Header.Get("X-Request-ID"))
 	writeError(w, r, http.StatusServiceUnavailable, "telemetry_query_failed", backend+" data is temporarily unavailable")
+}
+
+func withAuthorization(verifier auth.TokenVerifier, required bool, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions || !strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/api/v1/meta" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if verifier == nil {
+			if required {
+				writeError(w, r, http.StatusServiceUnavailable, "authentication_unavailable", "API authentication is not configured")
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		authorizationHeaders := r.Header.Values("Authorization")
+		if len(authorizationHeaders) != 1 {
+			writeUnauthorized(w, r)
+			return
+		}
+		fields := strings.Fields(authorizationHeaders[0])
+		if len(fields) != 2 || !strings.EqualFold(fields[0], "Bearer") ||
+			len(fields[1]) > 16<<10 || strings.ContainsAny(fields[1], "\r\n") {
+			writeUnauthorized(w, r)
+			return
+		}
+		principal, err := verifier.Verify(r.Context(), fields[1])
+		if err != nil {
+			writeUnauthorized(w, r)
+			return
+		}
+		if !principal.HasRole(auth.RoleViewer) {
+			writeError(w, r, http.StatusForbidden, "insufficient_role", "The access token does not grant viewer access")
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(auth.ContextWithPrincipal(r.Context(), principal)))
+	})
+}
+
+func writeUnauthorized(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("WWW-Authenticate", `Bearer realm="orbit-api", error="invalid_token"`)
+	writeError(w, r, http.StatusUnauthorized, "unauthorized", "A valid bearer access token is required")
 }
 
 func withCORS(origins []string, next http.Handler) http.Handler {
@@ -459,7 +507,8 @@ func withCORS(origins []string, next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, X-Request-ID")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Request-ID")
+			w.Header().Set("Access-Control-Expose-Headers", "WWW-Authenticate, X-Request-ID")
 			w.Header().Set("Access-Control-Max-Age", "600")
 			w.WriteHeader(http.StatusNoContent)
 			return
