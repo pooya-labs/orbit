@@ -122,6 +122,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		{version: "004_shared_api_rate_limits", file: "migrations/004_shared_api_rate_limits.sql"},
 		{version: "005_workspaces_memberships_audit", file: "migrations/005_workspaces_memberships_audit.sql"},
 		{version: "006_workspace_data_scope", file: "migrations/006_workspace_data_scope.sql"},
+		{version: "007_workload_identities", file: "migrations/007_workload_identities.sql"},
 	}
 
 	for _, item := range migrations {
