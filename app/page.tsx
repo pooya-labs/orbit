@@ -328,7 +328,7 @@ export default function Home() {
             <div className="bottom-stat"><div className="bottom-icon blue"><Database size={17} /></div><div><span>DATA INGESTION</span><strong>2.4 MB/s</strong></div><span className="bottom-note"><Signal size={13} /> Sample stream</span></div>
           </section>
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> SYSTEMS OBSERVATORY</span><span><Globe2 size={12} /> All systems are illustrative <i /> <span className="footer-version">v0.1.0</span></span></footer>
+          <footer className="page-footer"><span>ORBIT <b>·</b> SYSTEMS OBSERVATORY</span><span><Globe2 size={12} /> All systems are illustrative <i /> <span className="footer-version">v0.2.0</span></span></footer>
         </div>
       </section>
     </main>
