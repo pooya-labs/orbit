@@ -84,3 +84,20 @@ export interface TempoTraceSummary {
 export type TelemetryMetricsResponse = TelemetryQueryResponse<PrometheusRangeSeries[]>;
 export type TelemetryLogsResponse = TelemetryQueryResponse<LokiLogStream[]>;
 export type TelemetryTracesResponse = TelemetryQueryResponse<TempoTraceSummary[]>;
+
+
+export type TelemetryBackend = "prometheus" | "loki" | "tempo";
+
+export interface DiscoveredTelemetryService {
+  name: string;
+  sources: TelemetryBackend[];
+}
+
+export interface TelemetryServicesResponse {
+  source: "telemetry_backends";
+  window: TelemetryWindow;
+  queried_at: string;
+  sources_queried: TelemetryBackend[];
+  warnings?: string[];
+  data: DiscoveredTelemetryService[];
+}

@@ -9,6 +9,7 @@ import type {
   TelemetryMetricsResponse,
   TelemetryLogsResponse,
   TelemetryTracesResponse,
+  TelemetryServicesResponse,
 } from "./contracts";
 
 export class OrbitApiError extends Error {
@@ -106,9 +107,23 @@ export async function getTelemetryMetrics(
   window: TelemetryWindow = "1h",
   signal?: AbortSignal,
   baseUrl?: string,
+  service = "orbit-telemetry-demo",
 ): Promise<TelemetryMetricsResponse> {
+  const query = new URLSearchParams({ window, service });
   return getJSON<TelemetryMetricsResponse>(
-    `/api/v1/telemetry/metrics?window=${encodeURIComponent(window)}`,
+    `/api/v1/telemetry/metrics?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+}
+
+export async function listTelemetryServices(
+  window: TelemetryWindow = "1h",
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<TelemetryServicesResponse> {
+  return getJSON<TelemetryServicesResponse>(
+    `/api/v1/telemetry/services?window=${encodeURIComponent(window)}`,
     signal,
     baseUrl,
   );

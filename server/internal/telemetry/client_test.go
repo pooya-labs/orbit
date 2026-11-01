@@ -74,8 +74,8 @@ func TestMetricsQueriesOnlyFixedPromQLAndReturnsFreshness(t *testing.T) {
 			t.Fatalf("path = %q", r.URL.Path)
 		}
 		query := r.URL.Query()
-		if query.Get("query") != metricsQuery {
-			t.Fatalf("query = %q, want fixed query %q", query.Get("query"), metricsQuery)
+		if query.Get("query") != `sum(rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
+			t.Fatalf("unexpected service-scoped PromQL: %q", query.Get("query"))
 		}
 		if query.Get("step") != "1m" || query.Get("timeout") != "5s" || query.Get("limit") != "10" {
 			t.Fatalf("unexpected bounded query parameters: %v", query)
@@ -89,11 +89,11 @@ func TestMetricsQueriesOnlyFixedPromQLAndReturnsFreshness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"})
+	result, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Source != "prometheus" || result.Window != "1h" || result.Step != "1m" || result.Query != metricsQuery {
+	if result.Source != "prometheus" || result.Window != "1h" || result.Step != "1m" || result.Query != `sum(rate(orbit_demo_requests_total{service_name="orbit-telemetry-demo"}[5m]))` {
 		t.Fatalf("unexpected query metadata: %+v", result)
 	}
 	var data []map[string]json.RawMessage
@@ -170,7 +170,7 @@ func TestUnconfiguredBackendReturnsTypedError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}); err != ErrNotConfigured {
+	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo"); err != ErrNotConfigured {
 		t.Fatalf("error = %v, want ErrNotConfigured", err)
 	}
 }
@@ -185,7 +185,97 @@ func TestUpstreamErrorDoesNotBecomeAResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}); err == nil {
+	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo"); err == nil {
 		t.Fatal("expected upstream HTTP error")
+	}
+}
+
+
+func TestServicesMergesSourcesAndRejectsInvalidLabels(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/label/service_name/values" || r.URL.Query().Get("limit") != "250" {
+			t.Errorf("unexpected Prometheus service discovery request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":["api-gateway","shared-service","bad service"]}`))
+	}))
+	defer prometheus.Close()
+
+	loki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/loki/api/v1/label/service_name/values" {
+			t.Errorf("unexpected Loki service discovery request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":["worker","shared-service"]}`))
+	}))
+	defer loki.Close()
+
+	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/search/tag/service.name/values" || r.URL.Query().Get("limit") != "250" {
+			t.Errorf("unexpected Tempo service discovery request: %s %s", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tagValues":["trace-worker","shared-service"]}`))
+	}))
+	defer tempo.Close()
+
+	client, err := NewClient(prometheus.URL, loki.URL, tempo.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.Services(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Source != "telemetry_backends" || result.Window != "1h" || result.QueriedAt.IsZero() || len(result.Warnings) != 0 {
+		t.Fatalf("unexpected discovery metadata: %+v", result)
+	}
+	if len(result.Data) != 4 {
+		t.Fatalf("discovered %d services, want 4: %+v", len(result.Data), result.Data)
+	}
+	if result.Data[0].Name != "api-gateway" || result.Data[1].Name != "shared-service" {
+		t.Fatalf("services should be sorted and invalid names skipped: %+v", result.Data)
+	}
+	shared := result.Data[1]
+	if len(shared.Sources) != 3 || shared.Sources[0] != "loki" || shared.Sources[1] != "prometheus" || shared.Sources[2] != "tempo" {
+		t.Fatalf("expected merged source provenance for shared-service, got %+v", shared)
+	}
+}
+
+func TestServicesReturnsPartialResultsAndWarnings(t *testing.T) {
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":["api-gateway"]}`))
+	}))
+	defer prometheus.Close()
+
+	failingLoki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "backend detail must not leak", http.StatusBadGateway)
+	}))
+	defer failingLoki.Close()
+
+	client, err := NewClient(prometheus.URL, failingLoki.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.Services(context.Background(), QueryWindow{Name: "15m", Duration: 15 * time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Data) != 1 || result.Data[0].Name != "api-gateway" {
+		t.Fatalf("expected partial service catalog: %+v", result.Data)
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0] != "loki service discovery unavailable" {
+		t.Fatalf("unexpected safe warnings: %+v", result.Warnings)
+	}
+}
+
+func TestServicesRequiresAtLeastOneConfiguredBackend(t *testing.T) {
+	client, err := NewClient("", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Services(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour}); err != ErrNotConfigured {
+		t.Fatalf("error = %v, want ErrNotConfigured", err)
 	}
 }

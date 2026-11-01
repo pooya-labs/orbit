@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ORBIT API
-  version: 0.7.0
+  version: 0.8.0
   summary: Service inventory and bounded observability query API
   description: |
     ORBIT reads service and incident inventories from PostgreSQL and exposes
@@ -124,6 +124,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/v1/telemetry/services:
+    get:
+      tags: [Telemetry]
+      operationId: discoverTelemetryServices
+      summary: Discover service names across configured telemetry backends
+      description: Queries Prometheus, Loki, and Tempo concurrently, merges duplicate service names, and preserves backend provenance. Partial backend failures are returned as warnings when at least one backend succeeds.
+      parameters:
+        - in: query
+          name: window
+          required: false
+          description: Discovery time window. Defaults to 1h.
+          schema:
+            type: string
+            enum: [15m, 1h, 6h, 24h]
+            default: 1h
+      responses:
+        "200":
+          description: Discovered services and their source backends.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryServicesResponse"
+        "400":
+          description: Unsupported time window.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: All configured telemetry backends are unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/telemetry/metrics:
     get:
       tags: [Telemetry]
@@ -139,6 +173,14 @@ paths:
             type: string
             enum: [15m, 1h, 6h, 24h]
             default: 1h
+        - in: query
+          name: service
+          required: false
+          description: Safe service identifier used to scope the request-rate series.
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            default: orbit-telemetry-demo
       responses:
         "200":
           description: Prometheus range query result with source and query timestamp.
@@ -274,6 +316,41 @@ components:
           type: string
         limit:
           type: integer
+    TelemetryServicesResponse:
+      type: object
+      required: [source, window, queried_at, sources_queried, data]
+      properties:
+        source:
+          type: string
+          const: telemetry_backends
+        window:
+          type: string
+          enum: [15m, 1h, 6h, 24h]
+        queried_at:
+          type: string
+          format: date-time
+        sources_queried:
+          type: array
+          items:
+            type: string
+            enum: [prometheus, loki, tempo]
+        warnings:
+          type: array
+          items:
+            type: string
+        data:
+          type: array
+          items:
+            type: object
+            required: [name, sources]
+            properties:
+              name:
+                type: string
+              sources:
+                type: array
+                items:
+                  type: string
+                  enum: [prometheus, loki, tempo]
     TelemetryMetricsResponse:
       type: object
       required: [source, window, queried_at, query, step, data]
@@ -289,7 +366,7 @@ components:
           format: date-time
         query:
           type: string
-          const: "sum(rate(orbit_demo_requests_total[5m]))"
+          description: Fixed service-scoped PromQL expression.
         step:
           type: string
         data:

@@ -434,3 +434,18 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 @media (prefers-reduced-motion: reduce) {
   .telemetry-spinner, .telemetry-refreshing { animation: none !important; }
 }
+
+
+/* M04 — telemetry service discovery selector */
+.telemetry-service-select { min-width: 195px; max-width: 255px; display: grid; gap: 4px; }
+.telemetry-service-select > span { color: #71818b; font: 8px "DM Mono", monospace; letter-spacing: .08em; }
+.telemetry-service-select select { width: 100%; min-width: 0; height: 34px; padding: 0 27px 0 10px; border: 1px solid #2a3a42; border-radius: 6px; outline-offset: 2px; color: #d4e0e4; background: #10191f; font: 10px "DM Mono", monospace; }
+.telemetry-service-select select:disabled { opacity: .65; cursor: progress; }
+.telemetry-service-select small { color: #657781; font: 8px "DM Mono", monospace; }
+.telemetry-service-warning { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border: 1px solid rgba(216,166,93,.22); border-radius: 6px; color: #d9b77f; background: rgba(125,90,36,.09); font-size: 9px; }
+.telemetry-service-warning > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.telemetry-service-warning .text-action { flex: 0 0 auto; }
+@media (max-width: 700px) {
+  .telemetry-service-select { width: 100%; max-width: none; }
+  .telemetry-service-select select { height: 38px; }
+}

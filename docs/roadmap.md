@@ -15,7 +15,7 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 
 ## M02 — API and persistence foundation
 
-The browser dashboard can now read service and incident inventories from a configured API endpoint. Aggregate metrics remain visibly unavailable until telemetry ingestion exists.
+The browser dashboard reads service and incident inventories from a configured API endpoint. The telemetry API now also exposes bounded metrics, logs, and traces, which are rendered in the dedicated investigation views.
 
 - [x] Create Go API module and server lifecycle.
 - [x] Add liveness, readiness, and metadata endpoints.
@@ -31,7 +31,7 @@ The browser dashboard can now read service and incident inventories from a confi
 
 ## M03 — Local platform
 
-The optional `observability` profile accepts OTLP over gRPC/HTTP and routes metrics to Prometheus, traces to Tempo, and logs to Loki. An instrumented Go demo emits all three signals; GitHub Actions queries each backend and verifies the complete path. The production Go API remains uninstrumented, and the dashboard does not query these backends yet.
+The optional `observability` profile accepts OTLP over gRPC/HTTP and routes metrics to Prometheus, traces to Tempo, and logs to Loki. An instrumented Go demo emits all three signals; GitHub Actions verifies the complete path through the backends and ORBIT API. The production Go API remains uninstrumented.
 
 - [x] Add Docker Compose for PostgreSQL, Redis, and NATS JetStream.
 - [x] Add the Go API container and database readiness dependency.
@@ -43,11 +43,12 @@ The optional `observability` profile accepts OTLP over gRPC/HTTP and routes metr
 
 ## M04 — Real telemetry
 
-The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through bounded, source-labelled endpoints. The v0.7.0 dashboard renders Metrics, Logs, and Traces views with selectable time windows, refresh, query timestamps, and explicit loading/empty/error states. Queries are fixed and do not accept arbitrary PromQL/LogQL from callers. The current metric view uses the instrumented demo request-rate counter.
+The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through bounded, source-labelled endpoints. The v0.7.0 dashboard renders Metrics, Logs, and Traces views with selectable time windows, refresh, query timestamps, and explicit loading/empty/error states. The v0.8.0 preview adds merged service discovery with backend provenance and a shared dynamic selector. Queries are fixed and do not accept arbitrary PromQL/LogQL from callers; the current request-rate metric is the instrumented demo counter.
 
 - [x] Verify OTLP metrics, traces, and logs reach all three local backends from an instrumented workload.
 - [x] Add bounded ORBIT API queries for Prometheus request-rate metrics, Loki service logs, and Tempo trace search.
-- [ ] Normalize service/resource attributes into ORBIT's service inventory.
+- [x] Discover service names across Prometheus, Loki, and Tempo, merge duplicates, and preserve backend provenance.
+- [ ] Normalize service/resource attributes into ORBIT's persisted service inventory.
 - [ ] Build service catalog from observed telemetry.
 - [ ] Add cursor-based pagination and multi-series metric selection.
 - [x] Render queried telemetry in Metrics, Logs, and Traces dashboard views with loading/empty/error states, query freshness, and backend provenance.
