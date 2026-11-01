@@ -120,7 +120,7 @@ OpenTelemetry Collector
 
 ## Current limitations
 
-- The OIDC resource-server and API role-enforcement slice is implemented on the current security feature branch; browser Authorization Code + PKCE, workspace membership/isolation, and user management are not yet implemented.
+- The OIDC resource-server and API role-enforcement slice is merged in `main` (`977ce49`). Browser Authorization Code + PKCE, workspace membership/isolation, and user management are not yet implemented.
 - Rate limits are process-local and need a shared limiter for multi-instance production deployments.
 - M05 mutation routes, transactional audit records, and operator workflows remain disabled/not implemented until the security gate is merged and the corresponding audit/data model is delivered.
 - The local OTLP pipeline and a dedicated instrumented demo workload are available; the production Go API is not instrumented yet.
