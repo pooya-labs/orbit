@@ -1,6 +1,6 @@
 # ADR 0001 — OIDC access-token validation and API authorization
 
-- **Status:** Proposed; implementation not yet enabled
+- **Status:** Accepted; M06 resource-server implementation in progress
 - **Date:** 2026-11-01
 - **Scope:** ORBIT Go API, future browser client, and M05 state-changing workflows
 
@@ -81,7 +81,7 @@ No provider-specific callback URLs, secrets, client IDs, or tenant settings are 
 
 ### 6. Development and production behavior
 
-- Local development may run without authentication only when `ORBIT_ENVIRONMENT=development` is explicit.
+- Local development may run without authentication only when `ORBIT_ENVIRONMENT=development` is explicit. An unset environment defaults to `production` and fails closed.
 - If issuer/audience configuration is provided in development, authentication is enabled and invalid tokens must fail closed.
 - Staging/production must refuse to start unless issuer, audience, and the required validation/role configuration are present and validated.
 - There is no general-purpose `AUTH_DISABLED=true` production bypass.
