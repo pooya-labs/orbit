@@ -13,6 +13,7 @@ import (
 	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/config"
 	"github.com/pooya16pg-spec/orbit/server/internal/httpapi"
+	"github.com/pooya16pg-spec/orbit/server/internal/ingest"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/store/postgres"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
@@ -64,12 +65,55 @@ func main() {
 		logger.Warn("PostgreSQL is not configured; readiness and data endpoints will be unavailable")
 	}
 
+	var otlpIngestionHandler http.Handler
+	if cfg.OIDCWorkloadAudience != "" {
+		workloadRepository, ok := repository.(store.WorkloadIdentityRepository)
+		if !ok || repository == nil {
+			logger.Error("workload OTLP ingestion requires a PostgreSQL workload identity repository")
+			os.Exit(1)
+		}
+
+		verifierCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		workloadVerifier, verifierErr := auth.NewIngestionVerifier(verifierCtx, auth.Config{
+			Issuer: cfg.OIDCIssuer, Audience: cfg.OIDCWorkloadAudience,
+			RolesClaim: cfg.OIDCRolesClaim, AllowInsecureHTTP: cfg.Environment == "development",
+		}, cfg.OIDCAudience)
+		cancel()
+		if verifierErr != nil {
+			logger.Error("workload OIDC verifier initialization failed", "error", verifierErr)
+			os.Exit(1)
+		}
+		defer workloadVerifier.Close()
+
+		authorizer, authorizerErr := ingest.NewAuthorizer(workloadVerifier, workloadRepository)
+		if authorizerErr != nil {
+			logger.Error("workload telemetry authorizer initialization failed", "error", authorizerErr)
+			os.Exit(1)
+		}
+		forwarder, forwarderErr := ingest.NewCollectorHTTPForwarder(cfg.OTLPCollectorHTTPURL, 10*time.Second)
+		if forwarderErr != nil {
+			logger.Error("OTLP Collector forwarder configuration is invalid", "error", forwarderErr)
+			os.Exit(1)
+		}
+		otlpIngestionHandler, err = ingest.NewHTTPGateway(authorizer, forwarder, ingest.HTTPGatewayConfig{
+			RequestsPerMinute: cfg.RateLimitPerMinute,
+			ForwardTimeout: 10 * time.Second,
+			RateLimitStore: repository,
+		})
+		if err != nil {
+			logger.Error("workload OTLP HTTP gateway initialization failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("authenticated workload OTLP HTTP ingestion enabled")
+	}
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler: httpapi.NewHandler(httpapi.Config{
 			Version: cfg.Version, Environment: cfg.Environment, AllowedOrigins: cfg.AllowedOrigins,
 			Telemetry: telemetryClient, AuthVerifier: authVerifier,
 			RateLimitPerMinute: cfg.RateLimitPerMinute,
+			OTLPIngestionHandler: otlpIngestionHandler,
 		}, repository, logger),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
