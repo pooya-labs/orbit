@@ -43,13 +43,14 @@ The optional `observability` profile accepts OTLP over gRPC/HTTP and routes metr
 
 ## M04 — Real telemetry
 
-The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through bounded, source-labelled endpoints. The v0.7.0 dashboard renders Metrics, Logs, and Traces views with selectable time windows, refresh, query timestamps, and explicit loading/empty/error states. The v0.8.0 preview adds merged service discovery with backend provenance and a shared dynamic selector. Queries are fixed and do not accept arbitrary PromQL/LogQL from callers; the current request-rate metric is the instrumented demo counter.
+The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through bounded, source-labelled endpoints. The v0.7.0 dashboard renders Metrics, Logs, and Traces views with selectable time windows, refresh, query timestamps, and explicit loading/empty/error states. The v0.8.0 preview adds merged service discovery with backend provenance and a shared dynamic selector. The v0.9.0 preview persists observed services and source relationships in PostgreSQL and adds Persian localization with RTL layout. Queries are fixed and do not accept arbitrary PromQL/LogQL from callers; the current request-rate metric is the instrumented demo counter.
 
 - [x] Verify OTLP metrics, traces, and logs reach all three local backends from an instrumented workload.
 - [x] Add bounded ORBIT API queries for Prometheus request-rate metrics, Loki service logs, and Tempo trace search.
 - [x] Discover service names across Prometheus, Loki, and Tempo, merge duplicates, and preserve backend provenance.
-- [ ] Normalize service/resource attributes into ORBIT's persisted service inventory.
-- [ ] Build service catalog from observed telemetry.
+- [x] Persist observed service names and backend provenance in a normalized PostgreSQL catalog.
+- [x] Expose persisted first-seen, last-seen, and last-discovered metadata through the service discovery API.
+- [ ] Populate full OpenTelemetry resource attributes from instrumented workloads.
 - [ ] Add cursor-based pagination and multi-series metric selection.
 - [x] Render queried telemetry in Metrics, Logs, and Traces dashboard views with loading/empty/error states, query freshness, and backend provenance.
 - [ ] Add stale-data and telemetry-gap indicators based on sample timestamps.
