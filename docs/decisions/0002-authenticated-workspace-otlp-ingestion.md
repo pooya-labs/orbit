@@ -86,10 +86,12 @@ Workspace grants must be checked server-side on every ingestion authorization de
 3. [x] Implement OTLP/HTTP and OTLP/gRPC transport handlers with per-request workload verification and workspace/signal grant checks (PRs #28 and #29); dedicated runtime listeners and a separate strict workload verifier are wired in `server/cmd/orbit-api`.
 4. [x] Reject producer-supplied reserved tenant attributes at all traversed OTLP attribute scopes and inject the canonical authorized workspace ID for all three signals (PR #27). PostgreSQL-backed integration tests verify cross-workspace and revocation denial for all signals over HTTP/gRPC. PR #36 verifies forged-attribute rejection, and PR #38 is merged with passing CI for mixed-resource batch rejection across all three signals over both transports.
 5. [x] Isolate the local Compose telemetry services on an internal Docker network and remove host-published raw OTLP ports (PR #26). Production gateway-to-collector network policy and deployment firewall rules remain outstanding.
-6. [ ] Complete oversized-request integration tests for metrics, logs, and traces. Valid-grant, revoked-identity, cross-workspace, forged-attribute, and mixed-resource batch denial coverage is implemented and CI-verified over both transports. PR #39 and PR #40 are merged and CI-passing: workspace query matchers are verified across Prometheus, Loki, and Tempo, and non-members are rejected before backend access.
-7. [ ] Verify end-to-end that a workload authorized for workspace A cannot write data visible under workspace B, even when it supplies B's identifier. Gateway-level denial tests exist; backend-to-query visibility verification remains open.
-8. Run end-to-end tests through Prometheus, Loki, Tempo, and the workspace-scoped ORBIT query endpoints.
-9. Add load, rate-limit, revocation-latency, backup/restore, and deployment-network-policy tests before enabling production ingestion.
+6. [x] Verify oversized-request rejection for metrics, logs, and traces over HTTP/gRPC (PR #42). Valid-grant, revoked-identity, cross-workspace, forged-attribute, mixed-resource batch, and oversized-request denial coverage is implemented and CI-verified over both transports. PR #39 and PR #40 are merged and CI-passing: workspace query matchers are verified across Prometheus, Loki, and Tempo, and non-members are rejected before backend access.
+7. [x] Verify shared rate-limit enforcement across gateway instances and HTTP/gRPC transports (PR #43; merged, CI-passing).
+8. [ ] Complete concurrent multi-replica rate-limit verification (PR #46; CI pending).
+9. [ ] Verify end-to-end that a workload authorized for workspace A cannot write data visible under workspace B, even when it supplies B's identifier. Gateway-level denial tests exist; backend-to-query visibility verification remains open.
+10. Run end-to-end tests through Prometheus, Loki, Tempo, and the workspace-scoped ORBIT query endpoints.
+11. Add load, rate-limit, revocation-latency, backup/restore, and deployment-network-policy tests before enabling production ingestion.
 
 ## Acceptance criteria
 
