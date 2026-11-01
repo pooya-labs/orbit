@@ -92,11 +92,11 @@ docs/                        Architecture, roadmap, local development
 
 ## Roadmap
 
-See [docs/roadmap.md](docs/roadmap.md) and [docs/architecture.md](docs/architecture.md).
+See [docs/roadmap.md](docs/roadmap.md), [docs/architecture.md](docs/architecture.md), and the [OpenAPI 3.1 contract](docs/openapi.yaml). The TypeScript API client and contracts live in `lib/orbit/`.
 
 ## Release status
 
-The v0.1.0 public preview is the dashboard milestone. PostgreSQL-backed API work is in progress and is available for local evaluation through Docker Compose. Live telemetry ingestion, authentication, and hosted backend deployment are not yet implemented.
+The v0.1.0 public preview is the first dashboard release. The v0.2.0 backend foundation adds PostgreSQL-backed services/incidents, an OpenAPI contract, a typed TypeScript client, and a local Docker Compose stack. Live telemetry ingestion, authentication, and hosted backend deployment are not yet implemented.
 
 ## License
 
