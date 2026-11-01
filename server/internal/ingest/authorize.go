@@ -56,20 +56,21 @@ func NewAuthorizer(verifier TokenVerifier, grants WorkloadAuthorizer) (*Authoriz
 }
 
 // BearerToken accepts exactly one Authorization header containing one Bearer
-// credential. Multiple header values and ambiguous whitespace/token forms are
-// rejected rather than selecting an arbitrary credential.
+// credential. It requires one ASCII space between the scheme and credential;
+// tabs, line breaks, comma-joined credentials, and ambiguous spacing are
+// rejected instead of being normalized into a potentially different token.
 func BearerToken(values []string) (string, error) {
 	if len(values) != 1 {
 		return "", ErrInvalidBearer
 	}
-	parts := strings.Fields(values[0])
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+	scheme, token, found := strings.Cut(values[0], " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") || token == "" {
 		return "", ErrInvalidBearer
 	}
-	if strings.ContainsAny(parts[1], ",\r\n\t ") {
+	if strings.TrimSpace(token) != token || strings.ContainsAny(token, ",\r\n\t ") {
 		return "", ErrInvalidBearer
 	}
-	return parts[1], nil
+	return token, nil
 }
 
 // Authorize verifies the workload access token and then checks its verified
