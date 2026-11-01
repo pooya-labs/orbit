@@ -116,10 +116,38 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 		writeJSON(w, http.StatusOK, incidentsResponse{Data: items})
 	})
 
+	mux.HandleFunc("GET /api/v1/telemetry/services", func(w http.ResponseWriter, r *http.Request) {
+		window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_window", err.Error())
+			return
+		}
+		if cfg.Telemetry == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Telemetry backends are not configured")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 7*time.Second)
+		defer cancel()
+		result, err := cfg.Telemetry.Services(ctx, window)
+		if err != nil {
+			writeTelemetryError(w, r, logger, "Telemetry service discovery", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	})
+
 	mux.HandleFunc("GET /api/v1/telemetry/metrics", func(w http.ResponseWriter, r *http.Request) {
 		window, err := telemetry.ParseWindow(r.URL.Query().Get("window"))
 		if err != nil {
 			writeError(w, r, http.StatusBadRequest, "invalid_window", err.Error())
+			return
+		}
+		service := r.URL.Query().Get("service")
+		if service == "" {
+			service = "orbit-telemetry-demo"
+		}
+		if err := telemetry.ValidateServiceName(service); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_service", err.Error())
 			return
 		}
 		if cfg.Telemetry == nil {
@@ -128,7 +156,7 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 7*time.Second)
 		defer cancel()
-		result, err := cfg.Telemetry.Metrics(ctx, window)
+		result, err := cfg.Telemetry.Metrics(ctx, window, service)
 		if err != nil {
 			writeTelemetryError(w, r, logger, "Prometheus", err)
 			return
