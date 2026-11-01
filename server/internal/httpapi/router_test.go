@@ -780,3 +780,84 @@ func TestSharedSubjectRateLimitIsConsistentAcrossHandlers(t *testing.T) {
 		}
 	}
 }
+
+
+func (f *fakeRepository) CreateWorkspace(_ context.Context, input store.CreateWorkspaceInput) (store.Workspace, error) {
+	return store.Workspace{ID: "00000000-0000-4000-8000-000000000001", Name: input.Name, Slug: input.Slug, CreatedAt: time.Now().UTC()}, nil
+}
+
+func (f *fakeRepository) ListWorkspacesForPrincipal(_ context.Context, issuer, subject string) ([]store.Workspace, error) {
+	if issuer != "https://identity.example" || subject != "member-1" {
+		return []store.Workspace{}, nil
+	}
+	return []store.Workspace{{ID: "00000000-0000-4000-8000-000000000001", Name: "Test", Slug: "test"}}, nil
+}
+
+func (f *fakeRepository) GetWorkspaceMembership(_ context.Context, workspaceID, issuer, subject string) (store.WorkspaceMembership, error) {
+	if workspaceID != "00000000-0000-4000-8000-000000000001" || issuer != "https://identity.example" || subject != "member-1" {
+		return store.WorkspaceMembership{}, store.ErrWorkspaceMembershipNotFound
+	}
+	return store.WorkspaceMembership{WorkspaceID: workspaceID, UserIssuer: issuer, UserSubject: subject, Role: "owner"}, nil
+}
+
+func (f *fakeRepository) AppendWorkspaceAuditEvent(_ context.Context, event store.WorkspaceAuditEvent) (store.WorkspaceAuditEvent, error) {
+	event.ID = "00000000-0000-4000-8000-000000000002"
+	event.CreatedAt = time.Now().UTC()
+	return event, nil
+}
+
+func (f *fakeRepository) ListWorkspaceAuditEvents(_ context.Context, workspaceID string, _ int) ([]store.WorkspaceAuditEvent, error) {
+	if workspaceID != "00000000-0000-4000-8000-000000000001" {
+		return nil, store.ErrWorkspaceNotFound
+	}
+	return []store.WorkspaceAuditEvent{{ID: "00000000-0000-4000-8000-000000000002", WorkspaceID: workspaceID, Action: "workspace.created"}}, nil
+}
+
+func TestWorkspaceRoutesRequireAuthenticatedMembership(t *testing.T) {
+	repository := &fakeRepository{}
+	viewer := fixedTokenVerifier{principal: auth.Principal{
+		Issuer: "https://identity.example", Subject: "member-1", Roles: []string{"viewer"},
+	}}
+	handler := NewHandler(Config{Environment: "production", AuthVerifier: viewer}, repository, testLogger())
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces", nil)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "\"slug\":\"test\"") {
+		t.Fatalf("workspace list status/body = %d %s", recorder.Code, recorder.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/audit-events", nil)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "workspace.created") {
+		t.Fatalf("member audit read status/body = %d %s", recorder.Code, recorder.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/00000000-0000-4000-8000-000000000099/audit-events", nil)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("cross-workspace audit read status = %d, want 404", recorder.Code)
+	}
+}
+
+func TestWorkspaceCreationUsesVerifiedPrincipal(t *testing.T) {
+	repository := &fakeRepository{}
+	operator := fixedTokenVerifier{principal: auth.Principal{
+		Issuer: "https://identity.example", Subject: "member-1", Roles: []string{"operator"},
+	}}
+	handler := NewHandler(Config{Environment: "production", AuthVerifier: operator}, repository, testLogger())
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces", strings.NewReader(`{"name":"My workspace","slug":"my-workspace"}`))
+	request.Header.Set("Authorization", "Bearer valid-token")
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusCreated || !strings.Contains(recorder.Body.String(), "\"slug\":\"my-workspace\"") {
+		t.Fatalf("workspace create status/body = %d %s", recorder.Code, recorder.Body.String())
+	}
+}
