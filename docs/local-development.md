@@ -6,7 +6,7 @@
 - Git
 - Node.js 20+ and npm
 - Docker Desktop (for the backend stack)
-- Go 1.24+ (only if running the API directly)
+- Go 1.24+ (API); Docker builds the Go 1.25 telemetry demo
 
 ## Clone the repository
 
@@ -62,7 +62,7 @@ docker compose down -v
 The Collector, Prometheus, Loki, and Tempo are opt-in so a normal development session stays lightweight:
 
 ```powershell
-docker compose --profile observability up -d prometheus loki tempo otel-collector
+docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo
 ```
 
 | Service | Local endpoint |
@@ -74,9 +74,9 @@ docker compose --profile observability up -d prometheus loki tempo otel-collecto
 | Loki readiness | http://localhost:3100/ready |
 | Tempo readiness | http://localhost:3200/ready |
 
-The Collector routes OTLP metrics to Prometheus, traces to Tempo, and logs to Loki. All ports bind to loopback and the backends have no authentication; do not expose them outside your development machine. Prometheus and Loki retain seven days of data in named volumes. Stop these services with `docker compose stop prometheus loki tempo otel-collector`.
+The `telemetry-demo` workload is instrumented using the OpenTelemetry Go SDK. Send a sample request with `curl http://localhost:8081/emit`; it returns a trace ID and emits a metric, trace, and structured log. Query metrics in Prometheus at http://localhost:9090, logs in Loki at http://localhost:3100, and traces in Tempo at http://localhost:3200. The Collector routes OTLP metrics to Prometheus, traces to Tempo, and logs to Loki. All ports bind to loopback and the backends have no authentication; do not expose them outside your development machine. Prometheus and Loki retain seven days of data in named volumes. Stop these services with `docker compose stop prometheus loki tempo otel-collector telemetry-demo`.
 
-The Go API and the sample workload are not instrumented yet, and the dashboard does not query these backends. That is intentionally tracked as the next telemetry milestone.
+The dedicated demo workload is instrumented and its three OTLP signal paths are covered by CI. The production Go API is not instrumented yet, and the dashboard does not query these backends.
 
 ## Connect the local dashboard to the API
 
