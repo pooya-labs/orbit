@@ -38,7 +38,7 @@ const messages = {
     language: "Language", english: "English", persian: "فارسی", closeNavigation: "Close navigation",
     openNavigation: "Open navigation", notifications: "Notifications", searchServicesLabel: "Search services",
     refreshApi: "Refresh API data", pauseRefresh: "Pause demo refresh", resumeRefresh: "Resume demo refresh",
-    refresh: "Refresh", unknown: "Unknown", operational: "Operational", incident: "Incident", unknownStatus: "Unknown",
+    refresh: "Refresh", unknown: "Unknown", operational: "Operational", incident: "Incident", unknownStatus: "Unknown", critical: "Critical", high: "High", medium: "Medium", low: "Low", open: "Open", investigating: "Investigating", monitoring: "Monitoring", resolved: "Resolved",
     regionUnavailable: "region unavailable", timeUnavailable: "time unavailable", justNow: "just now", minAgo: "min ago",
     hrAgo: "hr ago", dayAgo: "d ago", invalidApiUrl: "Enter an API base URL such as http://localhost:8080.",
     validApiUrl: "Enter a valid API URL.", connectFailed: "Unable to connect to the ORBIT API."
@@ -80,7 +80,7 @@ const messages = {
     language: "زبان", english: "English", persian: "فارسی", closeNavigation: "بستن پیمایش",
     openNavigation: "باز کردن پیمایش", notifications: "اعلان‌ها", searchServicesLabel: "جست‌وجوی سرویس‌ها",
     refreshApi: "به‌روزرسانی داده‌های API", pauseRefresh: "توقف به‌روزرسانی نمایشی", resumeRefresh: "ادامهٔ به‌روزرسانی نمایشی",
-    refresh: "به‌روزرسانی", unknown: "نامشخص", operational: "عملیاتی", incident: "دارای رخداد", unknownStatus: "نامشخص",
+    refresh: "به‌روزرسانی", unknown: "نامشخص", operational: "عملیاتی", incident: "دارای رخداد", unknownStatus: "نامشخص", critical: "بحرانی", high: "زیاد", medium: "متوسط", low: "کم", open: "باز", investigating: "در دست بررسی", monitoring: "تحت پایش", resolved: "برطرف‌شده",
     regionUnavailable: "منطقه نامشخص", timeUnavailable: "زمان نامشخص", justNow: "همین الان", minAgo: "دقیقه پیش",
     hrAgo: "ساعت پیش", dayAgo: "روز پیش", invalidApiUrl: "نشانی پایهٔ API را وارد کن؛ برای نمونه http://localhost:8080.",
     validApiUrl: "یک نشانی معتبر API وارد کن.", connectFailed: "اتصال به ORBIT API ممکن نشد."
