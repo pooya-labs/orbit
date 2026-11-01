@@ -63,7 +63,7 @@ Install Docker Desktop, then from the repository root:
 docker compose up --build
 ```
 
-This starts PostgreSQL, Redis, NATS, and the Go API. On its first start the API applies the initial SQL migration and inserts five sample services and two sample incidents, each marked with source `demo_seed`.
+This starts PostgreSQL, Redis, NATS, and the Go API. On its first start the API applies the versioned SQL migrations (`001_initial` and `002_telemetry_service_catalog`) and inserts five sample services and two sample incidents, each marked with source `demo_seed`.
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -97,7 +97,7 @@ The discovery response merges valid names from Prometheus, Loki, and Tempo, reco
 
 These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus keeps seven days of metrics and Loki is configured for seven-day log retention; data volumes persist until removed. Stop only these services with `docker compose stop postgres api prometheus loki tempo otel-collector telemetry-demo`.
 
-The local sample service proves end-to-end delivery of all three OTLP signals. The Go API exposes bounded read-only queries to Prometheus, Loki, and Tempo, and the dashboard now renders those query results in separate Metrics, Logs, and Traces views. The production Go API does not yet export its own telemetry, and observed services are not yet normalized into the service catalog.
+The local sample service proves end-to-end delivery of all three OTLP signals. The Go API exposes bounded read-only queries to Prometheus, Loki, and Tempo, and the dashboard renders those results in separate Metrics, Logs, and Traces views. Discovered service names and source provenance are now normalized and persisted in PostgreSQL. Full OpenTelemetry resource-attribute extraction is still pending, and the production Go API does not yet export its own telemetry.
 
 ## Quality checks
 
