@@ -63,6 +63,7 @@ type Verifier struct {
 	keys        jwk.Set
 	expiresAt   time.Time
 	lastRefresh time.Time
+	lastUnknownRefresh time.Time
 }
 
 type tokenClaims struct {
@@ -270,9 +271,10 @@ func (v *Verifier) lookupKey(ctx context.Context, keyID string) (jwk.Set, jwk.Ke
 		if key, ok := v.keys.LookupKeyID(keyID); ok {
 			return v.keys, key, nil
 		}
-		if now.Sub(v.lastRefresh) < minForcedRefresh {
+		if !v.lastUnknownRefresh.IsZero() && now.Sub(v.lastUnknownRefresh) < minForcedRefresh {
 			return nil, nil, ErrMissingKey
 		}
+		v.lastUnknownRefresh = now
 	}
 	oldKeys := v.keys
 	if err := v.refreshLocked(ctx); err != nil {
