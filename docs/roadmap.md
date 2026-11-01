@@ -15,6 +15,8 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 
 ## M02 — API and persistence foundation
 
+The browser dashboard can now read service and incident inventories from a configured API endpoint. Aggregate metrics remain visibly unavailable until telemetry ingestion exists.
+
 - [x] Create Go API module and server lifecycle.
 - [x] Add liveness, readiness, and metadata endpoints.
 - [x] Add request IDs, structured HTTP logs, safe error envelopes, and panic recovery.
@@ -24,7 +26,7 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 - [x] Add PostgreSQL-backed integration tests in CI.
 - [x] Publish OpenAPI 3.1 contract.
 - [x] Add typed frontend API client and explicit API error types.
-- [ ] Add a separate demo-data provider and connect the dashboard through a source switch.
+- [x] Separate demo fixtures from the dashboard and add an explicit Demo / ORBIT API source switch with connection validation.
 - [ ] Connect the public dashboard to a hosted API after backend deployment and CORS/auth design.
 
 ## M03 — Local platform
