@@ -94,6 +94,7 @@ type Config struct {
 	Telemetry        *telemetry.Client
 	AuthVerifier       TokenVerifier
 	RateLimitPerMinute int
+	OTLPIngestionHandler http.Handler
 }
 
 type statusResponse struct {
@@ -131,6 +132,9 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 
 	mux := http.NewServeMux()
 	registerWorkspaceRoutes(mux, repository, cfg.Telemetry, logger)
+	if cfg.OTLPIngestionHandler != nil {
+		mux.Handle("/v1/workspaces/", cfg.OTLPIngestionHandler)
+	}
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, statusResponse{Status: "ok"})
 	})
