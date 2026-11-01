@@ -333,7 +333,7 @@ func TestAuthenticatedOTLPGatewaysRejectProducerWorkspaceSpoofingForEverySignal(
 			}
 			if grpcForwarder.metricsCalls != 0 || grpcForwarder.logsCalls != 0 || grpcForwarder.tracesCalls != 0 {
 				t.Fatalf("spoofed %s payload reached gRPC Collector forwarder: metrics=%d logs=%d traces=%d",
-					signal, grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
+					signal, signal, grpcForwarder.metricsCalls, grpcForwarder.logsCalls, grpcForwarder.tracesCalls)
 			}
 		})
 	}
