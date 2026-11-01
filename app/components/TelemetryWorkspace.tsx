@@ -31,10 +31,11 @@ const windows: { value: TelemetryWindow; label: string }[] = [
 ];
 
 function formatClock(timestamp: number | string): string {
+  const numericTimestamp = typeof timestamp === "string" ? Number(timestamp) : timestamp;
   const value = typeof timestamp === "number"
     ? timestamp
-    : /^\\d+$/.test(timestamp)
-      ? Number(timestamp)
+    : timestamp.trim() !== "" && Number.isFinite(numericTimestamp)
+      ? numericTimestamp
       : Date.parse(timestamp);
   if (!Number.isFinite(value)) return "Time unavailable";
   const date = new Date(value);
