@@ -95,12 +95,15 @@ func (r *Repository) SetWorkloadIdentityStatus(ctx context.Context,id,actorIssue
  if err:=validateWorkloadPrincipal(actorIssuer,actorSubject);err!=nil{return err}
  tx,err:=r.pool.Begin(ctx);if err!=nil{return fmt.Errorf("begin workload status change: %w",err)}
  defer func(){_=tx.Rollback(ctx)}()
- var found string
- err=tx.QueryRow(ctx,`
+ var currentStatus string
+ err=tx.QueryRow(ctx,`SELECT status FROM workload_identities WHERE id=$1::uuid FOR UPDATE`,id).Scan(&currentStatus)
+ if errors.Is(err,pgx.ErrNoRows){return store.ErrWorkloadIdentityNotFound};if err!=nil{return fmt.Errorf("read workload status: %w",err)}
+ if currentStatus=="revoked" && status!="revoked" { return store.ErrWorkloadAuthorizationDenied }
+ _,err=tx.Exec(ctx,`
  UPDATE workload_identities SET status=$2,revoked_at=CASE WHEN $2='revoked' THEN COALESCE(revoked_at,NOW()) ELSE NULL END,updated_at=NOW()
- WHERE id=$1::uuid RETURNING id::text
- `,id,status).Scan(&found)
- if errors.Is(err,pgx.ErrNoRows){return store.ErrWorkloadIdentityNotFound};if err!=nil{return fmt.Errorf("update workload status: %w",err)}
+ WHERE id=$1::uuid
+ `,id,status)
+ if err!=nil{return fmt.Errorf("update workload status: %w",err)}
  action:="workload.disabled";if status=="revoked"{action="workload.revoked"} else if status=="active"{action="workload.enabled"}
  if _,err=tx.Exec(ctx,`
  INSERT INTO workload_identity_audit_events(workload_identity_id,actor_issuer,actor_subject,action,details)
