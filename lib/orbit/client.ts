@@ -1,3 +1,4 @@
+import { getAccessToken } from "./oidc";
 import type {
   ApiErrorPayload,
   ApiMetadata,
@@ -47,11 +48,17 @@ async function getJSON<T>(
     );
   }
 
+  const accessToken = await getAccessToken();
+  const headers: HeadersInit = {
+    Accept: "application/json",
+    ...(accessToken ? { Authorization: "Bearer " + accessToken } : {}),
+  };
+
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers,
       cache: "no-store",
       credentials: "omit",
       signal,
