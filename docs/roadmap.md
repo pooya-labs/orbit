@@ -108,3 +108,15 @@ Workspace-scoped telemetry query routes are merged and CI-verified in PR #18. Pr
 PR #48 is merged into `main` (squash merge commit `3c5619d380b498a50660415b68175f8266c48a71`). CI run `41352185701` completed successfully: Go API tests/build, web typecheck/production build, and the local telemetry pipeline end-to-end smoke test all passed. The PostgreSQL-backed integration test uses four independent gateway/authorizer instances (two HTTP, two gRPC) and verifies that signal-grant revocation and workload-identity revocation are observed by other replicas for metrics, logs, and traces; denied requests do not reach the Collector forwarders.
 
 The test establishes read-after-commit revocation for requests authorized after the revocation transaction commits. It does not establish cancellation of requests that completed authorization before that commit. In-flight revocation ordering/cancellation remains an explicit open design and test item. Production ingestion remains disabled until TLS/network policy, in-flight semantics, broader load testing, real-provider PKCE, and operational runbooks are complete.
+
+
+## M06 PR #50 — in-flight revocation contract
+
+- [x] Define and CI-verify in-flight revocation semantics for OTLP/HTTP and OTLP/gRPC (PR #50; merge commit `45680118f44c3cd35f64214072085e6ca1a43de6`; CI run `41352877449` passed all three jobs).
+- [x] Establish the authorization boundary: an export already authorized and admitted to the Collector forwarder may finish after a later revocation commit; authorization beginning after the commit must fail closed and must not be forwarded.
+- [ ] Add broader load/capacity, burst, concurrency, database/Collector outage, timeout, and backpressure tests.
+- [ ] Verify production ingress TLS termination, trusted-proxy behavior, firewall/NetworkPolicy restrictions, and Collector/backend isolation.
+- [ ] Configure and end-to-end verify a real OIDC provider for browser PKCE, including callback, state/nonce, issuer/audience validation, and key rotation.
+- [ ] Complete dependency/secrets review, telemetry retention/cardinality controls, backup/restore, deployment and incident-response runbooks.
+
+The in-flight contract does not cancel or roll back data already admitted to the Collector. Production tenant ingestion remains disabled until the remaining production gates are verified.
