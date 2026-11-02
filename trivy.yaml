@@ -1,0 +1,3 @@
+vulnerability:
+  vex:
+    - security/vex/tempo-cve-2026-28377.openvex.json
