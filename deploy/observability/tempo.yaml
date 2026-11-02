@@ -4,6 +4,7 @@ server:
   http_listen_port: 3200
 
 distributor:
+  max_attribute_bytes: 1024
   receivers:
     otlp:
       protocols:
@@ -11,6 +12,29 @@ distributor:
           endpoint: 0.0.0.0:4317
         http:
           endpoint: 0.0.0.0:4318
+
+backend_scheduler:
+  provider:
+    retention:
+      interval: 1h
+    compaction:
+      measure_interval: 1m
+      compaction:
+        block_retention: 168h
+        compacted_block_retention: 1h
+        compaction_window: 1h
+        max_block_bytes: 1073741824
+      max_jobs_per_tenant: 1000
+      min_input_blocks: 2
+      max_input_blocks: 4
+      min_cycle_interval: 30s
+
+overrides:
+  defaults:
+    ingestion:
+      max_traces_per_user: 10000
+    global:
+      max_bytes_per_trace: 5000000
 
 storage:
   trace:
