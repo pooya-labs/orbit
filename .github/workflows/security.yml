@@ -1,0 +1,117 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  secrets:
+    name: Full-history secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Scan repository history with Gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+  dependencies:
+    name: Dependency vulnerability checks
+    permissions:
+      contents: write
+      pull-requests: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27.x"
+          cache-dependency-path: server/go.sum
+
+      - name: Refresh reachable Go dependencies on same-repository pull requests
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        working-directory: server
+        run: |
+          set -euo pipefail
+          go get github.com/jackc/pgx/v5@v5.9.2
+          go get google.golang.org/grpc@v1.83.2
+          go get golang.org/x/text@v0.42.0
+          go mod tidy
+          go get golang.org/x/net@v0.60.0
+          go mod download golang.org/x/net@v0.60.0
+          test "$(go list -m -f '{{.Version}}' golang.org/x/net)" = "v0.60.0"
+          go mod verify
+
+      - name: Commit security-fixed Go module metadata
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if git diff --quiet -- server/go.mod server/go.sum; then
+            echo "Go module metadata is already at security-fixed versions."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/go.mod server/go.sum
+          git commit -m "fix(deps): patch reachable Go vulnerabilities"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+
+      - name: Scan reachable Go vulnerabilities
+        working-directory: server
+        run: govulncheck ./...
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+
+      - name: Generate npm lockfile when missing
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Commit npm lockfile
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if [ -z "$(git status --porcelain -- package-lock.json)" ]; then
+            echo "npm lockfile is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "build(npm): add deterministic dependency lockfile"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
+
+      - name: Audit npm dependency lockfile
+        run: npm audit --audit-level=high
+
+      - name: Review dependency changes in pull requests
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
+        with:
+          fail-on-severity: high
