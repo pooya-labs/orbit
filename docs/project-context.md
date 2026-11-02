@@ -485,3 +485,17 @@ PR #90 was squash-merged into `main` as `4a4c46445d7f6b0129cba647d1bd71c49bbd0d4
 The final telemetry CI job passed all stages: private network/Compose validation, telemetry stack startup and readiness, OTLP metrics/logs/traces through the ORBIT API, Prometheus Collector scrape, authenticated workspace A-vs-B write-to-query isolation, and cleanup. Security confirmed the pinned Tempo upstream release revision, the VEX-aware Trivy result, the telemetry demo dependency fixes, Gitleaks, govulncheck, npm audit, and Dependency Review.
 
 The corresponding completion checkboxes are updated in `docs/roadmap.md`. Remaining work is explicitly separated into environment-level gates and policy decisions; production tenant ingestion remains disabled until they pass.
+
+## M04 PR #91 — workspace-scoped workload resource attributes — 2026-11-02
+
+Branch: `feat/m04-workload-resource-attributes`.
+
+- Adds migration `016_workspace_otlp_resource_attributes.sql`: telemetry service uniqueness becomes `(workspace_id, name)`, and `otlp` becomes an allowed telemetry source.
+- Adds a curated resource attribute extractor for OTLP metrics, logs, and traces. It runs only after successful workload token verification, workspace/signal grant authorization, rejection of producer-supplied tenant fields, and injection of the canonical workspace ID.
+- Captures only reviewed low-risk semantic-convention keys; excludes user identifiers, command lines, pod UIDs, arbitrary attributes, and unsupported composite values. Bounds are 32 keys, 8 values per key, and 256 bytes per string.
+- Adds PostgreSQL persistence with an independent allowlist check, per-attribute `otlp` provenance, and workspace-keyed upserts. Legacy unscoped catalog queries and attribute updates are explicitly limited to `legacy-default` so the old catalog cannot reveal other workspaces.
+- Wires both HTTP and gRPC gateways. Metadata persistence occurs only after a successful Collector export; a metadata-store failure emits an operational warning without changing the successful OTLP response.
+- Adds extraction/allowlist tests, gateway recording tests, PostgreSQL workspace A/B persistence tests, and extends the real workspace write-to-query E2E to assert per-workspace resource metadata. Latest CI must confirm these tests.
+- Adds the workspace telemetry catalog route to OpenAPI and documents the source provenance.
+
+Do not merge until all current-head CI, Security, and Pages checks pass. Production tenant ingestion remains disabled pending the separate production ingress, identity-provider, backup/PITR, sustained-load, and operational acceptance gates.
