@@ -105,10 +105,6 @@ function statusKey(status: AlertInstanceStatus): TranslationKey {
   }
 }
 
-function ruleMatches(instance: WorkspaceAlertInstance, rule: WorkspaceAlertRule): boolean {
-  return instance.alert_rule_id === rule.id;
-}
-
 export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Props) {
   const [user, setUser] = useState<OrbitAuthUser | null>(() => getCurrentAuthUser());
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
@@ -487,16 +483,14 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
               </div>
               {visibleInstances.length === 0 && !loading ? <div className="alert-empty">{t(language, "alertNoInstances")}</div> :
                 <div className="alert-instance-list">
-                  {visibleInstances.map((item) => {
-                    const rule = rules.find((candidate) => ruleMatches(item, candidate));
-                    return (
+                  {visibleInstances.map((item) => (
                       <article className="alert-instance-card" key={item.id}>
                         <div className="alert-instance-top">
                           <span className={`alert-status-pill status-${item.status}`}>{t(language, statusKey(item.status))}</span>
                           <span className={`alert-severity severity-${item.severity}`}>{t(language, item.severity)}</span>
                         </div>
                         <strong className="alert-instance-title">{item.rule_name}</strong>
-                        <p>{item.service_name} · {rule?.name ?? item.metric}</p>
+                        <p>{item.service_name} · {item.metric}</p>
                         <div className="alert-instance-values">
                           <span>{t(language, "alertCurrentValue")} <strong>{number(item.value, language, 3)} req/s</strong></span>
                           <span>{t(language, "alertThreshold")} <strong>{item.operator} {number(item.threshold, language, 3)} req/s</strong></span>
@@ -505,13 +499,11 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
                         {item.fired_at && <small><Activity size={11} /> {t(language, "alertFiredAt")} {dateTime(item.fired_at, language)}</small>}
                         {item.resolved_at && <small><Check size={11} /> {t(language, "alertResolvedAt")} {dateTime(item.resolved_at, language)}</small>}
                       </article>
-                    );
-                  })}
+                  ))}
                 </div>
               }
             </section>
           </div>
-          {!canManage && membership && <p className="alert-readonly-note"><ShieldCheck size={12} /> {t(language, "alertRoleReadOnly")}</p>}
           <p className="alert-footnote"><Activity size={12} /> {t(language, "alertOnlyRequestRate")} · {t(language, "alertAutoRefresh")}</p>
         </>
       )}
