@@ -3,7 +3,7 @@ export type Language = "en" | "fa";
 const messages = {
   en: {
     workspace: "Workspace", production: "PRODUCTION", observe: "OBSERVE", investigate: "INVESTIGATE", deliver: "DELIVER",
-    all: "All", cancel: "Cancel", saving: "Saving…",
+    all: "All", cancel: "Cancel", saving: "Saving…", loading: "Loading…", yes: "Yes", no: "No",
     incidentOperations: "INCIDENT OPERATIONS",
     incidentWorkspaceTitle: "Incident operations",
     incidentWorkspaceSubtitle: "Manage workspace incidents, status transitions, and the immutable activity timeline.",
@@ -228,7 +228,7 @@ const messages = {
   },
   fa: {
     workspace: "فضای کاری", production: "محیط عملیاتی", observe: "پایش", investigate: "بررسی", deliver: "انتشار",
-    all: "همه", cancel: "انصراف", saving: "در حال ذخیره…",
+    all: "همه", cancel: "انصراف", saving: "در حال ذخیره…", loading: "در حال بارگذاری…", yes: "بله", no: "خیر",
     incidentOperations: "مدیریت رخدادها",
     incidentWorkspaceTitle: "مدیریت رخدادها",
     incidentWorkspaceSubtitle: "مدیریت رخدادهای فضای کاری، تغییر وضعیت‌ها و تاریخچهٔ تغییرناپذیر فعالیت‌ها.",
