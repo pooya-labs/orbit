@@ -167,6 +167,8 @@ func main() {
 			RequestsPerMinute: cfg.RateLimitPerMinute,
 			ForwardTimeout: 10 * time.Second,
 			RateLimitStore: rateLimitStore,
+			ResourceAttributeRecorder: resourceAttributeRecorder,
+			OnResourceAttributeError: onResourceAttributeError,
 		})
 		if err != nil {
 			logger.Error("OTLP gRPC gateway initialization failed", "error", err)
