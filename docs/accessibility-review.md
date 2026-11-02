@@ -9,7 +9,7 @@ The keyboard and landmark baseline is implemented on `feat/m01-accessibility-rev
 - A first-in-order, localized skip link moves keyboard users to the primary content landmark.
 - The application shell is a neutral container; the dashboard content is exposed as the page's `main` landmark.
 - The sidebar exposes a named primary-navigation landmark, semantic group headings, and an active item announced with `aria-current="page"`.
-- The mobile navigation trigger exposes its expanded state and controlled navigation region. Opening the drawer moves focus to its close control. Escape closes it, Tab and Shift+Tab remain within the open drawer, and closing restores focus to the trigger. The closed off-canvas navigation is hidden from keyboard navigation.
+- The updated page heading is announced politely when client-side navigation changes the selected view. The mobile navigation trigger exposes its expanded state and controlled navigation region. Opening the drawer moves focus to its close control. Escape closes it, Tab and Shift+Tab remain within the open drawer, and closing restores focus to the trigger. The closed off-canvas navigation is hidden from keyboard navigation.
 - Links and interactive controls share a high-visibility `:focus-visible` treatment. Existing `prefers-reduced-motion` rules remain in place.
 - English and Persian labels are supplied for the skip link and primary navigation.
 
