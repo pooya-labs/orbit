@@ -1,5 +1,9 @@
 import { getAccessToken } from "./oidc";
 import type {
+  AlertInstanceStatus,
+  AlertRuleOperator,
+  WorkspaceAlertInstance,
+  WorkspaceAlertRule,
   ApiErrorPayload,
   ApiMetadata,
   DataEnvelope,
@@ -40,7 +44,7 @@ function resolveApiBaseUrl(override?: string): string {
 
 async function requestJSON<T>(
   path: string,
-  method: "GET" | "POST" | "PATCH",
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   body?: unknown,
   signal?: AbortSignal,
   baseUrlOverride?: string,
@@ -76,6 +80,10 @@ async function requestJSON<T>(
       throw error;
     }
     throw new OrbitApiError("The ORBIT API could not be reached. Check the URL, network, and CORS allowlist.", 0, "network_error");
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   const payload: unknown = await response.json().catch(() => null);
@@ -133,6 +141,108 @@ export async function listWorkspaceServices(
     baseUrl,
   );
   return response.data;
+}
+
+export async function listWorkspaceAlertRules(
+  workspaceId: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceAlertRule[]> {
+  const response = await getJSON<DataEnvelope<WorkspaceAlertRule>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alert-rules?limit=100`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function listWorkspaceAlerts(
+  workspaceId: string,
+  status?: AlertInstanceStatus,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceAlertInstance[]> {
+  const query = new URLSearchParams({ limit: "100" });
+  if (status) query.set("status", status);
+  const response = await getJSON<DataEnvelope<WorkspaceAlertInstance>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alerts?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export type WorkspaceAlertRuleInput = {
+  name: string;
+  description: string;
+  service_name: string;
+  metric: "request_rate";
+  operator: AlertRuleOperator;
+  threshold: number;
+  window_seconds: number;
+  pending_seconds: number;
+  severity: WorkspaceAlertRule["severity"];
+};
+
+export async function createWorkspaceAlertRule(
+  workspaceId: string,
+  input: WorkspaceAlertRuleInput,
+  baseUrl?: string,
+): Promise<WorkspaceAlertRule> {
+  const response = await requestJSON<{ data: WorkspaceAlertRule }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alert-rules`,
+    "POST",
+    input,
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function updateWorkspaceAlertRule(
+  workspaceId: string,
+  ruleId: string,
+  input: WorkspaceAlertRuleInput,
+  baseUrl?: string,
+): Promise<WorkspaceAlertRule> {
+  const response = await requestJSON<{ data: WorkspaceAlertRule }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alert-rules/${encodeURIComponent(ruleId)}`,
+    "PUT",
+    input,
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function setWorkspaceAlertRuleEnabled(
+  workspaceId: string,
+  ruleId: string,
+  enabled: boolean,
+  baseUrl?: string,
+): Promise<WorkspaceAlertRule> {
+  const response = await requestJSON<{ data: WorkspaceAlertRule }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alert-rules/${encodeURIComponent(ruleId)}/enabled`,
+    "PATCH",
+    { enabled },
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function deleteWorkspaceAlertRule(
+  workspaceId: string,
+  ruleId: string,
+  baseUrl?: string,
+): Promise<void> {
+  await requestJSON<void>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alert-rules/${encodeURIComponent(ruleId)}`,
+    "DELETE",
+    undefined,
+    undefined,
+    baseUrl,
+  );
 }
 
 export async function listWorkspaceIncidents(

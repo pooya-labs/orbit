@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import TelemetryWorkspace, { type TelemetryView } from "./components/TelemetryWorkspace";
 import AuthControls from "./components/AuthControls";
 import IncidentWorkspace from "./components/IncidentWorkspace";
+import AlertWorkspace from "./components/AlertWorkspace";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -502,7 +503,9 @@ export default function Home() {
             </section>
           )}
 
-{activeNav === "Incidents" ? (
+{activeNav === "Alert rules" ? (
+              <AlertWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
+            ) : activeNav === "Incidents" ? (
               <IncidentWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
             ) : telemetryView ? (
             sourceMode === "api" ? (
