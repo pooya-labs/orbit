@@ -203,8 +203,6 @@ jobs:
             image: prom/prometheus:v3.15.1
           - name: Loki
             image: grafana/loki:3.7.9
-          - name: Caddy production ingress
-            image: caddy:2.11.7-alpine
           - name: Go API build and isolation-test base
             image: golang:1.27-alpine
           - name: Telemetry demo Go build base
@@ -273,3 +271,28 @@ jobs:
           exit-code: "1"
           format: table
           timeout: 20m
+
+  caddy-image:
+    name: Build and scan patched Caddy ingress image
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build Caddy with patched dependencies
+        run: docker build --pull --file deploy/production/caddy.Dockerfile --tag orbit-caddy:ci .
+
+      - name: Scan Caddy ingress for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-caddy:ci
+          version: v0.76.1
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          format: table
+          timeout: 15m
