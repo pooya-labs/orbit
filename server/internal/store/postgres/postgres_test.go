@@ -709,3 +709,85 @@ func TestWorkspaceAuditActorContextMigrationBackfillsLegacyEvents(t *testing.T) 
 		t.Fatal("audit actor mapping became mutable after the migration")
 	}
 }
+
+func TestWorkloadResourceAttributesRemainWorkspaceScoped(t *testing.T) {
+	databaseURL := os.Getenv("ORBIT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("ORBIT_TEST_DATABASE_URL is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	repository, err := Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open repository: %v", err)
+	}
+	defer repository.Close()
+
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	create := func(label string) store.Workspace {
+		workspace, createErr := repository.CreateWorkspace(ctx, store.CreateWorkspaceInput{
+			Name: "Resource attributes " + label + " " + suffix,
+			Slug: "resource-attributes-" + label + "-" + suffix,
+			OwnerIssuer: "https://resource-attributes-test.example/",
+			OwnerSubject: label + "-" + suffix,
+		})
+		if createErr != nil {
+			t.Fatalf("create %s workspace: %v", label, createErr)
+		}
+		return workspace
+	}
+	workspaceA := create("alpha")
+	workspaceB := create("bravo")
+	serviceName := "shared-service-" + suffix
+
+	record := func(workspaceID, version string) {
+		t.Helper()
+		err := repository.RecordWorkloadResourceAttributes(ctx, workspaceID, []store.WorkloadResourceObservation{{
+			ServiceName: serviceName,
+			Attributes: map[string]any{
+				"service.name":    []any{serviceName},
+				"service.version": []any{version},
+				"cloud.region":    []any{"eu-central-1"},
+			},
+		}})
+		if err != nil {
+			t.Fatalf("record workload attributes for %s: %v", workspaceID, err)
+		}
+	}
+	record(workspaceA.ID, "1.2.3")
+	record(workspaceB.ID, "4.5.6")
+
+	assertWorkspace := func(workspaceID, wantVersion string) {
+		t.Helper()
+		items, listErr := repository.ListWorkspaceTelemetryServices(ctx, workspaceID, 50)
+		if listErr != nil {
+			t.Fatalf("list workspace telemetry services: %v", listErr)
+		}
+		if len(items) != 1 || items[0].Name != serviceName {
+			t.Fatalf("workspace %s telemetry = %+v, want only %q", workspaceID, items, serviceName)
+		}
+		versions, ok := items[0].ResourceAttributes["service.version"].([]any)
+		if !ok || len(versions) != 1 || versions[0] != wantVersion {
+			t.Fatalf("workspace %s service versions = %#v, want %q", workspaceID, items[0].ResourceAttributes["service.version"], wantVersion)
+		}
+		sources := items[0].ResourceAttributeSources["service.version"]
+		if len(sources) != 1 || sources[0] != "otlp" {
+			t.Fatalf("workspace %s service.version provenance = %#v, want [otlp]", workspaceID, sources)
+		}
+		if len(items[0].Sources) != 1 || items[0].Sources[0] != "otlp" {
+			t.Fatalf("workspace %s service sources = %#v, want [otlp]", workspaceID, items[0].Sources)
+		}
+	}
+	assertWorkspace(workspaceA.ID, "1.2.3")
+	assertWorkspace(workspaceB.ID, "4.5.6")
+
+	legacyItems, err := repository.ListTelemetryServices(ctx, 250)
+	if err != nil {
+		t.Fatalf("list legacy telemetry catalog: %v", err)
+	}
+	for _, item := range legacyItems {
+		if item.Name == serviceName {
+			t.Fatal("workspace workload service leaked into the legacy global telemetry catalog")
+		}
+	}
+}
