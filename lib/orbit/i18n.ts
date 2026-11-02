@@ -136,6 +136,7 @@ const messages = {
     notificationDeliveredAt: "Delivered",
     notificationAttemptsLoading: "Loading attempt history…",
     notificationNoAttempts: "No attempts have been recorded for this delivery yet.",
+    notificationAttemptsFailed: "Attempt history could not be loaded. Refresh and try again.",
     notificationRetryScheduled: "Retry scheduled",
 
     overview: "Overview", serviceMap: "Service map", services: "Services", infrastructure: "Infrastructure",
@@ -313,6 +314,7 @@ const messages = {
     notificationDeliveredAt: "زمان ارسال",
     notificationAttemptsLoading: "در حال دریافت تاریخچهٔ تلاش‌ها…",
     notificationNoAttempts: "هنوز تلاشی برای این ارسال ثبت نشده است.",
+    notificationAttemptsFailed: "تاریخچهٔ تلاش‌های ارسال بارگذاری نشد. تازه‌سازی کنید و دوباره تلاش کنید.",
     notificationRetryScheduled: "ارسال مجدد زمان‌بندی شد",
 
     overview: "نمای کلی", serviceMap: "نقشهٔ سرویس‌ها", services: "سرویس‌ها", infrastructure: "زیرساخت",
