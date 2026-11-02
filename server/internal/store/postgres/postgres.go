@@ -139,6 +139,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		{version: "009_incident_timeline", file: "migrations/009_incident_timeline.sql"},
 		{version: "010_alert_rules", file: "migrations/010_alert_rules.sql"},
 		{version: "011_alert_evaluation", file: "migrations/011_alert_evaluation.sql"},
+		{version: "012_alert_notifications", file: "migrations/012_alert_notifications.sql"},
 	}
 
 	for _, item := range migrations {
