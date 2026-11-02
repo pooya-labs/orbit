@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -278,4 +277,3 @@ func nullableUUID(value string) any {
 	return value
 }
 
-var _ = math.MaxFloat64
