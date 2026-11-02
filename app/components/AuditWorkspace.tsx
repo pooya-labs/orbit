@@ -62,6 +62,17 @@ function categoryKey(category: Exclude<AuditCategory, "all">): TranslationKey {
   }
 }
 
+function actorRoleKey(role: WorkspaceAuditEvent["actor_role"]): TranslationKey {
+  switch (role) {
+    case "owner": return "auditRoleOwner";
+    case "administrator": return "auditRoleAdministrator";
+    case "operator": return "auditRoleOperator";
+    case "viewer": return "auditRoleViewer";
+    case "system": return "auditRoleSystem";
+    default: return "auditRoleUnknown";
+  }
+}
+
 function dateTime(value: string, language: Language): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
@@ -300,6 +311,13 @@ export default function AuditWorkspace({ apiBaseUrl, language, sourceMode }: Pro
                         <span>{t(language, categoryKey(category))}</span>
                         <span>{t(language, "auditResource")}: <b>{event.resource_type}</b></span>
                         {event.resource_id && <code>{event.resource_id.length > 14 ? event.resource_id.slice(0, 8) + "…" + event.resource_id.slice(-4) : event.resource_id}</code>}
+                      </div>
+                      <div className="audit-actor-meta">
+                        <span>{t(language, "auditActor")}</span>
+                        <code className="audit-actor-ref" title={event.actor_ref}>{event.actor_ref.slice(0, 8)}…{event.actor_ref.slice(-4)}</code>
+                        <span className={"audit-actor-role audit-actor-role-" + event.actor_role}>
+                          {t(language, actorRoleKey(event.actor_role))}
+                        </span>
                       </div>
                       {event.request_id && (
                         <div className="audit-request-id">{t(language, "auditRequestId")}: <code>{event.request_id}</code></div>
