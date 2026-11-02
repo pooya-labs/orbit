@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
@@ -178,6 +177,3 @@ func marshalWorkloadResourceAttributes(observation store.WorkloadResourceObserva
 	return encoded, nil
 }
 
-// Keep provenance ordering deterministic when composing the stored OTLP source
-// metadata for testable, stable API output.
-var _ = sort.Strings
