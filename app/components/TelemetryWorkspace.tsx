@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -10,11 +10,10 @@ import {
   Workflow,
 } from "lucide-react";
 import {
-  getTelemetryMetrics,
-  listTelemetryLogs,
-  listTelemetryTraces,
-  listTelemetryServices,
-  getTelemetryServiceAttributes,
+  getWorkspaceTelemetryMetrics,
+  listWorkspaceTelemetryLogs,
+  listWorkspaceTelemetryTraces,
+  listWorkspaceTelemetryServices,
 } from "../../lib/orbit/client";
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../../lib/orbit/i18n";
 import type {
@@ -22,8 +21,7 @@ import type {
   TelemetryMetricsResponse,
   TelemetryTracesResponse,
   TelemetryWindow,
-  DiscoveredTelemetryService,
-  TelemetryResourceAttributesResponse,
+  WorkspaceTelemetryService,
 } from "../../lib/orbit/contracts";
 
 export type TelemetryView = "Metrics" | "Logs" | "Traces";
@@ -103,27 +101,21 @@ export default function TelemetryWorkspace({
   view,
   apiBaseUrl,
   language,
+  workspaceId,
 }: {
   view: TelemetryView;
   apiBaseUrl: string;
   language: Language;
+  workspaceId: string;
 }) {
   const tr = (key: TranslationKey) => t(language, key);
   const [windowRange, setWindowRange] = useState<TelemetryWindow>("1h");
   const [selectedService, setSelectedService] = useState("orbit-telemetry-demo");
   const [metricGroupBy, setMetricGroupBy] = useState<string[]>(["instance", "service_version", "deployment_environment"]);
-  const [discoveredServices, setDiscoveredServices] = useState<DiscoveredTelemetryService[]>([]);
+  const [discoveredServices, setDiscoveredServices] = useState<WorkspaceTelemetryService[]>([]);
   const [serviceWarnings, setServiceWarnings] = useState<string[]>([]);
   const [serviceError, setServiceError] = useState("");
   const [serviceLoading, setServiceLoading] = useState(true);
-  const [serviceCursor, setServiceCursor] = useState<string | null>(null);
-  const [serviceHasMore, setServiceHasMore] = useState(false);
-  const [serviceLoadingMore, setServiceLoadingMore] = useState(false);
-  const servicePageController = useRef<AbortController | null>(null);
-  const serviceDiscoveryController = useRef<AbortController | null>(null);
-  const [resourceAttributes, setResourceAttributes] = useState<TelemetryResourceAttributesResponse | null>(null);
-  const [resourceLoading, setResourceLoading] = useState(true);
-  const [resourceError, setResourceError] = useState("");
   const [metrics, setMetrics] = useState<TelemetryMetricsResponse | null>(null);
   const [logs, setLogs] = useState<TelemetryLogsResponse | null>(null);
   const [traces, setTraces] = useState<TelemetryTracesResponse | null>(null);
@@ -136,88 +128,63 @@ export default function TelemetryWorkspace({
 
   useEffect(() => {
     let mounted = true;
+    const controller = new AbortController();
 
     const loadServices = async () => {
-      servicePageController.current?.abort();
-      servicePageController.current = null;
-      setServiceLoadingMore(false);
+      if (!workspaceId) {
+        setDiscoveredServices([]);
+        setServiceWarnings([]);
+        setServiceError(language === "fa"
+          ? "برای مشاهدهٔ تله‌متری، API باید حداقل یک فضای کاری در دسترس داشته باشد."
+          : "The connected API must expose at least one workspace to query telemetry.");
+        setServiceLoading(false);
+        return;
+      }
 
-      serviceDiscoveryController.current?.abort();
-      const controller = new AbortController();
-      serviceDiscoveryController.current = controller;
       setServiceLoading(true);
       setServiceError("");
       try {
-        const response = await listTelemetryServices(windowRange, controller.signal, apiBaseUrl);
+        const response = await listWorkspaceTelemetryServices(workspaceId, 100, controller.signal, apiBaseUrl);
         if (!mounted || controller.signal.aborted) return;
         setDiscoveredServices(response.data);
-        setServiceCursor(response.next_cursor ?? null);
-        setServiceHasMore(response.has_more ?? false);
-        setServiceWarnings(response.warnings ?? []);
-        if (response.data.length > 0) {
-          setSelectedService((current) => {
-            if (response.data.some((service) => service.name === current)) return current;
-            const demo = response.data.find((service) => service.name === "orbit-telemetry-demo");
-            return demo?.name ?? response.data[0].name;
-          });
-        }
+        setServiceWarnings([]);
+        setSelectedService((current) => {
+          if (response.data.some((service) => service.name === current)) return current;
+          const demo = response.data.find((service) => service.name === "orbit-telemetry-demo");
+          return demo?.name ?? response.data[0]?.name ?? "";
+        });
       } catch (cause) {
         if (controller.signal.aborted || !mounted) return;
-        setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت فهرست سرویس‌ها ناموفق بود." : "Unable to discover telemetry services.");
+        setDiscoveredServices([]);
+        setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "دریافت فهرست سرویس‌های این فضا ناموفق بود." : "Unable to load this workspace's telemetry catalog.");
         setServiceWarnings([]);
-        setServiceCursor(null);
-        setServiceHasMore(false);
       } finally {
-        if (mounted && serviceDiscoveryController.current === controller) {
-          serviceDiscoveryController.current = null;
-          setServiceLoading(false);
-        }
+        if (mounted) setServiceLoading(false);
       }
     };
 
     void loadServices();
-    const interval = window.setInterval(() => void loadServices(), 60_000);
+    const interval = workspaceId ? window.setInterval(() => void loadServices(), 60_000) : null;
     return () => {
       mounted = false;
-      serviceDiscoveryController.current?.abort();
-      serviceDiscoveryController.current = null;
-      servicePageController.current?.abort();
-      servicePageController.current = null;
-      window.clearInterval(interval);
+      controller.abort();
+      if (interval !== null) window.clearInterval(interval);
     };
-  }, [windowRange, apiBaseUrl, reloadKey, language]);
+  }, [workspaceId, windowRange, apiBaseUrl, reloadKey, language]);
 
-  const loadMoreServices = async () => {
-    if (!serviceCursor || !serviceHasMore || serviceLoadingMore || serviceLoading) return;
-    servicePageController.current?.abort();
-    const controller = new AbortController();
-    servicePageController.current = controller;
-    setServiceLoadingMore(true);
-    try {
-      const response = await listTelemetryServices(windowRange, controller.signal, apiBaseUrl, serviceCursor, 50);
-      if (controller.signal.aborted) return;
-      setDiscoveredServices((current) => {
-        const merged = new Map(current.map((service) => [service.name, service]));
-        for (const service of response.data) merged.set(service.name, service);
-        return Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
-      });
-      setServiceCursor(response.next_cursor ?? null);
-      setServiceHasMore(response.has_more ?? false);
-      setServiceWarnings((current) => Array.from(new Set([...current, ...(response.warnings ?? [])])));
-    } catch (cause) {
-      if (controller.signal.aborted) return;
-      setServiceError(cause instanceof Error ? cause.message : language === "fa" ? "بارگذاری سرویس‌های بیشتر ناموفق بود." : "Unable to load more services.");
-    } finally {
-      if (servicePageController.current === controller) {
-        servicePageController.current = null;
-        setServiceLoadingMore(false);
-      }
-    }
-  };
-
-  const selectedServiceDiscovered = discoveredServices.some(
-    (service) => service.name === selectedService,
-  );
+  const selectedServiceEntry = discoveredServices.find((service) => service.name === selectedService) ?? null;
+  const selectedServiceDiscovered = selectedServiceEntry !== null;
+  const resourceAttributes = selectedServiceEntry ? {
+    service: selectedServiceEntry.name,
+    window: windowRange,
+    queried_at: selectedServiceEntry.last_discovered_at || selectedServiceEntry.last_seen_at || selectedServiceEntry.first_seen_at,
+    sources_queried: selectedServiceEntry.sources,
+    attributes: selectedServiceEntry.resource_attributes ?? {},
+    attribute_sources: selectedServiceEntry.resource_attribute_sources ?? {},
+    warnings: [],
+  } : null;
+  const resourceLoading = serviceLoading;
+  const resourceError = serviceError;
 
   useEffect(() => {
     let mounted = true;
@@ -267,6 +234,39 @@ export default function TelemetryWorkspace({
     const controller = new AbortController();
     let mounted = true;
 
+    if (!workspaceId) {
+      setLoading(false);
+      setRefreshing(false);
+      setError(language === "fa"
+        ? "ابتدا به یک API دارای فضای کاری متصل شوید."
+        : "Connect to an API with an accessible workspace first.");
+      return () => {
+        mounted = false;
+        controller.abort();
+      };
+    }
+
+    if (serviceLoading) {
+      setLoading(true);
+      return () => {
+        mounted = false;
+        controller.abort();
+      };
+    }
+
+    if (!selectedServiceDiscovered || !selectedService) {
+      setMetrics(null);
+      setLogs(null);
+      setTraces(null);
+      setLoading(false);
+      setRefreshing(false);
+      setError("");
+      return () => {
+        mounted = false;
+        controller.abort();
+      };
+    }
+
     const load = async (initial: boolean) => {
       if (initial) {
         setLoading(true);
@@ -278,18 +278,22 @@ export default function TelemetryWorkspace({
       try {
         if (view === "Metrics") {
           const groupBy = metricGroupBy.length > 0 ? [...metricGroupBy].sort().join(",") : "none";
-          const response = await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl, selectedService, groupBy);
+          const response = await getWorkspaceTelemetryMetrics(
+            workspaceId, windowRange, controller.signal, apiBaseUrl, selectedService, groupBy,
+          );
           if (mounted) setMetrics(response);
         } else if (view === "Logs") {
-          const response = await listTelemetryLogs(
+          const response = await listWorkspaceTelemetryLogs(
+            workspaceId,
             { window: windowRange, service: selectedService, limit: 50 },
             controller.signal,
             apiBaseUrl,
           );
           if (mounted) setLogs(response);
         } else {
-          const response = await listTelemetryTraces(
-            { window: windowRange, service: selectedService, limit: 50 },
+          const response = await listWorkspaceTelemetryTraces(
+            workspaceId,
+            { window: windowRange, service: selectedService, limit: 20 },
             controller.signal,
             apiBaseUrl,
           );
@@ -316,7 +320,7 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy]);
+  }, [view, workspaceId, serviceLoading, selectedServiceDiscovered, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy]);
 
   const metricSeries = useMemo(() => {
     if (!metrics) return [];
@@ -443,11 +447,6 @@ export default function TelemetryWorkspace({
               discoveredServices.length > 0 ? `${discoveredServices.length} ${tr("discovered")}` : tr("noDiscoveredServices")}
           </small>
         </label>
-        {serviceHasMore ? (
-          <button className="telemetry-load-more" type="button" onClick={() => void loadMoreServices()} disabled={serviceLoadingMore || serviceLoading}>
-            {serviceLoadingMore ? tr("loadingMoreServices") : tr("loadMoreServices")}
-          </button>
-        ) : null}
         <div className="telemetry-controls">
           <div className="range-switcher" role="group" aria-label={tr("windowLabel")}>
             {windowOptions.map((item) => (
