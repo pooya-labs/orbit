@@ -163,7 +163,9 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: "1.27.x"
-          cache-dependency-path: server/go.sum
+          cache-dependency-path: |
+            server/go.sum
+            examples/telemetry-go/go.sum
 
       - name: Refresh reachable Go dependencies on same-repository pull requests
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -179,17 +181,30 @@ jobs:
           test "$(go list -m -f '{{.Version}}' golang.org/x/net)" = "v0.60.0"
           go mod verify
 
+      - name: Refresh telemetry demo Go dependencies on same-repository pull requests
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        working-directory: examples/telemetry-go
+        run: |
+          set -euo pipefail
+          go get golang.org/x/net@v0.60.0
+          go get google.golang.org/grpc@v1.83.2
+          go mod tidy
+          test "$(go list -m -f '{{.Version}}' golang.org/x/net)" = "v0.60.0"
+          test "$(go list -m -f '{{.Version}}' google.golang.org/grpc)" = "v1.83.2"
+          go mod verify
+
       - name: Commit security-fixed Go module metadata
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         run: |
-          if git diff --quiet -- server/go.mod server/go.sum; then
+          module_files=(server/go.mod server/go.sum examples/telemetry-go/go.mod examples/telemetry-go/go.sum)
+          if git diff --quiet -- "${module_files[@]}"; then
             echo "Go module metadata is already at security-fixed versions."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add server/go.mod server/go.sum
-          git commit -m "fix(deps): patch reachable Go vulnerabilities"
+          git add "${module_files[@]}"
+          git commit -m "fix(deps): patch Go module vulnerabilities"
           git push origin "HEAD:${GITHUB_HEAD_REF}"
 
       - name: Install govulncheck
