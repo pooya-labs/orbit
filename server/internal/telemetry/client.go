@@ -54,8 +54,6 @@ const (
 
 var ErrNotConfigured = errors.New("telemetry backend is not configured")
 
-)
-
 var sloRoutePattern = regexp.MustCompile(`^/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$`)
 
 type AvailabilityEvents struct {
