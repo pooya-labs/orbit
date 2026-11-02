@@ -16,7 +16,7 @@ const (
 
 type DeliveryRepository interface {
 	ClaimAlertNotificationDeliveries(context.Context, int, int) ([]store.AlertNotificationDelivery, error)
-	RecordAlertNotificationAttempt(context.Context, store.RecordAlertNotificationAttemptInputInput) error
+	RecordAlertNotificationAttempt(context.Context, store.RecordAlertNotificationAttemptInput) error
 }
 
 type Worker struct {
