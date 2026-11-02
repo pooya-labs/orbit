@@ -98,6 +98,7 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [x] Persist security audit events for denied workload-telemetry authorization attempts (PR #23; CI-verified).
 - [x] Bound gateway admission before expensive authorization work to prevent unbounded verifier/database pressure (PR #33; CI-verified).
 - [x] Verify workspace isolation through both OTLP/HTTP and OTLP/gRPC; reject forged producer workspace attributes and mixed-workspace resource batches; verify Prometheus/Loki/Tempo tenant filtering and membership checks before backend access (PRs #32, #36, #38–#40; CI-verified).
+- [ ] Prove the complete write-to-query tenant boundary: ingest telemetry with an authenticated workload bound to workspace A through the gateway/Collector, then verify it is visible only to A-scoped queries and never to workspace B (including attempts to supply B's producer-side identifier). Existing gateway-denial and backend-filter tests are separate; ADR 0002 criterion 10 remains open.
 - [x] Reject oversized OTLP requests across metrics, logs, and traces over both HTTP and gRPC (PR #42; CI-verified).
 - [x] Verify atomic shared workload rate limits across independent gateway instances and concurrent replicas, plus cross-replica grant/identity revocation (PRs #43, #46, #48; CI-verified).
 - [x] Verify deterministic gateway saturation behavior and enforce the configured 64-slot default admission bound for HTTP and gRPC (PRs #51 and #60; CI-verified).
@@ -107,6 +108,7 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [x] Add CI-verified 7-day retention and explicit ingestion/cardinality/size guardrails for the single-tenant local Prometheus, Loki, and Tempo stack; document the limits and their production boundary (`docs/observability-retention.md`).
 - [x] Preserve the existing ephemeral API rate-limit retention: two-minute expiry with request-driven pruning and an indexed expiry column.
 - [ ] Define and implement a compliant retention/archive policy for durable API history (workspace audit, incident timelines, alert lifecycle, notification attempts, and deployment annotations); do not TTL-prune immutable history until its policy is approved.
+- [ ] Add a documented PostgreSQL backup/restore procedure and a repeatable restore drill that verifies the schema migration ledger and representative durable workspace data; no pg_dump/pg_restore script or restore test exists yet.
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
 - [ ] Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
 - [ ] Threat model, dependency review, and secret scanning.
