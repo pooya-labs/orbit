@@ -20,8 +20,8 @@ type AlertInstance struct {
 	Status string `json:"status"`
 	Value float64 `json:"value"`
 	PendingSince time.Time `json:"pending_since"`
-	FiredAt *time.Time `json:"fired_at,omitempty"`
-	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+	FiredAt *time.Time `json:"fired_at"`
+	ResolvedAt *time.Time `json:"resolved_at"`
 	LastEvaluatedAt time.Time `json:"last_evaluated_at"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
