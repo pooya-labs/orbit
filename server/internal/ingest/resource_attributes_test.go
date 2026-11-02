@@ -91,6 +91,9 @@ func TestExtractWorkloadResourceAttributesSupportsAllSignalsAndFiltersUnsafeFiel
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
+			if err := AttributeWorkspace(test.request, testWorkspace); err != nil {
+				t.Fatalf("inject canonical workspace before extraction: %v", err)
+			}
 			observations := ExtractWorkloadResourceAttributes(test.request)
 			if len(observations) != 1 || observations[0].ServiceName != "payments" {
 				t.Fatalf("observations = %+v, want one payments service", observations)
