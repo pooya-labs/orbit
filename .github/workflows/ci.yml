@@ -132,13 +132,13 @@ jobs:
         run: docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo api
 
       - name: Wait for telemetry services on the private network
-        run: docker compose --profile observability run --rm telemetry-smoke scripts/wait_for_telemetry.py
+        run: docker compose --profile observability run --rm telemetry-smoke wait
 
       - name: Verify OTLP signals and ORBIT API query endpoints end to end
-        run: docker compose --profile observability run --rm telemetry-smoke scripts/observability_smoke.py
+        run: docker compose --profile observability run --rm telemetry-smoke smoke
 
       - name: Verify Prometheus scrapes the ORBIT Collector
-        run: docker compose --profile observability run --rm telemetry-smoke scripts/check_prometheus_scrape.py
+        run: docker compose --profile observability run --rm telemetry-smoke scrape
 
       - name: Verify authenticated workspace telemetry write-to-query isolation
         run: docker compose --profile observability run --rm workspace-tenant-isolation-smoke
