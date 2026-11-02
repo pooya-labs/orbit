@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pooya16pg-spec/orbit/server/internal/slo"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 )
@@ -53,6 +54,46 @@ type incidentResponse struct {
 
 type incidentTimelineResponse struct {
 	Data []store.IncidentTimelineEvent `json:"data"`
+}
+
+type sloCreateRequest struct {
+	ServiceID string `json:"service_id"`
+	Name string `json:"name"`
+	Route string `json:"route"`
+	Target float64 `json:"target"`
+	RollingWindowDays int `json:"rolling_window_days"`
+}
+
+type sloUpdateRequest struct {
+	Name string `json:"name"`
+	Route string `json:"route"`
+	Target float64 `json:"target"`
+	RollingWindowDays int `json:"rolling_window_days"`
+}
+
+type sloEnabledRequest struct {
+	Enabled *bool `json:"enabled"`
+}
+
+type sloResponse struct {
+	Data store.ServiceLevelObjective `json:"data"`
+}
+
+type sloListResponse struct {
+	Data []store.ServiceLevelObjective `json:"data"`
+}
+
+type workspaceSLOBudgetData struct {
+	Objective store.ServiceLevelObjective `json:"objective"`
+	SLI string `json:"sli"`
+	ValidEventPolicy string `json:"valid_event_policy"`
+	WindowStart time.Time `json:"window_start"`
+	WindowEnd time.Time `json:"window_end"`
+	Budget slo.AvailabilityBudget `json:"budget"`
+}
+
+type workspaceSLOBudgetResponse struct {
+	Data workspaceSLOBudgetData `json:"data"`
 }
 
 type deploymentAnnotationCreateRequest struct {
@@ -149,6 +190,30 @@ func alertRuleError(w http.ResponseWriter, r *http.Request, logger *slog.Logger,
 	default:
 		logger.Error(operation, "error", err, "request_id", r.Header.Get("X-Request-ID"))
 		writeError(w, r, http.StatusServiceUnavailable, "alert_rule_operation_unavailable", "The alert rule operation is temporarily unavailable")
+	}
+}
+
+func sloError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, operation string, err error) {
+	switch {
+	case errors.Is(err, store.ErrWorkspaceMembershipNotFound),
+		errors.Is(err, store.ErrSLONotFound),
+		errors.Is(err, store.ErrSLOServiceNotFound):
+		writeError(w, r, http.StatusNotFound, "slo_not_found", "The workspace, service, or SLO was not found")
+	case errors.Is(err, store.ErrSLOForbidden):
+		writeError(w, r, http.StatusForbidden, "slo_forbidden", "Your workspace role cannot manage SLO definitions")
+	case errors.Is(err, store.ErrSLONameConflict):
+		writeError(w, r, http.StatusConflict, "slo_name_conflict", "An SLO with that name already exists for this service")
+	case errors.Is(err, store.ErrSLONoChange):
+		writeError(w, r, http.StatusConflict, "slo_no_change", "The SLO already has the requested state")
+	case errors.Is(err, store.ErrSLODisabled):
+		writeError(w, r, http.StatusConflict, "slo_disabled", "Enable the SLO before requesting its error budget")
+	case errors.Is(err, store.ErrSLOInvalidInput),
+		strings.Contains(err.Error(), "UUID"),
+		strings.Contains(err.Error(), "principal"):
+		writeError(w, r, http.StatusBadRequest, "invalid_slo", "SLO fields or identifiers are invalid")
+	default:
+		logger.Error(operation, "error", err, "request_id", r.Header.Get("X-Request-ID"))
+		writeError(w, r, http.StatusServiceUnavailable, "slo_unavailable", "SLO storage or telemetry is temporarily unavailable")
 	}
 }
 
@@ -274,6 +339,12 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 		mux.HandleFunc("POST /api/v1/workspaces/{workspaceID}/deployments", unavailable)
 		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/deployments/compare", unavailable)
 		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/deployments/{deploymentID}", unavailable)
+		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/slos", unavailable)
+		mux.HandleFunc("POST /api/v1/workspaces/{workspaceID}/slos", unavailable)
+		mux.HandleFunc("PUT /api/v1/workspaces/{workspaceID}/slos/{sloID}", unavailable)
+		mux.HandleFunc("PATCH /api/v1/workspaces/{workspaceID}/slos/{sloID}/enabled", unavailable)
+		mux.HandleFunc("DELETE /api/v1/workspaces/{workspaceID}/slos/{sloID}", unavailable)
+		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/slos/{sloID}/budget", unavailable)
 		return
 	}
 
@@ -567,6 +638,156 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			events = []store.IncidentTimelineEvent{}
 		}
 		writeJSON(w, http.StatusOK, incidentTimelineResponse{Data: events})
+	})
+
+	// Workspace SLOs are persisted definitions. Their live budget is computed
+	// from fixed, workspace-scoped Prometheus selectors, never caller-supplied PromQL.
+	sloRepository, sloRepositoryAvailable := repository.(store.WorkspaceSLORepository)
+	sloUnavailable := func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, r, http.StatusServiceUnavailable, "slo_store_unavailable", "SLO storage is not available")
+	}
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/slos", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !sloRepositoryAvailable || sloRepository == nil { sloUnavailable(w, r); return }
+		limit, err := parseAlertRuleLimit(r)
+		if err != nil { writeError(w, r, http.StatusBadRequest, "invalid_limit", err.Error()); return }
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		items, err := sloRepository.ListWorkspaceSLOs(ctx,
+			r.PathValue("workspaceID"), principal.Issuer, principal.Subject,
+			r.URL.Query().Get("service_id"), limit)
+		if err != nil { sloError(w, r, logger, "list workspace SLOs failed", err); return }
+		if items == nil { items = []store.ServiceLevelObjective{} }
+		writeJSON(w, http.StatusOK, sloListResponse{Data: items})
+	})
+
+	mux.HandleFunc("POST /api/v1/workspaces/{workspaceID}/slos", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !sloRepositoryAvailable || sloRepository == nil { sloUnavailable(w, r); return }
+		var input sloCreateRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_slo", "SLO fields must be a single valid JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		item, err := sloRepository.CreateWorkspaceSLO(ctx, store.CreateWorkspaceSLOInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			ServiceID: input.ServiceID,
+			Name: input.Name,
+			Route: input.Route,
+			Target: input.Target,
+			RollingWindowDays: input.RollingWindowDays,
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil { sloError(w, r, logger, "create workspace SLO failed", err); return }
+		writeJSON(w, http.StatusCreated, sloResponse{Data: item})
+	})
+
+	mux.HandleFunc("PUT /api/v1/workspaces/{workspaceID}/slos/{sloID}", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !sloRepositoryAvailable || sloRepository == nil { sloUnavailable(w, r); return }
+		var input sloUpdateRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_slo", "SLO fields must be a single valid JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		item, err := sloRepository.UpdateWorkspaceSLO(ctx, store.UpdateWorkspaceSLOInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			SLOID: r.PathValue("sloID"),
+			Name: input.Name,
+			Route: input.Route,
+			Target: input.Target,
+			RollingWindowDays: input.RollingWindowDays,
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil { sloError(w, r, logger, "update workspace SLO failed", err); return }
+		writeJSON(w, http.StatusOK, sloResponse{Data: item})
+	})
+
+	mux.HandleFunc("PATCH /api/v1/workspaces/{workspaceID}/slos/{sloID}/enabled", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !sloRepositoryAvailable || sloRepository == nil { sloUnavailable(w, r); return }
+		var input sloEnabledRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil || input.Enabled == nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_slo_state", "enabled must be provided in one valid JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		item, err := sloRepository.SetWorkspaceSLOEnabled(ctx, store.SetWorkspaceSLOEnabledInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			SLOID: r.PathValue("sloID"),
+			Enabled: *input.Enabled,
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil { sloError(w, r, logger, "change workspace SLO enabled state failed", err); return }
+		writeJSON(w, http.StatusOK, sloResponse{Data: item})
+	})
+
+	mux.HandleFunc("DELETE /api/v1/workspaces/{workspaceID}/slos/{sloID}", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !sloRepositoryAvailable || sloRepository == nil { sloUnavailable(w, r); return }
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		err := sloRepository.DeleteWorkspaceSLO(ctx, store.DeleteWorkspaceSLOInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			SLOID: r.PathValue("sloID"),
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil { sloError(w, r, logger, "delete workspace SLO failed", err); return }
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/slos/{sloID}/budget", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !sloRepositoryAvailable || sloRepository == nil { sloUnavailable(w, r); return }
+		if telemetryClient == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "slo_telemetry_unavailable", "Workspace SLO telemetry is not configured")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 9*time.Second)
+		defer cancel()
+		objective, err := sloRepository.GetWorkspaceSLO(ctx,
+			r.PathValue("workspaceID"), r.PathValue("sloID"), principal.Issuer, principal.Subject)
+		if err != nil { sloError(w, r, logger, "get workspace SLO for budget failed", err); return }
+		if !objective.Enabled {
+			sloError(w, r, logger, "request budget for disabled SLO", store.ErrSLODisabled)
+			return
+		}
+		events, err := telemetryClient.WorkspaceAvailabilityEvents(ctx,
+			objective.WorkspaceID, objective.ServiceName, objective.Route, objective.RollingWindowDays)
+		if err != nil { sloError(w, r, logger, "query workspace SLO availability events failed", err); return }
+		budget, err := slo.CalculateAvailabilityBudget(objective.Target, events.GoodEvents, events.BadEvents)
+		if err != nil {
+			logger.Error("calculate workspace SLO budget failed", "error", err, "request_id", r.Header.Get("X-Request-ID"))
+			writeError(w, r, http.StatusServiceUnavailable, "slo_calculation_unavailable", "The SLO budget could not be calculated safely")
+			return
+		}
+		writeJSON(w, http.StatusOK, workspaceSLOBudgetResponse{Data: workspaceSLOBudgetData{
+			Objective: objective,
+			SLI: "http_request_success_rate",
+			ValidEventPolicy: "Only the configured route is counted. HTTP 2xx and 3xx responses are good; all other instrumented HTTP responses are bad. Uninstrumented routes and /healthz are excluded.",
+			WindowStart: events.WindowStart,
+			WindowEnd: events.WindowEnd,
+			Budget: budget,
+		}})
 	})
 
 	// Deployment annotations are immutable release markers. Creation records
