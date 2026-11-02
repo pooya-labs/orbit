@@ -200,6 +200,32 @@ func TestWorkspaceOTLPWriteToQueryIsolation(t *testing.T) {
 	if sources := observedA.ResourceAttributeSources["service.version"]; !containsString(sources, "otlp") {
 		t.Fatalf("workspace A service.version provenance = %#v, want otlp", sources)
 	}
+
+	// The authenticated workspace route exposes the same catalog without
+	// allowing a member of A to select or inspect workspace B's records.
+	catalogRequest := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+workspaceA.ID+"/telemetry/services?limit=50", nil)
+	catalogRequest.Header.Set("Authorization", "Bearer integration-human-token")
+	catalogResponse := httptest.NewRecorder()
+	api.ServeHTTP(catalogResponse, catalogRequest)
+	if catalogResponse.Code != http.StatusOK {
+		t.Fatalf("workspace A catalog route status = %d; body=%s", catalogResponse.Code, catalogResponse.Body.String())
+	}
+	var catalogEnvelope struct {
+		Data []store.TelemetryService `json:"data"`
+	}
+	if err := json.Unmarshal(catalogResponse.Body.Bytes(), &catalogEnvelope); err != nil {
+		t.Fatalf("decode workspace catalog route response: %v", err)
+	}
+	var routeService *store.TelemetryService
+	for i := range catalogEnvelope.Data {
+		if catalogEnvelope.Data[i].Name == workspacePipelineService {
+			routeService = &catalogEnvelope.Data[i]
+			break
+		}
+	}
+	if routeService == nil || !containsString(routeService.Sources, "otlp") {
+		t.Fatalf("workspace catalog route did not expose OTLP service metadata: %+v", catalogEnvelope.Data)
+	}
 	catalogB, err := repository.ListWorkspaceTelemetryServices(ctx, workspaceB.ID, 50)
 	if err != nil {
 		t.Fatalf("list workspace B resource catalog: %v", err)
