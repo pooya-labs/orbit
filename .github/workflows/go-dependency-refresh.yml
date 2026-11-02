@@ -1,0 +1,46 @@
+name: One-time Go dependency refresh
+
+on:
+  push:
+    branches: [feat/m06-security-threat-model-scanning]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: startsWith(github.event.head_commit.message, '[deps-refresh]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout security branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.x"
+          cache: false
+
+      - name: Upgrade modules to security-fixed releases and tidy sums
+        working-directory: server
+        run: |
+          go get github.com/jackc/pgx/v5@v5.9.2
+          go get google.golang.org/grpc@v1.83.1
+          go get golang.org/x/net@v0.60.0
+          go get golang.org/x/text@v0.41.0
+          go mod tidy
+          go mod verify
+
+      - name: Commit refreshed Go module metadata to this branch
+        run: |
+          if git diff --quiet -- server/go.mod server/go.sum; then
+            echo "Go module metadata is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/go.mod server/go.sum
+          git commit -m "fix(deps): patch reachable Go vulnerabilities"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
