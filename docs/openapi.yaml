@@ -562,7 +562,7 @@ paths:
       tags: [Alerting]
       operationId: listWorkspaceAlertRules
       summary: List workspace alert rule definitions
-      description: Returns alert rule definitions for a workspace member. Enabled rules are evaluated by the background workspace evaluator when PostgreSQL and Prometheus are configured. Notification delivery is not yet implemented.
+      description: Returns workspace-scoped alert rule definitions. The background evaluator processes enabled rules when PostgreSQL and Prometheus are configured. Notification deliveries are created for firing and resolved events when enabled notification channels exist.
       security:
         - BearerAuth: []
       parameters:
@@ -1309,6 +1309,28 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  parameters:
+    WorkspaceID:
+      name: workspaceID
+      in: path
+      required: true
+      description: Workspace UUID scoped to the authenticated principal.
+      schema:
+        type: string
+        format: uuid
+  responses:
+    NotFound:
+      description: The workspace or requested workspace resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unavailable:
+      description: The workspace dependency or storage service is unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
 
     CreateIncidentRequest:
