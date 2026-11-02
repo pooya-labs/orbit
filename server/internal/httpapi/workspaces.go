@@ -645,7 +645,7 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 		to, err := deploymentRepository.GetWorkspaceDeploymentAnnotation(ctx,
 			r.PathValue("workspaceID"), toID, principal.Issuer, principal.Subject)
 		if err != nil { deploymentAnnotationError(w, r, logger, "read target deployment annotation for comparison failed", err); return }
-		if from.ID == to.ID || from.ServiceID != to.ServiceID || to.DeployedAt.Before(from.DeployedAt) {
+		if from.ID == to.ID || from.ServiceID != to.ServiceID || !to.DeployedAt.After(from.DeployedAt) {
 			deploymentAnnotationError(w, r, logger, "invalid deployment comparison", store.ErrDeploymentAnnotationComparisonInvalid)
 			return
 		}
