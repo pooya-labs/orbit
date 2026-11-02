@@ -106,6 +106,9 @@ func TestAlertNotificationDeliveryOutboxRetryAndAppendOnlyHistory(t *testing.T) 
 	`, first.ID); err == nil {
 		t.Fatal("notification attempt history allowed DELETE")
 	}
+	if _, err := repository.pool.Exec(ctx, "TRUNCATE alert_notification_attempts"); err == nil {
+		t.Fatal("notification attempt history allowed TRUNCATE")
+	}
 
 	if _, err := repository.ListWorkspaceAlertNotificationAttempts(ctx, workspace.ID, first.ID, issuer, "not-a-member", 50); !errors.Is(err, store.ErrWorkspaceMembershipNotFound) {
 		t.Fatalf("non-member attempt history error = %v; want membership not found", err)
@@ -123,6 +126,10 @@ func TestDisablingAlertNotificationChannelStopsQueuedDeliveries(t *testing.T) {
 	if err != nil || !changed {
 		t.Fatalf("create firing alert changed=%v err=%v", changed, err)
 	}
+	claimedBeforeDisable, err := repository.ClaimAlertNotificationDeliveries(ctx, 10, 60)
+	if err != nil || len(claimedBeforeDisable) != 1 {
+		t.Fatalf("claim delivery before disabling channel = %+v err=%v", claimedBeforeDisable, err)
+	}
 	if _, err := repository.SetWorkspaceAlertNotificationChannelEnabled(ctx, store.SetAlertNotificationChannelEnabledInput{
 		WorkspaceID: workspace.ID,
 		ChannelID: channel.ID,
@@ -133,13 +140,24 @@ func TestDisablingAlertNotificationChannelStopsQueuedDeliveries(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("disable notification channel: %v", err)
 	}
+	if _, err := repository.pool.Exec(ctx, `
+		UPDATE alert_notification_deliveries
+		SET lease_until = NOW() - INTERVAL '1 second'
+		WHERE id = $1::uuid
+	`, claimedBeforeDisable[0].ID); err != nil {
+		t.Fatalf("expire processing delivery after channel disable: %v", err)
+	}
+	claimed, err := repository.ClaimAlertNotificationDeliveries(ctx, 10, 60)
+	if err != nil || len(claimed) != 0 {
+		t.Fatalf("disabled channel delivery was reclaimed: %+v err=%v", claimed, err)
+	}
 	items, err := repository.ListWorkspaceAlertNotificationDeliveries(ctx, workspace.ID, issuer, owner, "dead", 50)
 	if err != nil || len(items) != 1 || items[0].LastError != "channel_disabled" {
 		t.Fatalf("disabled channel deliveries = %+v err=%v", items, err)
 	}
-	claimed, err := repository.ClaimAlertNotificationDeliveries(ctx, 10, 60)
-	if err != nil || len(claimed) != 0 {
-		t.Fatalf("disabled channel was still claimable: %+v err=%v", claimed, err)
+	attempts, err := repository.ListWorkspaceAlertNotificationAttempts(ctx, workspace.ID, claimedBeforeDisable[0].ID, issuer, owner, 50)
+	if err != nil || len(attempts) != 1 || attempts[0].Outcome != "dead" || attempts[0].ErrorCode != "channel_disabled" {
+		t.Fatalf("disabled channel attempt history = %+v err=%v", attempts, err)
 	}
 }
 
