@@ -199,14 +199,10 @@ jobs:
             image: redis:7-alpine
           - name: NATS
             image: nats:2-alpine
-          - name: OpenTelemetry Collector
-            image: otel/opentelemetry-collector-contrib:0.164.0
           - name: Prometheus
             image: prom/prometheus:v3.15.1
           - name: Loki
             image: grafana/loki:3.7.9
-          - name: Tempo
-            image: grafana/tempo:3.1.1
           - name: Caddy production ingress
             image: caddy:2.11.7-alpine
           - name: Go API build and isolation-test base
@@ -227,3 +223,53 @@ jobs:
           exit-code: "1"
           format: table
           timeout: 10m
+
+  tempo-image:
+    name: Build and scan patched Tempo image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build Tempo with patched go-jose
+        run: docker build --pull --file deploy/observability/tempo.Dockerfile --tag orbit-tempo:ci .
+
+      - name: Scan Tempo for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-tempo:ci
+          version: v0.76.1
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          format: table
+          timeout: 20m
+
+  otel-collector-image:
+    name: Build and scan minimal ORBIT Collector image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build minimal ORBIT Collector distribution
+        run: docker build --pull --file deploy/observability/collector.Dockerfile --tag orbit-otel-collector:ci .
+
+      - name: Scan ORBIT Collector for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-otel-collector:ci
+          version: v0.76.1
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          format: table
+          timeout: 20m
