@@ -601,6 +601,59 @@ export async function getTelemetryMetrics(
   );
 }
 
+export async function getWorkspaceTelemetryMetrics(
+  workspaceId: string,
+  window: TelemetryWindow = "1h",
+  signal?: AbortSignal,
+  baseUrl?: string,
+  service = "orbit-telemetry-demo",
+  groupBy?: string,
+): Promise<TelemetryMetricsResponse> {
+  const query = new URLSearchParams({ window, service });
+  if (groupBy !== undefined) query.set("group_by", groupBy);
+  return getJSON<TelemetryMetricsResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/telemetry/metrics?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+}
+
+export async function listWorkspaceTelemetryLogs(
+  workspaceId: string,
+  options: { window?: TelemetryWindow; service?: string; limit?: number } = {},
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<TelemetryLogsResponse> {
+  const query = new URLSearchParams({
+    window: options.window ?? "1h",
+    service: options.service ?? "orbit-telemetry-demo",
+    limit: String(options.limit ?? 50),
+  });
+  return getJSON<TelemetryLogsResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/telemetry/logs?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+}
+
+export async function listWorkspaceTelemetryTraces(
+  workspaceId: string,
+  options: { window?: TelemetryWindow; service?: string; limit?: number } = {},
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<TelemetryTracesResponse> {
+  const query = new URLSearchParams({
+    window: options.window ?? "1h",
+    service: options.service ?? "orbit-telemetry-demo",
+    limit: String(options.limit ?? 20),
+  });
+  return getJSON<TelemetryTracesResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/telemetry/traces?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+}
+
 export async function listWorkspaceTelemetryServices(
   workspaceId: string,
   limit = 50,
