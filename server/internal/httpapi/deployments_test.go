@@ -126,6 +126,29 @@ func TestWorkspaceDeploymentAnnotationHTTPRoutes(t *testing.T) {
 	}
 }
 
+func TestWorkspaceDeploymentComparisonRejectsNonChronologicalDeployments(t *testing.T) {
+	workspaceID := "11111111-1111-4111-8111-111111111111"
+	earlierID := "66666666-6666-4666-8666-666666666666"
+	laterID := "77777777-7777-4777-8777-777777777777"
+	now := time.Now().UTC().Truncate(time.Second)
+	repository := &deploymentRouteRepository{
+		incidentRouteRepository: &incidentRouteRepository{
+			fakeRepository: &fakeRepository{},
+			workspace: store.Workspace{ID: workspaceID},
+		},
+		items: []store.DeploymentAnnotation{
+			{ID: earlierID, WorkspaceID: workspaceID, ServiceID: "44444444-4444-4444-8444-444444444444", DeployedAt: now},
+			{ID: laterID, WorkspaceID: workspaceID, ServiceID: "44444444-4444-4444-8444-444444444444", DeployedAt: now},
+		},
+	}
+	handler := newDeploymentRouteHandler(repository)
+	response := incidentRouteRequest(handler, http.MethodGet,
+		"/api/v1/workspaces/"+workspaceID+"/deployments/compare?from_id="+earlierID+"&to_id="+laterID, "")
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("equal-time comparison status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestWorkspaceDeploymentComparisonRejectsDifferentServices(t *testing.T) {
 	workspaceID := "11111111-1111-4111-8111-111111111111"
 	repository := &deploymentRouteRepository{
