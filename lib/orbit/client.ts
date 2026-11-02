@@ -4,6 +4,10 @@ import type {
   AlertRuleOperator,
   WorkspaceAlertInstance,
   WorkspaceAlertRule,
+  WorkspaceAlertNotificationChannel,
+  WorkspaceAlertNotificationDelivery,
+  WorkspaceAlertNotificationAttempt,
+  AlertNotificationDeliveryStatus,
   ApiErrorPayload,
   ApiMetadata,
   DataEnvelope,
@@ -243,6 +247,80 @@ export async function deleteWorkspaceAlertRule(
     undefined,
     baseUrl,
   );
+}
+
+export async function listWorkspaceAlertNotificationChannels(
+  workspaceId: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceAlertNotificationChannel[]> {
+  const response = await getJSON<DataEnvelope<WorkspaceAlertNotificationChannel>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alert-notification-channels?limit=100`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function createWorkspaceAlertNotificationChannel(
+  workspaceId: string,
+  input: { name: string; secret_ref: string },
+  baseUrl?: string,
+): Promise<WorkspaceAlertNotificationChannel> {
+  const response = await requestJSON<{ data: WorkspaceAlertNotificationChannel }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alert-notification-channels`,
+    "POST",
+    input,
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function setWorkspaceAlertNotificationChannelEnabled(
+  workspaceId: string,
+  channelId: string,
+  enabled: boolean,
+  baseUrl?: string,
+): Promise<WorkspaceAlertNotificationChannel> {
+  const response = await requestJSON<{ data: WorkspaceAlertNotificationChannel }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alert-notification-channels/${encodeURIComponent(channelId)}/enabled`,
+    "PATCH",
+    { enabled },
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function listWorkspaceAlertNotificationDeliveries(
+  workspaceId: string,
+  status?: AlertNotificationDeliveryStatus,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceAlertNotificationDelivery[]> {
+  const query = new URLSearchParams({ limit: "100" });
+  if (status) query.set("status", status);
+  const response = await getJSON<DataEnvelope<WorkspaceAlertNotificationDelivery>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alert-notification-deliveries?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function listWorkspaceAlertNotificationAttempts(
+  workspaceId: string,
+  deliveryId: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceAlertNotificationAttempt[]> {
+  const response = await getJSON<DataEnvelope<WorkspaceAlertNotificationAttempt>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/alert-notification-deliveries/${encodeURIComponent(deliveryId)}/attempts?limit=100`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
 }
 
 export async function listWorkspaceIncidents(
