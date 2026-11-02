@@ -16,8 +16,8 @@ RUN go mod edit -require=github.com/go-jose/go-jose/v4@v4.1.7 \
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -trimpath \
     -ldflags="-s -w -X main.Version=3.1.1" \
     -o /out/tempo ./cmd/tempo \
-    && go version -m /out/tempo \
-    | grep -E '^[[:space:]]*mod[[:space:]]+github.com/grafana/tempo v3\.1\.1([[:space:]]|$)'
+    && go version -m /out/tempo | tee /tmp/tempo-build-info \
+    && grep -F "build vcs.revision=${TEMPO_COMMIT}" /tmp/tempo-build-info
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata \
