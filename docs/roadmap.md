@@ -77,9 +77,12 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 - [x] Workspace-scoped dashboard for incident creation, allowed status transitions/reopen, detail, and immutable timeline review (PR #71; CI-verified).
 - [x] Workspace-scoped alert rule definition CRUD with immutable workspace audit (PR #69; migration 010; CI passing). v1 is limited to the existing `request_rate` metric and rejects arbitrary query expressions.
 - [x] Add a scheduled workspace-aware evaluator for the allow-listed `request_rate` metric, with persisted pending/firing/resolved/cancelled instances, append-only events, deduplication, telemetry-gap handling, and PostgreSQL advisory-lock coordination across API replicas (PR #72; migration 011; CI-verified).
+- [x] Add the workspace alert-operations dashboard with lifecycle states, timestamps, bounded rule management, localization, and read-only demo mode (PR #73; CI-verified).
 - [x] Secure webhook notification delivery and retry history: workspace-scoped channels, transactional outbox, multi-replica claims, bounded retries, and append-only attempts (PR #74; migration 012; CI-verified).
-- [x] Workspace-scoped immutable deployment annotations with derived service/environment metadata, transactional workspace audit, and same-service/environment chronological release comparison (PR #77 merged; migration 013).
-- [x] Workspace-scoped HTTP request-success SLO definitions, live error-budget calculations, explicit insufficient-data handling, and audited SLO lifecycle operations (PR #78 merged; migration 014).
+- [x] Add the workspace Notifications page for channel configuration, safe secret-configuration status, delivery filters, and append-only attempt inspection (PR #75; CI-verified).
+- [x] Harden notification UI behavior: refresh expanded attempt history correctly and fail closed when an operator tries to enable a channel whose deployment-managed secret is missing (PR #76; CI-verified).
+- [x] Workspace-scoped immutable deployment annotations with derived service/environment metadata, transactional workspace audit, same-service/environment chronological release comparison, and the Deployments workspace UI (PR #77; migration 013; CI-verified).
+- [x] Workspace-scoped HTTP request-success SLO definitions, live error-budget calculations, explicit insufficient-data handling, audited SLO lifecycle operations, and the localized role-aware SLO workspace UI (PR #78; migration 014; CI-verified).
 - [x] Add the authenticated workspace audit-log dashboard with category filters, request IDs, event details, defensive sensitive-field redaction, and automatic refresh (PR #79).
 - [ ] Extend audit-backed history to every operator mutation and workflow, including historical role snapshots, actor-safe attribution in the read model, and any background lifecycle events not already covered by dedicated append-only histories.
 
