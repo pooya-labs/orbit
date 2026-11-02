@@ -31,6 +31,7 @@ checks = [
     (page, "first.focus();", "the mobile navigation keeps forward tab movement inside the drawer"),
     (page, "mobileMenuButtonRef.current?.focus()", "closing the drawer restores focus to its trigger"),
     (styles, ":focus-visible", "interactive controls have a visible keyboard focus indicator"),
+    (styles, 'html[data-theme="light"] :is(button, a, input, select, textarea, [tabindex]):focus-visible { outline-color: #087b6a; }', "light theme keeps a distinct focus indicator against pale surfaces"),
     (styles, ".skip-link:focus", "the skip link becomes visible when focused"),
     (styles, "visibility: hidden", "the closed mobile drawer is removed from keyboard navigation"),
     (styles, "@media (prefers-reduced-motion: reduce)", "reduced-motion preferences are respected"),
