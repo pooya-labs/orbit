@@ -139,8 +139,11 @@ func TestWebhookSenderSendsMinimalIdempotentAlertPayload(t *testing.T) {
 	if request.Method != http.MethodPost || request.URL.Host != "hooks.example.com" {
 		t.Fatalf("unexpected webhook request: %s %s", request.Method, request.URL)
 	}
-	if request.Header.Get("Idempotency-Key") != "dddddddd-dddd-4ddd-8ddd-dddddddddddd" {
+	if request.Header.Get("Idempotency-Key") != sampleDelivery().ID {
 		t.Fatalf("idempotency key = %q", request.Header.Get("Idempotency-Key"))
+	}
+	if request.Header.Get("X-ORBIT-Event-ID") != sampleDelivery().AlertInstanceEventID {
+		t.Fatalf("event ID header = %q", request.Header.Get("X-ORBIT-Event-ID"))
 	}
 	if request.Header.Get("X-ORBIT-Delivery-ID") != sampleDelivery().ID {
 		t.Fatalf("delivery header = %q", request.Header.Get("X-ORBIT-Delivery-ID"))
