@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	logsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	metricsv1 "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	tracesv1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -46,6 +47,8 @@ type HTTPGatewayConfig struct {
 	RequestsPerMinute int
 	ForwardTimeout time.Duration
 	RateLimitStore WorkloadRateLimitStore
+	ResourceAttributeRecorder store.WorkloadResourceAttributeRepository
+	OnResourceAttributeError func(error)
 }
 
 type HTTPGateway struct {
@@ -53,6 +56,8 @@ type HTTPGateway struct {
 	forwarder OTLPForwarder
 	limiter *workspaceRateLimiter
 	sharedLimiter WorkloadRateLimitStore
+	resourceAttributeRecorder store.WorkloadResourceAttributeRepository
+	onResourceAttributeError func(error)
 	timeout time.Duration
 	concurrency chan struct{}
 }
@@ -75,6 +80,8 @@ func NewHTTPGateway(authorizer *Authorizer, forwarder OTLPForwarder, cfg HTTPGat
 		forwarder: forwarder,
 		limiter: newWorkspaceRateLimiter(cfg.RequestsPerMinute),
 		sharedLimiter: cfg.RateLimitStore,
+		resourceAttributeRecorder: cfg.ResourceAttributeRecorder,
+		onResourceAttributeError: cfg.OnResourceAttributeError,
 		timeout: cfg.ForwardTimeout,
 		concurrency: make(chan struct{}, maxConcurrentExports),
 	}
@@ -235,6 +242,7 @@ func (g *HTTPGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not encode OTLP response", http.StatusInternalServerError)
 		return
 	}
+	recordWorkloadResourceAttributes(r.Context(), g.resourceAttributeRecorder, g.onResourceAttributeError, decision.WorkspaceID, ExtractWorkloadResourceAttributes(message))
 	w.Header().Set("Content-Type", mediaType)
 	w.Header().Set("Content-Length", fmt.Sprint(len(output)))
 	w.WriteHeader(http.StatusOK)
