@@ -9,6 +9,7 @@ import (
 var (
 	ErrSLONotFound = errors.New("service level objective not found")
 	ErrSLOForbidden = errors.New("workspace role cannot manage service level objectives")
+	ErrSLOServiceNotFound = errors.New("workspace service not found for SLO")
 	ErrSLOInvalidInput = errors.New("invalid service level objective input")
 	ErrSLONameConflict = errors.New("SLO name already exists for this service")
 	ErrSLONoChange = errors.New("SLO already has requested state")
