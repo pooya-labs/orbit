@@ -381,3 +381,15 @@ The security work has been rebuilt on the current `main` in PR #90 to avoid the 
 Latest previously observed scan evidence: Gitleaks passed; `govulncheck` found no vulnerabilities affecting code paths (two vulnerabilities were reported in required modules that the application does not appear to call); npm audit reported zero vulnerabilities. The workflow action pin policy must pass on the refreshed branch before this slice is considered verified.
 
 **External blocker:** GitHub Dependency Review reports that the repository Dependency Graph is not enabled. The repository owner must enable it under Settings → Code security and analysis → Dependency graph, then rerun the Security workflow. Do not mark PR #90's full security gate complete or merge it as fully security-verified while Dependency Review is blocked. This is a repository administration setting and must be enabled by an administrator in GitHub Settings.
+
+
+### PR #90 security validation update — 2026-11-02
+
+On head \`8456cf9d28d3615fa3fee8f086d54ee91a8fb251\`:
+- Full-history Gitleaks: passed.
+- Workflow action pin policy: passed.
+- Pages publishing-source check: passed (\`build_type=workflow\`).
+- Production API image built successfully; Trivy v0.76.1 reported zero vulnerabilities for Debian 12.15 OS packages and the Go API binary at HIGH/CRITICAL severities.
+- Web typecheck and production build: passed.
+- Go API race tests/vet/build and local telemetry E2E/workspace isolation: still running at the time this note was written.
+- Security dependency scan: Gitleaks passed; prior Go and npm scans found no code-path vulnerabilities / zero npm vulnerabilities. Dependency Review remains blocked because the repository Dependency Graph setting is disabled.
