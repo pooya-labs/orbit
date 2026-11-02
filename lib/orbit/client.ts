@@ -29,6 +29,7 @@ import type {
   TelemetryTracesResponse,
   TelemetryServicesResponse,
   TelemetryResourceAttributesResponse,
+  WorkspaceTelemetryServicesResponse,
 } from "./contracts";
 
 export class OrbitApiError extends Error {
@@ -595,6 +596,21 @@ export async function getTelemetryMetrics(
   if (groupBy !== undefined) query.set("group_by", groupBy);
   return getJSON<TelemetryMetricsResponse>(
     `/api/v1/telemetry/metrics?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+}
+
+export async function listWorkspaceTelemetryServices(
+  workspaceId: string,
+  limit = 50,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceTelemetryServicesResponse> {
+  const acceptedLimit = [10, 25, 50, 100].includes(limit) ? limit : 50;
+  const query = new URLSearchParams({ limit: String(acceptedLimit) });
+  return getJSON<WorkspaceTelemetryServicesResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/telemetry/services?${query.toString()}`,
     signal,
     baseUrl,
   );
