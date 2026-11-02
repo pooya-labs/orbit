@@ -477,9 +477,9 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
               <div className="alert-panel-heading">
                 <div><h3>{t(language, "alertInstancesTitle")}</h3><p>{t(language, "alertInstancesSubtitle")}</p></div>
                 <div className="incident-filter alert-filter">
-                  <button type="button" className={filter === "active" ? "selected" : ""} onClick={() => setFilter("active")}>{t(language, "alertActiveFilter")}</button>
-                  <button type="button" className={filter === "all" ? "selected" : ""} onClick={() => setFilter("all")}>{t(language, "all")}</button>
-                  <button type="button" className={filter === "history" ? "selected" : ""} onClick={() => setFilter("history")}>{t(language, "alertHistoryFilter")}</button>
+                  <button type="button" className={filter === "active" ? "selected" : ""} aria-pressed={filter === "active"} onClick={() => setFilter("active")}>{t(language, "alertActiveFilter")}</button>
+                  <button type="button" className={filter === "all" ? "selected" : ""} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>{t(language, "all")}</button>
+                  <button type="button" className={filter === "history" ? "selected" : ""} aria-pressed={filter === "history"} onClick={() => setFilter("history")}>{t(language, "alertHistoryFilter")}</button>
                 </div>
               </div>
               {visibleInstances.length === 0 && !loading ? <div className="alert-empty">{t(language, "alertNoInstances")}</div> :
