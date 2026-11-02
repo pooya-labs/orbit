@@ -435,7 +435,7 @@ export default function Home() {
           <button ref={sidebarCloseButtonRef} type="button" className="icon-button sidebar-close" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)}><X size={18} /></button>
         </div>
 
-        <button className="workspace-switcher">
+        <button type="button" className="workspace-switcher preview-unavailable" disabled aria-label={`${tr("workspace")} — ${tr("notAvailableInPreview")}`} title={tr("notAvailableInPreview")}>
           <div className="workspace-avatar">O</div>
           <div className="workspace-copy"><strong>ORBIT</strong><span>{language === "fa" ? "فضای کاری شخصی" : "Personal workspace"}</span></div>
           <ChevronDown size={15} className="muted-icon" />
@@ -462,8 +462,8 @@ export default function Home() {
             <div className="usage-track"><span /></div>
             <p>6.8 GB <span>{language === "fa" ? "از ۱۰ گیگابایت در ماه" : "of 10 GB monthly"}</span></p>
           </div>
-          <button className="nav-item"><Settings2 size={17} /><span>{tr("settings")}</span></button>
-          <button className="nav-item"><CircleHelp size={17} /><span>{tr("helpSupport")}</span><ExternalLink size={12} className="nav-external" /></button>
+          <button type="button" className="nav-item preview-unavailable" disabled aria-label={`${tr("settings")} — ${tr("notAvailableInPreview")}`} title={tr("notAvailableInPreview")}><Settings2 size={17} /><span>{tr("settings")}</span></button>
+          <button type="button" className="nav-item preview-unavailable" disabled aria-label={`${tr("helpSupport")} — ${tr("notAvailableInPreview")}`} title={tr("notAvailableInPreview")}><CircleHelp size={17} /><span>{tr("helpSupport")}</span><ExternalLink size={12} className="nav-external" /></button>
           <div className="profile-row">
             <div className="profile-avatar">P</div>
             <div className="profile-copy"><strong>Pooya</strong><a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a></div>
@@ -493,7 +493,7 @@ export default function Home() {
             >
               {sourceMode === "api" ? <RefreshCw size={16} /> : refreshing ? <Pause size={16} /> : <Play size={16} />}
             </button>
-            <button className="icon-button notification-button" aria-label={tr("notifications")}><Bell size={17} /><i /></button>
+            <button type="button" className="icon-button notification-button" aria-label={tr("notifications")} onClick={() => chooseNav("Notifications")}><Bell size={17} /><i /></button>
             <div className="topbar-divider" />
             <AuthControls language={language} />
             <div className="topbar-divider" />
@@ -511,7 +511,7 @@ export default function Home() {
               <button type="button" className={language === "en" ? "selected" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button>
               <button type="button" className={language === "fa" ? "selected" : ""} aria-pressed={language === "fa"} onClick={() => changeLanguage("fa")}>فارسی</button>
             </div>
-            <button className="help-button"><CircleHelp size={16} /><span>{tr("docs")}</span></button>
+            <a className="help-button" href="https://github.com/pooya16pg-spec/orbit/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp size={16} /><span>{tr("docs")}</span></a>
           </div>
         </header>
 
@@ -647,7 +647,7 @@ export default function Home() {
             <section className="panel incidents-panel">
               <div className="panel-header compact">
                 <div><div className="panel-title-line"><h2>{tr("activeIncidents")}</h2><span className="incident-count">{incidentRows.length}</span></div><p>{tr("issuesAttention")}</p></div>
-                <button className="icon-button subtle-more" aria-label={tr("incidentOptions")}><MoreHorizontal size={18} /></button>
+                <button type="button" className="icon-button subtle-more preview-unavailable" disabled aria-label={`${tr("incidentOptions")} — ${tr("notAvailableInPreview")}`} title={tr("notAvailableInPreview")}><MoreHorizontal size={18} /></button>
               </div>
               <div className="incident-list">
                 {incidentRows.length > 0 ? incidentRows.map((incident) => (
