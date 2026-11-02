@@ -405,9 +405,9 @@ export default function IncidentWorkspace({ apiBaseUrl, language, sourceMode }: 
           <div className="incident-panel-heading">
             <div><h3>{t(language, "incidentRegister")}</h3><p>{t(language, "incidentRegisterSubtitle")}</p></div>
             <div className="incident-filter">
-              <button type="button" className={filter === "active" ? "selected" : ""} onClick={() => setFilter("active")}>{t(language, "incidentActive")}</button>
-              <button type="button" className={filter === "all" ? "selected" : ""} onClick={() => setFilter("all")}>{t(language, "all")}</button>
-              <button type="button" className={filter === "resolved" ? "selected" : ""} onClick={() => setFilter("resolved")}>{t(language, "resolved")}</button>
+              <button type="button" className={filter === "active" ? "selected" : ""} aria-pressed={filter === "active"} onClick={() => setFilter("active")}>{t(language, "incidentActive")}</button>
+              <button type="button" className={filter === "all" ? "selected" : ""} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>{t(language, "all")}</button>
+              <button type="button" className={filter === "resolved" ? "selected" : ""} aria-pressed={filter === "resolved"} onClick={() => setFilter("resolved")}>{t(language, "resolved")}</button>
             </div>
           </div>
           {loading ? <div className="incident-empty"><span className="telemetry-spinner" />{t(language, "incidentLoading")}</div> :
@@ -418,6 +418,7 @@ export default function IncidentWorkspace({ apiBaseUrl, language, sourceMode }: 
                   type="button"
                   key={incident.id}
                   className={`incident-register-row ${selectedIncidentId === incident.id ? "selected" : ""}`}
+                  aria-pressed={selectedIncidentId === incident.id}
                   onClick={() => setSelectedIncidentId(incident.id)}
                 >
                   <span className={`incident-register-severity severity-${incident.severity}`} />
