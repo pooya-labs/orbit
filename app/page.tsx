@@ -13,9 +13,7 @@ import AlertWorkspace from "./components/AlertWorkspace";
 import NotificationWorkspace from "./components/NotificationWorkspace";
 import DeploymentWorkspace from "./components/DeploymentWorkspace";
 import SLOWorkspace from "./components/SLOWorkspace";
-import type { LucideIcon 
-  Gauge,
-} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   AlertTriangle,
