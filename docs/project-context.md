@@ -349,3 +349,10 @@ This is a repeatable logical backup/restore regression test, not a production ba
 CI run `41383068747` passed the new `Verify authenticated workspace telemetry write-to-query isolation` step. The test uses real PostgreSQL workspace identities/grants, the authenticated OTLP/HTTP gateway, the private Collector, Prometheus, Loki, Tempo, and the actual workspace-scoped ORBIT query handlers. A workload granted only to workspace A exports metrics, logs, and traces; A-scoped queries return the data, while a member-scoped query for workspace B returns no matching data. Direct writes to B are denied and a producer-supplied `orbit.workspace.id` for B is rejected before forwarding.
 
 The test uses a deterministic workload-token verifier fixture; JWT signature/claim validation remains covered by the separate OIDC verifier tests. The real backend write-to-query round trip runs over OTLP/HTTP; existing PostgreSQL-backed gateway tests cover HTTP/gRPC authorization, forged attributes, mixed-resource batches and revocation. This local Compose CI test does not prove production DNS/TLS, real-provider credentials, cloud/Kubernetes network policy, managed-service per-workspace quotas, or target-environment capacity. Production tenant ingestion remains disabled pending those deployment gates.
+
+
+## M01 deployment handoff — GitHub Pages source verification
+
+The public ORBIT dashboard is a Next.js static export published from the \`out/\` artifact by \`.github/workflows/deploy.yml\`. GitHub Pages must use the Actions publishing source (\`build_type=workflow\`), not legacy branch/Jekyll publishing, which can race or overwrite the artifact. The repository setting was read successfully by the dedicated verification workflow on 2026-11-02 and returned \`workflow\`.
+
+The refreshed PR #11 implementation is rebuilt on current \`main\` as PR #88. It checks the Pages source both on relevant pull requests and immediately before every deployment, failing closed for \`legacy\`, unknown, or inaccessible settings. The one-time setting and recovery steps are in \`docs/deployment/github-pages.md\`. The workflow checks but does not mutate repository administration settings.
