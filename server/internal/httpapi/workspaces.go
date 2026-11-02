@@ -85,6 +85,27 @@ type alertInstanceListResponse struct {
 	Data []store.AlertInstance `json:"data"`
 }
 
+type alertNotificationChannelCreateRequest struct {
+	Name string `json:"name"`
+	SecretRef string `json:"secret_ref"`
+}
+
+type alertNotificationChannelEnabledRequest struct {
+	Enabled *bool `json:"enabled"`
+}
+
+type alertNotificationChannelListResponse struct {
+	Data []store.AlertNotificationChannel `json:"data"`
+}
+
+type alertNotificationDeliveryListResponse struct {
+	Data []store.AlertNotificationDelivery `json:"data"`
+}
+
+type alertNotificationAttemptListResponse struct {
+	Data []store.AlertNotificationAttempt `json:"data"`
+}
+
 func alertRuleError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, operation string, err error) {
 	switch {
 	case errors.Is(err, store.ErrWorkspaceMembershipNotFound),
@@ -104,6 +125,36 @@ func alertRuleError(w http.ResponseWriter, r *http.Request, logger *slog.Logger,
 		logger.Error(operation, "error", err, "request_id", r.Header.Get("X-Request-ID"))
 		writeError(w, r, http.StatusServiceUnavailable, "alert_rule_operation_unavailable", "The alert rule operation is temporarily unavailable")
 	}
+}
+
+func alertNotificationError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, operation string, err error) {
+	switch {
+	case errors.Is(err, store.ErrWorkspaceMembershipNotFound),
+		errors.Is(err, store.ErrAlertNotificationChannelNotFound):
+		writeError(w, r, http.StatusNotFound, "alert_notification_resource_not_found", "The workspace or notification channel was not found")
+	case errors.Is(err, store.ErrAlertRuleForbidden):
+		writeError(w, r, http.StatusForbidden, "alert_notification_forbidden", "Your workspace role cannot manage notification channels")
+	case errors.Is(err, store.ErrAlertNotificationChannelConflict):
+		writeError(w, r, http.StatusConflict, "alert_notification_channel_conflict", "A notification channel with that name already exists in this workspace")
+	case errors.Is(err, store.ErrAlertNotificationNoChange):
+		writeError(w, r, http.StatusConflict, "alert_notification_no_change", "The notification channel already has the requested state")
+	case errors.Is(err, store.ErrAlertNotificationInvalidInput),
+		strings.Contains(err.Error(), "UUID"),
+		strings.Contains(err.Error(), "principal"):
+		writeError(w, r, http.StatusBadRequest, "invalid_alert_notification", "Notification channel fields or identifiers are invalid")
+	default:
+		logger.Error(operation, "error", err, "request_id", r.Header.Get("X-Request-ID"))
+		writeError(w, r, http.StatusServiceUnavailable, "alert_notification_operation_unavailable", "The alert notification operation is temporarily unavailable")
+	}
+}
+
+func configuredWebhookSecretRef(value string, configured []string) bool {
+	for _, item := range configured {
+		if value == item {
+			return true
+		}
+	}
+	return false
 }
 
 func parseAlertRuleLimit(r *http.Request) (int, error) {
@@ -159,7 +210,7 @@ func incidentError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, 
 	}
 }
 
-func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, telemetryClient *telemetry.Client, logger *slog.Logger) {
+func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, telemetryClient *telemetry.Client, webhookSecretRefs []string, logger *slog.Logger) {
 	workspaceRepository, ok := repository.(store.WorkspaceRepository)
 	if !ok || workspaceRepository == nil {
 		unavailable := func(w http.ResponseWriter, r *http.Request) {
@@ -169,6 +220,11 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 		mux.HandleFunc("POST /api/v1/workspaces", unavailable)
 		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/membership", unavailable)
 		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/audit-events", unavailable)
+		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-notification-channels", unavailable)
+		mux.HandleFunc("POST /api/v1/workspaces/{workspaceID}/alert-notification-channels", unavailable)
+		mux.HandleFunc("PATCH /api/v1/workspaces/{workspaceID}/alert-notification-channels/{channelID}/enabled", unavailable)
+		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-notification-deliveries", unavailable)
+		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-notification-deliveries/{deliveryID}/attempts", unavailable)
 		return
 	}
 
@@ -680,6 +736,116 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// Notification channels store only an environment-backed secret reference.
+	// The endpoint URL and token are never accepted from or returned to the browser.
+	notificationRepository, notificationRepositoryAvailable := repository.(store.AlertNotificationChannelRepository)
+	notificationUnavailable := func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, r, http.StatusServiceUnavailable, "alert_notification_store_unavailable", "Alert notification storage is not available")
+	}
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-notification-channels", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !notificationRepositoryAvailable || notificationRepository == nil { notificationUnavailable(w, r); return }
+		limit, err := parseAlertRuleLimit(r)
+		if err != nil { writeError(w, r, http.StatusBadRequest, "invalid_limit", err.Error()); return }
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		items, err := notificationRepository.ListWorkspaceAlertNotificationChannels(ctx,
+			r.PathValue("workspaceID"), principal.Issuer, principal.Subject, limit)
+		if err != nil { alertNotificationError(w, r, logger, "list workspace alert-notification channels failed", err); return }
+		if items == nil { items = []store.AlertNotificationChannel{} }
+		for index := range items {
+			items[index].SecretConfigured = configuredWebhookSecretRef(items[index].SecretRef, webhookSecretRefs)
+		}
+		writeJSON(w, http.StatusOK, alertNotificationChannelListResponse{Data: items})
+	})
+
+	mux.HandleFunc("POST /api/v1/workspaces/{workspaceID}/alert-notification-channels", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !notificationRepositoryAvailable || notificationRepository == nil { notificationUnavailable(w, r); return }
+		var input alertNotificationChannelCreateRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_alert_notification_channel", "Channel name and secret_ref must be provided in one valid JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		membership, err := workspaceRepository.GetWorkspaceMembership(ctx,
+			r.PathValue("workspaceID"), principal.Issuer, principal.Subject)
+		if err != nil {
+			alertNotificationError(w, r, logger, "verify notification-channel workspace membership failed", err)
+			return
+		}
+		switch membership.Role {
+		case "owner", "administrator", "operator":
+		default:
+			alertNotificationError(w, r, logger, "notification-channel mutation forbidden", store.ErrAlertRuleForbidden)
+			return
+		}
+		if !configuredWebhookSecretRef(strings.TrimSpace(input.SecretRef), webhookSecretRefs) {
+			writeError(w, r, http.StatusServiceUnavailable, "webhook_secret_not_configured", "The referenced webhook secret is not configured in this deployment")
+			return
+		}
+		channel, err := notificationRepository.CreateWorkspaceAlertNotificationChannel(ctx, store.CreateAlertNotificationChannelInput{
+			WorkspaceID: r.PathValue("workspaceID"), Name: input.Name, SecretRef: input.SecretRef,
+			ActorIssuer: principal.Issuer, ActorSubject: principal.Subject, RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil { alertNotificationError(w, r, logger, "create workspace alert-notification channel failed", err); return }
+		channel.SecretConfigured = true
+		writeJSON(w, http.StatusCreated, struct { Data store.AlertNotificationChannel `json:"data"` }{Data: channel})
+	})
+
+	mux.HandleFunc("PATCH /api/v1/workspaces/{workspaceID}/alert-notification-channels/{channelID}/enabled", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !notificationRepositoryAvailable || notificationRepository == nil { notificationUnavailable(w, r); return }
+		var input alertNotificationChannelEnabledRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil || input.Enabled == nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_alert_notification_channel_state", "enabled must be provided in one valid JSON object")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		channel, err := notificationRepository.SetWorkspaceAlertNotificationChannelEnabled(ctx, store.SetAlertNotificationChannelEnabledInput{
+			WorkspaceID: r.PathValue("workspaceID"), ChannelID: r.PathValue("channelID"), Enabled: *input.Enabled,
+			ActorIssuer: principal.Issuer, ActorSubject: principal.Subject, RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil { alertNotificationError(w, r, logger, "change workspace alert-notification channel state failed", err); return }
+		channel.SecretConfigured = configuredWebhookSecretRef(channel.SecretRef, webhookSecretRefs)
+		writeJSON(w, http.StatusOK, struct { Data store.AlertNotificationChannel `json:"data"` }{Data: channel})
+	})
+
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-notification-deliveries", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !notificationRepositoryAvailable || notificationRepository == nil { notificationUnavailable(w, r); return }
+		limit, err := parseAlertRuleLimit(r)
+		if err != nil { writeError(w, r, http.StatusBadRequest, "invalid_limit", err.Error()); return }
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		items, err := notificationRepository.ListWorkspaceAlertNotificationDeliveries(ctx,
+			r.PathValue("workspaceID"), principal.Issuer, principal.Subject, r.URL.Query().Get("status"), limit)
+		if err != nil { alertNotificationError(w, r, logger, "list workspace alert-notification deliveries failed", err); return }
+		if items == nil { items = []store.AlertNotificationDelivery{} }
+		writeJSON(w, http.StatusOK, alertNotificationDeliveryListResponse{Data: items})
+	})
+
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-notification-deliveries/{deliveryID}/attempts", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !notificationRepositoryAvailable || notificationRepository == nil { notificationUnavailable(w, r); return }
+		limit, err := parseAlertRuleLimit(r)
+		if err != nil { writeError(w, r, http.StatusBadRequest, "invalid_limit", err.Error()); return }
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		items, err := notificationRepository.ListWorkspaceAlertNotificationAttempts(ctx,
+			r.PathValue("workspaceID"), r.PathValue("deliveryID"), principal.Issuer, principal.Subject, limit)
+		if err != nil { alertNotificationError(w, r, logger, "list workspace alert-notification attempts failed", err); return }
+		if items == nil { items = []store.AlertNotificationAttempt{} }
+		writeJSON(w, http.StatusOK, alertNotificationAttemptListResponse{Data: items})
 	})
 
 	registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/services", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {

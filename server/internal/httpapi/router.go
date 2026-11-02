@@ -94,6 +94,7 @@ type Config struct {
 	Telemetry        *telemetry.Client
 	AuthVerifier       TokenVerifier
 	RateLimitPerMinute int
+	AlertWebhookSecretRefs []string
 }
 
 type statusResponse struct {
@@ -130,7 +131,7 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 	}
 
 	mux := http.NewServeMux()
-	registerWorkspaceRoutes(mux, repository, cfg.Telemetry, logger)
+	registerWorkspaceRoutes(mux, repository, cfg.Telemetry, cfg.AlertWebhookSecretRefs, logger)
 	registerWorkloadIdentityRoutes(mux, repository, logger)
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, statusResponse{Status: "ok"})

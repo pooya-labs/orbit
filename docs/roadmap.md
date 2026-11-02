@@ -66,7 +66,7 @@ ORBIT's milestones are not a reason to expose unsafe operations early. The deliv
 3. Deliver M05 in slices: incident lifecycle and immutable timeline first; alert rules and notification adapters second; deployment annotations third; SLO/error-budget calculations fourth; audit history across every mutation.
 4. Complete the remaining M06 operational hardening: retention/cardinality controls, load testing, backup/restore, dependency/security review, production deployment, and runbooks.
 
-M05 state-changing operations are exposed only through authenticated workspace-scoped routes. The backend verifies workspace membership and operator roles, validates state transitions, and records incident and alert-rule-definition mutations in workspace audit history within the same transaction. The dashboard must keep these controls read-only until a real browser OIDC provider is configured; local development may omit OIDC only in explicit non-production mode.
+M05 state-changing operations are exposed only through authenticated workspace-scoped routes. The backend verifies workspace membership and operator roles, validates state transitions, and records incident, alert-rule-definition, and notification-channel mutations in workspace audit history within the same transaction. Alert notification deliveries use a PostgreSQL transactional outbox and append-only attempt history. The dashboard must keep these controls read-only until a real browser OIDC provider is configured; local development may omit OIDC only in explicit non-production mode.
 
 ## M05 — Operations workflows
 
@@ -74,7 +74,7 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 - [x] Workspace-scoped dashboard for incident creation, allowed status transitions/reopen, detail, and immutable timeline review (PR #71; CI-verified).
 - [x] Workspace-scoped alert rule definition CRUD with immutable workspace audit (PR #69; migration 010; CI passing). v1 is limited to the existing `request_rate` metric and rejects arbitrary query expressions.
 - [x] Add a scheduled workspace-aware evaluator for the allow-listed `request_rate` metric, with persisted pending/firing/resolved/cancelled instances, append-only events, deduplication, telemetry-gap handling, and PostgreSQL advisory-lock coordination across API replicas (PR #72; migration 011; CI-verified).
-- [ ] Add secure notification adapters and delivery/retry history.
+- [x] Secure webhook notification delivery and retry history: workspace-scoped channels, transactional outbox, multi-replica claims, bounded retries, and append-only attempts (PR #74; migration 012; CI-verified).
 - [ ] Deployment annotations and release comparison.
 - [ ] SLO definitions and error-budget burn calculations.
 - [ ] Extend audit-backed history to every operator mutation and workflow.

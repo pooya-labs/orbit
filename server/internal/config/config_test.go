@@ -216,3 +216,67 @@ func TestLoadDefaultsIngestionListenersToLoopback(t *testing.T) {
 	}
 }
 
+
+func TestLoadReadsAlertWebhookSecretReferencesWithoutExposingThemAsConfigValues(t *testing.T) {
+	t.Setenv("ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS", " Hooks.Example.com,events.example.com ")
+	t.Setenv("ORBIT_ALERT_WEBHOOK_SECRET_PAGERDUTY_PRIMARY", " https://hooks.example.com/services/team/token ")
+	t.Setenv("ORBIT_ALERT_WEBHOOK_SECRET_EMPTY", " ")
+
+	got := Load()
+	if !reflect.DeepEqual(got.AlertWebhookAllowedHosts, []string{"hooks.example.com", "events.example.com"}) {
+		t.Fatalf("allowed hosts = %#v", got.AlertWebhookAllowedHosts)
+	}
+	if got.AlertWebhookSecrets["PAGERDUTY_PRIMARY"] != "https://hooks.example.com/services/team/token" {
+		t.Fatalf("webhook secret reference was not loaded")
+	}
+	if _, exists := got.AlertWebhookSecrets["EMPTY"]; exists {
+		t.Fatal("empty webhook secret must not be loaded")
+	}
+}
+
+func TestValidateWebhookSecretsRequiresHTTPSAndExactHostnameAllowlist(t *testing.T) {
+	base := Config{
+		Environment: "development",
+		RateLimitPerMinute: 120,
+		OIDCRolesClaim: "roles",
+		AlertWebhookSecrets: map[string]string{
+			"PAGERDUTY_PRIMARY": "https://hooks.example.com/services/team/token",
+		},
+		AlertWebhookAllowedHosts: []string{"hooks.example.com"},
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid webhook configuration rejected: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		edit func(*Config)
+	}{
+		{name: "missing host allowlist", edit: func(c *Config) { c.AlertWebhookAllowedHosts = nil }},
+		{name: "plaintext HTTP", edit: func(c *Config) { c.AlertWebhookSecrets["PAGERDUTY_PRIMARY"] = "http://hooks.example.com/webhook" }},
+		{name: "userinfo", edit: func(c *Config) { c.AlertWebhookSecrets["PAGERDUTY_PRIMARY"] = "https://user:pass@hooks.example.com/webhook" }},
+		{name: "query string", edit: func(c *Config) { c.AlertWebhookSecrets["PAGERDUTY_PRIMARY"] = "https://hooks.example.com/webhook?token=secret" }},
+		{name: "unlisted host", edit: func(c *Config) { c.AlertWebhookSecrets["PAGERDUTY_PRIMARY"] = "https://other.example.com/webhook" }},
+		{name: "IP literal", edit: func(c *Config) { c.AlertWebhookSecrets["PAGERDUTY_PRIMARY"] = "https://127.0.0.1/webhook"; c.AlertWebhookAllowedHosts = []string{"127.0.0.1"} }},
+		{name: "non-443 port", edit: func(c *Config) { c.AlertWebhookSecrets["PAGERDUTY_PRIMARY"] = "https://hooks.example.com:8443/webhook" }},
+		{name: "invalid secret reference", edit: func(c *Config) { c.AlertWebhookSecrets = map[string]string{"../BAD": "https://hooks.example.com/webhook"} }},
+		{name: "invalid allowlist host", edit: func(c *Config) { c.AlertWebhookAllowedHosts = []string{"*.example.com"} }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := Config{
+				Environment: base.Environment,
+				RateLimitPerMinute: base.RateLimitPerMinute,
+				OIDCRolesClaim: base.OIDCRolesClaim,
+				AlertWebhookSecrets: map[string]string{
+					"PAGERDUTY_PRIMARY": base.AlertWebhookSecrets["PAGERDUTY_PRIMARY"],
+				},
+				AlertWebhookAllowedHosts: append([]string(nil), base.AlertWebhookAllowedHosts...),
+			}
+			test.edit(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() accepted unsafe webhook configuration")
+			}
+		})
+	}
+}

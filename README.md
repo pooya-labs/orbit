@@ -168,3 +168,31 @@ The first M05 slice is merged: authenticated workspace-scoped incident creation 
 ## M05 alert-rule definitions — PR #69
 
 Workspace members can list alert rule definitions; owners, administrators, and operators can create, update, enable/disable, and delete them. Definitions are workspace-scoped and every mutation is audited transactionally. PR #72 adds a scheduled evaluator for the allow-listed `request_rate` metric, persisted pending/firing/resolved/cancelled instances, append-only transition events, telemetry-gap handling, and PostgreSQL advisory-lock coordination across API replicas. Notification adapters and delivery/retry history remain open; see [the M05 roadmap](docs/roadmap.md) and [PR #72](https://github.com/pooya16pg-spec/orbit/pull/72).
+
+
+## Webhook secret configuration
+
+The next M05 slice adds workspace-owned webhook channels, a PostgreSQL transactional outbox, idempotent delivery claims across API replicas, bounded exponential retries, and append-only attempt history. The webhook sender requires HTTPS, an exact deployment hostname allowlist, public-unicast DNS results, no redirects, and bounded request/response timeouts. The API accepts only a deployment-managed `secret_ref`; raw webhook URLs and credentials are not accepted or returned.
+
+For local Compose use, set these variables in an untracked `.env` file or inject them through your secret manager:
+
+```dotenv
+ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS=hooks.example.com
+ORBIT_ALERT_WEBHOOK_SECRET_OPS_PRIMARY=https://hooks.example.com/your/provider/path
+```
+
+A workspace owner, administrator, or operator can then create a channel with `secret_ref: "OPS_PRIMARY"`. Never commit a real endpoint token or a populated `.env` file. Additional adapter types, delivery acknowledgements/silences, and latency/error-rate alerting remain separate work.
+
+
+## M05 webhook notification delivery — PR #74
+
+ORBIT can route alert firing/resolved events to workspace-owned webhook channels. Delivery rows are queued transactionally with alert lifecycle events, claimed using PostgreSQL leases and `SKIP LOCKED`, and retried with bounded exponential backoff. Every completed or lease-expired attempt is recorded in append-only history.
+
+Only a deployment-configured secret reference is stored in PostgreSQL. The actual HTTPS endpoint URL/token must be injected through a secret manager or an untracked local `.env` file:
+
+```dotenv
+ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS=hooks.example.com
+ORBIT_ALERT_WEBHOOK_SECRET_OPS_PRIMARY=https://hooks.example.com/your/provider/path
+```
+
+The allowlist is exact-host, HTTPS-only and restricted to port 443. The sender rejects non-public DNS results, follows no redirects, and applies bounded timeouts. The API accepts `secret_ref: "OPS_PRIMARY"`, never the raw URL or credential. Additional adapter types and delivery acknowledgement/silence controls remain future work.

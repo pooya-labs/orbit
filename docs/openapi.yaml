@@ -562,7 +562,7 @@ paths:
       tags: [Alerting]
       operationId: listWorkspaceAlertRules
       summary: List workspace alert rule definitions
-      description: Returns alert rule definitions for a workspace member. Enabled rules are evaluated by the background workspace evaluator when PostgreSQL and Prometheus are configured. Notification delivery is not yet implemented.
+      description: Returns workspace-scoped alert rule definitions. The background evaluator processes enabled rules when PostgreSQL and Prometheus are configured. Notification deliveries are created for firing and resolved events when enabled notification channels exist.
       security:
         - BearerAuth: []
       parameters:
@@ -777,7 +777,7 @@ paths:
       tags: [Alerting]
       operationId: setWorkspaceAlertRuleEnabled
       summary: Enable or disable a workspace alert rule definition
-      description: Changes the enabled flag and appends a workspace audit event atomically. This controls stored rule configuration only; scheduled evaluation is not part of this API slice.
+      description: Changes the enabled flag and appends a workspace audit event atomically. Active alert instances are closed when the rule is disabled; scheduled evaluation is performed by the background evaluator.
       security:
         - BearerAuth: []
       parameters:
@@ -842,6 +842,224 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/v1/workspaces/{workspaceID}/alert-notification-channels:
+    get:
+      tags: [Alerting]
+      operationId: listWorkspaceAlertNotificationChannels
+      summary: List workspace alert notification channels
+      description: Returns workspace-owned webhook channels. Secret references and endpoint URLs are never returned; secret_configured only indicates whether the deployment currently provides the referenced secret.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [10, 25, 50, 100]
+            default: 50
+      responses:
+        "200":
+          description: Workspace notification channels.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertNotificationChannelListResponse"
+        "400":
+          description: Invalid workspace identifier or page size.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      tags: [Alerting]
+      operationId: createWorkspaceAlertNotificationChannel
+      summary: Create a workspace webhook notification channel
+      description: Creates an enabled webhook channel using a secret_ref that must already be configured in the API deployment. The destination URL and credentials are not accepted from the caller or stored in PostgreSQL. Owner, administrator, or operator membership is required; creation and workspace audit are atomic.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertNotificationChannelCreateRequest"
+      responses:
+        "201":
+          description: Notification channel created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertNotificationChannelResponse"
+        "400":
+          description: Invalid channel name, secret reference, or request body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Workspace role cannot manage notification channels.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          description: A channel with that name already exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Notification storage is unavailable or the referenced deployment secret is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/alert-notification-channels/{channelID}/enabled:
+    patch:
+      tags: [Alerting]
+      operationId: setWorkspaceAlertNotificationChannelEnabled
+      summary: Enable or disable a workspace webhook channel
+      description: Enables or disables the channel. Pending deliveries are stopped when a channel is disabled. The change and workspace audit event are written transactionally.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: channelID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated channel state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertNotificationChannelResponse"
+        "400":
+          description: Invalid workspace or channel identifier, or request body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Workspace role cannot manage notification channels.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          description: Channel already has the requested state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /api/v1/workspaces/{workspaceID}/alert-notification-deliveries:
+    get:
+      tags: [Alerting]
+      operationId: listWorkspaceAlertNotificationDeliveries
+      summary: List workspace alert notification deliveries
+      description: Returns the durable outbox delivery state without secret references, destination URLs, or webhook credentials. Any workspace member may read the delivery history.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, processing, delivered, dead]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [10, 25, 50, 100]
+            default: 50
+      responses:
+        "200":
+          description: Workspace notification deliveries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertNotificationDeliveryListResponse"
+        "400":
+          description: Invalid status, workspace identifier, or page size.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /api/v1/workspaces/{workspaceID}/alert-notification-deliveries/{deliveryID}/attempts:
+    get:
+      tags: [Alerting]
+      operationId: listWorkspaceAlertNotificationAttempts
+      summary: List append-only delivery attempts
+      description: Returns immutable attempt history for a delivery. Every workspace member may read this history; no destination or credential material is returned.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: deliveryID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [10, 25, 50, 100]
+            default: 50
+      responses:
+        "200":
+          description: Attempt history for the selected delivery.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertNotificationAttemptListResponse"
+        "400":
+          description: Invalid workspace or delivery identifier, or page size.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "503":
+          $ref: "#/components/responses/Unavailable"
   /api/v1/telemetry/services:
     get:
       tags: [Telemetry]
@@ -1091,6 +1309,28 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  parameters:
+    WorkspaceID:
+      name: workspaceID
+      in: path
+      required: true
+      description: Workspace UUID scoped to the authenticated principal.
+      schema:
+        type: string
+        format: uuid
+  responses:
+    NotFound:
+      description: The workspace or requested workspace resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unavailable:
+      description: The workspace dependency or storage service is unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
 
     CreateIncidentRequest:
@@ -1204,7 +1444,7 @@ components:
           type: integer
           minimum: 0
           maximum: 3600
-          description: Intended sustained-breach duration before firing; it is stored as configuration and is not evaluated by this API slice.
+          description: Intended sustained-breach duration before firing; the background evaluator applies this duration and resets it after a telemetry observation gap.
         severity:
           type: string
           enum: [critical, high, medium, low]
@@ -1290,6 +1530,104 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AlertRule"
+    AlertNotificationChannelCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, secret_ref]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        secret_ref:
+          type: string
+          pattern: "^[A-Z][A-Z0-9_]{0,63}$"
+          description: Reference to an API deployment secret. The endpoint URL and credential are never accepted by this API.
+    AlertNotificationChannel:
+      type: object
+      required: [id, workspace_id, name, adapter, enabled, secret_configured, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        name: { type: string }
+        adapter: { type: string, enum: [webhook] }
+        enabled: { type: boolean }
+        secret_configured:
+          type: boolean
+          description: Whether the API process currently has the referenced deployment secret. The reference itself is never returned.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AlertNotificationChannelResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/AlertNotificationChannel"
+    AlertNotificationChannelListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertNotificationChannel"
+    AlertNotificationDelivery:
+      type: object
+      required: [id, workspace_id, alert_instance_id, event_id, channel_id, channel_name, event_type, status, attempts, next_attempt_at, created_at, updated_at, rule_name, service_name, metric, operator, threshold, value, severity, instance_status, occurred_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        alert_instance_id: { type: string, format: uuid }
+        event_id: { type: string, format: uuid }
+        channel_id: { type: string, format: uuid }
+        channel_name: { type: string }
+        event_type: { type: string, enum: [alert.firing, alert.resolved] }
+        status: { type: string, enum: [pending, processing, delivered, dead] }
+        attempts: { type: integer, minimum: 0, maximum: 8 }
+        next_attempt_at: { type: string, format: date-time }
+        last_attempt_at: { type: string, format: date-time, nullable: true }
+        delivered_at: { type: string, format: date-time, nullable: true }
+        last_error:
+          type: string
+          description: Safe error code only; response bodies and destination credentials are never persisted here.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        rule_name: { type: string }
+        service_name: { type: string }
+        metric: { type: string, enum: [request_rate] }
+        operator: { type: string, enum: [gt, gte, lt, lte] }
+        threshold: { type: number }
+        value: { type: number }
+        severity: { type: string, enum: [critical, high, medium, low] }
+        instance_status: { type: string, enum: [pending, firing, resolved, cancelled] }
+        occurred_at: { type: string, format: date-time }
+    AlertNotificationDeliveryListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertNotificationDelivery"
+    AlertNotificationAttempt:
+      type: object
+      required: [id, delivery_id, attempt_number, outcome, attempted_at]
+      properties:
+        id: { type: string, format: uuid }
+        delivery_id: { type: string, format: uuid }
+        attempt_number: { type: integer, minimum: 1, maximum: 8 }
+        outcome: { type: string, enum: [delivered, retry_scheduled, dead] }
+        http_status: { type: integer, minimum: 100, maximum: 599, nullable: true }
+        error_code: { type: string, description: Safe error code only. }
+        attempted_at: { type: string, format: date-time }
+    AlertNotificationAttemptListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertNotificationAttempt"
     TelemetryQueryMeta:
       type: object
       required: [window, queried_at]
