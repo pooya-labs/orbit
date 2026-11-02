@@ -21,6 +21,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 - Docker Compose stack for PostgreSQL, Redis, NATS, and the Go API.
 - Optional local OpenTelemetry Collector → Prometheus, Tempo, and Loki pipeline.
 - An instrumented Go demo emits a request metric, trace, and structured log through OTLP/HTTP; CI verifies all three in their backend query APIs.
+- CI verifies authenticated workspace write-to-query isolation: a workload granted to workspace A can send metrics, logs, and traces visible to A-scoped queries but not B-scoped queries; direct B writes and forged tenant attributes are rejected.
 - The API provides bounded read endpoints for request-rate metrics, service logs, and trace search, with source and query-time metadata.
 - GitHub Actions for tests, static build, and GitHub Pages deployment.
 
