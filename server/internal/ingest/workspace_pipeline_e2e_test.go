@@ -99,7 +99,7 @@ func TestWorkspaceOTLPWriteToQueryIsolation(t *testing.T) {
 		Environment: "staging",
 		Telemetry: telemetryClient,
 		AuthVerifier: humanVerifier,
-		RateLimitPerMinute: 200,
+		RateLimitPerMinute: 10000,
 	}, repository, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	// A workload granted only to A must be denied when the route asks it to
