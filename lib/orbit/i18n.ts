@@ -574,6 +574,7 @@ export function t(language: Language, key: TranslationKey): string {
 }
 
 export function navLabel(language: Language, label: string): string {
+  if (label === "SLOs") return t(language, "SLOs");
   const keyByLabel: Record<string, TranslationKey> = {
     Overview: "overview", "Service map": "serviceMap", Services: "services",
     Infrastructure: "infrastructure", Metrics: "metrics", Traces: "traces",
