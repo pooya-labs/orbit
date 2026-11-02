@@ -76,7 +76,7 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 - [x] Add a scheduled workspace-aware evaluator for the allow-listed `request_rate` metric, with persisted pending/firing/resolved/cancelled instances, append-only events, deduplication, telemetry-gap handling, and PostgreSQL advisory-lock coordination across API replicas (PR #72; migration 011; CI-verified).
 - [x] Secure webhook notification delivery and retry history: workspace-scoped channels, transactional outbox, multi-replica claims, bounded retries, and append-only attempts (PR #74; migration 012; CI-verified).
 - [ ] Workspace-scoped immutable deployment annotations with derived service/environment metadata, transactional workspace audit, and same-service/environment chronological release comparison (PR #77; migration 013; CI pending).
-- [ ] SLO definitions and error-budget burn calculations.
+- [x] Workspace-scoped HTTP request-success SLO definitions, live error-budget calculations, explicit insufficient-data handling, and audited SLO lifecycle operations (PR #78; migration 014; CI pending).
 - [ ] Extend audit-backed history to every operator mutation and workflow.
 
 ## M06 — Production hardening
@@ -219,3 +219,10 @@ Version 1 deliberately supports only `request_rate`, the metric currently emitte
 Migration 013 adds workspace-scoped `deployment_annotations` linked to the owning service and workspace. The API derives service name and environment from that service, validates release/version metadata and deployment time, and writes the annotation plus `deployment.annotation_created` audit event in one transaction. Database triggers prevent UPDATE, DELETE, and TRUNCATE.
 
 Workspace members can list or read deployment annotations. Release comparison accepts two different annotations for the same service and environment in chronological order and reports version/commit changes plus elapsed time. It does not claim that a release caused a telemetry change. The operator dashboard follows in the next UI slice.
+
+
+## M05 SLO and error-budget semantics
+
+SLO definitions are per workspace service and use one bounded HTTP request-success SLI. Only instrumented low-cardinality routes contribute events: response codes 200–399 are good, other instrumented responses are bad; health checks and uninstrumented routes are excluded. Definitions allow targets from 90% to 99.99% and rolling windows of 1, 3, or 7 days, matching the Prometheus seven-day retention. PromQL is server-owned and filters by the authenticated workspace, service, route, and outcome.
+
+For observed good and bad events, availability is `good / (good + bad)`, allowed bad events are `total × (1 − target)`, remaining budget is `max(0, allowed − bad)`, and burn rate is `bad / allowed`. No observed events return `insufficient_data`; absence of telemetry is never reported as 100% availability. The local Compose demo is unscoped and cannot populate workspace SLOs until telemetry is sent through authenticated workspace ingestion.
