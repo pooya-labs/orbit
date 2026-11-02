@@ -126,7 +126,7 @@ func (t *telemetry) shutdown(ctx context.Context) error {
 }
 
 func sloOutcomeForHTTPStatus(statusCode int) string {
-	if statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices {
+	if statusCode >= http.StatusOK && statusCode < 400 {
 		return "good"
 	}
 	return "bad"
