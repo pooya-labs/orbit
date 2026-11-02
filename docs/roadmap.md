@@ -116,7 +116,7 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [ ] Merge the repository threat model and automated Gitleaks, govulncheck, and npm audit workflows (PR #90; implementation submitted, final CI verification pending).
 - [ ] Enable the repository Dependency Graph and obtain a successful PR Dependency Review result; the current GitHub setting prevents this check from running.
 - [ ] Merge the immutable full-commit-SHA GitHub Actions pin policy and scheduled Dependabot updates (PR #90; policy implementation submitted, CI verification pending).
-- [ ] Add container image/base-layer scanning, finding-remediation ownership/SLAs, and target-environment security testing.
+- [ ] Add image/base-layer scanning for the production API container, finding-remediation ownership/SLAs, and target-environment security testing (PR #90; Trivy gate added, scan result pending).
 - [x] Publish an operator runbook template covering production preflight gates, safe deployment and post-deploy verification, incident response, rollback boundaries, backup/restore coordination, and evidence capture (`docs/operations-runbook.md`). Executing its environment-specific gates remains open above.
 - [ ] Hosted API and managed persistence deployment.
 
