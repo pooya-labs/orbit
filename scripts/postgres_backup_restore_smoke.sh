@@ -22,7 +22,8 @@ cleanup() {
   dropdb --if-exists "$restore_db" >/dev/null 2>&1 || true
   rm -rf "$work_dir"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
 
 archive="$work_dir/orbit.dump"
 fixture_suffix="$(date +%s)_$$"
@@ -92,6 +93,7 @@ test -s "$archive"
 pg_restore --list "$archive" >/dev/null
 
 echo "[backup-restore] restoring into isolated database $restore_db"
+dropdb --if-exists "$restore_db" >/dev/null 2>&1 || true
 createdb --template=template0 "$restore_db"
 pg_restore --exit-on-error --no-owner --no-acl --dbname="$restore_db" "$archive"
 
