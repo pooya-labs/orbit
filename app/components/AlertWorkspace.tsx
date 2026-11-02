@@ -128,6 +128,7 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
   const [selectedDeliveryId, setSelectedDeliveryId] = useState("");
   const [notificationAttempts, setNotificationAttempts] = useState<WorkspaceAlertNotificationAttempt[]>([]);
   const [notificationAttemptsLoading, setNotificationAttemptsLoading] = useState(false);
+  const [notificationAttemptsError, setNotificationAttemptsError] = useState(false);
   const [notificationFilter, setNotificationFilter] = useState<AlertNotificationDeliveryStatus | "all">("all");
   const [showChannelForm, setShowChannelForm] = useState(false);
   const [channelName, setChannelName] = useState("");
@@ -154,6 +155,7 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
     setNotificationDeliveries([]);
     setSelectedDeliveryId("");
     setNotificationAttempts([]);
+    setNotificationAttemptsError(false);
   }), []);
 
   useEffect(() => {
@@ -168,6 +170,8 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
       setNotificationDeliveries([]);
       setSelectedDeliveryId("");
       setNotificationAttempts([]);
+      setNotificationAttemptsLoading(false);
+      setNotificationAttemptsError(false);
       return;
     }
     const controller = new AbortController();
@@ -260,13 +264,17 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
     const controller = new AbortController();
     let current = true;
     setNotificationAttempts([]);
+    setNotificationAttemptsError(false);
     setNotificationAttemptsLoading(true);
     listWorkspaceAlertNotificationAttempts(workspaceId, selectedDeliveryId, controller.signal, apiBaseUrl)
       .then((items) => {
         if (current) setNotificationAttempts(items);
       })
       .catch(() => {
-        if (current) setNotificationAttempts([]);
+        if (current) {
+          setNotificationAttempts([]);
+          setNotificationAttemptsError(true);
+        }
       })
       .finally(() => {
         if (current) setNotificationAttemptsLoading(false);
@@ -275,7 +283,7 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
       current = false;
       controller.abort();
     };
-  }, [apiBaseUrl, selectedDeliveryId, sourceMode, user?.sub, workspaceId]);
+  }, [apiBaseUrl, reloadVersion, selectedDeliveryId, sourceMode, user?.sub, workspaceId]);
 
   useEffect(() => {
     if (sourceMode !== "api" || !user || !workspaceId) return;
@@ -801,6 +809,8 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
               </div>
               {notificationAttemptsLoading ? (
                 <div className="notification-empty"><span className="telemetry-spinner" />{t(language, "notificationAttemptsLoading")}</div>
+              ) : notificationAttemptsError ? (
+                <div className="notification-empty" role="alert">{t(language, "notificationAttemptsFailed")}</div>
               ) : notificationAttempts.length === 0 ? (
                 <div className="notification-empty">{t(language, "notificationNoAttempts")}</div>
               ) : (
