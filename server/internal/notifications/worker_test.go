@@ -11,7 +11,7 @@ import (
 
 type fakeDeliveryRepository struct {
 	deliveries []store.AlertNotificationDelivery
-	records []store.RecordAlertNotificationAttempt
+	records []store.RecordAlertNotificationAttemptInput
 	claimErr error
 	recordErr error
 }
