@@ -17,6 +17,7 @@ import type {
   IncidentTimelineEvent,
   ServiceSummary,
   WorkspaceMembershipSummary,
+  WorkspaceAuditEvent,
   WorkspaceSummary,
   WorkspaceSLO,
   WorkspaceSLOBudget,
@@ -132,6 +133,22 @@ export async function getWorkspaceMembership(
 ): Promise<WorkspaceMembershipSummary> {
   const response = await getJSON<{ data: WorkspaceMembershipSummary }>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/membership`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function listWorkspaceAuditEvents(
+  workspaceId: string,
+  limit = 100,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceAuditEvent[]> {
+  const acceptedLimit = [10, 25, 50, 100].includes(limit) ? limit : 100;
+  const query = new URLSearchParams({ limit: String(acceptedLimit) });
+  const response = await getJSON<DataEnvelope<WorkspaceAuditEvent>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/audit-events?${query.toString()}`,
     signal,
     baseUrl,
   );
