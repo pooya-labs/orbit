@@ -118,7 +118,7 @@ func TestWorkspaceOTLPWriteToQueryIsolation(t *testing.T) {
 	forged := workspacePipelineMetricsRequest(1)
 	forged.ResourceMetrics[0].Resource.Attributes = append(
 		forged.ResourceMetrics[0].Resource.Attributes,
-		stringAttribute(WorkspaceAttribute, workspaceB.ID),
+		workspacePipelineStringAttribute(WorkspaceAttribute, workspaceB.ID),
 	)
 	forgedPayload, err := proto.Marshal(forged)
 	if err != nil {
@@ -267,13 +267,13 @@ func workspacePipelineHasData(raw json.RawMessage) bool {
 
 func workspacePipelineResource() *resourcev1.Resource {
 	return &resourcev1.Resource{Attributes: []*commonv1.KeyValue{
-		stringAttribute("service.name", workspacePipelineService),
-		stringAttribute("service.version", "e2e-1"),
-		stringAttribute("deployment.environment", "ci"),
+		workspacePipelineStringAttribute("service.name", workspacePipelineService),
+		workspacePipelineStringAttribute("service.version", "e2e-1"),
+		workspacePipelineStringAttribute("deployment.environment", "ci"),
 	}}
 }
 
-func stringAttribute(key, value string) *commonv1.KeyValue {
+func workspacePipelineStringAttribute(key, value string) *commonv1.KeyValue {
 	return &commonv1.KeyValue{
 		Key: key,
 		Value: &commonv1.AnyValue{Value: &commonv1.AnyValue_StringValue{StringValue: value}},
