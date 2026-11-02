@@ -1337,3 +1337,10 @@ html[data-theme="light"] .audit-filter.active { background: rgba(42,159,140,.1);
   .audit-event-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
   .audit-event-details dl { grid-template-columns: 1fr; }
 }
+
+.audit-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 2px 0 4px; }
+.audit-page-heading > div:first-child { min-width: 0; }
+.audit-page-heading > div:first-child > span { color: var(--mint); font-size: 9px; font-weight: 700; letter-spacing: .15em; }
+.audit-page-heading h2 { margin: 7px 0 5px; color: var(--text); font: 700 20px Manrope, sans-serif; }
+.audit-page-heading p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.audit-heading-mark { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid rgba(101,217,193,.24); border-radius: 12px; background: var(--mint-soft); color: var(--mint); }
