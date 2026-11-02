@@ -118,6 +118,7 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [ ] Merge the immutable full-commit-SHA GitHub Actions pin policy and scheduled Dependabot updates (PR #90; workflow pin policy CI passed; merge awaits the Dependency Review prerequisite).
 - [ ] Complete and merge the production image security gates (PR #90; API and rebuilt PostgreSQL scans passed; the minimal custom Collector build and scan passed; Tempo, Caddy, static smoke-runner, and remaining Compose image evidence is being verified). Do not suppress HIGH/CRITICAL findings to make the gate green. Scanning all production-relevant images, remediation ownership/SLAs, and target-environment security testing remain open.
 - [ ] Generate and retain CycloneDX SBOM artifacts for the first-party images and Compose/base image inventory (PR #90 adds 30-day workflow artifacts; latest-head generation and upload must pass). Signed build/release provenance and attestation remain a separate release gate.
+- [ ] Complete the refreshed Go telemetry-demo dependency lockfile and re-scan the image after fixing Trivy HIGH findings in `golang.org/x/net` (0.58.0 → 0.60.0) and `google.golang.org/grpc` (1.83.1 → 1.83.2).
 - [x] Publish an operator runbook template covering production preflight gates, safe deployment and post-deploy verification, incident response, rollback boundaries, backup/restore coordination, and evidence capture (`docs/operations-runbook.md`). Executing its environment-specific gates remains open above.
 - [ ] Hosted API and managed persistence deployment.
 
