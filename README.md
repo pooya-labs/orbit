@@ -170,7 +170,7 @@ The first M05 slice is merged: authenticated workspace-scoped incident creation 
 Workspace members can list alert rule definitions; owners, administrators, and operators can create, update, enable/disable, and delete them. Definitions are workspace-scoped and every mutation is audited transactionally. PR #72 adds a scheduled evaluator for the allow-listed `request_rate` metric, persisted pending/firing/resolved/cancelled instances, append-only transition events, telemetry-gap handling, and PostgreSQL advisory-lock coordination across API replicas. Notification adapters and delivery/retry history remain open; see [the M05 roadmap](docs/roadmap.md) and [PR #72](https://github.com/pooya16pg-spec/orbit/pull/72).
 
 
-## M05 webhook notification delivery — implementation in progress
+## Webhook secret configuration
 
 The next M05 slice adds workspace-owned webhook channels, a PostgreSQL transactional outbox, idempotent delivery claims across API replicas, bounded exponential retries, and append-only attempt history. The webhook sender requires HTTPS, an exact deployment hostname allowlist, public-unicast DNS results, no redirects, and bounded request/response timeouts. The API accepts only a deployment-managed `secret_ref`; raw webhook URLs and credentials are not accepted or returned.
 
