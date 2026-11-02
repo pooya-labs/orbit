@@ -357,3 +357,12 @@ This is a repeatable logical backup/restore regression test, not a production ba
 CI run `41383068747` passed the new `Verify authenticated workspace telemetry write-to-query isolation` step. The test uses real PostgreSQL workspace identities/grants, the authenticated OTLP/HTTP gateway, the private Collector, Prometheus, Loki, Tempo, and the actual workspace-scoped ORBIT query handlers. A workload granted only to workspace A exports metrics, logs, and traces; A-scoped queries return the data, while a member-scoped query for workspace B returns no matching data. Direct writes to B are denied and a producer-supplied `orbit.workspace.id` for B is rejected before forwarding.
 
 The test uses a deterministic workload-token verifier fixture; JWT signature/claim validation remains covered by the separate OIDC verifier tests. The real backend write-to-query round trip runs over OTLP/HTTP; existing PostgreSQL-backed gateway tests cover HTTP/gRPC authorization, forged attributes, mixed-resource batches and revocation. This local Compose CI test does not prove production DNS/TLS, real-provider credentials, cloud/Kubernetes network policy, managed-service per-workspace quotas, or target-environment capacity. Production tenant ingestion remains disabled pending those deployment gates.
+
+
+## M06 handoff update — security automation and immutable workflow action pins
+
+PR #85 proposes a repository threat-model baseline, full-history Gitleaks scanning, Go vulnerability analysis, npm audit, PR dependency review, and scheduled Dependabot updates. Its pull-request CI currently requires workflow approval; do not mark the slice merged or CI-verified until the required approval is granted and the resulting checks pass.
+
+The same PR pins every external GitHub Action to the full commit SHA resolved from its reviewed release tag, keeps a human-readable version comment beside each pin, and adds \`scripts/check_workflow_action_pins.py\` as a CI policy check. The policy also rejects unpinned Docker action images and validates local action paths. Future action updates should be made through reviewed Dependabot proposals, with the commit pin and version annotation updated together.
+
+These controls improve source/CI hygiene; they do not replace image/base-layer scanning, human triage and remediation SLAs, SBOM/provenance, credential rotation, or target-environment security testing. PR #85 must not be reported as merged or verified until its workflows are approved and pass.
