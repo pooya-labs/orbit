@@ -254,10 +254,12 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
   useEffect(() => {
     if (!workspaceId || !selectedDeliveryId || sourceMode !== "api" || !user) {
       setNotificationAttempts([]);
+      setNotificationAttemptsLoading(false);
       return;
     }
     const controller = new AbortController();
     let current = true;
+    setNotificationAttempts([]);
     setNotificationAttemptsLoading(true);
     listWorkspaceAlertNotificationAttempts(workspaceId, selectedDeliveryId, controller.signal, apiBaseUrl)
       .then((items) => {
@@ -722,7 +724,7 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
                           type="button"
                           className="notification-channel-toggle"
                           onClick={() => void toggleChannel(channel)}
-                          disabled={saving || !channel.secret_configured}
+                          disabled={saving || (!channel.secret_configured && !channel.enabled)}
                           title={t(language, channel.enabled ? "notificationDisableChannel" : "notificationEnableChannel")}
                           aria-label={t(language, channel.enabled ? "notificationDisableChannel" : "notificationEnableChannel")}
                         >
