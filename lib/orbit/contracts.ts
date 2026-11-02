@@ -102,6 +102,57 @@ export interface WorkspaceAlertInstance {
   updated_at: string;
 }
 
+export type AlertNotificationDeliveryStatus = "pending" | "processing" | "delivered" | "dead";
+export type AlertNotificationAttemptOutcome = "delivered" | "retry_scheduled" | "dead";
+
+export interface WorkspaceAlertNotificationChannel {
+  id: string;
+  workspace_id: string;
+  name: string;
+  adapter: "webhook";
+  enabled: boolean;
+  secret_configured: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceAlertNotificationDelivery {
+  id: string;
+  workspace_id: string;
+  alert_instance_id: string;
+  event_id: string;
+  channel_id: string;
+  channel_name: string;
+  event_type: "alert.firing" | "alert.resolved";
+  status: AlertNotificationDeliveryStatus;
+  attempts: number;
+  next_attempt_at: string;
+  last_attempt_at: string | null;
+  delivered_at: string | null;
+  last_error: string;
+  created_at: string;
+  updated_at: string;
+  rule_name: string;
+  service_name: string;
+  metric: "request_rate";
+  operator: AlertRuleOperator;
+  threshold: number;
+  value: number;
+  severity: IncidentSeverity;
+  instance_status: AlertInstanceStatus;
+  occurred_at: string;
+}
+
+export interface WorkspaceAlertNotificationAttempt {
+  id: string;
+  delivery_id: string;
+  attempt_number: number;
+  outcome: AlertNotificationAttemptOutcome;
+  http_status: number | null;
+  error_code: string;
+  attempted_at: string;
+}
+
 export interface ApiMetadata {
   name: "orbit-api";
   version: string;
