@@ -164,6 +164,38 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
   }, [apiBaseUrl, language, sourceMode, user?.sub, workspaceId, reloadVersion]);
 
   useEffect(() => {
+    if (!expandedDeliveryId || sourceMode !== "api" || !user || !workspaceId) {
+      setAttemptsLoadingId("");
+      return;
+    }
+    const controller = new AbortController();
+    let current = true;
+    setAttemptsLoadingId(expandedDeliveryId);
+    listWorkspaceAlertNotificationAttempts(
+      workspaceId,
+      expandedDeliveryId,
+      controller.signal,
+      apiBaseUrl,
+    )
+      .then((items) => {
+        if (current) setAttempts((previous) => ({ ...previous, [expandedDeliveryId]: items }));
+      })
+      .catch(() => {
+        if (current && !controller.signal.aborted) {
+          setError(t(language, "notificationLoadFailed"));
+          setAttempts((previous) => ({ ...previous, [expandedDeliveryId]: [] }));
+        }
+      })
+      .finally(() => {
+        if (current) setAttemptsLoadingId("");
+      });
+    return () => {
+      current = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, expandedDeliveryId, language, reloadVersion, sourceMode, user?.sub, workspaceId]);
+
+  useEffect(() => {
     if (sourceMode !== "api" || !user || !workspaceId) return;
     const timer = window.setInterval(() => setReloadVersion((version) => version + 1), 30_000);
     return () => window.clearInterval(timer);
@@ -218,17 +250,8 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
     } finally { setSaving(false); }
   };
 
-  const toggleAttempts = async (delivery: WorkspaceAlertNotificationDelivery) => {
-    if (expandedDeliveryId === delivery.id) { setExpandedDeliveryId(""); return; }
-    setExpandedDeliveryId(delivery.id);
-    if (attempts[delivery.id]) return;
-    setAttemptsLoadingId(delivery.id);
-    try {
-      const items = await listWorkspaceAlertNotificationAttempts(workspaceId, delivery.id, undefined, apiBaseUrl);
-      setAttempts((previous) => ({ ...previous, [delivery.id]: items }));
-    } catch {
-      setError(t(language, "notificationLoadFailed"));
-    } finally { setAttemptsLoadingId(""); }
+  const toggleAttempts = (delivery: WorkspaceAlertNotificationDelivery) => {
+    setExpandedDeliveryId((previous) => previous === delivery.id ? "" : delivery.id);
   };
 
   if (sourceMode === "demo") {
@@ -356,7 +379,8 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
                         <button type="button" className="notification-icon-action"
                           title={t(language, channel.enabled ? "notificationChannelDisable" : "notificationChannelEnable")}
                           aria-label={t(language, channel.enabled ? "notificationChannelDisable" : "notificationChannelEnable")}
-                          onClick={() => void toggleChannel(channel)} disabled={saving}>
+                          onClick={() => void toggleChannel(channel)}
+                          disabled={saving || (!channel.secret_configured && !channel.enabled)}>
                           {channel.enabled ? <Pause size={14} /> : <Play size={14} />}
                         </button>
                       )}
