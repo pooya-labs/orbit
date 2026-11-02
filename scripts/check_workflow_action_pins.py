@@ -20,6 +20,10 @@ def validate_reference(target: str, comment: str | None, source: Path, line_numb
 
     if target.startswith("./"):
         local_path = (ROOT / target).resolve()
+        try:
+            local_path.relative_to(ROOT.resolve())
+        except ValueError:
+            return f"{location}: local action path escapes the repository: {target}"
         if not local_path.exists():
             return f"{location}: local action path does not exist: {target}"
         return None
@@ -29,9 +33,11 @@ def validate_reference(target: str, comment: str | None, source: Path, line_numb
             return f"{location}: Docker actions must be pinned by sha256 digest: {target}"
         return None
 
-    _repository, separator, revision = target.rpartition("@")
+    repository, separator, revision = target.rpartition("@")
     if not separator or not SHA_RE.fullmatch(revision):
         return f"{location}: external action must use a full 40-character commit SHA: {target}"
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        return f"{location}: external action must use an owner/repository reference: {target}"
 
     if comment is None or not VERSION_COMMENT_RE.fullmatch(comment.strip()):
         return f"{location}: add a version comment such as '# v4' after the pinned SHA"
