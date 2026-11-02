@@ -438,12 +438,21 @@ Verified evidence:
 - Pages-source verification passed on several reviewed heads, including `41403398126`.
 - The CI, Security, and Pages checks triggered on branch head `cf74aa8bef8e4c293bcea266c52a5602923da2e9` were still running/queued when last inspected. Subsequent documentation commits retrigger checks, so always inspect the current branch head and its own workflow runs instead of reusing those older results.
 
-Next steps:
-1. Inspect current-head CI and Security jobs. Require a successful Tempo build/VEX-aware Trivy scan, telemetry demo image scan using x/net v0.60.0 and grpc v1.83.2, all remaining image scans, and the SBOM artifact set.
-2. Confirm latest-head Dependency Review, Gitleaks, govulncheck, npm audit, action-pin check, API/web CI, and telemetry A/B isolation.
-3. Update PR #90 body and evidence after current-head results are known. Do not merge until required checks are green.
-4. Keep production tenant ingestion disabled until real OIDC, ingress TLS/network policy, managed quotas/retention, encrypted off-host backup/PITR, and target-environment load/recovery gates are evidenced. Signed provenance/attestation, credential rotation, and remediation SLAs remain distinct work.
+Next steps after PR #90 merge:
+1. Keep production tenant ingestion disabled. Repository-level CI and Security gates are complete, but this does not establish production readiness.
+2. Prioritize the remaining environment-specific M06 gates: target-environment sustained ingestion/query load and backpressure; encrypted off-host backups/PITR plus a measured restore rehearsal; real DNS/ACME, host firewall, trusted-proxy and cloud/Kubernetes network policy; and real-provider browser PKCE validation.
+3. Define and approve a compliant retention/archive policy for durable workspace audit, incident, alert, notification, and deployment history before implementing any pruning.
+4. Keep signed build/release provenance and attestation, remediation ownership/SLAs, credential rotation, and hosted API/managed persistence deployment as distinct release/deployment work.
+5. M04/M01/M02 follow-ups remain visible in `docs/roadmap.md`: full OpenTelemetry resource ingestion, accessibility review, Redis/NATS integration only where justified, and hosted API integration.
 
+Verified final PR #90 evidence (all tied to the final PR head, not older runs):
+- PR #90 merged by squash on 2026-11-02; merge commit on `main`: `4a4c46445d7f6b0129cba647d1bd71c49bbd0d45`.
+- CI run `41406376148` completed successfully: Go race tests, `go vet`, build, PostgreSQL backup/restore round-trip, web typecheck/production build, immutable action-pin policy, and the full local telemetry pipeline. The telemetry end-to-end job passed service startup/readiness, OTLP metrics/logs/traces and API queries, Prometheus scrape, authenticated workspace A/B write-to-query isolation, and cleanup.
+- Security run `41406376150` completed successfully with all 13 jobs passing: Gitleaks, govulncheck, npm audit, Dependency Review, API/PostgreSQL and telemetry smoke/demo images, patched Tempo build and VEX-aware Trivy scan, minimal Collector, Caddy, Loki, Redis, NATS, Prometheus, and Go/Alpine base images.
+- All 11 planned CycloneDX SBOM artifacts were generated and uploaded with 30-day retention, including first-party images, Tempo, Collector, Caddy, Loki, Redis, NATS, Prometheus, Go API build base, and telemetry demo build/runtime bases.
+- Pages source verification run `41406376156` passed.
+- Tempo is built from upstream v3.1.1 pinned to commit `9db7df79d2af105a90d96484e6403e1fda0d011e`. The Dockerfile checks the exact Go build `vcs.revision` without depending on tab/space formatting. The exact-PURL OpenVEX statement is loaded explicitly by Trivy; the latest Tempo build, scan, and SBOM steps passed.
+- The verified evidence above is repository/CI-level only. Production TLS, ingress/network policy, real IdP, external backups/PITR, managed quotas/retention, sustained real-environment load/recovery, and durable-history retention policy are still open. Do not enable production tenant ingestion until those gates are evidenced.
 
 ## M06 PR #90 — explicit Trivy VEX wiring (2026-11-02)
 
@@ -468,3 +477,11 @@ Trigger fresh CI and Security validation on this branch head.
 
 Run fresh CI and Security validation against the corrected Tempo build revision assertion.
 Verify the VEX-aware Tempo scan and complete CycloneDX SBOM artifact set.
+
+## M06 PR #90 merge completion — 2026-11-02
+
+PR #90 was squash-merged into `main` as `4a4c46445d7f6b0129cba647d1bd71c49bbd0d45`. The final PR head `d388b4702f1dca3b26f55a5fa8ef1e93328c98ee` passed all CI jobs in run `41406376148`, all 13 Security jobs in run `41406376150`, and Pages-source check `41406376156`. The complete 11-artifact CycloneDX SBOM set was uploaded with 30-day retention.
+
+The final telemetry CI job passed all stages: private network/Compose validation, telemetry stack startup and readiness, OTLP metrics/logs/traces through the ORBIT API, Prometheus Collector scrape, authenticated workspace A-vs-B write-to-query isolation, and cleanup. Security confirmed the pinned Tempo upstream release revision, the VEX-aware Trivy result, the telemetry demo dependency fixes, Gitleaks, govulncheck, npm audit, and Dependency Review.
+
+The corresponding completion checkboxes are updated in `docs/roadmap.md`. Remaining work is explicitly separated into environment-level gates and policy decisions; production tenant ingestion remains disabled until they pass.
