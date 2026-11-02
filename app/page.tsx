@@ -248,6 +248,7 @@ export default function Home() {
   const [apiStatus, setApiStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
   const [apiError, setApiError] = useState("");
   const [apiMetadata, setApiMetadata] = useState<ApiMetadata | null>(null);
+  const [apiWorkspaceId, setApiWorkspaceId] = useState("");
   const [apiServices, setApiServices] = useState<ServiceSummary[]>([]);
   const [apiIncidents, setApiIncidents] = useState<IncidentSummary[]>([]);
 
@@ -326,6 +327,7 @@ export default function Home() {
           ])
         : [[], []];
       setApiMetadata(metadata);
+      setApiWorkspaceId(firstWorkspace?.id ?? "");
       setApiServices(serviceItems);
       setApiIncidents(incidentItems);
       setApiUrlInput(endpoint);
@@ -365,6 +367,7 @@ export default function Home() {
     setSourceMode("demo");
     setApiStatus("idle");
     setApiError("");
+    setApiWorkspaceId("");
   };
 
   const chooseNav = (label: string) => {
@@ -524,7 +527,7 @@ export default function Home() {
               <IncidentWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
             ) : telemetryView ? (
             sourceMode === "api" ? (
-              <TelemetryWorkspace view={telemetryView} apiBaseUrl={apiUrlInput} language={language} />
+              <TelemetryWorkspace view={telemetryView} apiBaseUrl={apiUrlInput} language={language} workspaceId={apiWorkspaceId} />
             ) : (
               <section className="panel telemetry-connect-prompt">
                 <div className="source-placeholder-icon"><Activity size={18} /></div>
