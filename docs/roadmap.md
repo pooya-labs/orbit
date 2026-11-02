@@ -77,7 +77,7 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 - [x] Secure webhook notification delivery and retry history: workspace-scoped channels, transactional outbox, multi-replica claims, bounded retries, and append-only attempts (PR #74; migration 012; CI-verified).
 - [x] Workspace-scoped immutable deployment annotations with derived service/environment metadata, transactional workspace audit, and same-service/environment chronological release comparison (PR #77 merged; migration 013).
 - [x] Workspace-scoped HTTP request-success SLO definitions, live error-budget calculations, explicit insufficient-data handling, and audited SLO lifecycle operations (PR #78 merged; migration 014).
-- [x] Add the authenticated workspace audit-log dashboard with category filters, request IDs, event details, defensive sensitive-field redaction, and automatic refresh.
+- [x] Add the authenticated workspace audit-log dashboard with category filters, request IDs, event details, defensive sensitive-field redaction, and automatic refresh (PR #79).
 - [ ] Extend audit-backed history to every operator mutation and workflow, including historical role snapshots, actor-safe attribution in the read model, and any background lifecycle events not already covered by dedicated append-only histories.
 
 ## M06 — Production hardening
