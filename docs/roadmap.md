@@ -113,6 +113,8 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
 - [ ] Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
 - [ ] Add a repository security threat model and automated Gitleaks full-history scanning, Go govulncheck, npm audit, PR Dependency Review, and weekly Dependabot updates (PR #85; awaiting required workflow approval and CI validation).
+- [ ] Pin every external GitHub Action to an immutable full commit SHA with a version annotation and enforce the rule in CI (PR #85; awaiting required workflow approval and CI validation).
+- [ ] Add container image/base-layer scanning, formal finding-remediation SLAs, and target-environment security testing.
 - [ ] Production deployment guide and operational runbooks.
 - [ ] Hosted API and managed persistence deployment.
 
