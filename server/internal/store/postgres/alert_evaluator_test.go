@@ -216,3 +216,57 @@ func TestAlertRuleChangesCloseActiveInstancesAndPreserveHistory(t *testing.T) {
 		t.Fatalf("rule-deleted event count=%d err=%v; want 1", deletedEvents, err)
 	}
 }
+
+func TestPendingAlertDoesNotCountTimeWithoutTelemetry(t *testing.T) {
+	repository, workspace, issuer, owner := openAlertEvaluationTestRepository(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	rule := createAlertEvaluatorRule(t, ctx, repository, workspace, issuer, owner, 90)
+	base := time.Now().UTC().Truncate(time.Second)
+
+	initial, changed, err := repository.ApplyWorkspaceAlertSample(ctx, workspace.ID, rule.ID, "checkout", 300, base)
+	if err != nil || !changed || initial.Status != "pending" {
+		t.Fatalf("initial alert = %+v changed=%v err=%v; want pending", initial, changed, err)
+	}
+	regular, changed, err := repository.ApplyWorkspaceAlertSample(ctx, workspace.ID, rule.ID, "checkout", 310, base.Add(30*time.Second))
+	if err != nil || changed || regular.Status != "pending" {
+		t.Fatalf("regular evaluation = %+v changed=%v err=%v; want unchanged pending", regular, changed, err)
+	}
+
+	// No sample was observed for one full 30-second evaluation interval.
+	// The next matching sample must restart, not complete, the pending timer.
+	afterGap, changed, err := repository.ApplyWorkspaceAlertSample(ctx, workspace.ID, rule.ID, "checkout", 320, base.Add(90*time.Second))
+	if err != nil || !changed || afterGap.Status != "pending" ||
+		!afterGap.PendingSince.Equal(base.Add(90*time.Second)) {
+		t.Fatalf("alert after telemetry gap = %+v changed=%v err=%v; want pending timer reset", afterGap, changed, err)
+	}
+
+	stillPending, changed, err := repository.ApplyWorkspaceAlertSample(ctx, workspace.ID, rule.ID, "checkout", 330, base.Add(120*time.Second))
+	if err != nil || changed || stillPending.Status != "pending" {
+		t.Fatalf("post-gap pending evaluation = %+v changed=%v err=%v; want pending", stillPending, changed, err)
+	}
+	stillPending, changed, err = repository.ApplyWorkspaceAlertSample(ctx, workspace.ID, rule.ID, "checkout", 340, base.Add(150*time.Second))
+	if err != nil || changed || stillPending.Status != "pending" {
+		t.Fatalf("second post-gap pending evaluation = %+v changed=%v err=%v; want pending", stillPending, changed, err)
+	}
+	firing, changed, err := repository.ApplyWorkspaceAlertSample(ctx, workspace.ID, rule.ID, "checkout", 350, base.Add(180*time.Second))
+	if err != nil || !changed || firing.Status != "firing" ||
+		firing.FiredAt == nil || !firing.FiredAt.Equal(base.Add(180*time.Second)) {
+		t.Fatalf("post-gap firing = %+v changed=%v err=%v; want firing after 90 observed seconds", firing, changed, err)
+	}
+
+	var pendingEvents, gapEvents, firingEvents int
+	err = repository.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FILTER (WHERE event_type = 'alert.pending'),
+		       COUNT(*) FILTER (WHERE event_type = 'alert.pending' AND details->>'reason' = 'telemetry_observation_gap'),
+		       COUNT(*) FILTER (WHERE event_type = 'alert.firing')
+		FROM alert_instance_events WHERE alert_instance_id = $1::uuid
+	`, initial.ID).Scan(&pendingEvents, &gapEvents, &firingEvents)
+	if err != nil {
+		t.Fatalf("count pending observation events: %v", err)
+	}
+	if pendingEvents != 2 || gapEvents != 1 || firingEvents != 1 {
+		t.Fatalf("pending=%d gap_reset=%d firing=%d; want 2/1/1", pendingEvents, gapEvents, firingEvents)
+	}
+}
+
