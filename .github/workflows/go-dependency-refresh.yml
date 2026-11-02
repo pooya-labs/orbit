@@ -28,9 +28,10 @@ jobs:
         run: |
           go get github.com/jackc/pgx/v5@v5.9.2
           go get google.golang.org/grpc@v1.83.1
-          go get golang.org/x/net@v0.60.0
           go get golang.org/x/text@v0.41.0
+          go get golang.org/x/net@v0.60.0
           go mod tidy
+          test "$(go list -m -f '{{.Version}}' golang.org/x/net)" = "v0.60.0"
           go mod verify
 
       - name: Commit refreshed Go module metadata to this branch
