@@ -117,7 +117,7 @@ func waitReady() error {
 
 func checkPrometheusScrape() error {
 	endpoint := queryURL(prometheusURL, "/api/v1/query", url.Values{
-		"query": {"up{job=\\\"orbit-otel-collector\\\"}"},
+		"query": {`up{job="orbit-otel-collector"}`},
 	})
 	return waitFor("Prometheus scrapes the ORBIT Collector over the private network", 60*time.Second, func() (bool, error) {
 		body, err := getJSON(endpoint)
