@@ -11,6 +11,7 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 - [x] Verify production type-check and build.
 - [x] Configure static export for GitHub Pages.
 - [x] Add automated Pages deployment.
+- [x] Add a user-selectable, persistent light/dark dashboard theme while retaining the established dark palette (PR #35).
 - [ ] Accessibility review with keyboard and screen readers.
 
 ## M02 — API and persistence foundation
@@ -56,6 +57,8 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 - [x] Add allow-listed multi-series grouping and separate line rendering for the request-rate metric; arbitrary metric-name selection remains future work.
 - [x] Render queried telemetry in Metrics, Logs, and Traces dashboard views with loading/empty/error states, query freshness, and backend provenance.
 - [x] Flag stale metric samples and gaps using the actual Prometheus sample timestamps and query step; event-driven logs and traces are not judged against metric scrape intervals.
+- [x] Ship Persian localization with right-to-left dashboard layout alongside the persisted telemetry catalog (PR #8).
+- [x] Keep the Tempo trace smoke path aligned with the backend's trace-lookup operation rather than treating trace lookup as indexed search (PR #61; CI verified).
 
 ## Execution order and dependency gates
 
@@ -88,6 +91,14 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [x] Implement provider-neutral browser Authorization Code + PKCE, state/nonce checks, memory-only access/refresh tokens, and API Bearer-token injection (PR #12; provider configuration and production rollout remain open).
 - [x] Complete workspace-membership-scoped inventory, incident, telemetry-catalog, and Prometheus/Loki/Tempo query routes, with legacy global reads disabled in staging/production (migration 006; PRs #16–#18, #39–#40; CI-verified).
 - [x] Implement authenticated workspace-aware OTLP ingestion with workload identity, per-signal workspace grants, canonical tenant attribution, bounded HTTP/gRPC gateways, shared rate limits, revocation checks, and fail-closed behavior (PRs #21–#56; CI-verified).
+- [x] Add workspace workload-identity administration endpoints for managing workload identities and their workspace/signal grants (PR #34; CI-verified).
+- [x] Persist security audit events for denied workload-telemetry authorization attempts (PR #23; CI-verified).
+- [x] Bound gateway admission before expensive authorization work to prevent unbounded verifier/database pressure (PR #33; CI-verified).
+- [x] Verify workspace isolation through both OTLP/HTTP and OTLP/gRPC; reject forged producer workspace attributes and mixed-workspace resource batches; verify Prometheus/Loki/Tempo tenant filtering and membership checks before backend access (PRs #32, #36, #38–#40; CI-verified).
+- [x] Reject oversized OTLP requests across metrics, logs, and traces over both HTTP and gRPC (PR #42; CI-verified).
+- [x] Verify atomic shared workload rate limits across independent gateway instances and concurrent replicas, plus cross-replica grant/identity revocation (PRs #43, #46, #48; CI-verified).
+- [x] Verify deterministic gateway saturation behavior and enforce the configured 64-slot default admission bound for HTTP and gRPC (PRs #51 and #60; CI-verified).
+- [x] Verify fail-closed gRPC dependency errors, HTTP Collector timeout mapping, and recovery after transient authorization, rate-limit, and Collector faults (PRs #53, #54, #58; CI-verified).
 - [ ] Complete production rollout of the implemented ingestion security boundary: verify real DNS/ACME issuance, host firewall and trusted-proxy policy, deployment-specific network controls, real-provider browser PKCE, sustained multi-replica load/recovery, and operational runbooks. PR #56 supplies an optional Caddy TLS edge-ingress scaffold, not a live deployment. Production tenant ingestion remains disabled until these environment-level gates pass. Reserved producer tenant attributes are rejected, never trusted.
 - [x] Merge and CI-verify the shared PostgreSQL rate limiter for horizontally scaled API instances (`db45843`); staging/production require PostgreSQL and the limiter stores only hashed short-lived keys.
 - [x] Add CI-verified 7-day retention and explicit ingestion/cardinality/size guardrails for the single-tenant local Prometheus, Loki, and Tempo stack; document the limits and their production boundary (`docs/observability-retention.md`).
