@@ -23,6 +23,7 @@ checks = [
     (page, '<main className="content-wrap" id="main-content" tabIndex={-1}>', "the primary page content has a focusable main landmark"),
     (page, '<nav className="sidebar-scroll" id="primary-navigation" aria-label={tr("primaryNavigation")}>', "primary navigation exposes a named navigation landmark"),
     (page, 'aria-current={activeNav === label ? "page" : undefined}', "the active navigation item is announced as the current page"),
+    (page, '<h1 aria-live="polite" aria-atomic="true">', "client-side view changes announce the updated page heading"),
     (page, 'aria-expanded={mobileNavOpen} aria-controls="primary-navigation"', "the mobile navigation trigger exposes its expanded state and controlled region"),
     (page, 'event.key === "Escape"', "Escape closes the mobile navigation"),
     (page, 'event.key !== "Tab"', "the mobile navigation handles keyboard tab movement"),
