@@ -26,6 +26,22 @@ const (
 
 var ErrNotConfigured = errors.New("telemetry backend is not configured")
 
+var sloRoutePattern = regexp.MustCompile("^/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$")
+
+type AvailabilityEvents struct {
+	GoodEvents float64
+	BadEvents float64
+	WindowStart time.Time
+	WindowEnd time.Time
+}
+
+func ValidateSLORoute(route string) error {
+	if !sloRoutePattern.MatchString(route) || strings.Contains(route, "//") {
+		return errors.New("SLO route must be a normalized low-cardinality absolute route path")
+	}
+	return nil
+}
+
 var serviceNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 
 type QueryWindow struct {
@@ -416,6 +432,85 @@ func (c *Client) WorkspaceRequestRates(
 	}
 	return samples, nil
 }
+
+// WorkspaceAvailabilityEvents reads the fixed allow-listed request counter.
+// Only requests instrumented with slo_outcome=good|bad and a canonical
+// workspace label are included. No caller-supplied PromQL is accepted.
+func (c *Client) WorkspaceAvailabilityEvents(
+	ctx context.Context,
+	workspaceID, service, route string,
+	windowDays int,
+) (AvailabilityEvents, error) {
+	if err := validateWorkspaceID(workspaceID); err != nil {
+		return AvailabilityEvents{}, err
+	}
+	if c == nil || c.prometheusURL == "" {
+		return AvailabilityEvents{}, ErrNotConfigured
+	}
+	if err := ValidateServiceName(service); err != nil {
+		return AvailabilityEvents{}, err
+	}
+	if err := ValidateSLORoute(route); err != nil {
+		return AvailabilityEvents{}, err
+	}
+	switch windowDays {
+	case 1, 3, 7:
+	default:
+		return AvailabilityEvents{}, errors.New("SLO window must be 1, 3, or 7 days")
+	}
+
+	window := fmt.Sprintf("%dd", windowDays)
+	selector := strings.Join([]string{
+		"orbit_workspace_id=" + strconv.Quote(workspaceID),
+		"service_name=" + strconv.Quote(service),
+		"slo_route=" + strconv.Quote(route),
+		`slo_outcome=~"good|bad"`,
+	}, ",")
+	query := fmt.Sprintf("sum by (slo_outcome) (increase(%s{%s}[%s]))", metricName, selector, window)
+	now := c.now().UTC()
+	values := url.Values{}
+	values.Set("query", query)
+	values.Set("time", now.Format(time.RFC3339Nano))
+	values.Set("timeout", "5s")
+	payload, err := c.get(ctx, c.prometheusURL, "/api/v1/query", values)
+	if err != nil {
+		return AvailabilityEvents{}, fmt.Errorf("query workspace availability events: %w", err)
+	}
+	if payload.Status != "success" {
+		return AvailabilityEvents{}, errors.New("Prometheus returned an unsuccessful SLO query status")
+	}
+	var result struct {
+		Result []struct {
+			Metric map[string]string `json:"metric"`
+			Value []json.RawMessage `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(payload.Data, &result); err != nil {
+		return AvailabilityEvents{}, fmt.Errorf("decode workspace availability result: %w", err)
+	}
+	events := AvailabilityEvents{WindowStart: now.Add(-time.Duration(windowDays) * 24 * time.Hour), WindowEnd: now}
+	for _, item := range result.Result {
+		outcome := item.Metric["slo_outcome"]
+		if (outcome != "good" && outcome != "bad") || len(item.Value) != 2 {
+			continue
+		}
+		var rawValue string
+		if err := json.Unmarshal(item.Value[1], &rawValue); err != nil {
+			return AvailabilityEvents{}, fmt.Errorf("decode %s availability counter: %w", outcome, err)
+		}
+		value, err := strconv.ParseFloat(rawValue, 64)
+		if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+			return AvailabilityEvents{}, fmt.Errorf("Prometheus returned an invalid %s availability count", outcome)
+		}
+		if outcome == "good" {
+			events.GoodEvents += value
+		} else {
+			events.BadEvents += value
+		}
+	}
+	return events, nil
+}
+
 
 func (c *Client) WorkspaceMetrics(ctx context.Context, workspaceID string, window QueryWindow, service string, groupBy []string) (QueryResult, error) {
 	if err := validateWorkspaceID(workspaceID); err != nil { return QueryResult{}, err }

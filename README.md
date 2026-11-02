@@ -203,3 +203,10 @@ The allowlist is exact-host, HTTPS-only and restricted to port 443. The sender r
 Workspace operators can record immutable deployment annotations for a service with version, commit SHA, optional change reference/release notes, and deployment time. Service name and environment are derived from the workspace-owned service record. Annotation creation and its workspace audit event commit together; database guards reject UPDATE, DELETE, and TRUNCATE.
 
 Workspace members can list deployment history or compare two deployments of the same service in chronological order. The comparison reports only deployment metadata changes and elapsed time; it does not infer that a deployment caused a telemetry change. See [the M05 roadmap](docs/roadmap.md) and [the OpenAPI contract](docs/openapi.yaml).
+
+
+## M05 service level objectives and error budgets
+
+Workspace owners, administrators, and operators can create, update, enable/disable, and delete HTTP request-success objectives. Definitions are linked to a service in the same workspace and every mutation is audited transactionally. Targets are 90%–99.99%; rolling windows are 1, 3, or 7 days to match the configured Prometheus retention.
+
+The SLI counts only explicitly instrumented routes: HTTP 2xx/3xx responses are good events; all other instrumented responses are bad events. The budget is computed from observed good/bad events using the fixed workspace/service/route selectors. A missing series returns `insufficient_data`, never synthetic 100% availability. The development telemetry demo bypasses workspace authentication and its unscoped metrics are intentionally excluded from workspace SLO calculations. See [the M05 roadmap](docs/roadmap.md), [architecture](docs/architecture.md), and [OpenAPI](docs/openapi.yaml).

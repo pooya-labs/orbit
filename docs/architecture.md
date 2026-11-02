@@ -151,3 +151,10 @@ The API now provides workspace-scoped incident lifecycle mutations with an appen
 ### Workspace deployment annotations
 
 Deployment annotations are immutable workspace-owned release markers linked by a composite service/workspace foreign key. The service name and environment are derived from the linked service, never trusted from the browser. Creation verifies owner/administrator/operator membership, inserts the annotation, and appends `deployment.annotation_created` to workspace audit in the same transaction. Database triggers reject UPDATE, DELETE, and TRUNCATE. Workspace members can list and read annotations; comparison requires two distinct deployments of the same service in chronological order and returns metadata differences plus elapsed time only. It does not infer telemetry causality.
+
+
+### Workspace service level objectives and error budgets
+
+`service_level_objectives` definitions are linked to a service through the composite `(service_id, workspace_id)` foreign key. Owner/administrator/operator roles can create, update, enable/disable, and delete definitions; every mutation appends a workspace audit event in the same PostgreSQL transaction. The SLI is fixed to HTTP request-success events for a bounded normalized route; callers cannot submit PromQL or select arbitrary metrics. The evaluator queries `orbit_demo_requests_total` with the authenticated workspace label, service name, route, and `slo_outcome` labels. 2xx/3xx responses are good; all other instrumented responses are bad. Health checks and routes not explicitly instrumented are excluded.
+
+Targets are fractional values from 0.90 through 0.9999. Rolling windows are limited to 1, 3, or 7 days to match the current Prometheus retention. Allowed error events equal `total_events * (1 - target)`; remaining events equal `max(0, allowed - bad)`; burn rate equals `bad / allowed`. Empty result vectors yield `insufficient_data` with nullable ratios, not 100% success. The unscoped local Compose demo bypasses workload authentication and therefore cannot be used as workspace SLO evidence.

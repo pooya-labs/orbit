@@ -557,3 +557,91 @@ func TestWorkspaceRequestRatesRejectsInvalidScopeAndWindowBeforeNetwork(t *testi
 	}
 }
 
+
+func TestWorkspaceAvailabilityEventsUsesWorkspaceScopedGoodBadCounters(t *testing.T) {
+	const workspaceID = "00000000-0000-4000-8000-000000000001"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/query" {
+			t.Fatalf("request path = %q, want /api/v1/query", r.URL.Path)
+		}
+		query := r.URL.Query().Get("query")
+		for _, expected := range []string{
+			"orbit_demo_requests_total",
+			`orbit_workspace_id="00000000-0000-4000-8000-000000000001"`,
+			`service_name="checkout"`,
+			`slo_route="/emit"`,
+			`slo_outcome=~"good|bad"`,
+			"increase(",
+			"[7d]",
+			"sum by (slo_outcome)",
+		} {
+			if !strings.Contains(query, expected) {
+				t.Errorf("PromQL %q does not contain %q", query, expected)
+			}
+		}
+		if r.URL.Query().Get("timeout") != "5s" || r.URL.Query().Get("time") == "" {
+			t.Errorf("SLO query is missing bounded timeout/evaluation time: %v", r.URL.Query())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[
+			{"metric":{"slo_outcome":"good"},"value":[1762000000.0,"950"]},
+			{"metric":{"slo_outcome":"bad"},"value":[1762000000.0,"50"]}
+		]}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "", "")
+	if err != nil { t.Fatal(err) }
+	events, err := client.WorkspaceAvailabilityEvents(context.Background(), workspaceID, "checkout", "/emit", 7)
+	if err != nil { t.Fatalf("WorkspaceAvailabilityEvents: %v", err) }
+	if events.GoodEvents != 950 || events.BadEvents != 50 {
+		t.Fatalf("unexpected availability events: %+v", events)
+	}
+	if events.WindowEnd.IsZero() || !events.WindowStart.Before(events.WindowEnd) ||
+		events.WindowEnd.Sub(events.WindowStart) != 7*24*time.Hour {
+		t.Fatalf("unexpected evaluation window: %+v", events)
+	}
+}
+
+func TestWorkspaceAvailabilityEventsWithNoSeriesReturnsZeroCounts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[]}}`))
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "", "")
+	if err != nil { t.Fatal(err) }
+	events, err := client.WorkspaceAvailabilityEvents(context.Background(),
+		"00000000-0000-4000-8000-000000000001", "checkout", "/emit", 1)
+	if err != nil { t.Fatal(err) }
+	if events.GoodEvents != 0 || events.BadEvents != 0 {
+		t.Fatalf("empty vector returned non-zero events: %+v", events)
+	}
+}
+
+func TestWorkspaceAvailabilityEventsRejectsUnsafeScopeRouteAndWindowBeforeNetwork(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("invalid SLO input reached Prometheus")
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "", "")
+	if err != nil { t.Fatal(err) }
+	tests := []struct {
+		workspace string
+		service string
+		route string
+		window int
+	}{
+		{workspace: "not-a-uuid", service: "checkout", route: "/emit", window: 7},
+		{workspace: "00000000-0000-4000-8000-000000000001", service: "invalid service", route: "/emit", window: 7},
+		{workspace: "00000000-0000-4000-8000-000000000001", service: "checkout", route: "emit", window: 7},
+		{workspace: "00000000-0000-4000-8000-000000000001", service: "checkout", route: "/api//emit", window: 7},
+		{workspace: "00000000-0000-4000-8000-000000000001", service: "checkout", route: "/emit", window: 30},
+	}
+	for _, test := range tests {
+		if _, err := client.WorkspaceAvailabilityEvents(context.Background(),
+			test.workspace, test.service, test.route, test.window); err == nil {
+			t.Errorf("expected validation error for %+v", test)
+		}
+	}
+}

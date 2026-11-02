@@ -12,6 +12,7 @@ import IncidentWorkspace from "./components/IncidentWorkspace";
 import AlertWorkspace from "./components/AlertWorkspace";
 import NotificationWorkspace from "./components/NotificationWorkspace";
 import DeploymentWorkspace from "./components/DeploymentWorkspace";
+import SLOWorkspace from "./components/SLOWorkspace";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -172,6 +173,7 @@ const navGroups: NavGroup[] = [
       { label: "Deployments", icon: GitBranch },
       { label: "Alert rules", icon: Bell },
       { label: "Notifications", icon: Radio },
+      { label: "SLOs", icon: Gauge },
     ],
   },
 ];
@@ -506,7 +508,9 @@ export default function Home() {
             </section>
           )}
 
-{activeNav === "Deployments" ? (
+{activeNav === "SLOs" ? (
+              <SLOWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
+            ) : activeNav === "Deployments" ? (
               <DeploymentWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
             ) : activeNav === "Notifications" ? (
               <NotificationWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />

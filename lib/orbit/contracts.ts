@@ -175,6 +175,46 @@ export interface DeploymentAnnotationComparison {
   commit_changed: boolean;
 }
 
+export interface WorkspaceSLO {
+  id: string;
+  workspace_id: string;
+  service_id: string;
+  service_name: string;
+  environment: string;
+  name: string;
+  route: string;
+  target: number;
+  rolling_window_days: 1 | 3 | 7;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SLOBudgetStatus = "insufficient_data" | "within_budget" | "exhausted";
+
+export interface SLOAvailabilityBudget {
+  status: SLOBudgetStatus;
+  target: number;
+  good_events: number;
+  bad_events: number;
+  total_events: number;
+  availability?: number;
+  allowed_bad_events?: number;
+  remaining_bad_events?: number;
+  budget_consumed_percent?: number;
+  budget_remaining_percent?: number;
+  burn_rate?: number;
+}
+
+export interface WorkspaceSLOBudget {
+  objective: WorkspaceSLO;
+  sli: "http_request_success_rate";
+  valid_event_policy: string;
+  window_start: string;
+  window_end: string;
+  budget: SLOAvailabilityBudget;
+}
+
 export interface ApiMetadata {
   name: "orbit-api";
   version: string;

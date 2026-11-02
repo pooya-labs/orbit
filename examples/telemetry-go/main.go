@@ -125,8 +125,27 @@ func (t *telemetry) shutdown(ctx context.Context) error {
 	)
 }
 
+func sloOutcomeForHTTPStatus(statusCode int) string {
+	if statusCode >= http.StatusOK && statusCode < 400 {
+		return "good"
+	}
+	return "bad"
+}
+
+func (t *telemetry) recordSLORequest(ctx context.Context, route, method string, statusCode int) {
+	outcome := sloOutcomeForHTTPStatus(statusCode)
+	t.requests.Add(ctx, 1, metricapi.WithAttributes(
+		attribute.String("http.route", route),
+		attribute.String("http.request.method", method),
+		attribute.Int("http.response.status_code", statusCode),
+		attribute.String("slo_route", route),
+		attribute.String("slo_outcome", outcome),
+	))
+}
+
 func (t *telemetry) emitHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
+		t.recordSLORequest(r.Context(), "/emit", r.Method, http.StatusMethodNotAllowed)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -143,10 +162,7 @@ func (t *telemetry) emitHandler(w http.ResponseWriter, r *http.Request) {
 		attribute.String("demo.signal", "smoke-test"),
 	)
 
-	t.requests.Add(ctx, 1, metricapi.WithAttributes(
-		attribute.String("http.route", "/emit"),
-		attribute.String("http.request.method", http.MethodGet),
-	))
+	t.recordSLORequest(ctx, "/emit", http.MethodGet, http.StatusAccepted)
 
 	var record otellog.Record
 	record.SetTimestamp(now)
