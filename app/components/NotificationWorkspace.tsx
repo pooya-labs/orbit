@@ -6,6 +6,7 @@ import {
   Activity, BellRing, Check, Clock3, History, Pause, Play, Plus, RefreshCw, Send, ShieldCheck, X,
 } from "lucide-react";
 import {
+  OrbitApiError,
   createWorkspaceAlertNotificationChannel,
   getWorkspaceMembership,
   listWorkspaceAlertNotificationAttempts,
@@ -196,8 +197,12 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
       closeForm();
       setNotice(t(language, "notificationCreated"));
       setReloadVersion((version) => version + 1);
-    } catch {
-      setError(t(language, "notificationMutationFailed"));
+    } catch (cause) {
+      setError(
+        cause instanceof OrbitApiError && cause.code === "webhook_secret_not_configured"
+          ? t(language, "notificationSecretNotConfigured")
+          : t(language, "notificationMutationFailed"),
+      );
     } finally { setSaving(false); }
   };
 
