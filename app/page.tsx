@@ -598,8 +598,8 @@ export default function Home() {
           <section className="panel traffic-panel">
             <div className="panel-header">
               <div><div className="panel-title-line"><h2>{tr("trafficPerformance")}</h2><span className="live-indicator"><i /> {tr("sample")}</span></div><p>{tr("incomingRequests")}</p></div>
-              <div className="range-switcher" role="group" aria-label={tr("last24Hours")}>
-                {["1 hour", "6 hours", "24 hours"].map((item) => <button key={item} className={range === item ? "selected" : ""} onClick={() => setRange(item)}>{language === "fa" ? (item === "1 hour" ? "۱ ساعت" : item === "6 hours" ? "۶ ساعت" : "۲۴ ساعت") : item}</button>)}
+              <div className="range-switcher" role="group" aria-label={tr("timeRange")}>
+                {["1 hour", "6 hours", "24 hours"].map((item) => <button key={item} className={range === item ? "selected" : ""} aria-pressed={range === item} onClick={() => setRange(item)}>{language === "fa" ? (item === "1 hour" ? "۱ ساعت" : item === "6 hours" ? "۶ ساعت" : "۲۴ ساعت") : item}</button>)}
               </div>
             </div>
             <div className="chart-summary">
