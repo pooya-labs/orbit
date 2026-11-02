@@ -132,6 +132,7 @@ export default function SLOWorkspace({ apiBaseUrl, language, sourceMode }: Props
       setSlos([]);
       setSelectedSloId("");
       setBudget(null);
+      setBudgetLoading(false);
       return;
     }
     const controller = new AbortController();
@@ -515,7 +516,7 @@ export default function SLOWorkspace({ apiBaseUrl, language, sourceMode }: Props
                     </button>
                     {canManage && (
                       <div className="slo-objective-actions">
-                        <button type="button" className="slo-icon-action" onClick={() => startEdit(item)} title={t(language, "edit")} aria-label={t(language, "edit")} disabled={saving}><Edit3 size={13} /></button>
+                        <button type="button" className="slo-icon-action" onClick={() => startEdit(item)} title={t(language, "sloEditTitle")} aria-label={t(language, "sloEditTitle")} disabled={saving}><Edit3 size={13} /></button>
                         <button type="button" className="slo-icon-action" onClick={() => void toggleSLO(item)} title={t(language, item.enabled ? "sloDisable" : "sloEnable")} aria-label={t(language, item.enabled ? "sloDisable" : "sloEnable")} disabled={saving}>
                           {item.enabled ? <Pause size={13} /> : <Play size={13} />}
                         </button>
