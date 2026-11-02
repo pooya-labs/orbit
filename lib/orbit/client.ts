@@ -18,6 +18,8 @@ import type {
   ServiceSummary,
   WorkspaceMembershipSummary,
   WorkspaceSummary,
+  WorkspaceDeploymentAnnotation,
+  DeploymentAnnotationComparison,
   TelemetryWindow,
   TelemetryMetricsResponse,
   TelemetryLogsResponse,
@@ -145,6 +147,61 @@ export async function listWorkspaceServices(
     baseUrl,
   );
   return response.data;
+}
+
+export async function listWorkspaceDeploymentAnnotations(
+  workspaceId: string,
+  serviceId?: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceDeploymentAnnotation[]> {
+  const query = new URLSearchParams({ limit: "100" });
+  if (serviceId) query.set("service_id", serviceId);
+  const response = await getJSON<DataEnvelope<WorkspaceDeploymentAnnotation>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/deployments?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export type WorkspaceDeploymentAnnotationInput = {
+  service_id: string;
+  version: string;
+  commit_sha?: string;
+  change_reference?: string;
+  release_notes?: string;
+  deployed_at?: string;
+};
+
+export async function createWorkspaceDeploymentAnnotation(
+  workspaceId: string,
+  input: WorkspaceDeploymentAnnotationInput,
+  baseUrl?: string,
+): Promise<WorkspaceDeploymentAnnotation> {
+  const response = await requestJSON<{ data: WorkspaceDeploymentAnnotation }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/deployments`,
+    "POST",
+    input,
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function compareWorkspaceDeploymentAnnotations(
+  workspaceId: string,
+  fromId: string,
+  toId: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<DeploymentAnnotationComparison> {
+  const query = new URLSearchParams({ from_id: fromId, to_id: toId });
+  return getJSON<DeploymentAnnotationComparison>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/deployments/compare?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
 }
 
 export async function listWorkspaceAlertRules(
