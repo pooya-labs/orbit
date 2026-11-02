@@ -17,6 +17,7 @@ import (
 
 	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/httpapi"
+	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
 	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
 	logsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
@@ -82,6 +83,7 @@ func TestWorkspaceOTLPWriteToQueryIsolation(t *testing.T) {
 		RequestsPerMinute: 200,
 		ForwardTimeout:    10 * time.Second,
 		RateLimitStore:    repository,
+		ResourceAttributeRecorder: repository,
 	})
 	if err != nil {
 		t.Fatalf("create authenticated HTTP gateway: %v", err)
@@ -168,6 +170,46 @@ func TestWorkspaceOTLPWriteToQueryIsolation(t *testing.T) {
 		t.Fatalf("workspace A traces export status = %d; body=%s", traceResponse.Code, traceResponse.Body.String())
 	}
 
+	// Authenticated workload metadata must be persisted in the owning
+	// workspace catalog, with provenance distinct from backend label discovery.
+	catalogA, err := repository.ListWorkspaceTelemetryServices(ctx, workspaceA.ID, 50)
+	if err != nil {
+		t.Fatalf("list workspace A resource catalog: %v", err)
+	}
+	var observedA *store.TelemetryService
+	for i := range catalogA {
+		if catalogA[i].Name == workspacePipelineService {
+			observedA = &catalogA[i]
+			break
+		}
+	}
+	if observedA == nil {
+		t.Fatalf("workspace A catalog did not persist OTLP service %q: %+v", workspacePipelineService, catalogA)
+	}
+	if !containsString(observedA.Sources, "otlp") {
+		t.Fatalf("workspace A source provenance = %#v, want otlp", observedA.Sources)
+	}
+	versions, ok := observedA.ResourceAttributes["service.version"].([]any)
+	if !ok || !containsAnyString(versions, "e2e-1") {
+		t.Fatalf("workspace A service.version attributes = %#v, want e2e-1", observedA.ResourceAttributes["service.version"])
+	}
+	environments, ok := observedA.ResourceAttributes["deployment.environment.name"].([]any)
+	if !ok || !containsAnyString(environments, "ci") {
+		t.Fatalf("workspace A deployment environment attributes = %#v, want ci", observedA.ResourceAttributes["deployment.environment.name"])
+	}
+	if sources := observedA.ResourceAttributeSources["service.version"]; !containsString(sources, "otlp") {
+		t.Fatalf("workspace A service.version provenance = %#v, want otlp", sources)
+	}
+	catalogB, err := repository.ListWorkspaceTelemetryServices(ctx, workspaceB.ID, 50)
+	if err != nil {
+		t.Fatalf("list workspace B resource catalog: %v", err)
+	}
+	for _, item := range catalogB {
+		if item.Name == workspacePipelineService {
+			t.Fatalf("workspace B observed workspace A's OTLP service: %+v", item)
+		}
+	}
+
 	window, err := telemetry.ParseWindow("15m")
 	if err != nil {
 		t.Fatal(err)
@@ -202,6 +244,24 @@ func TestWorkspaceOTLPWriteToQueryIsolation(t *testing.T) {
 	if !workspacePipelineHasData(metricsA.Data) || workspacePipelineHasData(metricsB.Data) {
 		t.Fatalf("Prometheus tenant isolation failed: A=%s B=%s", metricsA.Data, metricsB.Data)
 	}
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func containsAnyString(values []any, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func workspacePipelineExport(gateway http.Handler, workspaceID, signal string, payload []byte, token string) *httptest.ResponseRecorder {
