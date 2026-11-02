@@ -22,6 +22,7 @@ import {
   getWorkspaceMembership,
   listWorkspaceAlertRules,
   listWorkspaceAlerts,
+  listWorkspaceServices,
   listWorkspaces,
   setWorkspaceAlertRuleEnabled,
   updateWorkspaceAlertRule,
