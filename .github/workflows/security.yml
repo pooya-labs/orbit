@@ -94,12 +94,12 @@ jobs:
       - name: Commit npm lockfile
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         run: |
-          if git diff --quiet -- package-lock.json; then
+          if [ -z "$(git status --porcelain -- package-lock.json)" ]; then
             echo "npm lockfile is already current."
             exit 0
           fi
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+users.noreply.github.com"
           git add package-lock.json
           git commit -m "build(npm): add deterministic dependency lockfile"
           git push origin "HEAD:${GITHUB_HEAD_REF}"
