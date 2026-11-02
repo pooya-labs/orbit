@@ -17,7 +17,7 @@ jobs:
   container-image:
     name: Build and scan the ORBIT API image
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -233,7 +233,7 @@ jobs:
   compose-images:
     name: Scan Compose image (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -313,6 +313,9 @@ jobs:
           format: table
           timeout: 20m
 
+      - name: Create SBOM output directory
+        run: mkdir -p sbom
+
       - name: Generate Tempo CycloneDX SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -354,6 +357,9 @@ jobs:
           format: table
           timeout: 20m
 
+      - name: Create SBOM output directory
+        run: mkdir -p sbom
+
       - name: Generate ORBIT Collector CycloneDX SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -394,6 +400,9 @@ jobs:
           exit-code: "1"
           format: table
           timeout: 15m
+
+      - name: Create SBOM output directory
+        run: mkdir -p sbom
 
       - name: Generate Caddy CycloneDX SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
