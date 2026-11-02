@@ -356,3 +356,10 @@ The test uses a deterministic workload-token verifier fixture; JWT signature/cla
 The public ORBIT dashboard is a Next.js static export published from the \`out/\` artifact by \`.github/workflows/deploy.yml\`. GitHub Pages must use the Actions publishing source (\`build_type=workflow\`), not legacy branch/Jekyll publishing, which can race or overwrite the artifact. The repository setting was read successfully by the dedicated verification workflow on 2026-11-02 and returned \`workflow\`.
 
 The refreshed PR #11 implementation is rebuilt on current \`main\` as PR #88. It checks the Pages source both on relevant pull requests and immediately before every deployment, failing closed for \`legacy\`, unknown, or inaccessible settings. The one-time setting and recovery steps are in \`docs/deployment/github-pages.md\`. The workflow checks but does not mutate repository administration settings.
+
+
+## M06 handoff update — deployment and operations runbook
+
+PR #86 was merged into \`main\` as \`a412864c8639ed6530bdbe07569e878ee33a9e6a\`. It adds \`docs/operations-runbook.md\`, covering production preflight, safe deployment, post-deployment verification, routine operations, incident response, rollback boundaries, backup/restore coordination, and evidence capture. Its full API, PostgreSQL restore, web, and telemetry CI passed before merge.
+
+The runbook is an operator procedure baseline, not production-readiness evidence. The environment-specific gates remain open: real human/workload OIDC provider configuration, DNS/ACME and firewall/network policy, managed per-workspace quotas, encrypted off-host backups/PITR and measured RPO/RTO, sustained target-environment load/backpressure testing, and hosted API/managed persistence. Production tenant ingestion remains disabled until those gates are evidenced. The README documentation index links the runbook.
