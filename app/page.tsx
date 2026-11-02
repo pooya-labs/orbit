@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getMetadata, listWorkspaceIncidents, listWorkspaceServices, listWorkspaces } from "../lib/orbit/client";
 import type { ApiMetadata, IncidentSummary, ServiceSummary } from "../lib/orbit/contracts";
 import { chartArea, chartPoints, demoIncidents, demoServices } from "../lib/orbit/demo";
@@ -239,6 +239,53 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+
+    const sidebar = sidebarRef.current;
+    if (!sidebar) return;
+
+    sidebarCloseButtonRef.current?.focus();
+
+    const getFocusableElements = () =>
+      Array.from(sidebar.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => element.getClientRects().length > 0);
+
+    const handleNavigationKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobileNavOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = getFocusableElements();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleNavigationKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleNavigationKeyDown);
+      window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
+    };
+  }, [mobileNavOpen]);
   const [showAllServices, setShowAllServices] = useState(false);
   const [sourceMode, setSourceMode] = useState<SourceMode>("demo");
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
@@ -384,7 +431,7 @@ export default function Home() {
         <div className="brand-lockup">
           <div className="brand-mark"><span /><span /><span /></div>
           <div className="brand-wordmark">ORBIT<span>.</span><small>OBSERVABILITY</small></div>
-          <button className="icon-button sidebar-close" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)}><X size={18} /></button>
+          <button ref={sidebarCloseButtonRef} type="button" className="icon-button sidebar-close" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)}><X size={18} /></button>
         </div>
 
         <button className="workspace-switcher">
@@ -393,12 +440,12 @@ export default function Home() {
           <ChevronDown size={15} className="muted-icon" />
         </button>
 
-        <div className="sidebar-scroll">
+        <nav className="sidebar-scroll" id="primary-navigation" aria-label={tr("primaryNavigation")}>
           {navGroups.map((group) => (
             <div className="nav-group" key={group.label}>
-              <div className="nav-group-label">{group.label === "OBSERVE" ? tr("observe") : group.label === "INVESTIGATE" ? tr("investigate") : tr("deliver")}</div>
+              <div className="nav-group-label" role="heading" aria-level={2}>{group.label === "OBSERVE" ? tr("observe") : group.label === "INVESTIGATE" ? tr("investigate") : tr("deliver")}</div>
               {group.items.map(({ label, icon: Icon, count, alert }) => (
-                <button key={label} className={`nav-item ${activeNav === label ? "active" : ""}`} onClick={() => chooseNav(label)}>
+                <button type="button" key={label} className={`nav-item ${activeNav === label ? "active" : ""}`} aria-current={activeNav === label ? "page" : undefined} onClick={() => chooseNav(label)}>
                   <Icon size={17} strokeWidth={1.75} />
                   <span>{navLabel(language, label)}</span>
                   {count && <span className={`nav-count ${alert ? "nav-alert" : ""}`}>{count}</span>}
@@ -406,7 +453,7 @@ export default function Home() {
               ))}
             </div>
           ))}
-        </div>
+        </nav>
 
         <div className="sidebar-bottom">
           <div className="usage-card">
@@ -427,7 +474,7 @@ export default function Home() {
       <section className="main-panel">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="icon-button mobile-menu" aria-label={tr("openNavigation")} onClick={() => setMobileNavOpen(true)}><Menu size={19} /></button>
+            <button ref={mobileMenuButtonRef} type="button" className="icon-button mobile-menu" aria-label={tr("openNavigation")} aria-expanded={mobileNavOpen} aria-controls="primary-navigation" onClick={() => setMobileNavOpen(true)}><Menu size={19} /></button>
             <div className="breadcrumbs"><span>{tr("workspace")}</span><span className="crumb-separator">/</span><strong>{navLabel(language, activeNav)}</strong></div>
             <span className="environment-pill"><span /> {tr("production")}</span>
           </div>
@@ -467,7 +514,7 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="content-wrap">
+        <main className="content-wrap" id="main-content" tabIndex={-1}>
           <div className="page-heading">
             <div>
               <div className="eyebrow"><span className="eyebrow-line" /> {telemetryView ? `${language === "fa" ? "زنده" : "LIVE"} ${navLabel(language, telemetryView).toUpperCase()}` : tr("systemOverview")} <span className="demo-tag">{sourceMode === "api" ? tr("apiConnected") : tr("demoEnvironment")}</span></div>
@@ -629,8 +676,8 @@ export default function Home() {
           )}
 
           <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v0.9.0</span></span><span className="owner-credit"><strong>{tr("projectOwner")}:</strong> <a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a> <span>·</span> <a href="https://github.com/pooya16pg-spec/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a></span></footer>
-        </div>
+        </main>
       </section>
-    </main>
+    </div>
   );
 }
