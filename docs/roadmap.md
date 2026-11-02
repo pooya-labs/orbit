@@ -11,6 +11,7 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 - [x] Verify production type-check and build.
 - [x] Configure static export for GitHub Pages.
 - [x] Add automated Pages deployment.
+- [x] Require GitHub Actions as the Pages publishing source and verify it before deployment; document the branch/Jekyll conflict and recovery steps (PR #88; Pages-source check and full CI verified).
 - [x] Add a user-selectable, persistent light/dark dashboard theme while retaining the established dark palette (PR #35).
 - [ ] Accessibility review with keyboard and screen readers.
 
