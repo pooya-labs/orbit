@@ -48,7 +48,7 @@ The main security objectives are:
 | Webhook SSRF or credential disclosure | HTTPS/port-443 allowlist, exact host checks, public-unicast DNS validation, no redirects, bounded timeouts, and secret_ref rather than raw URL/credential in API/storage | Production secret-manager integration, credential rotation/expiry, adapter-specific incident response, and delivery monitoring remain deployment work |
 | Audit history alteration or misleading attribution | PostgreSQL append-only guards protect audit events and actor mappings; migration 015 records workspace-local pseudonymous actor refs and role-at-event snapshots. Historical roles remain unknown when they cannot be reconstructed safely | Raw OIDC issuer/subject values remain server-side. A retention/archive/compliance policy for durable history has not been approved; history must not be TTL-pruned before that policy exists |
 | Database loss or corrupted recovery | CI runs a real PostgreSQL 17 pg_dump/pg_restore round-trip into a separate database and verifies migration ledger, workspace/audit data, actor context, and append-only guards (PR #83) | No production encrypted off-host schedule, PITR/WAL archiving, retention policy, restore rehearsal, backup alerting, or measured RPO/RTO is configured |
-| Secret or dependency compromise in source/CI | Security workflow runs full-history Gitleaks, govulncheck, npm audit, and PR Dependency Review. Dependabot proposes dependency/action updates | Findings still require human triage and remediation. These checks do not replace credential rotation, image/base-layer scanning, action SHA pinning, malware review, or a formal release provenance/SBOM process |
+| Secret or dependency compromise in source/CI | Security workflow runs full-history Gitleaks, govulncheck, npm audit, and PR Dependency Review. Dependabot proposes dependency/action updates. Every external workflow action is pinned to a full commit SHA with a CI-enforced version annotation (`scripts/check_workflow_action_pins.py`). | Findings still require human triage and remediation. These checks do not replace credential rotation, image/base-layer scanning, malware review, or a formal release provenance/SBOM process |
 
 ## 4. Security invariants for future changes
 
@@ -60,7 +60,7 @@ The main security objectives are:
 - Keep durable audit, incident, alert, notification, and deployment histories append-only. Do not add TTL deletion without an approved retention/archive/compliance policy.
 - Fail closed when OIDC verification, workload grants, PostgreSQL authorization, or rate-limit state is unavailable.
 - Any new state-changing API operation must be workspace-scoped, role-checked, transactional with its audit record where possible, and covered by integration tests.
-- Any new dependency or GitHub Action must have a clear owner, update path, and security review. Prefer maintained actions with least privileges; pin to immutable commit SHAs when the repository's action-update policy is established.
+- Any new dependency or GitHub Action must have a clear owner, update path, and security review. Prefer maintained actions with least privileges; every external workflow action must be pinned to a full commit SHA and carry a human-readable version comment. CI enforces this policy; Dependabot proposes the corresponding updates.
 
 ## 5. Production go-live gates
 
