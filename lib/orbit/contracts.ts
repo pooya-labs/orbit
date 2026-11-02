@@ -17,9 +17,13 @@ export interface WorkspaceMembershipSummary {
   updated_at: string;
 }
 
+export type AuditActorRole = "owner" | "administrator" | "operator" | "viewer" | "system" | "unknown";
+
 export interface WorkspaceAuditEvent {
   id: string;
   workspace_id: string;
+  actor_ref: string;
+  actor_role: AuditActorRole;
   action: string;
   resource_type: string;
   resource_id?: string;

@@ -174,9 +174,11 @@ func (r *Repository) AppendWorkspaceAuditEvent(ctx context.Context, event store.
 			SELECT 1 FROM workspace_memberships
 			WHERE workspace_id = $1::uuid AND user_issuer = $2 AND user_subject = $3
 		)
-		RETURNING id::text, created_at
+		RETURNING id::text, created_at, actor_ref::text, actor_role
 	`, event.WorkspaceID, event.ActorIssuer, event.ActorSubject, event.Action,
-		event.ResourceType, event.ResourceID, event.RequestID, string(details)).Scan(&event.ID, &event.CreatedAt)
+		event.ResourceType, event.ResourceID, event.RequestID, string(details)).Scan(
+		&event.ID, &event.CreatedAt, &event.ActorRef, &event.ActorRole,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return store.WorkspaceAuditEvent{}, store.ErrWorkspaceMembershipNotFound
 	}
@@ -194,8 +196,9 @@ func (r *Repository) ListWorkspaceAuditEvents(ctx context.Context, workspaceID s
 		limit = 50
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id::text, workspace_id::text, actor_issuer, actor_subject, action,
-		       resource_type, resource_id, request_id, details, created_at
+		SELECT id::text, workspace_id::text, actor_ref::text, actor_role,
+		       actor_issuer, actor_subject, action, resource_type, resource_id,
+		       request_id, details, created_at
 		FROM workspace_audit_events
 		WHERE workspace_id = $1::uuid
 		ORDER BY created_at DESC, id DESC
@@ -211,9 +214,9 @@ func (r *Repository) ListWorkspaceAuditEvents(ctx context.Context, workspaceID s
 		var item store.WorkspaceAuditEvent
 		var details []byte
 		if err := rows.Scan(
-			&item.ID, &item.WorkspaceID, &item.ActorIssuer, &item.ActorSubject,
-			&item.Action, &item.ResourceType, &item.ResourceID, &item.RequestID,
-			&details, &item.CreatedAt,
+			&item.ID, &item.WorkspaceID, &item.ActorRef, &item.ActorRole,
+			&item.ActorIssuer, &item.ActorSubject, &item.Action, &item.ResourceType,
+			&item.ResourceID, &item.RequestID, &details, &item.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan workspace audit event: %w", err)
 		}
