@@ -388,8 +388,8 @@ func (r *Repository) ClaimAlertNotificationDeliveries(ctx context.Context, limit
 			  AND ((d.status = 'pending' AND d.next_attempt_at <= NOW())
 			       OR (d.status = 'processing' AND d.lease_until <= NOW()))
 			ORDER BY d.next_attempt_at ASC, d.created_at ASC, d.id ASC
-			FOR UPDATE OF d SKIP LOCKED
 			LIMIT $1
+			FOR UPDATE OF d SKIP LOCKED
 		),
 		claimed AS (
 			UPDATE alert_notification_deliveries d
