@@ -18,6 +18,8 @@ import type {
   ServiceSummary,
   WorkspaceMembershipSummary,
   WorkspaceSummary,
+  WorkspaceSLO,
+  WorkspaceSLOBudget,
   WorkspaceDeploymentAnnotation,
   DeploymentAnnotationComparison,
   TelemetryWindow,
@@ -143,6 +145,105 @@ export async function listWorkspaceServices(
 ): Promise<ServiceSummary[]> {
   const response = await getJSON<DataEnvelope<ServiceSummary>>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/services`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function listWorkspaceSLOs(
+  workspaceId: string,
+  serviceId?: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceSLO[]> {
+  const query = new URLSearchParams({ limit: "100" });
+  if (serviceId) query.set("service_id", serviceId);
+  const response = await getJSON<DataEnvelope<WorkspaceSLO>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/slos?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export type WorkspaceSLOInput = {
+  service_id: string;
+  name: string;
+  route: string;
+  target: number;
+  rolling_window_days: 1 | 3 | 7;
+};
+
+export async function createWorkspaceSLO(
+  workspaceId: string,
+  input: WorkspaceSLOInput,
+  baseUrl?: string,
+): Promise<WorkspaceSLO> {
+  const response = await requestJSON<{ data: WorkspaceSLO }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/slos`,
+    "POST",
+    input,
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function updateWorkspaceSLO(
+  workspaceId: string,
+  sloId: string,
+  input: Omit<WorkspaceSLOInput, "service_id">,
+  baseUrl?: string,
+): Promise<WorkspaceSLO> {
+  const response = await requestJSON<{ data: WorkspaceSLO }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/slos/${encodeURIComponent(sloId)}`,
+    "PUT",
+    input,
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function setWorkspaceSLOEnabled(
+  workspaceId: string,
+  sloId: string,
+  enabled: boolean,
+  baseUrl?: string,
+): Promise<WorkspaceSLO> {
+  const response = await requestJSON<{ data: WorkspaceSLO }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/slos/${encodeURIComponent(sloId)}/enabled`,
+    "PATCH",
+    { enabled },
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function deleteWorkspaceSLO(
+  workspaceId: string,
+  sloId: string,
+  baseUrl?: string,
+): Promise<void> {
+  await requestJSON<void>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/slos/${encodeURIComponent(sloId)}`,
+    "DELETE",
+    undefined,
+    undefined,
+    baseUrl,
+  );
+}
+
+export async function getWorkspaceSLOBudget(
+  workspaceId: string,
+  sloId: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceSLOBudget> {
+  const response = await getJSON<DataEnvelope<WorkspaceSLOBudget>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/slos/${encodeURIComponent(sloId)}/budget`,
     signal,
     baseUrl,
   );
