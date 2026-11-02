@@ -90,9 +90,9 @@ Workspace grants must be checked server-side on every ingestion authorization de
 7. [x] Verify shared rate-limit enforcement across gateway instances and HTTP/gRPC transports (PR #43; merged, CI-passing).
 8. [x] Verify concurrent multi-replica shared rate-limit enforcement (PR #46; merged and CI-passing).
 9. [x] Verify bounded gateway admission under saturation for OTLP/HTTP and OTLP/gRPC (PR #51; merged and CI-passing). With one admission slot occupied by a blocked export, a second request is rejected before forwarding; the admitted request completes after the slot is released.
-10. [ ] Verify end-to-end that a workload authorized for workspace A cannot write data visible under workspace B, even when it supplies B's identifier. Gateway-level denial tests exist; backend-to-query visibility verification remains open.
-11. Run end-to-end tests through Prometheus, Loki, Tempo, and the workspace-scoped ORBIT query endpoints.
-12. Add broader burst/load, database/Collector outage, timeout, backpressure, revocation-latency, backup/restore, and deployment-network-policy tests before enabling production ingestion.
+- [x] Verify end-to-end that a workload authorized for workspace A cannot write data visible under workspace B, including direct writes to B and producer-supplied B tenant identifiers (PR #84; real PostgreSQL grants, authenticated HTTP gateway, Collector, backend/query path; CI run `41383068747`).
+- [x] Verify end-to-end metrics, logs, and traces through Prometheus, Loki, Tempo, and workspace-scoped ORBIT query routes; A-scoped reads return the data and B-scoped reads do not (PR #84; CI-verified).
+- [ ] Complete target-environment burst/load, database/Collector outage, timeout, backpressure, revocation-latency, and deployment-network-policy tests before enabling production ingestion. The separate CI backup/restore round-trip is verified in PR #83; encrypted off-host production backups, PITR, and measured RPO/RTO remain deployment gates.
 
 ## Acceptance criteria
 
@@ -167,3 +167,10 @@ This establishes listener stop/restart recovery in-process. It does not establis
 PR #64 is merged into `main` (squash merge commit `6b2e3418be2e8fdff0c9634b361acaa5bb6d6da1`). CI run `41357596656` passed the complete pipeline. The integration test opens the production PostgreSQL Repository/pgxpool through a local TCP proxy, warms a connection, closes established tunnels and rejects new connections, verifies Ping fails while the database network path is unavailable, then restores the proxy and verifies the same pool reconnects without recreating the Repository.
 
 The database server itself remains online. This establishes recovery from a TCP path interruption, not PostgreSQL process restart, container replacement, or packet-loss/partition tolerance. Those and sustained-load/backpressure tests remain open validation work.
+
+
+## ADR 0002 — PR #84 workspace write-to-query isolation verification
+
+PR #84 adds a PostgreSQL-backed integration test across two workspaces. A workload identity receives metrics/logs/traces grants only for workspace A; the test sends all three signals over the authenticated OTLP/HTTP gateway to the private Collector and local Prometheus, Loki, and Tempo backends. A and B share a human test member so workspace-scoped read authorization succeeds independently for both; A's query routes return the newly written data, while B's routes return no matching data. Direct writes to B are denied, and a producer-supplied `orbit.workspace.id` naming B is rejected before Collector forwarding.
+
+CI run `41383068747` passed all three jobs, including `Verify authenticated workspace telemetry write-to-query isolation`, the existing OTLP/API smoke test, Prometheus scrape verification, Go tests/vet/build, PostgreSQL backup/restore, and web typecheck/build. The real backend round trip uses a deterministic workload-verifier fixture; JWT signature/claim verification is covered by the independent OIDC verifier tests. The new round trip runs over OTLP/HTTP; existing tests cover HTTP and gRPC authorization, spoofing, mixed-resource batches, and revocation. This is local Compose CI coverage, not proof of real-provider credentials, public TLS, DNS/ACME, cloud/Kubernetes network policy, or production per-workspace quotas. Production tenant ingestion remains disabled pending those environment-level gates.

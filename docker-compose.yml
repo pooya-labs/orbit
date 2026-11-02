@@ -144,6 +144,43 @@ services:
       retries: 12
       start_period: 5s
 
+  workspace-tenant-isolation-smoke:
+    image: golang:1.24-alpine
+    profiles: ["observability"]
+    working_dir: /workspace
+    command:
+      - go
+      - test
+      - ./internal/ingest
+      - -run
+      - ^TestWorkspaceOTLPWriteToQueryIsolation$
+      - -count=1
+      - -v
+    environment:
+      ORBIT_TEST_DATABASE_URL: postgres://orbit:orbit_local_only@postgres:5432/orbit?sslmode=disable
+      ORBIT_TEST_COLLECTOR_OTLP_HTTP_URL: http://otel-collector:4318
+      ORBIT_TEST_PROMETHEUS_URL: http://prometheus:9090
+      ORBIT_TEST_LOKI_URL: http://loki:3100
+      ORBIT_TEST_TEMPO_URL: http://tempo:3200
+      GOPROXY: https://proxy.golang.org,direct
+      GOFLAGS: -mod=readonly
+    volumes:
+      - ./server:/workspace:ro
+    networks:
+      - default
+      - telemetry-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_started
+
   telemetry-smoke:
     image: python:3.13-alpine
     profiles: ["observability"]
