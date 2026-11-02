@@ -142,3 +142,40 @@ func TestDisablingAlertNotificationChannelStopsQueuedDeliveries(t *testing.T) {
 		t.Fatalf("disabled channel was still claimable: %+v err=%v", claimed, err)
 	}
 }
+
+
+func TestExpiredNotificationLeaseIsRecordedBeforeReclaim(t *testing.T) {
+	repository, workspace, issuer, owner := openAlertEvaluationTestRepository(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	channel := createAlertNotificationChannelForTest(t, ctx, repository, workspace, issuer, owner, "Crash recovery", "OPS_CRASH_RECOVERY")
+	rule := createAlertEvaluatorRule(t, ctx, repository, workspace, issuer, owner, 0)
+	_, changed, err := repository.ApplyWorkspaceAlertSample(ctx, workspace.ID, rule.ID, "checkout", 300, time.Now().UTC())
+	if err != nil || !changed {
+		t.Fatalf("create firing alert changed=%v err=%v", changed, err)
+	}
+	first, err := repository.ClaimAlertNotificationDeliveries(ctx, 5, 60)
+	if err != nil || len(first) != 1 || first[0].ChannelID != channel.ID || first[0].Attempts != 1 {
+		t.Fatalf("first claim = %+v err=%v", first, err)
+	}
+	if _, err := repository.pool.Exec(ctx, `
+		UPDATE alert_notification_deliveries
+		SET lease_until = NOW() - INTERVAL '1 second'
+		WHERE id = $1::uuid
+	`, first[0].ID); err != nil {
+		t.Fatalf("expire notification lease: %v", err)
+	}
+	reclaimed, err := repository.ClaimAlertNotificationDeliveries(ctx, 5, 60)
+	if err != nil || len(reclaimed) != 1 || reclaimed[0].ID != first[0].ID || reclaimed[0].Attempts != 2 {
+		t.Fatalf("reclaimed notification = %+v err=%v", reclaimed, err)
+	}
+	attempts, err := repository.ListWorkspaceAlertNotificationAttempts(ctx, workspace.ID, first[0].ID, issuer, owner, 20)
+	if err != nil || len(attempts) != 1 {
+		t.Fatalf("expired lease history = %+v err=%v", attempts, err)
+	}
+	if attempts[0].AttemptNumber != 1 || attempts[0].Outcome != "retry_scheduled" ||
+		attempts[0].ErrorCode != "worker_lease_expired" {
+		t.Fatalf("expired lease attempt = %+v", attempts[0])
+	}
+}
