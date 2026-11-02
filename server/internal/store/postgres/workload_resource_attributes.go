@@ -219,3 +219,99 @@ func marshalWorkloadResourceAttributes(observation store.WorkloadResourceObserva
 }
 
 var _ store.WorkloadResourceAttributeRepository = (*Repository)(nil)
+
+func TestMarshalWorkloadResourceAttributesEnforcesCuratedAllowlist(t *testing.T) {
+	valid := store.WorkloadResourceObservation{
+		ServiceName: "payments",
+		Attributes: map[string]any{
+			"service.name": []any{"payments"},
+			"service.version": []any{"1.2.3"},
+			"cloud.region": []any{"eu-central-1"},
+			"host.type": []any{"compute"},
+		},
+	}
+	if _, err := marshalWorkloadResourceAttributes(valid); err != nil {
+		t.Fatalf("valid curated resource attributes were rejected: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		mutate func(map[string]any)
+	}{
+		{
+			name: "private user identifier",
+			mutate: func(attributes map[string]any) {
+				attributes["user.email"] = []any{"private@example.invalid"}
+			},
+		},
+		{
+			name: "process command line",
+			mutate: func(attributes map[string]any) {
+				attributes["process.command_line"] = []any{"app --token secret"}
+			},
+		},
+		{
+			name: "high cardinality pod UID",
+			mutate: func(attributes map[string]any) {
+				attributes["k8s.pod.uid"] = []any{"random-uid"}
+			},
+		},
+		{
+			name: "producer tenant identity",
+			mutate: func(attributes map[string]any) {
+				attributes["orbit.workspace.id"] = []any{"another-workspace"}
+			},
+		},
+		{
+			name: "non-array value",
+			mutate: func(attributes map[string]any) {
+				attributes["cloud.region"] = "eu-central-1"
+			},
+		},
+		{
+			name: "missing canonical service name",
+			mutate: func(attributes map[string]any) {
+				delete(attributes, "service.name")
+			},
+		},
+		{
+			name: "mismatched service name",
+			mutate: func(attributes map[string]any) {
+				attributes["service.name"] = []any{"another-service"}
+			},
+		},
+		{
+			name: "oversized string value",
+			mutate: func(attributes map[string]any) {
+				attributes["host.name"] = []any{strings.Repeat("x", maxPersistedWorkloadResourceValueBytes+1)}
+			},
+		},
+		{
+			name: "non-finite floating point",
+			mutate: func(attributes map[string]any) {
+				attributes["host.type"] = []any{math.Inf(1)}
+			},
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			attributes := make(map[string]any, len(valid.Attributes)+1)
+			for key, value := range valid.Attributes {
+				values, ok := value.([]any)
+				if ok {
+					attributes[key] = append([]any(nil), values...)
+				} else {
+					attributes[key] = value
+				}
+			}
+			test.mutate(attributes)
+			observation := store.WorkloadResourceObservation{
+				ServiceName: valid.ServiceName,
+				Attributes: attributes,
+			}
+			if _, err := marshalWorkloadResourceAttributes(observation); err == nil {
+				t.Fatal("invalid workload resource attributes were accepted")
+			}
+		})
+	}
+}
