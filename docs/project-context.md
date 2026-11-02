@@ -486,7 +486,7 @@ The final telemetry CI job passed all stages: private network/Compose validation
 
 The corresponding completion checkboxes are updated in `docs/roadmap.md`. Remaining work is explicitly separated into environment-level gates and policy decisions; production tenant ingestion remains disabled until they pass.
 
-## M04 PR #91 — workspace-scoped workload resource attributes — 2026-11-02
+## M04 PR #104 — workspace-scoped workload resource attributes — 2026-11-02
 
 Branch: `feat/m04-workload-resource-attributes`.
 
@@ -496,6 +496,6 @@ Branch: `feat/m04-workload-resource-attributes`.
 - Adds PostgreSQL persistence with an independent allowlist check, per-attribute `otlp` provenance, and workspace-keyed upserts. Legacy unscoped catalog queries and attribute updates are explicitly limited to `legacy-default` so the old catalog cannot reveal other workspaces.
 - Wires both HTTP and gRPC gateways. Metadata persistence occurs only after a successful Collector export; a metadata-store failure emits an operational warning without changing the successful OTLP response.
 - Adds extraction/allowlist tests, gateway recording tests, PostgreSQL workspace A/B persistence tests, and extends the real workspace write-to-query E2E to assert per-workspace resource metadata. Latest CI must confirm these tests.
-- Adds the workspace telemetry catalog route to OpenAPI and documents the source provenance.
+- Adds the workspace telemetry catalog route to OpenAPI and documents the source provenance. The TypeScript client now exposes a separate workspace catalog source type (including `otlp`) and `listWorkspaceTelemetryServices`, leaving the backend-discovery source union unchanged.
 
 Do not merge until all current-head CI, Security, and Pages checks pass. Production tenant ingestion remains disabled pending the separate production ingress, identity-provider, backup/PITR, sustained-load, and operational acceptance gates.
