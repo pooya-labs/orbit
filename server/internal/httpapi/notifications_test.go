@@ -140,6 +140,13 @@ func TestWorkspaceAlertNotificationChannelRejectsUnconfiguredSecretReference(t *
 	if response.Code != http.StatusServiceUnavailable || repository.createdInput.SecretRef != "" {
 		t.Fatalf("unconfigured secret response status=%d input=%+v body=%s", response.Code, repository.createdInput, response.Body.String())
 	}
+
+	outsider := alertRouteRequest(handler, http.MethodPost,
+		"/api/v1/workspaces/22222222-2222-4222-8222-222222222222/alert-notification-channels",
+		`{"name":"Probe","secret_ref":"NOT_CONFIGURED"}`)
+	if outsider.Code != http.StatusNotFound {
+		t.Fatalf("non-member secret-reference probe status=%d, body=%s; want workspace not found before secret lookup", outsider.Code, outsider.Body.String())
+	}
 }
 
 func TestWorkspaceAlertNotificationDeliveryAndAttemptHistoryRoutes(t *testing.T) {
