@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: orbit-postgres:local
+    build:
+      context: .
+      dockerfile: deploy/postgres/Dockerfile
     restart: unless-stopped
     environment:
       POSTGRES_DB: orbit
@@ -182,7 +185,10 @@ services:
         condition: service_started
 
   telemetry-smoke:
-    image: python:3.13-alpine
+    image: orbit-telemetry-smoke:local
+    build:
+      context: .
+      dockerfile: deploy/observability/telemetry-smoke.Dockerfile
     profiles: ["observability"]
     working_dir: /workspace
     entrypoint: ["python"]
