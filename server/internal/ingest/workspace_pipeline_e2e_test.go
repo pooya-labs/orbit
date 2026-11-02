@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -350,6 +349,3 @@ func workspacePipelineTracesRequest() *tracesv1.ExportTraceServiceRequest {
 	}
 }
 
-// Keep the metric unit finite and positive in tests that marshal values to
-// Prometheus; NaN/Inf cannot be represented as a valid OTLP sample.
-var _ = math.IsNaN
