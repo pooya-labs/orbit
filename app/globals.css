@@ -1215,3 +1215,72 @@ html[data-theme="light"] .notification-delivery-title span,html[data-theme="ligh
  .notification-attempt-row { grid-template-columns:1fr 1fr; }
  .notification-delivery-values { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
+
+
+/* Workspace deployment history and release comparison */
+.deployment-workspace { display:flex; flex-direction:column; gap:16px; min-width:0; }
+.deployment-toolbar { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; flex-wrap:wrap; }
+.deployment-toolbar h2 { margin:5px 0 4px; color:#e5eef1; font-size:20px; letter-spacing:-.04em; }
+.deployment-toolbar p { margin:0; color:#91a1a8; font-size:11px; }
+.deployment-toolbar-actions { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; }
+.deployment-workspace-select,.deployment-service-select { display:flex; flex-direction:column; gap:6px; min-width:190px; color:#92a3aa; font-size:10px; }
+.deployment-workspace-select select,.deployment-service-select select,.deployment-form-grid input,.deployment-form-grid select,.deployment-form-grid textarea,.deployment-compare-controls select { min-height:36px; width:100%; border:1px solid #2b3a40; border-radius:7px; padding:8px 10px; color:#dce8eb; background:#10191e; font:inherit; font-size:11px; outline:none; }
+.deployment-workspace-select select:focus,.deployment-service-select select:focus,.deployment-form-grid input:focus,.deployment-form-grid select:focus,.deployment-form-grid textarea:focus,.deployment-compare-controls select:focus { border-color:#65d9c1; box-shadow:0 0 0 2px rgba(101,217,193,.12); }
+.deployment-toolbar-secondary { display:flex; align-items:flex-end; gap:12px; }
+.deployment-environment-pill { display:inline-flex; align-items:center; padding:7px 10px; border:1px solid #38534e; border-radius:20px; color:#80d7b7; background:rgba(101,217,193,.06); font-size:9px; text-transform:uppercase; }
+.deployment-notice { display:flex; align-items:center; gap:14px; padding:20px; }
+.deployment-notice h2 { margin:0 0 5px; color:#e5eef1; font-size:14px; }
+.deployment-notice p { margin:0; color:#91a1a8; font-size:11px; line-height:1.6; }
+.deployment-heading-icon { display:grid; place-items:center; flex:0 0 38px; width:38px; height:38px; border-radius:10px; color:#65d9c1; background:rgba(101,217,193,.1); }
+.deployment-panel,.deployment-form-panel,.deployment-compare-panel { min-width:0; padding:16px; }
+.deployment-panel-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.deployment-panel-heading h3 { display:flex; align-items:center; gap:7px; margin:0 0 4px; color:#e2ecef; font-size:13px; }
+.deployment-panel-heading p { margin:0; color:#81939b; font-size:10px; line-height:1.5; }
+.deployment-loading { display:flex; align-items:center; min-height:20px; }
+.deployment-empty { display:flex; align-items:center; justify-content:center; min-height:112px; color:#81939b; font-size:10px; text-align:center; line-height:1.6; padding:12px; }
+.deployment-form-panel { border-color:rgba(101,217,193,.24); }
+.deployment-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; margin-top:15px; }
+.deployment-form-grid label,.deployment-compare-controls label { display:flex; flex-direction:column; gap:6px; min-width:0; color:#92a3aa; font-size:10px; }
+.deployment-form-grid .deployment-form-wide { grid-column:1/-1; }
+.deployment-form-grid textarea { resize:vertical; min-height:80px; }
+.deployment-form-actions { grid-column:1/-1; display:flex; justify-content:flex-end; gap:8px; margin-top:3px; }
+.deployment-history-list { display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+.deployment-history-card { display:flex; flex-direction:column; gap:8px; padding:12px; border:1px solid #293940; border-radius:8px; background:#10191e; }
+.deployment-history-top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.deployment-history-top strong { color:#dce8eb; font-size:12px; }
+.deployment-history-top span { color:#8799a0; font-size:9px; }
+.deployment-history-meta { display:flex; align-items:center; flex-wrap:wrap; gap:7px; color:#91a1a8; font-size:9px; }
+.deployment-history-meta span,.deployment-history-meta code { padding:3px 6px; border:1px solid #34464d; border-radius:5px; background:#172229; }
+.deployment-history-meta code { color:#a8c8d5; font:9px "DM Mono",monospace; }
+.deployment-history-card p { margin:0; color:#a0afb4; font-size:10px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; }
+.deployment-compare-panel { display:flex; flex-direction:column; gap:14px; }
+.deployment-compare-controls { display:grid; grid-template-columns:1fr 1fr auto; align-items:end; gap:10px; }
+.deployment-compare-result { display:flex; flex-direction:column; gap:12px; border-top:1px solid #293940; padding-top:14px; }
+.deployment-compare-releases { display:flex; align-items:center; justify-content:center; gap:24px; }
+.deployment-compare-releases > div { display:flex; flex-direction:column; gap:5px; text-align:center; }
+.deployment-compare-releases span { color:#dce8eb; font:14px "DM Mono",monospace; }
+.deployment-compare-releases small { color:#8799a0; font-size:9px; }
+.deployment-compare-releases > svg { color:#65d9c1; }
+.deployment-compare-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+.deployment-compare-stats > div { display:flex; flex-direction:column; gap:7px; min-height:62px; padding:10px 12px; border:1px solid #293940; border-radius:8px; background:#10191e; }
+.deployment-compare-stats span { color:#91a1a8; font-size:9px; }
+.deployment-compare-stats strong { color:#dce8eb; font-size:11px; }
+.deployment-compare-result > p { margin:0; color:#8799a0; font-size:9px; text-align:center; }
+html[data-theme="light"] .deployment-toolbar h2,html[data-theme="light"] .deployment-notice h2,html[data-theme="light"] .deployment-panel-heading h3,html[data-theme="light"] .deployment-history-top strong,html[data-theme="light"] .deployment-compare-releases span,html[data-theme="light"] .deployment-compare-stats strong { color:#263b44; }
+html[data-theme="light"] .deployment-toolbar p,html[data-theme="light"] .deployment-notice p,html[data-theme="light"] .deployment-workspace-select,html[data-theme="light"] .deployment-service-select,html[data-theme="light"] .deployment-form-grid label,html[data-theme="light"] .deployment-compare-controls label { color:#71838c; }
+html[data-theme="light"] .deployment-history-card,html[data-theme="light"] .deployment-compare-stats > div { border-color:#e2eaed; background:#f8fafb; }
+html[data-theme="light"] .deployment-history-top span,html[data-theme="light"] .deployment-history-meta,html[data-theme="light"] .deployment-history-card p,html[data-theme="light"] .deployment-compare-releases small,html[data-theme="light"] .deployment-compare-stats span,html[data-theme="light"] .deployment-compare-result > p { color:#778991; }
+html[data-theme="light"] .deployment-history-meta span,html[data-theme="light"] .deployment-history-meta code { border-color:#dce5e9; background:#eef4f5; color:#47606a; }
+html[data-theme="light"] .deployment-workspace-select select,html[data-theme="light"] .deployment-service-select select,html[data-theme="light"] .deployment-form-grid input,html[data-theme="light"] .deployment-form-grid select,html[data-theme="light"] .deployment-form-grid textarea,html[data-theme="light"] .deployment-compare-controls select { border-color:#dce5e9; color:#344a53; background:#f8fafb; }
+html[data-theme="light"] .deployment-compare-result { border-color:#e2eaed; }
+@media (max-width:760px) {
+ .deployment-toolbar { align-items:stretch; }
+ .deployment-toolbar-actions { display:grid; grid-template-columns:1fr 1fr; }
+ .deployment-workspace-select { grid-column:1/-1; }
+ .deployment-workspace-select select { width:100%; }
+ .deployment-form-grid,.deployment-compare-controls { grid-template-columns:1fr; }
+ .deployment-form-grid .deployment-form-wide,.deployment-form-actions { grid-column:auto; }
+ .deployment-compare-stats { grid-template-columns:1fr; }
+ .deployment-compare-releases { gap:12px; }
+ .deployment-toolbar-secondary { flex-wrap:wrap; }
+}

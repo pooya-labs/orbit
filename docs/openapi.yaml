@@ -842,6 +842,209 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/v1/workspaces/{workspaceID}/deployments:
+    get:
+      tags: [Deployments]
+      operationId: listWorkspaceDeploymentAnnotations
+      summary: List workspace deployment annotations
+      description: Lists immutable deployment annotations for workspace members, optionally filtered to one service. Deployment metadata is historical; it is not proof that a deployment caused a telemetry change.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: service_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            enum: [10, 25, 50, 100]
+            default: 50
+      responses:
+        "200":
+          description: Immutable deployment history.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentAnnotationListResponse"
+        "400":
+          description: Invalid workspace, service, or limit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership or workspace was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deployment annotation storage is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags: [Deployments]
+      operationId: createWorkspaceDeploymentAnnotation
+      summary: Record a deployment annotation
+      description: Creates an immutable deployment annotation for a service in the specified workspace. The environment and service name are derived from the service record, never accepted from the caller. The authenticated actor, annotation, and workspace audit event are recorded transactionally. Owner, administrator, or operator membership is required.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeploymentAnnotationCreateRequest"
+      responses:
+        "201":
+          description: Deployment annotation created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentAnnotationResponse"
+        "400":
+          description: Invalid deployment annotation fields or identifiers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Workspace role cannot create deployment annotations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace or service was not found in the workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deployment annotation storage or audit is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/deployments/compare:
+    get:
+      tags: [Deployments]
+      operationId: compareWorkspaceDeploymentAnnotations
+      summary: Compare two deployments of the same service
+      description: Compares immutable deployment metadata for two different deployments of the same service and environment, in chronological order. Returns elapsed time and whether the version or commit changed. This endpoint does not infer causal relationships or compute telemetry deltas.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: from_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: to_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Metadata comparison between the two deployment annotations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentComparisonResponse"
+        "400":
+          description: The deployments differ in service, are the same deployment, or are not chronological.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership or one of the deployment annotations was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deployment annotation storage is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/deployments/{deploymentID}:
+    get:
+      tags: [Deployments]
+      operationId: getWorkspaceDeploymentAnnotation
+      summary: Get a deployment annotation
+      description: Returns one immutable deployment annotation to a member of the owning workspace.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: deploymentID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deployment annotation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentAnnotationResponse"
+        "400":
+          description: Invalid workspace or deployment identifier.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership or deployment annotation was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Deployment annotation storage is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/v1/workspaces/{workspaceID}/alert-notification-channels:
     get:
       tags: [Alerting]
@@ -1620,6 +1823,94 @@ components:
         http_status: { type: integer, minimum: 100, maximum: 599, nullable: true }
         error_code: { type: string, description: Safe error code only. }
         attempted_at: { type: string, format: date-time }
+    DeploymentAnnotationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [service_id, version]
+      properties:
+        service_id:
+          type: string
+          format: uuid
+        version:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[A-Za-z0-9][A-Za-z0-9.+_:/-]{0,127}$"
+        commit_sha:
+          type: string
+          maxLength: 64
+          pattern: "^[0-9a-fA-F]{7,64}$"
+        change_reference:
+          type: string
+          maxLength: 256
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,255}$"
+        release_notes:
+          type: string
+          maxLength: 4000
+        deployed_at:
+          type: string
+          format: date-time
+    DeploymentAnnotation:
+      type: object
+      required: [id, workspace_id, service_id, service_name, environment, version, deployed_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        service_id:
+          type: string
+          format: uuid
+        service_name:
+          type: string
+        environment:
+          type: string
+        version:
+          type: string
+        commit_sha:
+          type: string
+        change_reference:
+          type: string
+        release_notes:
+          type: string
+        deployed_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    DeploymentAnnotationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/DeploymentAnnotation"
+    DeploymentAnnotationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeploymentAnnotation"
+    DeploymentComparisonResponse:
+      type: object
+      required: [from, to, elapsed_seconds, version_changed, commit_changed]
+      properties:
+        from:
+          $ref: "#/components/schemas/DeploymentAnnotation"
+        to:
+          $ref: "#/components/schemas/DeploymentAnnotation"
+        elapsed_seconds:
+          type: integer
+          format: int64
+          minimum: 0
+        version_changed:
+          type: boolean
+        commit_changed:
+          type: boolean
     AlertNotificationAttemptListResponse:
       type: object
       required: [data]
