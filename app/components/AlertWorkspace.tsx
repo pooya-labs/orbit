@@ -641,6 +641,184 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
               }
             </section>
           </div>
+          <div className="notification-operations-grid">
+            <section className="panel notification-panel">
+              <div className="notification-panel-heading">
+                <div>
+                  <h3>{t(language, "notificationChannelsTitle")}</h3>
+                  <p>{t(language, "notificationChannelsSubtitle")}</p>
+                </div>
+                {canManage && (
+                  <button
+                    type="button"
+                    className="button-primary"
+                    onClick={() => { setShowChannelForm((value) => !value); setError(""); setNotice(""); }}
+                    disabled={saving}
+                  >
+                    <Plus size={13} /> {t(language, "notificationAddChannel")}
+                  </button>
+                )}
+              </div>
+
+              {showChannelForm && canManage && (
+                <form className="notification-channel-form" onSubmit={(event) => void submitChannel(event)}>
+                  <label>
+                    <span>{t(language, "notificationChannelName")}</span>
+                    <input
+                      required
+                      maxLength={80}
+                      value={channelName}
+                      onChange={(event) => setChannelName(event.target.value)}
+                      placeholder={t(language, "notificationChannelNamePlaceholder")}
+                    />
+                  </label>
+                  <label>
+                    <span>{t(language, "notificationSecretRef")}</span>
+                    <input
+                      required
+                      maxLength={64}
+                      pattern="[A-Z][A-Z0-9_]{0,63}"
+                      value={secretRef}
+                      onChange={(event) => setSecretRef(event.target.value.toUpperCase())}
+                      placeholder="OPS_PRIMARY"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <p className="notification-form-help">{t(language, "notificationSecretRefHelp")}</p>
+                  <div className="notification-form-actions">
+                    <button type="button" className="button-secondary" onClick={closeChannelForm}>{t(language, "cancel")}</button>
+                    <button type="submit" className="button-primary" disabled={saving || !channelName.trim() || !channelSecretRefPattern.test(secretRef.trim())}>
+                      {saving ? t(language, "saving") : t(language, "notificationCreateChannel")}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {notificationChannels.length === 0 && !loading ? (
+                <div className="notification-empty">{t(language, "notificationNoChannels")}</div>
+              ) : (
+                <div className="notification-channel-list">
+                  {notificationChannels.map((channel) => (
+                    <article className="notification-channel-card" key={channel.id}>
+                      <div className="notification-channel-copy">
+                        <div className="notification-channel-title">
+                          <strong>{channel.name}</strong>
+                          <span className={`notification-channel-state ${channel.enabled ? "is-enabled" : "is-disabled"}`}>
+                            {t(language, channel.enabled ? "notificationChannelActive" : "notificationChannelInactive")}
+                          </span>
+                        </div>
+                        <div className="notification-channel-meta">
+                          <span>{t(language, "notificationWebhookAdapter")}</span>
+                          <span className={channel.secret_configured ? "notification-secret-ready" : "notification-secret-missing"}>
+                            <ShieldCheck size={11} />
+                            {t(language, channel.secret_configured ? "notificationSecretConfigured" : "notificationSecretNotConfigured")}
+                          </span>
+                        </div>
+                        <small>{t(language, "notificationUpdated")} {dateTime(channel.updated_at, language)}</small>
+                      </div>
+                      {canManage && (
+                        <button
+                          type="button"
+                          className="notification-channel-toggle"
+                          onClick={() => void toggleChannel(channel)}
+                          disabled={saving || !channel.secret_configured}
+                          title={t(language, channel.enabled ? "notificationDisableChannel" : "notificationEnableChannel")}
+                          aria-label={t(language, channel.enabled ? "notificationDisableChannel" : "notificationEnableChannel")}
+                        >
+                          {channel.enabled ? <Pause size={13} /> : <Play size={13} />}
+                          {t(language, channel.enabled ? "notificationDisableChannel" : "notificationEnableChannel")}
+                        </button>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              )}
+              {!canManage && membership && <p className="notification-readonly-note"><ShieldCheck size={12} /> {t(language, "alertRoleReadOnly")}</p>}
+            </section>
+
+            <section className="panel notification-panel">
+              <div className="notification-panel-heading">
+                <div>
+                  <h3>{t(language, "notificationDeliveriesTitle")}</h3>
+                  <p>{t(language, "notificationDeliveriesSubtitle")}</p>
+                </div>
+                <select
+                  className="notification-delivery-filter"
+                  aria-label={t(language, "notificationDeliveryFilter")}
+                  value={notificationFilter}
+                  onChange={(event) => setNotificationFilter(event.target.value as AlertNotificationDeliveryStatus | "all")}
+                >
+                  <option value="all">{t(language, "notificationAllStatuses")}</option>
+                  <option value="pending">{t(language, "notificationPending")}</option>
+                  <option value="processing">{t(language, "notificationProcessing")}</option>
+                  <option value="delivered">{t(language, "notificationDelivered")}</option>
+                  <option value="dead">{t(language, "notificationDead")}</option>
+                </select>
+              </div>
+              {notificationDeliveries.length === 0 && !loading ? (
+                <div className="notification-empty">{t(language, "notificationNoDeliveries")}</div>
+              ) : (
+                <div className="notification-delivery-list">
+                  {notificationDeliveries.map((delivery) => (
+                    <button
+                      type="button"
+                      key={delivery.id}
+                      className={`notification-delivery-row ${selectedDeliveryId === delivery.id ? "selected" : ""}`}
+                      onClick={() => setSelectedDeliveryId(delivery.id)}
+                    >
+                      <span className={`notification-delivery-dot status-${delivery.status}`} />
+                      <span className="notification-delivery-copy">
+                        <strong>{delivery.rule_name}</strong>
+                        <small>{delivery.channel_name} · {delivery.service_name} · {t(language, delivery.event_type === "alert.firing" ? "notificationEventFiring" : "notificationEventResolved")}</small>
+                      </span>
+                      <span className={`notification-status-pill status-${delivery.status}`}>{t(language, deliveryStatusKey(delivery.status))}</span>
+                      <span className="notification-delivery-attempts">{number(delivery.attempts, language, 0)} / 8</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+
+          {selectedDelivery && (
+            <section className="panel notification-attempt-panel">
+              <div className="notification-panel-heading">
+                <div>
+                  <h3>{t(language, "notificationAttemptsTitle")}</h3>
+                  <p>{selectedDelivery.channel_name} · {selectedDelivery.rule_name} · {dateTime(selectedDelivery.occurred_at, language)}</p>
+                </div>
+                <span className={`notification-status-pill status-${selectedDelivery.status}`}>
+                  {t(language, deliveryStatusKey(selectedDelivery.status))}
+                </span>
+              </div>
+              <div className="notification-delivery-detail">
+                <span>{t(language, "notificationNextAttempt")} <strong>{dateTime(selectedDelivery.next_attempt_at, language)}</strong></span>
+                <span>{t(language, "notificationLastError")} <strong>{selectedDelivery.last_error || "—"}</strong></span>
+                {selectedDelivery.delivered_at && <span>{t(language, "notificationDeliveredAt")} <strong>{dateTime(selectedDelivery.delivered_at, language)}</strong></span>}
+              </div>
+              {notificationAttemptsLoading ? (
+                <div className="notification-empty"><span className="telemetry-spinner" />{t(language, "notificationAttemptsLoading")}</div>
+              ) : notificationAttempts.length === 0 ? (
+                <div className="notification-empty">{t(language, "notificationNoAttempts")}</div>
+              ) : (
+                <div className="notification-attempt-list">
+                  {notificationAttempts.map((attempt) => (
+                    <article className="notification-attempt-row" key={attempt.id}>
+                      <span className="notification-attempt-number">#{number(attempt.attempt_number, language, 0)}</span>
+                      <span className={`notification-status-pill status-${attempt.outcome === "retry_scheduled" ? "pending" : attempt.outcome}`}>
+                        {t(language, attemptOutcomeKey(attempt.outcome))}
+                      </span>
+                      <span className="notification-attempt-time">{dateTime(attempt.attempted_at, language)}</span>
+                      <span className="notification-attempt-http">{attempt.http_status ? `HTTP ${attempt.http_status}` : "—"}</span>
+                      <span className="notification-attempt-error">{attempt.error_code || "—"}</span>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           <p className="alert-footnote"><Activity size={12} /> {t(language, "alertOnlyRequestRate")} · {t(language, "alertAutoRefresh")}</p>
         </>
       )}
