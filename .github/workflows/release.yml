@@ -65,7 +65,7 @@ jobs:
             - Metric grouping is available only for the instrumented demo request-rate counter; arbitrary metric-name discovery and selection are not implemented.
             - The production ORBIT API is not yet self-instrumented.
             - Redis and NATS are provisioned for local development but are not yet wired into application behavior.
-            - The API has no production authentication, workspace isolation, or role-based access control yet; no public state-changing operations are enabled.
+            - The Go API implements server-side OIDC role enforcement, workspace membership/scoped reads, transactional M05 operator workflows, and authenticated workload-aware OTLP ingestion. The public GitHub Pages site remains static and is not connected to a hosted production API; real-provider login, production TLS/network controls, and target-environment deployment gates remain open.
             - M05 incident/alert/SLO workflows and M06 production hardening remain future milestones. Redis and NATS are provisioned locally but are not yet integrated.
 
             This is an early public preview, not a production monitoring service.
