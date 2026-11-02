@@ -235,7 +235,7 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 .page-footer i { width: 3px; height: 3px; border-radius: 50%; background: #63737d; }
 .footer-version { color: #82919b; }
 .mobile-scrim { display: none; }
-.preview-unavailable:disabled { opacity: .48; cursor: not-allowed; }
+.preview-unavailable:disabled { opacity: .62; cursor: not-allowed; }
 
 @media (min-width: 1600px) {
   .content-wrap { padding-top: 43px; }
