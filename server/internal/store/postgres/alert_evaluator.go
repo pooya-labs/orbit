@@ -17,6 +17,8 @@ const (
 	alertEvaluationLockClass int32 = 1330795073
 	alertEvaluationLockID int32 = 2
 	maxEnabledAlertRules = 1000
+	// Two missed 30-second evaluation intervals break a continuous pending window.
+	alertPendingObservationMaxGap = 60 * time.Second
 )
 
 func (r *Repository) TryAcquireAlertEvaluationLock(ctx context.Context) (func(), bool, error) {
@@ -44,23 +46,31 @@ func (r *Repository) TryAcquireAlertEvaluationLock(ctx context.Context) (func(),
 }
 
 func (r *Repository) ListEnabledWorkspaceAlertRules(ctx context.Context, limit int) ([]store.AlertRule, error) {
-	if limit < 1 || limit > maxEnabledAlertRules { limit = maxEnabledAlertRules }
-	var overflow bool
-	if err := r.pool.QueryRow(ctx, "SELECT COUNT(*) > $1 FROM alert_rules WHERE enabled = TRUE", limit).Scan(&overflow); err != nil {
-		return nil, fmt.Errorf("count enabled workspace alert rules: %w", err)
+	if limit < 1 || limit > maxEnabledAlertRules {
+		limit = maxEnabledAlertRules
 	}
-	if overflow { return nil, fmt.Errorf("enabled alert rule count exceeds evaluator safety limit %d", limit) }
+	// Read one extra row in the same statement so a concurrent rule insert
+	// cannot slip between a separate COUNT and SELECT and bypass the cap.
 	rows, err := r.pool.Query(ctx, `SELECT `+alertRuleSelectColumns+`
-		FROM alert_rules WHERE enabled = TRUE ORDER BY workspace_id, id LIMIT $1`, limit)
-	if err != nil { return nil, fmt.Errorf("list enabled workspace alert rules: %w", err) }
+		FROM alert_rules WHERE enabled = TRUE ORDER BY workspace_id, id LIMIT $1`, limit+1)
+	if err != nil {
+		return nil, fmt.Errorf("list enabled workspace alert rules: %w", err)
+	}
 	defer rows.Close()
-	items := make([]store.AlertRule, 0)
+	items := make([]store.AlertRule, 0, limit+1)
 	for rows.Next() {
 		rule, err := scanAlertRule(rows)
-		if err != nil { return nil, fmt.Errorf("scan enabled workspace alert rule: %w", err) }
+		if err != nil {
+			return nil, fmt.Errorf("scan enabled workspace alert rule: %w", err)
+		}
 		items = append(items, rule)
 	}
-	if err := rows.Err(); err != nil { return nil, fmt.Errorf("iterate enabled workspace alert rules: %w", err) }
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate enabled workspace alert rules: %w", err)
+	}
+	if len(items) > limit {
+		return nil, fmt.Errorf("enabled alert rule count exceeds evaluator safety limit %d", limit)
+	}
 	return items, nil
 }
 
@@ -192,10 +202,18 @@ func (r *Repository) ApplyWorkspaceAlertSample(ctx context.Context, workspaceID,
 	oldStatus, nextStatus := current.Status, current.Status
 	eventType := ""
 	firedAt := current.FiredAt
-	var resolvedAt *time.Time
+	resolvedAt := (*time.Time)(nil)
+	pendingSince := current.PendingSince
 	if matched {
-		if oldStatus == "pending" && evaluatedAt.Sub(current.PendingSince) >= time.Duration(rule.PendingSeconds)*time.Second {
-			nextStatus, firedAt, eventType = "firing", &evaluatedAt, "alert.firing"
+		if oldStatus == "pending" {
+			if evaluatedAt.Sub(current.LastEvaluatedAt) >= alertPendingObservationMaxGap {
+				// Missing telemetry is not recovery, but an unobserved interval
+				// cannot count toward the rule's continuous pending duration.
+				pendingSince = evaluatedAt
+				eventType = "alert.pending"
+			} else if evaluatedAt.Sub(current.PendingSince) >= time.Duration(rule.PendingSeconds)*time.Second {
+				nextStatus, firedAt, eventType = "firing", &evaluatedAt, "alert.firing"
+			}
 		}
 	} else if oldStatus == "pending" {
 		nextStatus, resolvedAt, eventType = "cancelled", &evaluatedAt, "alert.pending_cancelled"
@@ -208,19 +226,26 @@ func (r *Repository) ApplyWorkspaceAlertSample(ctx context.Context, workspaceID,
 		SET rule_name = $4, metric = $5, operator = $6, threshold = $7,
 		    window_seconds = $8, pending_seconds = $9, severity = $10,
 		    status = $11, value = $12, fired_at = $13, resolved_at = $14,
-		    last_evaluated_at = $15, updated_at = NOW()
+		    pending_since = $15, last_evaluated_at = $16, updated_at = NOW()
 		WHERE id = $1::uuid AND workspace_id = $2::uuid AND alert_rule_id = $3::uuid
 		RETURNING `+alertInstanceSelectColumns,
 		current.ID, workspaceID, ruleID, rule.Name, rule.Metric, rule.Operator,
 		rule.Threshold, rule.WindowSeconds, rule.PendingSeconds, rule.Severity,
-		nextStatus, value, firedAt, resolvedAt, evaluatedAt,
+		nextStatus, value, firedAt, resolvedAt, pendingSince, evaluatedAt,
 	))
 	if err != nil { return store.AlertInstance{}, false, fmt.Errorf("update alert instance evaluation: %w", err) }
 	if eventType != "" {
-		if err := appendAlertInstanceEventTx(ctx, tx, instance, eventType, map[string]any{
+		details := map[string]any{
 			"from_status": oldStatus, "to_status": nextStatus, "value": value,
 			"threshold": rule.Threshold, "operator": rule.Operator,
-		}); err != nil { return store.AlertInstance{}, false, err }
+		}
+		if eventType == "alert.pending" && !pendingSince.Equal(current.PendingSince) {
+			details["reason"] = "telemetry_observation_gap"
+			details["pending_since"] = pendingSince
+		}
+		if err := appendAlertInstanceEventTx(ctx, tx, instance, eventType, details); err != nil {
+			return store.AlertInstance{}, false, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil { return store.AlertInstance{}, false, fmt.Errorf("commit alert instance evaluation: %w", err) }
 	return instance, eventType != "", nil
