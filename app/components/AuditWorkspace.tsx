@@ -218,6 +218,14 @@ export default function AuditWorkspace({ apiBaseUrl, language, sourceMode }: Pro
 
   return (
     <section className="audit-workspace">
+      <header className="audit-page-heading">
+        <div>
+          <span>{t(language, "auditOperations")}</span>
+          <h2>{t(language, "auditWorkspaceTitle")}</h2>
+          <p>{t(language, "auditWorkspaceSubtitle")}</p>
+        </div>
+        <div className="audit-heading-mark"><FileText size={18} /></div>
+      </header>
       <div className="audit-toolbar">
         <label className="audit-workspace-select">
           <span>{t(language, "auditSelectWorkspace")}</span>
