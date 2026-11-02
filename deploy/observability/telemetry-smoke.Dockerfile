@@ -1,11 +1,10 @@
-# The smoke script uses only Python's standard library. Keep the base small and
-# update the preinstalled packages that the upstream image ships with.
-FROM python:3.13-alpine
+# The smoke scripts use Python's standard library only. Use the slim upstream
+# image instead of carrying optional third-party packages into this test helper.
+FROM python:3.13-slim
 
-RUN python -m pip install --no-cache-dir --upgrade \
-    msgpack==1.2.3 \
-    setuptools==78.1.1 \
-    urllib3==2.8.0
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /workspace
+USER 65532:65532
 ENTRYPOINT ["python"]
