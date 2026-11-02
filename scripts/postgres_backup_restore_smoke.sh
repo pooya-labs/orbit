@@ -80,8 +80,12 @@ esac
 
 source_event_count="$(
   psql "$ORBIT_TEST_DATABASE_URL" -X -qAt -v ON_ERROR_STOP=1 \
-    -v workspace_id="$workspace_id" \
-    -c "SELECT COUNT(*) FROM workspace_audit_events WHERE workspace_id = :'workspace_id'::uuid AND action = 'backup_restore.drill'"
+    -v workspace_id="$workspace_id" <<'SQL'
+SELECT COUNT(*)
+FROM workspace_audit_events
+WHERE workspace_id = :'workspace_id'::uuid
+  AND action = 'backup_restore.drill';
+SQL
 )"
 [ "$source_event_count" = "1" ] || {
   echo "ERROR: source audit fixture count is $source_event_count, expected 1" >&2
@@ -111,8 +115,9 @@ restored_migrations="$(
 
 restored_workspace_id="$(
   psql -X -qAt -v ON_ERROR_STOP=1 -d "$restore_db" \
-    -v workspace_slug="$workspace_slug" \
-    -c "SELECT id::text FROM workspaces WHERE slug = :'workspace_slug'"
+    -v workspace_slug="$workspace_slug" <<'SQL'
+SELECT id::text FROM workspaces WHERE slug = :'workspace_slug';
+SQL
 )"
 [ "$workspace_id" = "$restored_workspace_id" ] || {
   echo "ERROR: restored workspace identity does not match the source fixture" >&2
@@ -121,8 +126,12 @@ restored_workspace_id="$(
 
 restored_actor_context="$(
   psql -X -qAt -v ON_ERROR_STOP=1 -d "$restore_db" \
-    -v workspace_id="$workspace_id" \
-    -c "SELECT actor_ref::text || '|' || actor_role FROM workspace_audit_events WHERE workspace_id = :'workspace_id'::uuid AND action = 'backup_restore.drill'"
+    -v workspace_id="$workspace_id" <<'SQL'
+SELECT actor_ref::text || '|' || actor_role
+FROM workspace_audit_events
+WHERE workspace_id = :'workspace_id'::uuid
+  AND action = 'backup_restore.drill';
+SQL
 )"
 case "$restored_actor_context" in
   ?*'|owner') ;;
@@ -135,8 +144,12 @@ esac
 restored_actor_ref="${restored_actor_context%|owner}"
 actor_mapping_count="$(
   psql -X -qAt -v ON_ERROR_STOP=1 -d "$restore_db" \
-    -v workspace_id="$workspace_id" -v actor_ref="$restored_actor_ref" \
-    -c "SELECT COUNT(*) FROM workspace_audit_actors WHERE workspace_id = :'workspace_id'::uuid AND actor_ref = :'actor_ref'::uuid"
+    -v workspace_id="$workspace_id" -v actor_ref="$restored_actor_ref" <<'SQL'
+SELECT COUNT(*)
+FROM workspace_audit_actors
+WHERE workspace_id = :'workspace_id'::uuid
+  AND actor_ref = :'actor_ref'::uuid;
+SQL
 )"
 [ "$actor_mapping_count" = "1" ] || {
   echo "ERROR: pseudonymous actor mapping was not restored" >&2
@@ -144,15 +157,23 @@ actor_mapping_count="$(
 }
 
 if psql -X -q -v ON_ERROR_STOP=1 -d "$restore_db" \
-  -v workspace_id="$workspace_id" \
-  -c "UPDATE workspace_audit_events SET action = 'tampered' WHERE workspace_id = :'workspace_id'::uuid" >/dev/null 2>&1; then
+  -v workspace_id="$workspace_id" >/dev/null 2>&1 <<'SQL'
+UPDATE workspace_audit_events
+SET action = 'tampered'
+WHERE workspace_id = :'workspace_id'::uuid;
+SQL
+then
   echo "ERROR: restored audit events are mutable" >&2
   exit 1
 fi
 
 if psql -X -q -v ON_ERROR_STOP=1 -d "$restore_db" \
-  -v workspace_id="$workspace_id" \
-  -c "UPDATE workspace_audit_actors SET actor_ref = gen_random_uuid() WHERE workspace_id = :'workspace_id'::uuid" >/dev/null 2>&1; then
+  -v workspace_id="$workspace_id" >/dev/null 2>&1 <<'SQL'
+UPDATE workspace_audit_actors
+SET actor_ref = gen_random_uuid()
+WHERE workspace_id = :'workspace_id'::uuid;
+SQL
+then
   echo "ERROR: restored audit actor mappings are mutable" >&2
   exit 1
 fi
