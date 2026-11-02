@@ -46,6 +46,11 @@ type TelemetryService struct {
 	ResourceAttributeSources map[string][]string `json:"resource_attribute_sources"`
 }
 
+type WorkloadResourceObservation struct {
+	ServiceName string
+	Attributes map[string]any
+}
+
 type TelemetryServiceCursor struct {
 	Name string
 	ID   string
