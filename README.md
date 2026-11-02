@@ -167,4 +167,4 @@ The first M05 slice is merged: authenticated workspace-scoped incident creation 
 
 ## M05 alert-rule definitions — PR #69
 
-Workspace members can list alert rule definitions; owners, administrators, and operators can create, update, enable/disable, and delete them. Definitions are workspace-scoped and every mutation is audited transactionally. The initial metric allowlist is limited to `request_rate`. Scheduled evaluation and notification delivery have not been implemented yet; see [the M05 roadmap](docs/roadmap.md).
+Workspace members can list alert rule definitions; owners, administrators, and operators can create, update, enable/disable, and delete them. Definitions are workspace-scoped and every mutation is audited transactionally. PR #72 adds a scheduled evaluator for the allow-listed `request_rate` metric, persisted pending/firing/resolved/cancelled instances, append-only transition events, telemetry-gap handling, and PostgreSQL advisory-lock coordination across API replicas. Notification adapters and delivery/retry history remain open; see [the M05 roadmap](docs/roadmap.md) and [PR #72](https://github.com/pooya16pg-spec/orbit/pull/72).
