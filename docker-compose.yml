@@ -190,10 +190,6 @@ services:
       context: .
       dockerfile: deploy/observability/telemetry-smoke.Dockerfile
     profiles: ["observability"]
-    working_dir: /workspace
-    entrypoint: ["python"]
-    volumes:
-      - ./scripts:/workspace/scripts:ro
     networks:
       - telemetry-internal
     depends_on:
