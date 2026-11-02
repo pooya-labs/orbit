@@ -71,7 +71,10 @@ services:
         condition: service_healthy
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.164.0
+    image: orbit-otel-collector:local
+    build:
+      context: .
+      dockerfile: deploy/observability/collector.Dockerfile
     profiles: ["observability"]
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -117,7 +120,10 @@ services:
       - telemetry-internal
 
   tempo:
-    image: grafana/tempo:3.1.1
+    image: orbit-tempo:local
+    build:
+      context: .
+      dockerfile: deploy/observability/tempo.Dockerfile
     profiles: ["observability"]
     restart: unless-stopped
     command: ["-target=all", "-config.file=/etc/tempo.yaml"]
