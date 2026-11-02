@@ -90,11 +90,14 @@ func (w *Worker) dispatch(ctx context.Context) {
 		case result.Delivered:
 			record.Outcome = "delivered"
 			record.ErrorCode = ""
-		case result.Permanent || delivery.Attempts >= maxDeliveryAttempts:
+		case result.Permanent:
 			record.Outcome = "dead"
 			if record.ErrorCode == "" {
-				record.ErrorCode = "attempt_limit_reached"
+				record.ErrorCode = "permanent_delivery_failure"
 			}
+		case delivery.Attempts >= maxDeliveryAttempts:
+			record.Outcome = "dead"
+			record.ErrorCode = "attempt_limit_reached"
 		default:
 			record.Outcome = "retry_scheduled"
 			record.NextAttemptAt = w.now().UTC().Add(retryDelay(delivery.Attempts))
