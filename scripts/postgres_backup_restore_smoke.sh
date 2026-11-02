@@ -17,7 +17,8 @@ for command in psql pg_dump pg_restore createdb dropdb; do
 done
 
 work_dir="$(mktemp -d)"
-restore_db="orbit_restore_drill_$$"
+unique_id="$(cat /proc/sys/kernel/random/uuid | tr -d '-')"
+restore_db="orbit_restore_$unique_id"
 cleanup() {
   dropdb --if-exists "$restore_db" >/dev/null 2>&1 || true
   rm -rf "$work_dir"
@@ -26,7 +27,7 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 archive="$work_dir/orbit.dump"
-fixture_suffix="$(date +%s)-$"
+fixture_suffix="$unique_id"
 workspace_name="Backup restore drill $fixture_suffix"
 workspace_slug="backup-restore-$fixture_suffix"
 issuer="https://identity.example.test/"
