@@ -31,6 +31,10 @@ func (alertRouteVerifier) Verify(_ context.Context, token string) (auth.Principa
 type alertRouteRepository struct {
 	*incidentRouteRepository
 	rules []store.AlertRule
+	instances []store.AlertInstance
+	instancesErr error
+	requestedStatus string
+	requestedLimit int
 	createdInput store.CreateWorkspaceAlertRuleInput
 	updatedInput store.UpdateWorkspaceAlertRuleInput
 	enabledInput store.SetWorkspaceAlertRuleEnabledInput
@@ -123,6 +127,36 @@ func (r *alertRouteRepository) DeleteWorkspaceAlertRule(_ context.Context, input
 		}
 	}
 	return store.ErrAlertRuleNotFound
+}
+
+func (r *alertRouteRepository) TryAcquireAlertEvaluationLock(context.Context) (func(), bool, error) {
+	return func(){}, true, nil
+}
+
+func (r *alertRouteRepository) ListEnabledWorkspaceAlertRules(context.Context, int) ([]store.AlertRule, error) {
+	return append([]store.AlertRule(nil), r.rules...), nil
+}
+
+func (r *alertRouteRepository) ApplyWorkspaceAlertSample(_ context.Context, workspaceID, ruleID, serviceName string, value float64, at time.Time) (store.AlertInstance, bool, error) {
+	return store.AlertInstance{}, false, nil
+}
+
+func (r *alertRouteRepository) ListWorkspaceAlertInstances(_ context.Context, workspaceID, issuer, subject, status string, limit int) ([]store.AlertInstance, error) {
+	if workspaceID != r.workspace.ID || issuer != "https://orbit.test/issuer" || subject != "alert-route-operator" {
+		return nil, store.ErrWorkspaceMembershipNotFound
+	}
+	r.requestedStatus = status
+	r.requestedLimit = limit
+	if r.instancesErr != nil {
+		return nil, r.instancesErr
+	}
+	items := make([]store.AlertInstance, 0)
+	for _, item := range r.instances {
+		if status == "" || item.Status == status {
+			items = append(items, item)
+		}
+	}
+	return items, nil
 }
 
 func newAlertRouteRepository() *alertRouteRepository {
@@ -236,3 +270,35 @@ func TestWorkspaceAlertRuleHTTPValidationAndConflictMapping(t *testing.T) {
 		t.Fatalf("forbidden state update status/body = %d %s; want 403", forbidden.Code, forbidden.Body.String())
 	}
 }
+
+
+func TestWorkspaceAlertInstancesHTTPRoute(t *testing.T) {
+	repository := newAlertRouteRepository()
+	repository.instances = []store.AlertInstance{
+		{ID:"66666666-6666-4666-8666-666666666666",WorkspaceID:repository.workspace.ID,AlertRuleID:"55555555-5555-4555-8555-555555555555",Status:"firing",ServiceName:"checkout"},
+		{ID:"77777777-7777-4777-8777-777777777777",WorkspaceID:repository.workspace.ID,AlertRuleID:"55555555-5555-4555-8555-555555555555",Status:"resolved",ServiceName:"checkout"},
+	}
+	handler := newAlertRouteHandler(repository)
+	base := "/api/v1/workspaces/" + repository.workspace.ID + "/alerts"
+
+	listed := alertRouteRequest(handler,http.MethodGet,base+"?status=firing&limit=25","")
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(),repository.instances[0].ID) ||
+		strings.Contains(listed.Body.String(),repository.instances[1].ID) {
+		t.Fatalf("workspace alerts status/body = %d %s; want only the firing instance",listed.Code,listed.Body.String())
+	}
+	if repository.requestedStatus != "firing" || repository.requestedLimit != 25 {
+		t.Fatalf("alert list filters status=%q limit=%d; want firing/25",repository.requestedStatus,repository.requestedLimit)
+	}
+
+	invalid := alertRouteRequest(handler,http.MethodGet,base+"?status=triggered","")
+	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(),"invalid_alert_status") {
+		t.Fatalf("invalid alert status = %d %s; want 400",invalid.Code,invalid.Body.String())
+	}
+
+	repository.instancesErr = store.ErrWorkspaceMembershipNotFound
+	forbiddenWorkspace := alertRouteRequest(handler,http.MethodGet,base,"")
+	if forbiddenWorkspace.Code != http.StatusNotFound || !strings.Contains(forbiddenWorkspace.Body.String(),"workspace_not_found") {
+		t.Fatalf("non-member workspace response = %d %s; want 404",forbiddenWorkspace.Code,forbiddenWorkspace.Body.String())
+	}
+}
+

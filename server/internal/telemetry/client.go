@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"io"
 	"net/http"
 	"net/url"
@@ -340,6 +341,80 @@ func validateWorkspaceID(workspaceID string) error {
 		return errors.New("workspace identifier is invalid")
 	}
 	return nil
+}
+
+
+// WorkspaceRequestRates returns the latest bounded request-rate sample per
+// service for exactly one workspace. It never accepts caller-supplied PromQL.
+func (c *Client) WorkspaceRequestRates(
+	ctx context.Context,
+	workspaceID, service string,
+	windowSeconds int,
+) (map[string]float64, error) {
+	if err := validateWorkspaceID(workspaceID); err != nil {
+		return nil, err
+	}
+	if c == nil || c.prometheusURL == "" {
+		return nil, ErrNotConfigured
+	}
+	if service != "" {
+		if err := ValidateServiceName(service); err != nil {
+			return nil, err
+		}
+	}
+	switch windowSeconds {
+	case 60, 300, 900:
+	default:
+		return nil, errors.New("alert evaluation window must be 60, 300, or 900 seconds")
+	}
+
+	selector := "orbit_workspace_id=" + strconv.Quote(workspaceID)
+	if service != "" {
+		selector += ",service_name=" + strconv.Quote(service)
+	}
+	query := fmt.Sprintf("sum by (service_name) (rate(%s{%s}[%ds]))", metricName, selector, windowSeconds)
+	now := c.now().UTC()
+	values := url.Values{}
+	values.Set("query", query)
+	values.Set("time", now.Format(time.RFC3339Nano))
+	values.Set("timeout", "5s")
+
+	payload, err := c.get(ctx, c.prometheusURL, "/api/v1/query", values)
+	if err != nil {
+		return nil, fmt.Errorf("query workspace request rate: %w", err)
+	}
+	if payload.Status != "success" {
+		return nil, errors.New("Prometheus returned an unsuccessful alert-evaluation query")
+	}
+	var result struct {
+		Result []struct {
+			Metric map[string]string `json:"metric"`
+			Value  []json.RawMessage `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(payload.Data, &result); err != nil {
+		return nil, fmt.Errorf("decode workspace request-rate result: %w", err)
+	}
+	samples := make(map[string]float64, len(result.Result))
+	for _, item := range result.Result {
+		serviceName := item.Metric["service_name"]
+		if serviceName == "" || ValidateServiceName(serviceName) != nil || len(item.Value) != 2 {
+			continue
+		}
+		var rawValue string
+		if err := json.Unmarshal(item.Value[1], &rawValue); err != nil {
+			return nil, fmt.Errorf("decode request-rate sample for %q: %w", serviceName, err)
+		}
+		value, err := strconv.ParseFloat(rawValue, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse request-rate sample for %q: %w", serviceName, err)
+		}
+		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+			continue
+		}
+		samples[serviceName] = value
+	}
+	return samples, nil
 }
 
 func (c *Client) WorkspaceMetrics(ctx context.Context, workspaceID string, window QueryWindow, service string, groupBy []string) (QueryResult, error) {

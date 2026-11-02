@@ -73,7 +73,7 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 - [x] Backend incident lifecycle API and immutable timeline: workspace-scoped creation, validated status transitions/reopen, and atomic workspace audit (PR #66; migration 009; CI passing).
 - [x] Workspace-scoped dashboard for incident creation, allowed status transitions/reopen, detail, and immutable timeline review (PR #71; CI-verified).
 - [x] Workspace-scoped alert rule definition CRUD with immutable workspace audit (PR #69; migration 010; CI passing). v1 is limited to the existing `request_rate` metric and rejects arbitrary query expressions.
-- [ ] Add a scheduled evaluator with persisted firing/resolved state, deduplication, and multi-replica coordination; stored rule definitions are not evaluated yet.
+- [x] Add a scheduled workspace-aware evaluator for the allow-listed `request_rate` metric, with persisted pending/firing/resolved/cancelled instances, append-only events, deduplication, telemetry-gap handling, and PostgreSQL advisory-lock coordination across API replicas (PR #72; migration 011; CI-verified).
 - [ ] Add secure notification adapters and delivery/retry history.
 - [ ] Deployment annotations and release comparison.
 - [ ] SLO definitions and error-budget burn calculations.

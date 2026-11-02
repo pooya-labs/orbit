@@ -488,3 +488,72 @@ func otherWorkspaceID(current, first, second string) string {
 	}
 	return first
 }
+
+func TestWorkspaceRequestRatesUsesOnlyWorkspaceScopedAllowListedMetric(t *testing.T) {
+	const workspaceID = "00000000-0000-4000-8000-000000000001"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/query" {
+			t.Fatalf("request path = %q, want /api/v1/query", r.URL.Path)
+		}
+		query := r.URL.Query().Get("query")
+		for _, expected := range []string{
+			"orbit_demo_requests_total",
+			`orbit_workspace_id="00000000-0000-4000-8000-000000000001"`,
+			"[300s]",
+			"sum by (service_name)",
+		} {
+			if !strings.Contains(query, expected) {
+				t.Errorf("PromQL %q does not contain %q", query, expected)
+			}
+		}
+		if strings.Contains(query, "service_name=") && !strings.Contains(query, "sum by (service_name)") {
+			t.Errorf("service matcher unexpectedly present: %s", query)
+		}
+		if r.URL.Query().Get("timeout") != "5s" || r.URL.Query().Get("time") == "" {
+			t.Errorf("instant query must include bounded timeout and evaluation time: %v", r.URL.Query())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[
+			{"metric":{"service_name":"api-gateway"},"value":[1762000000.0,"3.5"]},
+			{"metric":{"service_name":"checkout"},"value":[1762000000.0,"0.25"]}
+		]}}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	samples, err := client.WorkspaceRequestRates(context.Background(), workspaceID, "", 300)
+	if err != nil {
+		t.Fatalf("WorkspaceRequestRates: %v", err)
+	}
+	if samples["api-gateway"] != 3.5 || samples["checkout"] != 0.25 || len(samples) != 2 {
+		t.Fatalf("unexpected request-rate samples: %#v", samples)
+	}
+}
+
+func TestWorkspaceRequestRatesRejectsInvalidScopeAndWindowBeforeNetwork(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("invalid input reached Prometheus")
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		workspace string
+		service string
+		window int
+	}{
+		{workspace: "not-a-uuid", window: 300},
+		{workspace: "00000000-0000-4000-8000-000000000001", service: "invalid service", window: 300},
+		{workspace: "00000000-0000-4000-8000-000000000001", window: 120},
+	} {
+		if _, err := client.WorkspaceRequestRates(context.Background(), test.workspace, test.service, test.window); err == nil {
+			t.Errorf("expected validation error for %+v", test)
+		}
+	}
+}
+

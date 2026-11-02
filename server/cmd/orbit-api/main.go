@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pooya16pg-spec/orbit/server/internal/alerts"
 	"github.com/pooya16pg-spec/orbit/server/internal/auth"
 	"github.com/pooya16pg-spec/orbit/server/internal/config"
 	"github.com/pooya16pg-spec/orbit/server/internal/httpapi"
@@ -196,6 +197,15 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if evaluationRepository, ok := repository.(store.AlertEvaluationRepository); ok &&
+		evaluationRepository != nil && cfg.PrometheusURL != "" {
+		worker := alerts.NewWorker(evaluationRepository, telemetryClient, logger, 30*time.Second)
+		go worker.Run(ctx)
+		logger.Info("workspace alert evaluator started", "interval", "30s")
+	} else {
+		logger.Info("workspace alert evaluator disabled; PostgreSQL alert storage and Prometheus are both required")
+	}
 
 	var runtimeErr error
 	select {

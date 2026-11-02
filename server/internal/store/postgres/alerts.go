@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -329,6 +330,9 @@ func (r *Repository) UpdateWorkspaceAlertRule(ctx context.Context, input store.U
 	if err != nil {
 		return store.AlertRule{}, mapAlertRuleConflict(fmt.Errorf("update alert rule: %w", err))
 	}
+	if err := resolveAlertInstancesForRuleTx(ctx, tx, input.WorkspaceID, rule.ID, "alert.rule_updated", time.Now().UTC()); err != nil {
+		return store.AlertRule{}, err
+	}
 	if err := appendAlertRuleAuditTx(ctx, tx, input.WorkspaceID, rule.ID,
 		input.ActorIssuer, input.ActorSubject, "alert_rule.updated", input.RequestID, alertRuleAuditDetails(rule)); err != nil {
 		return store.AlertRule{}, err
@@ -385,6 +389,8 @@ func (r *Repository) SetWorkspaceAlertRuleEnabled(ctx context.Context, input sto
 	action := "alert_rule.disabled"
 	if input.Enabled {
 		action = "alert_rule.enabled"
+	} else if err := resolveAlertInstancesForRuleTx(ctx, tx, input.WorkspaceID, rule.ID, "alert.rule_disabled", time.Now().UTC()); err != nil {
+		return store.AlertRule{}, err
 	}
 	if err := appendAlertRuleAuditTx(ctx, tx, input.WorkspaceID, rule.ID,
 		input.ActorIssuer, input.ActorSubject, action, input.RequestID,
@@ -426,6 +432,9 @@ func (r *Repository) DeleteWorkspaceAlertRule(ctx context.Context, input store.D
 	}
 	if err != nil {
 		return fmt.Errorf("lock alert rule for deletion: %w", err)
+	}
+	if err := resolveAlertInstancesForRuleTx(ctx, tx, input.WorkspaceID, rule.ID, "alert.rule_deleted", time.Now().UTC()); err != nil {
+		return err
 	}
 	if err := appendAlertRuleAuditTx(ctx, tx, input.WorkspaceID, rule.ID,
 		input.ActorIssuer, input.ActorSubject, "alert_rule.deleted", input.RequestID, alertRuleAuditDetails(rule)); err != nil {
