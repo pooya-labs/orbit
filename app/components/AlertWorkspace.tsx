@@ -19,21 +19,30 @@ import {
 import {
   createWorkspaceAlertRule,
   deleteWorkspaceAlertRule,
+  createWorkspaceAlertNotificationChannel,
   getWorkspaceMembership,
   listWorkspaceAlertRules,
   listWorkspaceAlerts,
+  listWorkspaceAlertNotificationChannels,
+  listWorkspaceAlertNotificationDeliveries,
+  listWorkspaceAlertNotificationAttempts,
   listWorkspaceServices,
   listWorkspaces,
   setWorkspaceAlertRuleEnabled,
+  setWorkspaceAlertNotificationChannelEnabled,
   updateWorkspaceAlertRule,
   type WorkspaceAlertRuleInput,
 } from "../../lib/orbit/client";
 import type {
   AlertInstanceStatus,
   AlertRuleOperator,
+  AlertNotificationDeliveryStatus,
   ServiceSummary,
   WorkspaceAlertInstance,
   WorkspaceAlertRule,
+  WorkspaceAlertNotificationAttempt,
+  WorkspaceAlertNotificationChannel,
+  WorkspaceAlertNotificationDelivery,
   WorkspaceMembershipSummary,
   WorkspaceSummary,
 } from "../../lib/orbit/contracts";
@@ -114,6 +123,15 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
   const [services, setServices] = useState<ServiceSummary[]>([]);
   const [rules, setRules] = useState<WorkspaceAlertRule[]>([]);
   const [instances, setInstances] = useState<WorkspaceAlertInstance[]>([]);
+  const [notificationChannels, setNotificationChannels] = useState<WorkspaceAlertNotificationChannel[]>([]);
+  const [notificationDeliveries, setNotificationDeliveries] = useState<WorkspaceAlertNotificationDelivery[]>([]);
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState("");
+  const [notificationAttempts, setNotificationAttempts] = useState<WorkspaceAlertNotificationAttempt[]>([]);
+  const [notificationAttemptsLoading, setNotificationAttemptsLoading] = useState(false);
+  const [notificationFilter, setNotificationFilter] = useState<AlertNotificationDeliveryStatus | "all">("all");
+  const [showChannelForm, setShowChannelForm] = useState(false);
+  const [channelName, setChannelName] = useState("");
+  const [secretRef, setSecretRef] = useState("");
   const [filter, setFilter] = useState<AlertFilter>("active");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -132,6 +150,10 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
     setServices([]);
     setRules([]);
     setInstances([]);
+    setNotificationChannels([]);
+    setNotificationDeliveries([]);
+    setSelectedDeliveryId("");
+    setNotificationAttempts([]);
   }), []);
 
   useEffect(() => {
@@ -142,6 +164,10 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
       setServices([]);
       setRules([]);
       setInstances([]);
+      setNotificationChannels([]);
+      setNotificationDeliveries([]);
+      setSelectedDeliveryId("");
+      setNotificationAttempts([]);
       return;
     }
     const controller = new AbortController();
@@ -181,13 +207,27 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
       listWorkspaceServices(workspaceId, controller.signal, apiBaseUrl),
       listWorkspaceAlertRules(workspaceId, controller.signal, apiBaseUrl),
       listWorkspaceAlerts(workspaceId, undefined, controller.signal, apiBaseUrl),
+      listWorkspaceAlertNotificationChannels(workspaceId, controller.signal, apiBaseUrl),
+      listWorkspaceAlertNotificationDeliveries(
+        workspaceId,
+        notificationFilter === "all" ? undefined : notificationFilter,
+        controller.signal,
+        apiBaseUrl,
+      ),
     ])
-      .then(([role, serviceItems, ruleItems, alertItems]) => {
+      .then(([role, serviceItems, ruleItems, alertItems, channelItems, deliveryItems]) => {
         if (!current) return;
         setMembership(role);
         setServices(serviceItems);
         setRules(ruleItems);
         setInstances(alertItems);
+        setNotificationChannels(channelItems);
+        setNotificationDeliveries(deliveryItems);
+        setSelectedDeliveryId((previous) =>
+          previous && deliveryItems.some((item) => item.id === previous)
+            ? previous
+            : deliveryItems[0]?.id ?? "",
+        );
       })
       .catch(() => {
         if (current) {
@@ -195,6 +235,10 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
           setServices([]);
           setRules([]);
           setInstances([]);
+          setNotificationChannels([]);
+          setNotificationDeliveries([]);
+          setSelectedDeliveryId("");
+          setNotificationAttempts([]);
           setError(t(language, "alertLoadFailed"));
         }
       })
@@ -205,7 +249,31 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
       current = false;
       controller.abort();
     };
-  }, [apiBaseUrl, language, sourceMode, user?.sub, workspaceId, reloadVersion]);
+  }, [apiBaseUrl, language, notificationFilter, sourceMode, user?.sub, workspaceId, reloadVersion]);
+
+  useEffect(() => {
+    if (!workspaceId || !selectedDeliveryId || sourceMode !== "api" || !user) {
+      setNotificationAttempts([]);
+      return;
+    }
+    const controller = new AbortController();
+    let current = true;
+    setNotificationAttemptsLoading(true);
+    listWorkspaceAlertNotificationAttempts(workspaceId, selectedDeliveryId, controller.signal, apiBaseUrl)
+      .then((items) => {
+        if (current) setNotificationAttempts(items);
+      })
+      .catch(() => {
+        if (current) setNotificationAttempts([]);
+      })
+      .finally(() => {
+        if (current) setNotificationAttemptsLoading(false);
+      });
+    return () => {
+      current = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, selectedDeliveryId, sourceMode, user?.sub, workspaceId]);
 
   useEffect(() => {
     if (sourceMode !== "api" || !user || !workspaceId) return;
@@ -233,6 +301,26 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
   const firingCount = instances.filter((item) => item.status === "firing").length;
   const pendingCount = instances.filter((item) => item.status === "pending").length;
   const enabledCount = rules.filter((rule) => rule.enabled).length;
+  const selectedDelivery = notificationDeliveries.find((item) => item.id === selectedDeliveryId) ?? null;
+
+  const deliveryStatusKey = (status: AlertNotificationDeliveryStatus): TranslationKey => {
+    switch (status) {
+      case "pending": return "notificationPending";
+      case "processing": return "notificationProcessing";
+      case "delivered": return "notificationDelivered";
+      case "dead": return "notificationDead";
+    }
+  };
+
+  const attemptOutcomeKey = (outcome: WorkspaceAlertNotificationAttempt["outcome"]): TranslationKey => {
+    switch (outcome) {
+      case "delivered": return "notificationDelivered";
+      case "retry_scheduled": return "notificationRetryScheduled";
+      case "dead": return "notificationDead";
+    }
+  };
+
+  const channelSecretRefPattern = /^[A-Z][A-Z0-9_]{0,63}$/;
 
   const startCreate = () => {
     setEditingRule(null);
@@ -306,6 +394,54 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
       setReloadVersion((version) => version + 1);
     } catch {
       setError(t(language, "alertMutationFailed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const closeChannelForm = () => {
+    setShowChannelForm(false);
+    setChannelName("");
+    setSecretRef("");
+  };
+
+  const submitChannel = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!workspaceId || !canManage || !channelName.trim() || !channelSecretRefPattern.test(secretRef.trim())) {
+      setError(t(language, "notificationInvalidChannel"));
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await createWorkspaceAlertNotificationChannel(workspaceId, {
+        name: channelName.trim(),
+        secret_ref: secretRef.trim(),
+      }, apiBaseUrl);
+      closeChannelForm();
+      setNotice(t(language, "notificationChannelCreated"));
+      setReloadVersion((version) => version + 1);
+    } catch {
+      setError(t(language, "notificationChannelCreateFailed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleChannel = async (channel: WorkspaceAlertNotificationChannel) => {
+    if (!workspaceId || !canManage) return;
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await setWorkspaceAlertNotificationChannelEnabled(workspaceId, channel.id, !channel.enabled, apiBaseUrl);
+      setNotice(channel.enabled
+        ? t(language, "notificationChannelDisabled")
+        : t(language, "notificationChannelEnabled"));
+      setReloadVersion((version) => version + 1);
+    } catch {
+      setError(t(language, "notificationChannelUpdateFailed"));
     } finally {
       setSaving(false);
     }
