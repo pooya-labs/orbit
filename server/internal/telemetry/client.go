@@ -26,33 +26,7 @@ const (
 
 var ErrNotConfigured = errors.New("telemetry backend is not configured")
 
-var sloRoutePattern = regexp.MustCompile(`^/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}package telemetry
-
-import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"math"
-	"io"
-	"net/http"
-	"net/url"
-	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-)
-
-const (
-	maxResponseBytes = 2 << 20
-	maxResultLimit   = 100
-	maxServiceCount  = 250
-	metricName       = "orbit_demo_requests_total"
-)
-
-)
+var sloRoutePattern = regexp.MustCompile("^/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$")
 
 type AvailabilityEvents struct {
 	GoodEvents float64
@@ -67,7 +41,6 @@ func ValidateSLORoute(route string) error {
 	}
 	return nil
 }
-
 
 var serviceNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 
@@ -537,6 +510,7 @@ func (c *Client) WorkspaceAvailabilityEvents(
 	}
 	return events, nil
 }
+
 
 func (c *Client) WorkspaceMetrics(ctx context.Context, workspaceID string, window QueryWindow, service string, groupBy []string) (QueryResult, error) {
 	if err := validateWorkspaceID(workspaceID); err != nil { return QueryResult{}, err }
