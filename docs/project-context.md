@@ -464,3 +464,7 @@ Trigger fresh CI and Security validation on this branch head.
 - Ten SBOM artifacts were uploaded with 30-day retention on this run, including the first-party bundle and SBOMs for API build base, Collector, Caddy, Loki, Redis, NATS, Prometheus, and telemetry demo build/runtime bases. Tempo SBOM was not generated because its build failed. This is a partial artifact set, not completion of the full planned matrix.
 - The corrected branch head is `e80bf366a888f8b35299846a8f2dd32ab225119e`. GitHub Contents API updates did not trigger PR workflows for this commit. A user-authenticated GitHub Web commit is required to trigger fresh CI and Security against this exact head. PR #90 remains open and must not be merged until the new head's CI, Tempo VEX-aware scan, and complete SBOM output pass.
 - Production tenant ingestion remains disabled pending the separate real-environment gates listed above.
+### Web-triggered CI checkpoint — 2026-11-02
+
+Run fresh CI and Security validation against the corrected Tempo build revision assertion.
+Verify the VEX-aware Tempo scan and complete CycloneDX SBOM artifact set.
