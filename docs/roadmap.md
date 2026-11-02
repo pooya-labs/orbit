@@ -112,7 +112,7 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [ ] Configure encrypted off-host production backups, retention/PITR, backup alerting, and a target-environment restore rehearsal with measured RPO/RTO; the CI round-trip does not satisfy this deployment gate.
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
 - [ ] Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
-- [ ] Threat model, dependency review, and secret scanning.
+- [x] Add a repository security threat model and automated Gitleaks full-history scanning, Go govulncheck, npm audit, PR Dependency Review, and weekly Dependabot updates (PR #85; CI-verified). Container image scanning, immutable SHA pinning of every third-party action, remediation SLAs, and target-environment security testing remain follow-up work.
 - [ ] Production deployment guide and operational runbooks.
 - [ ] Hosted API and managed persistence deployment.
 
