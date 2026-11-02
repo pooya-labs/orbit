@@ -12,6 +12,8 @@ import (
 
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 )
 
 func TestPostgresMigrationAndReadModels(t *testing.T) {
@@ -579,5 +581,129 @@ func TestConcurrentRepositoryOpenSerializesMigrations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("concurrent repository Open() failed: %v", err)
 		}
+	}
+}
+
+
+// TestWorkspaceAuditActorContextMigrationBackfillsLegacyEvents models an upgrade
+// from the existing append-only audit schema with data already present. A clean
+// database migration alone would not execute the backfill UPDATE trigger path.
+func TestWorkspaceAuditActorContextMigrationBackfillsLegacyEvents(t *testing.T) {
+	databaseURL := os.Getenv("ORBIT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("ORBIT_TEST_DATABASE_URL is not set")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	repository, err := Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open integration repository: %v", err)
+	}
+	defer repository.Close()
+
+	schema := fmt.Sprintf("orbit_m015_%d", time.Now().UnixNano())
+	if _, err := repository.pool.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatalf("create isolated migration schema: %v", err)
+	}
+	defer func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = repository.pool.Exec(cleanupCtx, "DROP SCHEMA IF EXISTS "+schema+" CASCADE")
+	}()
+
+	poolConfig, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		t.Fatalf("parse isolated pool config: %v", err)
+	}
+	if poolConfig.ConnConfig.RuntimeParams == nil {
+		poolConfig.ConnConfig.RuntimeParams = make(map[string]string)
+	}
+	poolConfig.ConnConfig.RuntimeParams["search_path"] = schema + ",public"
+	isolatedPool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		t.Fatalf("open isolated migration pool: %v", err)
+	}
+	defer isolatedPool.Close()
+
+	legacyMigration, err := migrationFiles.ReadFile("migrations/005_workspaces_memberships_audit.sql")
+	if err != nil {
+		t.Fatalf("read legacy workspace/audit migration: %v", err)
+	}
+	if _, err := isolatedPool.Exec(ctx, string(legacyMigration)); err != nil {
+		t.Fatalf("apply legacy append-only audit schema: %v", err)
+	}
+
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	issuer := "https://identity.example/"
+	subject := "legacy-actor-" + suffix
+	var workspaceID string
+	err = isolatedPool.QueryRow(ctx, `
+		INSERT INTO workspaces (name, slug, created_by_issuer, created_by_subject)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id::text
+	`, "Migration fixture "+suffix, "m015-"+suffix, issuer, subject).Scan(&workspaceID)
+	if err != nil {
+		t.Fatalf("insert legacy workspace: %v", err)
+	}
+	if _, err := isolatedPool.Exec(ctx, `
+		INSERT INTO workspace_memberships (workspace_id, user_issuer, user_subject, role)
+		VALUES ($1::uuid, $2, $3, 'operator')
+	`, workspaceID, issuer, subject); err != nil {
+		t.Fatalf("insert legacy membership: %v", err)
+	}
+	var legacyEventID string
+	err = isolatedPool.QueryRow(ctx, `
+		INSERT INTO workspace_audit_events (
+			workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, details
+		)
+		VALUES ($1::uuid, $2, $3, 'workspace.legacy_test', 'workspace', $1, '{"source":"pre-m015"}'::jsonb)
+		RETURNING id::text
+	`, workspaceID, issuer, subject).Scan(&legacyEventID)
+	if err != nil {
+		t.Fatalf("insert pre-migration immutable audit event: %v", err)
+	}
+
+	actorMigration, err := migrationFiles.ReadFile("migrations/015_workspace_audit_actor_context.sql")
+	if err != nil {
+		t.Fatalf("read audit actor migration: %v", err)
+	}
+	if _, err := isolatedPool.Exec(ctx, string(actorMigration)); err != nil {
+		t.Fatalf("apply audit actor migration over existing immutable history: %v", err)
+	}
+
+	var legacyActorRef, legacyRole string
+	if err := isolatedPool.QueryRow(ctx, `
+		SELECT actor_ref::text, actor_role
+		FROM workspace_audit_events
+		WHERE id = $1::uuid
+	`, legacyEventID).Scan(&legacyActorRef, &legacyRole); err != nil {
+		t.Fatalf("read backfilled legacy event: %v", err)
+	}
+	if legacyActorRef == "" || legacyRole != "unknown" {
+		t.Fatalf("legacy actor context = (%q, %q), want a stable reference and unknown role", legacyActorRef, legacyRole)
+	}
+
+	var newActorRef, newRole string
+	err = isolatedPool.QueryRow(ctx, `
+		INSERT INTO workspace_audit_events (
+			workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id
+		)
+		VALUES ($1::uuid, $2, $3, 'workspace.new_test', 'workspace', $1)
+		RETURNING actor_ref::text, actor_role
+	`, workspaceID, issuer, subject).Scan(&newActorRef, &newRole)
+	if err != nil {
+		t.Fatalf("insert audit event after actor migration: %v", err)
+	}
+	if newActorRef != legacyActorRef || newRole != "operator" {
+		t.Fatalf("new actor context = (%q, %q), want stable ref %q and insertion-time role operator", newActorRef, newRole, legacyActorRef)
+	}
+
+	if _, err := isolatedPool.Exec(ctx, "UPDATE workspace_audit_events SET actor_role = 'owner' WHERE id = $1::uuid", legacyEventID); err == nil {
+		t.Fatal("legacy audit event became mutable after the migration")
+	}
+	if _, err := isolatedPool.Exec(ctx, "UPDATE workspace_audit_actors SET actor_ref = gen_random_uuid() WHERE workspace_id = $1::uuid", workspaceID); err == nil {
+		t.Fatal("audit actor mapping became mutable after the migration")
 	}
 }
