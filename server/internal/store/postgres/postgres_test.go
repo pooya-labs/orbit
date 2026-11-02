@@ -660,9 +660,9 @@ func TestWorkspaceAuditActorContextMigrationBackfillsLegacyEvents(t *testing.T) 
 		INSERT INTO workspace_audit_events (
 			workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, details
 		)
-		VALUES ($1::uuid, $2, $3, 'workspace.legacy_test', 'workspace', $1, '{"source":"pre-m015"}'::jsonb)
+		VALUES ($1::uuid, $2, $3, 'workspace.legacy_test', 'workspace', $4, '{"source":"pre-m015"}'::jsonb)
 		RETURNING id::text
-	`, workspaceID, issuer, subject).Scan(&legacyEventID)
+	`, workspaceID, issuer, subject, workspaceID).Scan(&legacyEventID)
 	if err != nil {
 		t.Fatalf("insert pre-migration immutable audit event: %v", err)
 	}
@@ -692,9 +692,9 @@ func TestWorkspaceAuditActorContextMigrationBackfillsLegacyEvents(t *testing.T) 
 		INSERT INTO workspace_audit_events (
 			workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id
 		)
-		VALUES ($1::uuid, $2, $3, 'workspace.new_test', 'workspace', $1)
+		VALUES ($1::uuid, $2, $3, 'workspace.new_test', 'workspace', $4)
 		RETURNING actor_ref::text, actor_role
-	`, workspaceID, issuer, subject).Scan(&newActorRef, &newRole)
+	`, workspaceID, issuer, subject, workspaceID).Scan(&newActorRef, &newRole)
 	if err != nil {
 		t.Fatalf("insert audit event after actor migration: %v", err)
 	}
