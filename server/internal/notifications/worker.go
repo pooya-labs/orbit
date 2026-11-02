@@ -16,7 +16,7 @@ const (
 
 type DeliveryRepository interface {
 	ClaimAlertNotificationDeliveries(context.Context, int, int) ([]store.AlertNotificationDelivery, error)
-	RecordAlertNotificationAttempt(context.Context, store.RecordAlertNotificationAttemptInput) error
+	RecordAlertNotificationAttempt(context.Context, store.RecordAlertNotificationAttemptInputInput) error
 }
 
 type Worker struct {
@@ -79,7 +79,7 @@ func (w *Worker) dispatch(ctx context.Context) {
 			// The lease will expire and another API replica can reclaim the item.
 			return
 		}
-		record := store.RecordAlertNotificationAttempt{
+		record := store.RecordAlertNotificationAttemptInput{
 			DeliveryID: delivery.ID,
 			AttemptNumber: delivery.Attempts,
 			HTTPStatus: result.HTTPStatus,
