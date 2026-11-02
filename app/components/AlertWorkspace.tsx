@@ -8,6 +8,7 @@ import {
   Check,
   Clock3,
   Pencil,
+  Pause,
   Play,
   Plus,
   RefreshCw,
@@ -35,7 +36,7 @@ import type {
   WorkspaceMembershipSummary,
   WorkspaceSummary,
 } from "../../lib/orbit/contracts";
-import { formatLocale, t, type Language } from "../../lib/orbit/i18n";
+import { formatLocale, t, type Language, type TranslationKey } from "../../lib/orbit/i18n";
 import {
   getCurrentAuthUser,
   isOidcConfigured,
@@ -95,7 +96,7 @@ function number(value: number, language: Language, maximumFractionDigits = 2): s
   }).format(value);
 }
 
-function statusKey(status: AlertInstanceStatus): string {
+function statusKey(status: AlertInstanceStatus): TranslationKey {
   switch (status) {
     case "pending": return "alertPending";
     case "firing": return "alertFiring";
@@ -457,7 +458,7 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
                       <div className="alert-rule-copy">
                         <div className="alert-rule-title-row">
                           <strong>{rule.name}</strong>
-                          <span className={\`alert-enabled-pill \${rule.enabled ? "is-enabled" : "is-disabled"}\`}>{t(language, rule.enabled ? "alertEnabled" : "alertDisabled")}</span>
+                          <span className={`alert-enabled-pill ${rule.enabled ? "is-enabled" : "is-disabled"}`}>{t(language, rule.enabled ? "alertEnabled" : "alertDisabled")}</span>
                         </div>
                         <p>{rule.description || t(language, "alertNoDescription")}</p>
                         <small>{rule.service_name || t(language, "alertAllServices")} · {rule.metric} · {rule.operator} {number(rule.threshold, language, 3)} req/s · {number(rule.window_seconds, language, 0)}s · {number(rule.pending_seconds, language, 0)}s</small>
@@ -465,7 +466,7 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
                       {canManage && (
                         <div className="alert-rule-actions">
                           <button type="button" className="alert-icon-action" title={t(language, "alertRuleEdit")} aria-label={t(language, "alertRuleEdit")} onClick={() => startEdit(rule)} disabled={saving}><Pencil size={13} /></button>
-                          <button type="button" className="alert-icon-action" title={t(language, rule.enabled ? "alertDisable" : "alertEnable")} aria-label={t(language, rule.enabled ? "alertDisable" : "alertEnable")} onClick={() => void toggleRule(rule)} disabled={saving}>{rule.enabled ? <Play size={13} /> : <Check size={13} />}</button>
+                          <button type="button" className="alert-icon-action" title={t(language, rule.enabled ? "alertDisable" : "alertEnable")} aria-label={t(language, rule.enabled ? "alertDisable" : "alertEnable")} onClick={() => void toggleRule(rule)} disabled={saving}>{rule.enabled ? <Pause size={13} /> : <Play size={13} />}</button>
                           <button type="button" className="alert-icon-action danger" title={t(language, "alertDelete")} aria-label={t(language, "alertDelete")} onClick={() => void removeRule(rule)} disabled={saving}><Trash2 size={13} /></button>
                         </div>
                       )}
@@ -491,8 +492,8 @@ export default function AlertWorkspace({ apiBaseUrl, language, sourceMode }: Pro
                     return (
                       <article className="alert-instance-card" key={item.id}>
                         <div className="alert-instance-top">
-                          <span className={\`alert-status-pill status-\${item.status}\`}>{t(language, statusKey(item.status))}</span>
-                          <span className={\`alert-severity severity-\${item.severity}\`}>{t(language, item.severity)}</span>
+                          <span className={`alert-status-pill status-${item.status}`}>{t(language, statusKey(item.status))}</span>
+                          <span className={`alert-severity severity-${item.severity}`}>{t(language, item.severity)}</span>
                         </div>
                         <strong className="alert-instance-title">{item.rule_name}</strong>
                         <p>{item.service_name} · {rule?.name ?? item.metric}</p>
