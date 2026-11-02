@@ -425,9 +425,10 @@ export default function Home() {
       : null;
 
   return (
-    <main className="app-shell" data-theme={theme} dir={language === "fa" ? "rtl" : "ltr"} lang={language}>
-      {mobileNavOpen && <button className="mobile-scrim" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)} />}
-      <aside className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
+    <div className="app-shell" data-theme={theme} dir={language === "fa" ? "rtl" : "ltr"} lang={language}>
+      <a className="skip-link" href="#main-content">{tr("skipToMainContent")}</a>
+      {mobileNavOpen && <button type="button" className="mobile-scrim" aria-hidden="true" tabIndex={-1} onClick={() => setMobileNavOpen(false)} />}
+      <aside ref={sidebarRef} className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
         <div className="brand-lockup">
           <div className="brand-mark"><span /><span /><span /></div>
           <div className="brand-wordmark">ORBIT<span>.</span><small>OBSERVABILITY</small></div>
