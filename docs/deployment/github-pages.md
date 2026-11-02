@@ -1,7 +1,7 @@
 # GitHub Pages deployment
 
-ORBIT is a Next.js static export deployed from the \`out/\` artifact by
-\`.github/workflows/deploy.yml\`. The repository must use the **GitHub Actions**
+ORBIT is a Next.js static export deployed from the `out/` artifact by
+`.github/workflows/deploy.yml`. The repository must use the **GitHub Actions**
 publishing source. Branch-based Jekyll publishing is not compatible with this
 build.
 
@@ -11,11 +11,11 @@ build.
 2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
 3. Save the setting.
 4. Rerun the **Deploy ORBIT to GitHub Pages** workflow from the Actions tab, or
-   push a commit to \`main\`.
+   push a commit to `main`.
 
 Both the pull-request verification workflow and the deployment workflow read
-the repository's Pages \`build_type\` from GitHub. They require \`workflow\` and
-fail with an actionable message when the source is \`legacy\` or unknown. This
+the repository's Pages `build_type` from GitHub. They require `workflow` and
+fail with an actionable message when the source is `legacy` or unknown. This
 prevents an Actions deployment from silently racing a second branch/Jekyll
 deployment derived from repository files such as README.md.
 
@@ -29,5 +29,5 @@ The project site is:
 
 https://pooya16pg-spec.github.io/orbit/
 
-The repository root domain (without \`/orbit/\`) is not the URL for this
+The repository root domain (without `/orbit/`) is not the URL for this
 project site.
