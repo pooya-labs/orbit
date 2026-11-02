@@ -108,11 +108,29 @@ func appendAlertInstanceEventTx(ctx context.Context, tx pgx.Tx, instance store.A
 	raw, err := json.Marshal(details)
 	if err != nil { return fmt.Errorf("encode alert-instance event details: %w", err) }
 	if len(raw) > 16*1024 { return fmt.Errorf("alert-instance event details exceed 16 KiB") }
-	_, err = tx.Exec(ctx, `INSERT INTO alert_instance_events
+	var eventID string
+	err = tx.QueryRow(ctx, `INSERT INTO alert_instance_events
 		(workspace_id, alert_instance_id, alert_rule_id, event_type, details)
-		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::jsonb)`,
-		instance.WorkspaceID, instance.ID, instance.AlertRuleID, eventType, string(raw))
-	if err != nil { return fmt.Errorf("append alert-instance event: %w", err) }
+		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::jsonb)
+		RETURNING id::text`,
+		instance.WorkspaceID, instance.ID, instance.AlertRuleID, eventType, string(raw)).Scan(&eventID)
+	if err != nil {
+		return fmt.Errorf("append alert-instance event: %w", err)
+	}
+	if eventType == "alert.firing" || eventType == "alert.resolved" {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO alert_notification_deliveries (
+				workspace_id, alert_instance_id, alert_instance_event_id, channel_id, event_type
+			)
+			SELECT $1::uuid, $2::uuid, $3::uuid, channels.id, $4
+			FROM alert_notification_channels AS channels
+			WHERE channels.workspace_id = $1::uuid AND channels.enabled = TRUE
+			ON CONFLICT (alert_instance_event_id, channel_id) DO NOTHING
+		`, instance.WorkspaceID, instance.ID, eventID, eventType)
+		if err != nil {
+			return fmt.Errorf("enqueue alert-notification deliveries: %w", err)
+		}
+	}
 	return nil
 }
 
