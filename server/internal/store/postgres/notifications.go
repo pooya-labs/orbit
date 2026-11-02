@@ -375,14 +375,26 @@ func (r *Repository) ClaimAlertNotificationDeliveries(ctx context.Context, limit
 	// the same event idempotency key and the outbox guarantees at-least-once delivery.
 	if _, err := tx.Exec(ctx, `
 		WITH expired AS (
-			UPDATE alert_notification_deliveries
-			SET status = CASE WHEN attempts >= 8 THEN 'dead' ELSE 'pending' END,
-			    next_attempt_at = CASE WHEN attempts >= 8 THEN next_attempt_at ELSE NOW() END,
+			UPDATE alert_notification_deliveries AS d
+			SET status = CASE
+					WHEN c.enabled = FALSE OR d.attempts >= 8 THEN 'dead'
+					ELSE 'pending'
+				END,
+			    next_attempt_at = CASE
+					WHEN c.enabled = TRUE AND d.attempts < 8 THEN NOW()
+					ELSE d.next_attempt_at
+				END,
 			    lease_until = NULL,
-			    last_error = CASE WHEN attempts >= 8 THEN 'attempt_limit_reached' ELSE 'worker_lease_expired' END,
+			    last_error = CASE
+					WHEN c.enabled = FALSE THEN 'channel_disabled'
+					WHEN d.attempts >= 8 THEN 'attempt_limit_reached'
+					ELSE 'worker_lease_expired'
+				END,
 			    updated_at = NOW()
-			WHERE status = 'processing' AND lease_until <= NOW()
-			RETURNING workspace_id, id, attempts, status, last_error
+			FROM alert_notification_channels AS c
+			WHERE c.id = d.channel_id AND c.workspace_id = d.workspace_id
+			  AND d.status = 'processing' AND d.lease_until <= NOW()
+			RETURNING d.workspace_id, d.id, d.attempts, d.status, d.last_error
 		)
 		INSERT INTO alert_notification_attempts (
 			workspace_id, delivery_id, attempt_number, outcome, error_code
