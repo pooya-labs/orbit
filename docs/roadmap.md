@@ -84,7 +84,7 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 - [x] Workspace-scoped immutable deployment annotations with derived service/environment metadata, transactional workspace audit, same-service/environment chronological release comparison, and the Deployments workspace UI (PR #77; migration 013; CI-verified).
 - [x] Workspace-scoped HTTP request-success SLO definitions, live error-budget calculations, explicit insufficient-data handling, audited SLO lifecycle operations, and the localized role-aware SLO workspace UI (PR #78; migration 014; CI-verified).
 - [x] Add the authenticated workspace audit-log dashboard with category filters, request IDs, event details, defensive sensitive-field redaction, and automatic refresh (PR #79).
-- [x] Complete audit actor context and searchable operator history: workspace-local pseudonymous actor references, role-at-event snapshots, legacy `unknown` roles where history cannot be reconstructed, append-only actor mappings, member-scoped OpenAPI, and actor display in the Audit Log (PR #80; migration 015; CI-verified). Current M05 state-changing mutations retain transactional audit records; alert-instance transitions and webhook delivery attempts retain dedicated append-only histories.
+- [x] Complete audit actor context and searchable operator history: workspace-local pseudonymous actor references, role-at-event snapshots, legacy `unknown` roles where history cannot be reconstructed, append-only actor mappings, member-scoped OpenAPI, and actor display in the Audit Log (PR #82; migration 015; CI-verified). Current M05 state-changing mutations retain transactional audit records; alert-instance transitions and webhook delivery attempts retain dedicated append-only histories.
 
 ## M06 — Production hardening
 
@@ -108,7 +108,8 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [x] Add CI-verified 7-day retention and explicit ingestion/cardinality/size guardrails for the single-tenant local Prometheus, Loki, and Tempo stack; document the limits and their production boundary (`docs/observability-retention.md`).
 - [x] Preserve the existing ephemeral API rate-limit retention: two-minute expiry with request-driven pruning and an indexed expiry column.
 - [ ] Define and implement a compliant retention/archive policy for durable API history (workspace audit, incident timelines, alert lifecycle, notification attempts, and deployment annotations); do not TTL-prune immutable history until its policy is approved.
-- [ ] Add a documented PostgreSQL backup/restore procedure and a repeatable restore drill that verifies the schema migration ledger and representative durable workspace data; no pg_dump/pg_restore script or restore test exists yet.
+- [x] Add a documented full-database PostgreSQL logical backup/restore runbook and CI-verified pg_dump/pg_restore round-trip covering the schema migration ledger, workspace audit data, actor context, and post-restore append-only guards (PR #83; `docs/postgres-backup-restore.md`).
+- [ ] Configure encrypted off-host production backups, retention/PITR, backup alerting, and a target-environment restore rehearsal with measured RPO/RTO; the CI round-trip does not satisfy this deployment gate.
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
 - [ ] Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
 - [ ] Threat model, dependency review, and secret scanning.

@@ -31,6 +31,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 - [Project context & handoff](docs/project-context.md) — implementation history, decisions, and the continuity notes for future work.
 - [OIDC security decision](docs/decisions/0001-oidc-access-token-authentication.md) — access-token validation, roles, route policy, and the M05 security gate.
 - [Telemetry retention and cardinality policy](docs/observability-retention.md) — local seven-day retention, backend ingestion limits, and the remaining production/database gates.
+- [PostgreSQL backup and restore runbook](docs/postgres-backup-restore.md) — full-database logical dumps, safe restore checks, and the remaining production backup gates.
 
 ## Technology
 
