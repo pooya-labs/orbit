@@ -1,10 +1,9 @@
-# The smoke scripts use Python's standard library only. Use the slim upstream
-# image instead of carrying optional third-party packages into this test helper.
-FROM python:3.13-slim
+FROM golang:1.27-alpine AS build
+WORKDIR /src
+COPY scripts/telemetry-smoke/main.go ./main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/telemetry-smoke .
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-WORKDIR /workspace
+FROM scratch
+COPY --from=build /out/telemetry-smoke /telemetry-smoke
 USER 65532:65532
-ENTRYPOINT ["python"]
+ENTRYPOINT ["/telemetry-smoke"]
