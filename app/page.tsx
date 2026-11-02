@@ -10,6 +10,7 @@ import TelemetryWorkspace, { type TelemetryView } from "./components/TelemetryWo
 import AuthControls from "./components/AuthControls";
 import IncidentWorkspace from "./components/IncidentWorkspace";
 import AlertWorkspace from "./components/AlertWorkspace";
+import NotificationWorkspace from "./components/NotificationWorkspace";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -169,6 +170,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Deployments", icon: GitBranch },
       { label: "Alert rules", icon: Bell },
+      { label: "Notifications", icon: Radio },
     ],
   },
 ];
@@ -503,7 +505,9 @@ export default function Home() {
             </section>
           )}
 
-{activeNav === "Alert rules" ? (
+{activeNav === "Notifications" ? (
+              <NotificationWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
+            ) : activeNav === "Alert rules" ? (
               <AlertWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
             ) : activeNav === "Incidents" ? (
               <IncidentWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
