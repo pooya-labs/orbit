@@ -39,6 +39,22 @@ jobs:
           format: table
           timeout: 10m
 
+
+      - name: Build the telemetry demo image
+        run: docker build --pull --file examples/telemetry-go/Dockerfile --tag orbit-telemetry-demo:ci ./examples/telemetry-go
+
+      - name: Scan the telemetry demo image for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-telemetry-demo:ci
+          version: v0.76.1
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          format: table
+          timeout: 10m
+
   secrets:
     name: Full-history secret scan
     runs-on: ubuntu-latest
