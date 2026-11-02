@@ -210,3 +210,10 @@ Workspace members can list deployment history or compare two deployments of the 
 Workspace owners, administrators, and operators can create, update, enable/disable, and delete HTTP request-success objectives. Definitions are linked to a service in the same workspace and every mutation is audited transactionally. Targets are 90%–99.99%; rolling windows are 1, 3, or 7 days to match the configured Prometheus retention.
 
 The SLI counts only explicitly instrumented routes: HTTP 2xx/3xx responses are good events; all other instrumented responses are bad events. The budget is computed from observed good/bad events using the fixed workspace/service/route selectors. A missing series returns `insufficient_data`, never synthetic 100% availability. The development telemetry demo bypasses workspace authentication and its unscoped metrics are intentionally excluded from workspace SLO calculations. See [the M05 roadmap](docs/roadmap.md), [architecture](docs/architecture.md), and [OpenAPI](docs/openapi.yaml).
+
+
+## M05 workspace audit history
+
+PR #79 adds the authenticated workspace Audit log page, which reads the latest 100 workspace audit events through `GET /api/v1/workspaces/{workspaceID}/audit-events`. Members can filter incident, alert-rule, notification-channel, deployment, SLO, and workspace events. Each record shows its action, resource, request ID, timestamp, and bounded details; the UI refreshes every 30 seconds and defensively suppresses sensitive-looking detail keys.
+
+The API verifies workspace membership before returning events. Raw OIDC issuer and subject identifiers are intentionally omitted from the browser response. Audit events are append-only; role snapshots and a browser-visible actor-safe identity remain separate follow-up work.

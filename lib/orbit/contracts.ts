@@ -17,6 +17,17 @@ export interface WorkspaceMembershipSummary {
   updated_at: string;
 }
 
+export interface WorkspaceAuditEvent {
+  id: string;
+  workspace_id: string;
+  action: string;
+  resource_type: string;
+  resource_id?: string;
+  request_id?: string;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface IncidentTimelineEvent {
   id: string;
   workspace_id: string;
