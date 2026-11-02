@@ -313,15 +313,65 @@ func TestWorkspaceMembershipAndAppendOnlyAudit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("append audit event: %v", err)
 	}
-	if event.ID == "" || event.CreatedAt.IsZero() {
-		t.Fatalf("audit event was not persisted: %+v", event)
+	if event.ID == "" || event.CreatedAt.IsZero() || event.ActorRef == "" || event.ActorRole != "owner" {
+		t.Fatalf("audit event did not capture pseudonymous actor context: %+v", event)
+	}
+	if strings.EqualFold(event.ActorRef, subject) {
+		t.Fatal("audit actor reference exposed the raw subject")
 	}
 	events, err := repository.ListWorkspaceAuditEvents(ctx, workspace.ID, 10)
 	if err != nil {
 		t.Fatalf("list workspace audit events: %v", err)
 	}
-	if len(events) != 2 || events[0].ID != event.ID || events[0].Details["source"] != "integration_test" || events[1].Action != "workspace.created" {
-		t.Fatalf("unexpected workspace audit timeline: %+v", events)
+	if len(events) != 2 || events[0].ID != event.ID || events[0].Details["source"] != "integration_test" ||
+		events[0].ActorRole != "owner" || events[0].ActorRef != event.ActorRef ||
+		events[1].Action != "workspace.created" || events[1].ActorRole != "owner" ||
+		events[1].ActorRef != event.ActorRef {
+		t.Fatalf("unexpected workspace audit timeline/actor context: %+v", events)
+	}
+
+	operatorSubject := "workspace-operator-" + suffix
+	if _, err := repository.pool.Exec(ctx, `
+		INSERT INTO workspace_memberships (workspace_id, user_issuer, user_subject, role)
+		VALUES ($1::uuid, $2, $3, 'operator')
+	`, workspace.ID, issuer, operatorSubject); err != nil {
+		t.Fatalf("create operator membership: %v", err)
+	}
+	operatorEvent, err := repository.AppendWorkspaceAuditEvent(ctx, store.WorkspaceAuditEvent{
+		WorkspaceID: workspace.ID,
+		ActorIssuer: issuer,
+		ActorSubject: operatorSubject,
+		Action: "workspace.operator_action",
+		ResourceType: "workspace",
+		RequestID: "req-operator-" + suffix,
+	})
+	if err != nil {
+		t.Fatalf("append operator audit event: %v", err)
+	}
+	if operatorEvent.ActorRole != "operator" || operatorEvent.ActorRef == "" || operatorEvent.ActorRef == event.ActorRef {
+		t.Fatalf("operator audit actor context = %+v", operatorEvent)
+	}
+	if _, err := repository.pool.Exec(ctx, `
+		UPDATE workspace_memberships SET role = 'viewer'
+		WHERE workspace_id = $1::uuid AND user_issuer = $2 AND user_subject = $3
+	`, workspace.ID, issuer, operatorSubject); err != nil {
+		t.Fatalf("change operator membership role: %v", err)
+	}
+	events, err = repository.ListWorkspaceAuditEvents(ctx, workspace.ID, 10)
+	if err != nil {
+		t.Fatalf("read audit events after membership role change: %v", err)
+	}
+	var operatorEventFound bool
+	for _, item := range events {
+		if item.ID == operatorEvent.ID {
+			operatorEventFound = true
+			if item.ActorRole != "operator" || item.ActorRef != operatorEvent.ActorRef {
+				t.Fatalf("audit actor context changed with current membership: %+v", item)
+			}
+		}
+	}
+	if !operatorEventFound {
+		t.Fatalf("operator audit event %q missing from history", operatorEvent.ID)
 	}
 	if _, err := repository.AppendWorkspaceAuditEvent(ctx, store.WorkspaceAuditEvent{
 		WorkspaceID: workspace.ID, ActorIssuer: issuer, ActorSubject: "not-a-member",
@@ -338,6 +388,21 @@ func TestWorkspaceMembershipAndAppendOnlyAudit(t *testing.T) {
 	}
 	if _, err := repository.pool.Exec(ctx, "TRUNCATE workspace_audit_events"); err == nil {
 		t.Fatal("audit event truncate succeeded; expected append-only trigger to reject it")
+	}
+	if _, err := repository.pool.Exec(ctx, `
+		UPDATE workspace_audit_actors SET actor_subject = 'tampered'
+		WHERE workspace_id = $1::uuid AND actor_ref = $2::uuid
+	`, workspace.ID, event.ActorRef); err == nil {
+		t.Fatal("audit actor reference update succeeded; expected immutable mapping trigger to reject it")
+	}
+	if _, err := repository.pool.Exec(ctx, `
+		DELETE FROM workspace_audit_actors
+		WHERE workspace_id = $1::uuid AND actor_ref = $2::uuid
+	`, workspace.ID, event.ActorRef); err == nil {
+		t.Fatal("audit actor reference delete succeeded; expected immutable mapping trigger to reject it")
+	}
+	if _, err := repository.pool.Exec(ctx, "TRUNCATE workspace_audit_actors"); err == nil {
+		t.Fatal("audit actor reference truncate succeeded; expected immutable mapping trigger to reject it")
 	}
 	if _, err := repository.AppendWorkspaceAuditEvent(ctx, store.WorkspaceAuditEvent{
 		WorkspaceID: workspace.ID, ActorIssuer: issuer, ActorSubject: subject,
