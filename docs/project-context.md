@@ -316,6 +316,6 @@ The only SLI is the instrumented HTTP request-success ratio: 2xx/3xx responses a
 
 ## M05 handoff update — workspace audit log UI
 
-The main branch already contained the membership-protected `GET /api/v1/workspaces/{workspaceID}/audit-events` endpoint and PostgreSQL append-only event store. The audit UI slice adds a typed client method, an authenticated workspace page, category filters, request-ID visibility, expandable bounded event details, 30-second refresh, English/Persian copy, and dark/light responsive styling. It covers the existing audit event families without displaying raw actor issuer/subject identifiers or webhook-secret fields.
+PR #79 builds on the membership-protected `GET /api/v1/workspaces/{workspaceID}/audit-events` endpoint already present on `main` and PostgreSQL append-only event store. The audit UI slice adds a typed client method, an authenticated workspace page, category filters, request-ID visibility, expandable bounded event details, 30-second refresh, English/Persian copy, and dark/light responsive styling. It covers the existing audit event families without displaying raw actor issuer/subject identifiers or webhook-secret fields.
 
 Remaining audit-quality work is deliberately explicit: add a safe actor display reference and historical role snapshot, review before/after detail consistency, and ensure future state-changing/background workflows either write the shared audit stream or maintain an equally clear append-only lifecycle history. This UI does not imply those remaining controls are complete.
