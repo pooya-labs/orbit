@@ -182,3 +182,17 @@ ORBIT_ALERT_WEBHOOK_SECRET_OPS_PRIMARY=https://hooks.example.com/your/provider/p
 ```
 
 A workspace owner, administrator, or operator can then create a channel with `secret_ref: "OPS_PRIMARY"`. Never commit a real endpoint token or a populated `.env` file. Additional adapter types, delivery acknowledgements/silences, and latency/error-rate alerting remain separate work.
+
+
+## M05 webhook notification delivery — PR #74
+
+ORBIT can route alert firing/resolved events to workspace-owned webhook channels. Delivery rows are queued transactionally with alert lifecycle events, claimed using PostgreSQL leases and `SKIP LOCKED`, and retried with bounded exponential backoff. Every completed or lease-expired attempt is recorded in append-only history.
+
+Only a deployment-configured secret reference is stored in PostgreSQL. The actual HTTPS endpoint URL/token must be injected through a secret manager or an untracked local `.env` file:
+
+```dotenv
+ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS=hooks.example.com
+ORBIT_ALERT_WEBHOOK_SECRET_OPS_PRIMARY=https://hooks.example.com/your/provider/path
+```
+
+The allowlist is exact-host, HTTPS-only and restricted to port 443. The sender rejects non-public DNS results, follows no redirects, and applies bounded timeouts. The API accepts `secret_ref: "OPS_PRIMARY"`, never the raw URL or credential. Additional adapter types and delivery acknowledgement/silence controls remain future work.
