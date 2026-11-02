@@ -149,7 +149,7 @@ func TestWorkspaceAlertNotificationDeliveryAndAttemptHistoryRoutes(t *testing.T)
 			ID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 			WorkspaceID: "11111111-1111-4111-8111-111111111111",
 			EventType: "alert.firing",
-			Status: "retry_scheduled",
+			Status: "pending",
 			Attempts: 2,
 		}},
 		attempts: []store.AlertNotificationAttempt{{
@@ -163,9 +163,9 @@ func TestWorkspaceAlertNotificationDeliveryAndAttemptHistoryRoutes(t *testing.T)
 	}
 	handler := newAlertNotificationRouteHandler(repository, []string{"OPS_PRIMARY"})
 	deliveries := alertRouteRequest(handler, http.MethodGet,
-		"/api/v1/workspaces/11111111-1111-4111-8111-111111111111/alert-notification-deliveries?status=retry_scheduled", "")
-	if deliveries.Code != http.StatusBadRequest {
-		t.Fatalf("invalid delivery status code = %d, body=%s", deliveries.Code, deliveries.Body.String())
+		"/api/v1/workspaces/11111111-1111-4111-8111-111111111111/alert-notification-deliveries?status=pending", "")
+	if deliveries.Code != http.StatusOK || !strings.Contains(deliveries.Body.String(), `"status":"pending"`) {
+		t.Fatalf("delivery history status=%d, body=%s", deliveries.Code, deliveries.Body.String())
 	}
 
 	attempts := alertRouteRequest(handler, http.MethodGet,
