@@ -523,7 +523,7 @@ paths:
       summary: List workspace alert instances
       description: Returns persisted alert instances for workspace members. The evaluator processes only the allow-listed request_rate metric. Missing telemetry samples do not resolve existing state.
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/WorkspaceID'
         - name: status
@@ -562,7 +562,7 @@ paths:
       tags: [Alerting]
       operationId: listWorkspaceAlertRules
       summary: List workspace alert rule definitions
-      description: Returns alert rule definitions for a workspace member. Rules are definitions only in this API slice; periodic evaluation and notification delivery are not yet implemented.
+      description: Returns alert rule definitions for a workspace member. Enabled rules are evaluated by the background workspace evaluator when PostgreSQL and Prometheus are configured. Notification delivery is not yet implemented.
       security:
         - BearerAuth: []
       parameters:
@@ -608,7 +608,7 @@ paths:
       tags: [Alerting]
       operationId: createWorkspaceAlertRule
       summary: Create a workspace alert rule definition
-      description: Creates an enabled rule definition. Only request_rate is currently supported because it is the only metric emitted by the instrumented demo workload. No PromQL/LogQL is accepted. Owner, administrator, or operator membership is required. Creation and workspace audit are committed in one transaction. This endpoint does not start an evaluator or send notifications.
+      description: Creates an enabled rule definition. Only request_rate is currently supported because it is the only metric emitted by the instrumented demo workload. No PromQL/LogQL is accepted. Owner, administrator, or operator membership is required. Creation and workspace audit are committed in one transaction. The background evaluator processes enabled rules independently of this request; this endpoint does not send notifications.
       security:
         - BearerAuth: []
       parameters:
