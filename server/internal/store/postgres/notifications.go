@@ -370,12 +370,30 @@ func (r *Repository) ClaimAlertNotificationDeliveries(ctx context.Context, limit
 		return nil, fmt.Errorf("begin alert-notification delivery claim: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// Expired leases are recorded as attempts before rows become claimable again.
+	// A worker may have sent the HTTP request just before crashing, so retries use
+	// the same event idempotency key and the outbox guarantees at-least-once delivery.
 	if _, err := tx.Exec(ctx, `
-		UPDATE alert_notification_deliveries
-		SET status = 'dead', lease_until = NULL, last_error = 'attempt_limit_reached', updated_at = NOW()
-		WHERE status = 'processing' AND lease_until <= NOW() AND attempts >= 8
-	`); err != nil {
-		return nil, fmt.Errorf("expire exhausted alert-notification deliveries: %w", err)
+		WITH expired AS (
+			UPDATE alert_notification_deliveries
+			SET status = CASE WHEN attempts >= 8 THEN 'dead' ELSE 'pending' END,
+			    next_attempt_at = CASE WHEN attempts >= 8 THEN next_attempt_at ELSE NOW() END,
+			    lease_until = NULL,
+			    last_error = CASE WHEN attempts >= 8 THEN 'attempt_limit_reached' ELSE 'worker_lease_expired' END,
+			    updated_at = NOW()
+			WHERE status = 'processing' AND lease_until <= NOW()
+			RETURNING workspace_id, id, attempts, status, last_error
+		)
+		INSERT INTO alert_notification_attempts (
+			workspace_id, delivery_id, attempt_number, outcome, error_code
+		)
+		SELECT workspace_id, id, attempts,
+		       CASE WHEN status = 'dead' THEN 'dead' ELSE 'retry_scheduled' END,
+		       last_error
+		FROM expired
+		ON CONFLICT (delivery_id, attempt_number) DO NOTHING
+	`,); err != nil {
+		return nil, fmt.Errorf("recover expired alert-notification delivery leases: %w", err)
 	}
 	rows, err := tx.Query(ctx, `
 		WITH picked AS (
