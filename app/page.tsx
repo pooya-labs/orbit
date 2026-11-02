@@ -11,6 +11,7 @@ import AuthControls from "./components/AuthControls";
 import IncidentWorkspace from "./components/IncidentWorkspace";
 import AlertWorkspace from "./components/AlertWorkspace";
 import NotificationWorkspace from "./components/NotificationWorkspace";
+import DeploymentWorkspace from "./components/DeploymentWorkspace";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -505,7 +506,9 @@ export default function Home() {
             </section>
           )}
 
-{activeNav === "Notifications" ? (
+{activeNav === "Deployments" ? (
+              <DeploymentWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
+            ) : activeNav === "Notifications" ? (
               <NotificationWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
             ) : activeNav === "Alert rules" ? (
               <AlertWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
