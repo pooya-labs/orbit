@@ -30,6 +30,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 - [Architecture](docs/architecture.md) — current system shape and runtime boundaries.
 - [Project context & handoff](docs/project-context.md) — implementation history, decisions, and the continuity notes for future work.
 - [OIDC security decision](docs/decisions/0001-oidc-access-token-authentication.md) — access-token validation, roles, route policy, and the M05 security gate.
+- [Telemetry retention and cardinality policy](docs/observability-retention.md) — local seven-day retention, backend ingestion limits, and the remaining production/database gates.
 
 ## Technology
 
@@ -102,7 +103,7 @@ Invoke-RestMethod "http://localhost:8080/api/v1/telemetry/traces?service=orbit-t
 
 The discovery response merges valid names from Prometheus, Loki, and Tempo, records source provenance, and returns partial results with safe warnings if one backend is unavailable. Discovered services and source observations are persisted in a normalized PostgreSQL catalog and returned through cursor-based pages with first-seen, last-seen, and last-discovered timestamps. If all telemetry backends are unavailable, the API serves the last known PostgreSQL catalog with a warning when cached services exist. The service-scoped resource-attributes endpoint extracts a bounded allowlist from Prometheus series labels, Loki labels, and Tempo resource tags, preserves per-attribute source provenance, and stores successful observations as JSONB. This is a preview, not yet a complete arbitrary OpenTelemetry resource-attribute ingestion pipeline. The API uses fixed, bounded queries instead of accepting arbitrary PromQL or LogQL from callers.
 
-These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus keeps seven days of metrics and Loki is configured for seven-day log retention; data volumes persist until removed. Stop only these services with `docker compose stop postgres api prometheus loki tempo otel-collector telemetry-demo`.
+These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus, Loki, and Tempo use a seven-day local retention baseline with explicit scrape, label, stream, attribute, and trace-size bounds; see [the retention policy](docs/observability-retention.md). Durable API audit/lifecycle history is not automatically deleted, and local single-tenant limits are not production per-workspace quotas. Data volumes persist until removed. Stop only these services with `docker compose stop postgres api prometheus loki tempo otel-collector telemetry-demo`.
 
 The local sample service proves end-to-end delivery of all three OTLP signals. The Go API exposes bounded read-only queries to Prometheus, Loki, and Tempo, and the dashboard renders those results in separate Metrics, Logs, and Traces views. The v0.10.0 preview adds bounded resource-attribute discovery with per-attribute provenance, cursor pagination, allow-listed multi-series request-rate grouping, and Prometheus sample freshness/gap warnings. Full OpenTelemetry resource-attribute ingestion and production API instrumentation remain open work.
 

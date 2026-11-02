@@ -103,6 +103,9 @@ jobs:
       - name: Assert raw OTLP receivers are private-network-only
         run: python3 scripts/check_collector_network.py
 
+      - name: Verify telemetry retention and cardinality guardrails
+        run: python3 scripts/check_observability_limits.py
+
       - name: Start telemetry stack and instrumented demo
         run: docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo api
 

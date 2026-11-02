@@ -40,7 +40,7 @@ The Compose overlay sets `ORBIT_ENVIRONMENT=production`; the API therefore refus
 - Caddy is not an identity provider. Workload JWT verification, workspace grants, signal permissions, and shared rate limits remain enforced by ORBIT.
 - The dashboard/API's human OIDC provider integration and browser PKCE rollout must be tested against the real provider. Do not assume this OTLP ingress overlay configures browser login.
 - Configure host firewall rules to expose only TCP 80/443 and optional UDP 443. Never publish API OTLP ports 4319/4320, raw Collector ports 4317/4318, or backend ports.
-- Add deployment-specific monitoring, certificate renewal alerts, restore drills, secret/key rotation, retention/cardinality limits, and incident runbooks before enabling tenant traffic.
+- Add deployment-specific monitoring, certificate renewal alerts, restore drills, secret/key rotation, managed retention/cardinality limits with per-workspace budgets, and incident runbooks before enabling tenant traffic. The local Compose budgets in [the retention policy](observability-retention.md) are single-tenant development defaults and must not be treated as production quotas.
 - This scaffold does not implement Kubernetes NetworkPolicy, cloud load-balancer policy, mTLS, or production secret delivery. Those remain deployment-specific controls.
 
 Production tenant ingestion must remain disabled until every go-live gate in [the M06 roadmap](../roadmap.md) is verified.

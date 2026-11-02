@@ -11,6 +11,7 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 - [x] Verify production type-check and build.
 - [x] Configure static export for GitHub Pages.
 - [x] Add automated Pages deployment.
+- [x] Add a user-selectable, persistent light/dark dashboard theme while retaining the established dark palette (PR #35).
 - [ ] Accessibility review with keyboard and screen readers.
 
 ## M02 — API and persistence foundation
@@ -56,6 +57,8 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 - [x] Add allow-listed multi-series grouping and separate line rendering for the request-rate metric; arbitrary metric-name selection remains future work.
 - [x] Render queried telemetry in Metrics, Logs, and Traces dashboard views with loading/empty/error states, query freshness, and backend provenance.
 - [x] Flag stale metric samples and gaps using the actual Prometheus sample timestamps and query step; event-driven logs and traces are not judged against metric scrape intervals.
+- [x] Ship Persian localization with right-to-left dashboard layout alongside the persisted telemetry catalog (PR #8).
+- [x] Keep the Tempo trace smoke path aligned with the backend's trace-lookup operation rather than treating trace lookup as indexed search (PR #61; CI verified).
 
 ## Execution order and dependency gates
 
@@ -74,9 +77,12 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 - [x] Workspace-scoped dashboard for incident creation, allowed status transitions/reopen, detail, and immutable timeline review (PR #71; CI-verified).
 - [x] Workspace-scoped alert rule definition CRUD with immutable workspace audit (PR #69; migration 010; CI passing). v1 is limited to the existing `request_rate` metric and rejects arbitrary query expressions.
 - [x] Add a scheduled workspace-aware evaluator for the allow-listed `request_rate` metric, with persisted pending/firing/resolved/cancelled instances, append-only events, deduplication, telemetry-gap handling, and PostgreSQL advisory-lock coordination across API replicas (PR #72; migration 011; CI-verified).
+- [x] Add the workspace alert-operations dashboard with lifecycle states, timestamps, bounded rule management, localization, and read-only demo mode (PR #73; CI-verified).
 - [x] Secure webhook notification delivery and retry history: workspace-scoped channels, transactional outbox, multi-replica claims, bounded retries, and append-only attempts (PR #74; migration 012; CI-verified).
-- [x] Workspace-scoped immutable deployment annotations with derived service/environment metadata, transactional workspace audit, and same-service/environment chronological release comparison (PR #77 merged; migration 013).
-- [x] Workspace-scoped HTTP request-success SLO definitions, live error-budget calculations, explicit insufficient-data handling, and audited SLO lifecycle operations (PR #78 merged; migration 014).
+- [x] Add the workspace Notifications page for channel configuration, safe secret-configuration status, delivery filters, and append-only attempt inspection (PR #75; CI-verified).
+- [x] Harden notification UI behavior: refresh expanded attempt history correctly and fail closed when an operator tries to enable a channel whose deployment-managed secret is missing (PR #76; CI-verified).
+- [x] Workspace-scoped immutable deployment annotations with derived service/environment metadata, transactional workspace audit, same-service/environment chronological release comparison, and the Deployments workspace UI (PR #77; migration 013; CI-verified).
+- [x] Workspace-scoped HTTP request-success SLO definitions, live error-budget calculations, explicit insufficient-data handling, audited SLO lifecycle operations, and the localized role-aware SLO workspace UI (PR #78; migration 014; CI-verified).
 - [x] Add the authenticated workspace audit-log dashboard with category filters, request IDs, event details, defensive sensitive-field redaction, and automatic refresh (PR #79).
 - [ ] Extend audit-backed history to every operator mutation and workflow, including historical role snapshots, actor-safe attribution in the read model, and any background lifecycle events not already covered by dedicated append-only histories.
 
@@ -88,9 +94,21 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [x] Implement provider-neutral browser Authorization Code + PKCE, state/nonce checks, memory-only access/refresh tokens, and API Bearer-token injection (PR #12; provider configuration and production rollout remain open).
 - [x] Complete workspace-membership-scoped inventory, incident, telemetry-catalog, and Prometheus/Loki/Tempo query routes, with legacy global reads disabled in staging/production (migration 006; PRs #16–#18, #39–#40; CI-verified).
 - [x] Implement authenticated workspace-aware OTLP ingestion with workload identity, per-signal workspace grants, canonical tenant attribution, bounded HTTP/gRPC gateways, shared rate limits, revocation checks, and fail-closed behavior (PRs #21–#56; CI-verified).
+- [x] Add workspace workload-identity administration endpoints for managing workload identities and their workspace/signal grants (PR #34; CI-verified).
+- [x] Persist security audit events for denied workload-telemetry authorization attempts (PR #23; CI-verified).
+- [x] Bound gateway admission before expensive authorization work to prevent unbounded verifier/database pressure (PR #33; CI-verified).
+- [x] Verify workspace isolation through both OTLP/HTTP and OTLP/gRPC; reject forged producer workspace attributes and mixed-workspace resource batches; verify Prometheus/Loki/Tempo tenant filtering and membership checks before backend access (PRs #32, #36, #38–#40; CI-verified).
+- [ ] Prove the complete write-to-query tenant boundary: ingest telemetry with an authenticated workload bound to workspace A through the gateway/Collector, then verify it is visible only to A-scoped queries and never to workspace B (including attempts to supply B's producer-side identifier). Existing gateway-denial and backend-filter tests are separate; ADR 0002 criterion 10 remains open.
+- [x] Reject oversized OTLP requests across metrics, logs, and traces over both HTTP and gRPC (PR #42; CI-verified).
+- [x] Verify atomic shared workload rate limits across independent gateway instances and concurrent replicas, plus cross-replica grant/identity revocation (PRs #43, #46, #48; CI-verified).
+- [x] Verify deterministic gateway saturation behavior and enforce the configured 64-slot default admission bound for HTTP and gRPC (PRs #51 and #60; CI-verified).
+- [x] Verify fail-closed gRPC dependency errors, HTTP Collector timeout mapping, and recovery after transient authorization, rate-limit, and Collector faults (PRs #53, #54, #58; CI-verified).
 - [ ] Complete production rollout of the implemented ingestion security boundary: verify real DNS/ACME issuance, host firewall and trusted-proxy policy, deployment-specific network controls, real-provider browser PKCE, sustained multi-replica load/recovery, and operational runbooks. PR #56 supplies an optional Caddy TLS edge-ingress scaffold, not a live deployment. Production tenant ingestion remains disabled until these environment-level gates pass. Reserved producer tenant attributes are rejected, never trusted.
 - [x] Merge and CI-verify the shared PostgreSQL rate limiter for horizontally scaled API instances (`db45843`); staging/production require PostgreSQL and the limiter stores only hashed short-lived keys.
-- [ ] Add retention policies and cardinality guardrails for telemetry and API state.
+- [x] Add CI-verified 7-day retention and explicit ingestion/cardinality/size guardrails for the single-tenant local Prometheus, Loki, and Tempo stack; document the limits and their production boundary (`docs/observability-retention.md`).
+- [x] Preserve the existing ephemeral API rate-limit retention: two-minute expiry with request-driven pruning and an indexed expiry column.
+- [ ] Define and implement a compliant retention/archive policy for durable API history (workspace audit, incident timelines, alert lifecycle, notification attempts, and deployment annotations); do not TTL-prune immutable history until its policy is approved.
+- [ ] Add a documented PostgreSQL backup/restore procedure and a repeatable restore drill that verifies the schema migration ledger and representative durable workspace data; no pg_dump/pg_restore script or restore test exists yet.
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
 - [ ] Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
 - [ ] Threat model, dependency review, and secret scanning.

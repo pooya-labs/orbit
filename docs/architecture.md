@@ -116,7 +116,7 @@ OpenTelemetry Collector
 - Enforce query timeouts, a 1 MiB request-body cap, a 16 KiB bearer-token cap, and fixed-window per-IP/per-subject request limits. The current limiter is process-local; it is not a distributed quota or tenant boundary.
 - Readiness must verify required dependencies; liveness must remain a process-level check.
 - Every asynchronous operation should carry correlation context.
-- Retention and cardinality limits must be explicit to prevent uncontrolled telemetry cost.
+- The local Compose profile sets a seven-day retention baseline for metrics/logs/traces and explicit scrape, label, stream, trace-size and attribute-size caps (see [observability retention policy](observability-retention.md)). These are single-tenant development limits, not per-workspace production quotas; managed production budgets remain a go-live gate.
 
 ## Current limitations
 

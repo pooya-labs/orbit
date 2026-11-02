@@ -8,5 +8,10 @@ scrape_configs:
       - targets: ["localhost:9090"]
 
   - job_name: orbit-otel-collector
+    sample_limit: 20000
+    label_limit: 32
+    label_name_length_limit: 128
+    label_value_length_limit: 256
+    body_size_limit: 10MB
     static_configs:
       - targets: ["otel-collector:9464"]
