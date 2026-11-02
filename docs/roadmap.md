@@ -78,7 +78,7 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 - [x] Workspace-scoped immutable deployment annotations with derived service/environment metadata, transactional workspace audit, and same-service/environment chronological release comparison (PR #77 merged; migration 013).
 - [x] Workspace-scoped HTTP request-success SLO definitions, live error-budget calculations, explicit insufficient-data handling, and audited SLO lifecycle operations (PR #78 merged; migration 014).
 - [x] Add the authenticated workspace audit-log dashboard with category filters, request IDs, event details, defensive sensitive-field redaction, and automatic refresh (PR #79).
-- [ ] Extend audit-backed history to every operator mutation and workflow, including historical role snapshots, actor-safe attribution in the read model, and any background lifecycle events not already covered by dedicated append-only histories.
+- [x] Complete audit actor context and searchable operator history: workspace-local pseudonymous actor references, role-at-event snapshots, legacy `unknown` roles where history cannot be reconstructed, append-only actor mappings, member-scoped OpenAPI, and actor display in the Audit Log (PR #80; migration 015; CI-verified). Current M05 state-changing mutations retain transactional audit records; alert-instance transitions and webhook delivery attempts retain dedicated append-only histories.
 
 ## M06 — Production hardening
 
