@@ -12,6 +12,7 @@ import (
 
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 )
@@ -621,6 +622,7 @@ func TestWorkspaceAuditActorContextMigrationBackfillsLegacyEvents(t *testing.T) 
 		poolConfig.ConnConfig.RuntimeParams = make(map[string]string)
 	}
 	poolConfig.ConnConfig.RuntimeParams["search_path"] = schema + ",public"
+	poolConfig.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 	isolatedPool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		t.Fatalf("open isolated migration pool: %v", err)
