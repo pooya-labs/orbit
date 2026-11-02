@@ -180,8 +180,8 @@ jobs:
         working-directory: server
         run: |
           set -euo pipefail
-          go get github.com/jackc/pgx/v5@v5.9.2
-          go get google.golang.org/grpc@v1.83.2
+          # Preserve dependency upgrades requested by Dependabot; pin only
+          # dependencies with a reviewed security floor or known advisory.
           go get golang.org/x/text@v0.42.0
           go mod tidy
           go get golang.org/x/net@v0.60.0
