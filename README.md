@@ -196,3 +196,10 @@ ORBIT_ALERT_WEBHOOK_SECRET_OPS_PRIMARY=https://hooks.example.com/your/provider/p
 ```
 
 The allowlist is exact-host, HTTPS-only and restricted to port 443. The sender rejects non-public DNS results, follows no redirects, and applies bounded timeouts. The API accepts `secret_ref: "OPS_PRIMARY"`, never the raw URL or credential. Additional adapter types and delivery acknowledgement/silence controls remain future work.
+
+
+## M05 deployment annotations and release comparison
+
+Workspace operators can record immutable deployment annotations for a service with version, commit SHA, optional change reference/release notes, and deployment time. Service name and environment are derived from the workspace-owned service record. Annotation creation and its workspace audit event commit together; database guards reject UPDATE, DELETE, and TRUNCATE.
+
+Workspace members can list deployment history or compare two deployments of the same service in chronological order. The comparison reports only deployment metadata changes and elapsed time; it does not infer that a deployment caused a telemetry change. See [the M05 roadmap](docs/roadmap.md) and [the OpenAPI contract](docs/openapi.yaml).
