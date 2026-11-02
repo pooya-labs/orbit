@@ -242,7 +242,7 @@ export async function getWorkspaceSLOBudget(
   signal?: AbortSignal,
   baseUrl?: string,
 ): Promise<WorkspaceSLOBudget> {
-  const response = await getJSON<DataEnvelope<WorkspaceSLOBudget>>(
+  const response = await getJSON<{ data: WorkspaceSLOBudget }>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/slos/${encodeURIComponent(sloId)}/budget`,
     signal,
     baseUrl,
