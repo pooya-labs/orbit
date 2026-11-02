@@ -78,19 +78,28 @@ M05 acceptance requires API and database tests, lifecycle-transition tests, work
 
 ## 7. M06 security gate and production hardening
 
-The detailed proposed design is recorded in [ADR 0001 — OIDC access-token validation and API authorization](decisions/0001-oidc-access-token-authentication.md). It deliberately distinguishes OAuth access tokens from OIDC ID tokens and sets a Go 1.24-compatible JOSE dependency constraint.
+The detailed identity design is recorded in [ADR 0001 — OIDC access-token validation and API authorization](decisions/0001-oidc-access-token-authentication.md), and the machine-ingestion trust boundary is recorded in [ADR 0002 — authenticated workspace OTLP ingestion](decisions/0002-authenticated-workspace-otlp-ingestion.md). Both distinguish human and workload access tokens and require server-side authorization.
 
-The initial server-side authentication gate is implemented in `main` (`977ce49`) and CI-verified. It validates OIDC access-token signatures and claims against issuer discovery/JWKS, applies viewer/operator/administrator route policy, rejects missing credentials in staging/production, bounds request bodies and token sizes, and enforces PostgreSQL-backed shared per-IP/per-subject limits (`db45843`).
+The following implementation is merged and CI-verified:
 
-The remaining security work before multi-user or M05 operations deployment is:
+- Human OIDC access-token validation through issuer discovery/JWKS, RS256/ES256 allowlisting, viewer/operator/administrator route policy, fail-closed staging/production startup, request/token bounds, and shared PostgreSQL-backed API rate limits (`977ce49`, `db45843`).
+- Provider-neutral browser Authorization Code + PKCE with state/nonce and memory-only access/refresh tokens (PR #12); no real public-site issuer/client is configured.
+- Workspace membership, tenant-scoped reads, member/role enforcement, workload identity administration, per-signal workspace grants, and transactional audit records for M05 mutations.
+- Authenticated OTLP/HTTP and OTLP/gRPC gateways, canonical workspace attribution, producer-attribute rejection, mixed-resource batch rejection, bounded admission, shared rate limits, cross-replica revocation checks, and fail-closed dependency behavior.
+- PR #84 proves the local write-to-query boundary for metrics/logs/traces with real PostgreSQL, Collector and Prometheus/Loki/Tempo backends; workspace A sees its data and workspace B does not.
+- PostgreSQL logical backup/restore CI drill (PR #83) and seven-day local telemetry retention/cardinality controls are merged and verified.
+- The security threat model, full-history secret scanning, Go/Node dependency checks, Dependabot, and immutable action-pin policy are proposed in PR #90. Gitleaks, govulncheck, and npm audit have run; Dependency Review remains blocked until the repository Dependency Graph is enabled.
 
-- real OIDC provider registration, callback/CORS/audience end-to-end verification, and provider token revocation/global logout (the provider-neutral PKCE client is implemented in PR #12 but is not configured for the public site);
-- workspace/tenant membership and database scoping;
-- actor identity and transactional audit records for every state-changing operation;
-- bounded backend concurrency for horizontally scaled deployments;
-- secret management, CORS allowlists, dependency review, backups/retention, cardinality guardrails, and operational runbooks.
+Remaining before production tenant ingestion:
 
-Local development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is explicitly set. Startup must fail closed if staging/production is configured without valid authentication settings. Health/readiness endpoints should reveal status, not credentials or sensitive topology.
+- Real OIDC provider registration, browser callback/CORS/audience verification, workload-token issuance/rotation, and provider token revocation/global logout.
+- Real DNS/ACME, TLS termination, host firewall/trusted-proxy policy, cloud/Kubernetes network policy, and an explicit internal-hop mTLS decision.
+- Target-environment multi-replica load, query latency, backpressure, outage/recovery and revocation-latency measurements with real PostgreSQL and Collector dependencies.
+- Managed-backend per-workspace ingestion/cardinality/retention/cost budgets.
+- Encrypted off-host database backups, approved retention/PITR/WAL policy, backup alerting, a rehearsed managed restore, and measured RPO/RTO.
+- Secret/key rotation, container-image scanning, action SHA pinning, remediation ownership, deployment monitoring, and operator incident runbooks.
+
+Local development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is explicitly set. Staging/production startup must fail closed without valid human and workload authentication settings. Health/readiness endpoints should reveal status, not credentials or sensitive topology.
 
 ## 8. Related portfolio context
 
@@ -363,3 +372,99 @@ The refreshed PR #11 implementation is rebuilt on current `main` as PR #88. It c
 PR #86 was merged into `main` as `a412864c8639ed6530bdbe07569e878ee33a9e6a`. It adds `docs/operations-runbook.md`, covering production preflight, safe deployment, post-deployment verification, routine operations, incident response, rollback boundaries, backup/restore coordination, and evidence capture. Its full API, PostgreSQL restore, web, and telemetry CI passed before merge.
 
 The runbook is an operator procedure baseline, not production-readiness evidence. The environment-specific gates remain open: real human/workload OIDC provider configuration, DNS/ACME and firewall/network policy, managed per-workspace quotas, encrypted off-host backups/PITR and measured RPO/RTO, sustained target-environment load/backpressure testing, and hosted API/managed persistence. Production tenant ingestion remains disabled until those gates are evidenced. The README documentation index links the runbook.
+
+
+## M06 security automation handoff — PR #90
+
+The security work has been rebuilt on the current `main` in PR #90 to avoid the stale base of the superseded PR #85. It adds the threat-model baseline, full-history Gitleaks, Go `govulncheck`, npm audit, scheduled Dependabot, Node 22/`npm ci`, refreshed Go modules, and full-SHA pins for external GitHub Actions enforced by `scripts/check_workflow_action_pins.py`. It also adds a pinned Trivy v0.76.1 scan of the built production API image; the scanner reported zero HIGH/CRITICAL Debian 12.15 OS vulnerabilities and zero HIGH/CRITICAL findings in the Go API binary.
+
+Latest scan evidence on PR #90: Gitleaks passed; `govulncheck` found zero vulnerabilities affecting code paths (two vulnerabilities were reported in required modules that the application does not appear to call); npm audit reported zero vulnerabilities; the workflow action pin policy passed; Trivy v0.76.1 reported zero HIGH/CRITICAL findings for both Debian 12.15 OS packages and the Go API binary.
+
+**External blocker:** GitHub Dependency Review reports that the repository Dependency Graph is not enabled. The repository owner must enable it under Settings → Code security and analysis → Dependency graph, then rerun the Security workflow. Do not mark PR #90's full security gate complete or merge it as fully security-verified while Dependency Review is blocked. This is a repository administration setting and must be enabled by an administrator in GitHub Settings.
+
+
+### PR #90 security validation update — 2026-11-02
+
+On head `0e06b6ad77ed53610a085bc59cc84dc7e33dc177` (2026-11-02):
+- Full-history Gitleaks: passed.
+- Workflow action pin policy: passed.
+- Pages publishing-source check: passed (`build_type=workflow`).
+- Production API image built successfully; Trivy v0.76.1 reported zero vulnerabilities for Debian 12.15 OS packages and the Go API binary at HIGH/CRITICAL severities.
+- Web typecheck and production build: passed.
+- Go API race tests/vet/build, web typecheck/production build, full telemetry E2E, Prometheus scrape, and authenticated Workspace A/B write-to-query isolation: passed in CI run `41397730088`.
+- Security run `41397730087`: Gitleaks, API image scan, `govulncheck`, and npm audit passed. The Security workflow is marked failed only because Dependency Review cannot run while the repository Dependency Graph setting is disabled.
+- Pages source verification passed on the same head (`build_type=workflow`).
+
+## M06 security PR #90 — extended image hardening update
+
+The security branch now extends Trivy coverage beyond the ORBIT API to production-relevant Compose and ingress images. The PostgreSQL image keeps the official PostgreSQL entrypoint but rebuilds the pinned upstream `gosu` v1.20 source with Go 1.27. The Python smoke helper was replaced by a static Go binary that uses only the standard library, so the test image no longer carries an unrelated Python runtime and package set. Tempo is rebuilt from the pinned v3.1.1 source with `github.com/go-jose/go-jose/v4` upgraded to v4.1.7. The upstream all-components Collector image is replaced with a custom OCB distribution containing only ORBIT's configured OTLP receiver, memory limiter, batch processor, Prometheus/OTLP/OTLP-HTTP/debug exporters, and health-check extension. Caddy is also rebuilt from pinned v2.11.7 source with current Go and module dependencies; its scan must still be checked for legacy modules that lack a patched upstream release.
+
+Evidence on the pre-Caddy-hardening scan run: the ORBIT API image passed; the rebuilt PostgreSQL image passed; the minimal ORBIT Collector built and passed Trivy; Gitleaks passed; Redis, NATS, Prometheus, Loki, and the Go/Alpine base images passed. The smoke-image CI initially failed because its Dockerfile omitted the new `go.mod`; that copy instruction has been corrected. The latest head's CI/security workflows are queued or running and must be checked again before merging. Dependency Review remains blocked until the repository Dependency Graph is enabled in GitHub Settings. Production tenant ingestion remains disabled.
+
+
+
+## M06 PR #90 — extended image scans and SBOM handoff (2026-11-02)
+
+The current PR #90 head at the time of this handoff is `5c253a2bfe8607d8574a27cbf496a1d2962c88b7`. All changes remain on `feat/m06-security-hardening-current`; they have not been merged into `main`.
+
+New repository-controlled work:
+- The CI Caddyfile syntax check now uses Caddy `2.11.7`, matching the release used by the pinned-source custom ingress build.
+- The Security workflow builds and scans custom Tempo, minimal ORBIT Collector, and Caddy images. On the pre-SBOM head `f3a2a01ba16bfdf2bc2ff306e2f5ead33bfcddc7`, the custom Caddy and Collector jobs passed Trivy with the configured HIGH/CRITICAL fail threshold. Redis, NATS, Prometheus, Loki, Go 1.27 build bases, and Alpine runtime-base image jobs also passed.
+- The Security workflow now emits CycloneDX SBOMs for 14 image references: API, PostgreSQL, telemetry smoke runner, telemetry demo, Redis, NATS, Prometheus, Loki, Go/Alpine build/runtime bases, Tempo, ORBIT Collector, and Caddy. The files are uploaded as 11 named workflow artifacts with 30-day retention. This implementation is not yet verified on a completed workflow run; do not describe the SBOM artifact path as passing until the current-head jobs succeed.
+- The upload-artifact action is pinned to the verified full SHA for v7.0.2. The workflow action-pin policy remains enforced.
+
+Verification snapshot:
+- CI run `41401602903` on the pre-SBOM head: Go API tests, vet/build, web typecheck/build, and action-pin policy passed. The telemetry end-to-end job advanced to authenticated workspace A/B isolation; its final job conclusion was not yet available at the last inspection.
+- Security run `41401602920` on the pre-SBOM head: Gitleaks and npm audit passed (npm reported zero vulnerabilities); custom Caddy and Collector build/scan jobs passed; Redis, NATS, Prometheus, Loki, Go/Alpine base scans passed. Tempo source build was still running when last inspected.
+- Dependency Review failed with the explicit message that Dependency Graph is not enabled for this repository. This is an owner-side GitHub Settings action, not a code failure. Enable it at https://github.com/pooya16pg-spec/orbit/settings/security_analysis, then rerun Security.
+- On current head `5c253a2bfe8607d8574a27cbf496a1d2962c88b7`, CI run `41402304517` and Security run `41402304452` were queued; the Pages publishing-source check `41402304642` passed.
+
+Do not merge PR #90 until current-head CI, all image scans and SBOM uploads are green and Dependency Review succeeds. Signed build/release provenance, credential rotation, target-environment OIDC/network/load/recovery evidence, and production backup/retention remain separate gates. Production tenant ingestion stays disabled.
+
+
+## M06 PR #90 — security remediation and owner-side gate update (2026-11-02)
+
+The branch remains `feat/m06-security-hardening-current`, based on `main`; PR #90 is open and has not been merged. The latest implementation changes in this handoff are:
+- `examples/telemetry-go/go.mod` pins `golang.org/x/net v0.60.0` and `google.golang.org/grpc v1.83.2`, addressing the two HIGH findings reported by Trivy on the earlier demo binary. The Security dependency job refreshes and verifies the demo module files and commits `go.sum` when generated. The patched image still needs a completed latest-head Trivy result.
+- `deploy/observability/tempo.Dockerfile` fetches the upstream `v3.1.1` Git tag, asserts that its peeled commit is exactly `9db7df79d2af105a90d96484e6403e1fda0d011e`, and verifies the resulting binary's VCS revision.
+- The upstream Tempo tag contains the fix for CVE-2026-28377: the upstream fix commit `bb8ca663db34a0980c9758b40d918fda3b4dbec3` is an ancestor of the release tag and the release changelog documents redaction of the S3 SSE-C `encryption_key`. Trivy reports the local main module with a pseudo-version ending `+dirty`; therefore PR #90 adds an OpenVEX `not_affected` statement scoped to the exact Trivy PURL and this CVE only, loaded explicitly by passing `trivy-config: trivy.yaml` to all 16 Trivy Action invocations, so the image-scan and SBOM steps use the same repository policy. This is not a blanket ignore. The latest Tempo scan must confirm the VEX statement is consumed and the scan succeeds.
+- The security workflow creates CycloneDX SBOMs for 14 image references and uploads 11 named CI artifacts with 30-day retention. One older run uploaded the Redis SBOM only; the full set must be verified on the latest head.
+- README, roadmap, and threat model now describe the above remediations and distinguish completed checks from pending verification.
+
+Verified evidence:
+- CI run `41401602903` completed successfully across all four jobs, including Go API race tests/vet/build, web typecheck/production build, action-pin policy, and the full local telemetry pipeline including Prometheus scrape and authenticated workspace A/B write-to-query isolation.
+- Security run `41401602920`: Gitleaks passed; custom Caddy and minimal Collector build/scan jobs passed; Redis, NATS, Prometheus, Loki, Go/Alpine base scans passed. That older run exposed the Tempo metadata/CVE issue and the two Go demo module findings, which this handoff records as addressed in source but awaiting latest-head verification.
+- Security run `41402304452`: Dependency Review completed successfully and reported no packages at HIGH-or-higher severity and no denied packages. This confirms the earlier Dependency Graph settings blocker is no longer preventing the action. Revalidate this check on the newest head.
+- Pages-source verification passed on several reviewed heads, including `41403398126`.
+- The CI, Security, and Pages checks triggered on branch head `cf74aa8bef8e4c293bcea266c52a5602923da2e9` were still running/queued when last inspected. Subsequent documentation commits retrigger checks, so always inspect the current branch head and its own workflow runs instead of reusing those older results.
+
+Next steps:
+1. Inspect current-head CI and Security jobs. Require a successful Tempo build/VEX-aware Trivy scan, telemetry demo image scan using x/net v0.60.0 and grpc v1.83.2, all remaining image scans, and the SBOM artifact set.
+2. Confirm latest-head Dependency Review, Gitleaks, govulncheck, npm audit, action-pin check, API/web CI, and telemetry A/B isolation.
+3. Update PR #90 body and evidence after current-head results are known. Do not merge until required checks are green.
+4. Keep production tenant ingestion disabled until real OIDC, ingress TLS/network policy, managed quotas/retention, encrypted off-host backup/PITR, and target-environment load/recovery gates are evidenced. Signed provenance/attestation, credential rotation, and remediation SLAs remain distinct work.
+
+
+## M06 PR #90 — explicit Trivy VEX wiring (2026-11-02)
+
+- Security workflow now passes `trivy-config: trivy.yaml` explicitly to all 16 Trivy Action invocations (both vulnerability scans and CycloneDX SBOM generation) so use of the repository-root configuration is deterministic. The root configuration points at the exact-PURL OpenVEX statement for Tempo CVE-2026-28377.
+- Latest branch head at this handoff before this context-only commit: `f073221fee0541f6b0adc66ee9f26551581ff260`. The GitHub Contents API commits made after the earlier observed runs have not produced a newer PR workflow run in the connector's pull-request-only workflow-run listing. Do not assume the latest source changes have been tested. A user-authenticated push to the PR branch is needed to trigger PR synchronize CI/Security checks if the GitHub App token suppresses workflow events.
+- Dependency Review is confirmed to pass on run `41402304452` (no HIGH-or-higher and no denied packages). The remaining latest-head action is to trigger and inspect current CI/Security results. Production tenant ingestion remains disabled.
+### Web-based CI verification checkpoint — 2026-11-02
+
+The final M06 security changes are maintained directly through GitHub.
+Trigger fresh CI and Security validation on this branch head.
+
+## M06 PR #90 — latest CI/Security evidence and Tempo build-check correction (2026-11-02)
+
+- User-authenticated GitHub Web commit `1ec2193ae9296db0352e19f5ef56ceca07225bdb` triggered fresh CI run `41404735820`, Security run `41404735793`, and Pages-source check `41404735840`.
+- CI `41404735820`: Go API tests/race tests, `go vet`, build, PostgreSQL backup/restore round-trip, web typecheck/production build, and immutable action-pin policy passed. The local telemetry smoke job failed while building Tempo. Its log shows that Tempo compiled and that `go version -m` reported the exact pinned `vcs.revision=9db7df79d2af105a90d96484e6403e1fda0d011e`; the Dockerfile check failed only because it searched for a literal space between `build` and `vcs.revision`, while Go emits tab-separated metadata.
+- Corrected `deploy/observability/tempo.Dockerfile` in commit `e80bf366a888f8b35299846a8f2dd32ab225119e` to match the exact `vcs.revision=${TEMPO_COMMIT}` key/value independent of whitespace. The pinned tag/commit equality checks remain unchanged. The old CI/Security runs are tied to the prior head and do not validate this fix.
+- Security `41404735793`: API/PostgreSQL image, Collector, Caddy, Loki, Redis, NATS, Prometheus, Go build/runtime base images, full-history Gitleaks, and Dependency Review/govulncheck/npm audit passed. Tempo image build failed at the same whitespace-sensitive assertion before Trivy scan, so its VEX-aware scan remains unverified.
+- Ten SBOM artifacts were uploaded with 30-day retention on this run, including the first-party bundle and SBOMs for API build base, Collector, Caddy, Loki, Redis, NATS, Prometheus, and telemetry demo build/runtime bases. Tempo SBOM was not generated because its build failed. This is a partial artifact set, not completion of the full planned matrix.
+- The corrected branch head is `e80bf366a888f8b35299846a8f2dd32ab225119e`. GitHub Contents API updates did not trigger PR workflows for this commit. A user-authenticated GitHub Web commit is required to trigger fresh CI and Security against this exact head. PR #90 remains open and must not be merged until the new head's CI, Tempo VEX-aware scan, and complete SBOM output pass.
+- Production tenant ingestion remains disabled pending the separate real-environment gates listed above.
+### Web-triggered CI checkpoint — 2026-11-02
+
+Run fresh CI and Security validation against the corrected Tempo build revision assertion.
+Verify the VEX-aware Tempo scan and complete CycloneDX SBOM artifact set.

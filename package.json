@@ -15,6 +15,11 @@
     "react-dom": "^19.1.0",
     "jose": "^6.2.14"
   },
+  "overrides": {
+    "next": {
+      "postcss": "^8.5.32"
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.8",

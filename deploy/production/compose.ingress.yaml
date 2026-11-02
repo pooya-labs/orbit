@@ -22,7 +22,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
 
   caddy:
-    image: caddy:2.10.2-alpine
+    image: orbit-caddy:local
+    build:
+      context: .
+      dockerfile: deploy/production/caddy.Dockerfile
     profiles: ["production-ingress"]
     restart: unless-stopped
     environment:

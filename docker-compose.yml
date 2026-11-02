@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: orbit-postgres:local
+    build:
+      context: .
+      dockerfile: deploy/postgres/Dockerfile
     restart: unless-stopped
     environment:
       POSTGRES_DB: orbit
@@ -68,7 +71,10 @@ services:
         condition: service_healthy
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.164.0
+    image: orbit-otel-collector:local
+    build:
+      context: .
+      dockerfile: deploy/observability/collector.Dockerfile
     profiles: ["observability"]
     restart: unless-stopped
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -85,7 +91,7 @@ services:
         condition: service_started
 
   prometheus:
-    image: prom/prometheus:v3.14.0
+    image: prom/prometheus:v3.15.1
     profiles: ["observability"]
     restart: unless-stopped
     command:
@@ -114,7 +120,10 @@ services:
       - telemetry-internal
 
   tempo:
-    image: grafana/tempo:3.1.1
+    image: orbit-tempo:local
+    build:
+      context: .
+      dockerfile: deploy/observability/tempo.Dockerfile
     profiles: ["observability"]
     restart: unless-stopped
     command: ["-target=all", "-config.file=/etc/tempo.yaml"]
@@ -145,7 +154,7 @@ services:
       start_period: 5s
 
   workspace-tenant-isolation-smoke:
-    image: golang:1.24-alpine
+    image: golang:1.27-alpine
     profiles: ["observability"]
     working_dir: /workspace
     command:
@@ -182,12 +191,11 @@ services:
         condition: service_started
 
   telemetry-smoke:
-    image: python:3.13-alpine
+    image: orbit-telemetry-smoke:local
+    build:
+      context: .
+      dockerfile: deploy/observability/telemetry-smoke.Dockerfile
     profiles: ["observability"]
-    working_dir: /workspace
-    entrypoint: ["python"]
-    volumes:
-      - ./scripts:/workspace/scripts:ro
     networks:
       - telemetry-internal
     depends_on:

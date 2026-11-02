@@ -10,6 +10,15 @@ permissions:
   contents: read
 
 jobs:
+  workflow-hygiene:
+    name: Workflow action pin policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Verify immutable third-party action pins
+        run: python3 scripts/check_workflow_action_pins.py
+
   api:
     name: Go API tests and build
     runs-on: ubuntu-latest
@@ -34,12 +43,12 @@ jobs:
         working-directory: server
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.24.x"
+          go-version: "1.27.x"
 
       - name: Verify committed Go module lock
         run: |
@@ -74,7 +83,7 @@ jobs:
     timeout-minutes: 18
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Validate Compose configuration
         run: docker compose --profile observability config --quiet
@@ -93,7 +102,7 @@ jobs:
           docker run --rm \
             -e ORBIT_OTLP_HTTP_DOMAIN -e ORBIT_OTLP_GRPC_DOMAIN \
             -v "$PWD/deploy/production/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            caddy:2.10.2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+            caddy:2.11.7-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           docker compose -f docker-compose.yml -f deploy/production/compose.ingress.yaml --profile observability --profile production-ingress config --format json > /tmp/orbit-compose.json
           python3 - <<'PY'
           import json
@@ -123,13 +132,13 @@ jobs:
         run: docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo api
 
       - name: Wait for telemetry services on the private network
-        run: docker compose --profile observability run --rm telemetry-smoke scripts/wait_for_telemetry.py
+        run: docker compose --profile observability run --rm telemetry-smoke wait
 
       - name: Verify OTLP signals and ORBIT API query endpoints end to end
-        run: docker compose --profile observability run --rm telemetry-smoke scripts/observability_smoke.py
+        run: docker compose --profile observability run --rm telemetry-smoke smoke
 
       - name: Verify Prometheus scrapes the ORBIT Collector
-        run: docker compose --profile observability run --rm telemetry-smoke scripts/check_prometheus_scrape.py
+        run: docker compose --profile observability run --rm telemetry-smoke scrape
 
       - name: Verify authenticated workspace telemetry write-to-query isolation
         run: docker compose --profile observability run --rm workspace-tenant-isolation-smoke
@@ -143,15 +152,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
