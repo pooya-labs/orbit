@@ -331,8 +331,8 @@ export interface TelemetryResourceAttributesResponse {
   service: string;
   window: TelemetryWindow;
   queried_at: string;
-  sources_queried: TelemetryBackend[];
+  sources_queried: TelemetryServiceSource[];
   warnings?: string[];
   attributes: Record<string, unknown>;
-  attribute_sources: Record<string, TelemetryBackend[]>;
+  attribute_sources: Record<string, TelemetryServiceSource[]>;
 }
