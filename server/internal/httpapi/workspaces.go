@@ -55,6 +55,31 @@ type incidentTimelineResponse struct {
 	Data []store.IncidentTimelineEvent `json:"data"`
 }
 
+type deploymentAnnotationCreateRequest struct {
+	ServiceID string `json:"service_id"`
+	Version string `json:"version"`
+	CommitSHA string `json:"commit_sha"`
+	ChangeReference string `json:"change_reference"`
+	ReleaseNotes string `json:"release_notes"`
+	DeployedAt *time.Time `json:"deployed_at"`
+}
+
+type deploymentAnnotationResponse struct {
+	Data store.DeploymentAnnotation `json:"data"`
+}
+
+type deploymentAnnotationListResponse struct {
+	Data []store.DeploymentAnnotation `json:"data"`
+}
+
+type deploymentComparisonResponse struct {
+	From store.DeploymentAnnotation `json:"from"`
+	To store.DeploymentAnnotation `json:"to"`
+	ElapsedSeconds int64 `json:"elapsed_seconds"`
+	VersionChanged bool `json:"version_changed"`
+	CommitChanged bool `json:"commit_changed"`
+}
+
 type alertRuleCreateRequest struct {
 	Name string `json:"name"`
 	Description string `json:"description"`
@@ -124,6 +149,26 @@ func alertRuleError(w http.ResponseWriter, r *http.Request, logger *slog.Logger,
 	default:
 		logger.Error(operation, "error", err, "request_id", r.Header.Get("X-Request-ID"))
 		writeError(w, r, http.StatusServiceUnavailable, "alert_rule_operation_unavailable", "The alert rule operation is temporarily unavailable")
+	}
+}
+
+func deploymentAnnotationError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, operation string, err error) {
+	switch {
+	case errors.Is(err, store.ErrWorkspaceMembershipNotFound),
+		errors.Is(err, store.ErrDeploymentAnnotationNotFound),
+		errors.Is(err, store.ErrDeploymentAnnotationServiceNotFound):
+		writeError(w, r, http.StatusNotFound, "deployment_annotation_not_found", "The workspace, service, or deployment annotation was not found")
+	case errors.Is(err, store.ErrDeploymentAnnotationForbidden):
+		writeError(w, r, http.StatusForbidden, "deployment_annotation_forbidden", "Your workspace role cannot create deployment annotations")
+	case errors.Is(err, store.ErrDeploymentAnnotationComparisonInvalid):
+		writeError(w, r, http.StatusBadRequest, "invalid_deployment_comparison", "Compare two different deployments of the same service in chronological order")
+	case errors.Is(err, store.ErrDeploymentAnnotationInvalidInput),
+		strings.Contains(err.Error(), "UUID"),
+		strings.Contains(err.Error(), "principal"):
+		writeError(w, r, http.StatusBadRequest, "invalid_deployment_annotation", "Deployment annotation fields or identifiers are invalid")
+	default:
+		logger.Error(operation, "error", err, "request_id", r.Header.Get("X-Request-ID"))
+		writeError(w, r, http.StatusServiceUnavailable, "deployment_annotation_unavailable", "Deployment history is temporarily unavailable")
 	}
 }
 
@@ -225,6 +270,10 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 		mux.HandleFunc("PATCH /api/v1/workspaces/{workspaceID}/alert-notification-channels/{channelID}/enabled", unavailable)
 		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-notification-deliveries", unavailable)
 		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-notification-deliveries/{deliveryID}/attempts", unavailable)
+		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/deployments", unavailable)
+		mux.HandleFunc("POST /api/v1/workspaces/{workspaceID}/deployments", unavailable)
+		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/deployments/compare", unavailable)
+		mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/deployments/{deploymentID}", unavailable)
 		return
 	}
 
@@ -518,6 +567,94 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			events = []store.IncidentTimelineEvent{}
 		}
 		writeJSON(w, http.StatusOK, incidentTimelineResponse{Data: events})
+	})
+
+	// Deployment annotations are immutable release markers. Creation records
+	// the authenticated actor and an audit row in the same transaction.
+	deploymentRepository, deploymentRepositoryAvailable := repository.(store.DeploymentAnnotationRepository)
+	deploymentUnavailable := func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, r, http.StatusServiceUnavailable, "deployment_annotation_store_unavailable", "Deployment annotation storage is not available")
+	}
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/deployments", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !deploymentRepositoryAvailable || deploymentRepository == nil { deploymentUnavailable(w, r); return }
+		limit, err := parseAlertRuleLimit(r)
+		if err != nil { writeError(w, r, http.StatusBadRequest, "invalid_limit", err.Error()); return }
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		items, err := deploymentRepository.ListWorkspaceDeploymentAnnotations(ctx,
+			r.PathValue("workspaceID"), principal.Issuer, principal.Subject,
+			r.URL.Query().Get("service_id"), limit)
+		if err != nil { deploymentAnnotationError(w, r, logger, "list workspace deployment annotations failed", err); return }
+		if items == nil { items = []store.DeploymentAnnotation{} }
+		writeJSON(w, http.StatusOK, deploymentAnnotationListResponse{Data: items})
+	})
+
+	mux.HandleFunc("POST /api/v1/workspaces/{workspaceID}/deployments", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !deploymentRepositoryAvailable || deploymentRepository == nil { deploymentUnavailable(w, r); return }
+		var input deploymentAnnotationCreateRequest
+		if err := decodeIncidentJSON(w, r, &input); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_deployment_annotation", "Deployment annotation fields must be a single valid JSON object")
+			return
+		}
+		deployedAt := time.Time{}
+		if input.DeployedAt != nil { deployedAt = *input.DeployedAt }
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		item, err := deploymentRepository.CreateWorkspaceDeploymentAnnotation(ctx, store.CreateWorkspaceDeploymentAnnotationInput{
+			WorkspaceID: r.PathValue("workspaceID"),
+			ServiceID: input.ServiceID,
+			Version: input.Version,
+			CommitSHA: input.CommitSHA,
+			ChangeReference: input.ChangeReference,
+			ReleaseNotes: input.ReleaseNotes,
+			DeployedAt: deployedAt,
+			ActorIssuer: principal.Issuer,
+			ActorSubject: principal.Subject,
+			RequestID: r.Header.Get("X-Request-ID"),
+		})
+		if err != nil { deploymentAnnotationError(w, r, logger, "create workspace deployment annotation failed", err); return }
+		writeJSON(w, http.StatusCreated, deploymentAnnotationResponse{Data: item})
+	})
+
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/deployments/{deploymentID}", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !deploymentRepositoryAvailable || deploymentRepository == nil { deploymentUnavailable(w, r); return }
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		item, err := deploymentRepository.GetWorkspaceDeploymentAnnotation(ctx,
+			r.PathValue("workspaceID"), r.PathValue("deploymentID"), principal.Issuer, principal.Subject)
+		if err != nil { deploymentAnnotationError(w, r, logger, "get workspace deployment annotation failed", err); return }
+		writeJSON(w, http.StatusOK, deploymentAnnotationResponse{Data: item})
+	})
+
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/deployments/compare", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok { unauthorized(w, r); return }
+		if !deploymentRepositoryAvailable || deploymentRepository == nil { deploymentUnavailable(w, r); return }
+		fromID, toID := r.URL.Query().Get("from_id"), r.URL.Query().Get("to_id")
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		from, err := deploymentRepository.GetWorkspaceDeploymentAnnotation(ctx,
+			r.PathValue("workspaceID"), fromID, principal.Issuer, principal.Subject)
+		if err != nil { deploymentAnnotationError(w, r, logger, "read source deployment annotation for comparison failed", err); return }
+		to, err := deploymentRepository.GetWorkspaceDeploymentAnnotation(ctx,
+			r.PathValue("workspaceID"), toID, principal.Issuer, principal.Subject)
+		if err != nil { deploymentAnnotationError(w, r, logger, "read target deployment annotation for comparison failed", err); return }
+		if from.ID == to.ID || from.ServiceID != to.ServiceID || to.DeployedAt.Before(from.DeployedAt) {
+			deploymentAnnotationError(w, r, logger, "invalid deployment comparison", store.ErrDeploymentAnnotationComparisonInvalid)
+			return
+		}
+		writeJSON(w, http.StatusOK, deploymentComparisonResponse{
+			From: from, To: to,
+			ElapsedSeconds: int64(to.DeployedAt.Sub(from.DeployedAt).Seconds()),
+			VersionChanged: from.Version != to.Version,
+			CommitChanged: from.CommitSHA != to.CommitSHA,
+		})
 	})
 
 	// Alert rules are workspace-owned definitions. Their evaluator and notification
