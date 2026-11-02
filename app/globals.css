@@ -1313,6 +1313,17 @@ html[data-theme="light"] .deployment-compare-result { border-color:#e2eaed; }
 .audit-event-meta > span:first-child { color: var(--mint); }
 .audit-event-meta code,.audit-request-id code { max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; background: var(--panel-raised); color: var(--muted); font: 10px "DM Mono", monospace; }
 .audit-event-meta b { color: var(--text); font-weight: 600; }
+.audit-actor-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 8px; color: var(--muted); font-size: 10px; }
+.audit-actor-ref { border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; color: var(--muted); background: var(--panel-raised); font: 10px "DM Mono", monospace; }
+.audit-actor-role { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px 7px; color: var(--muted); font-size: 9px; }
+.audit-actor-role-owner,.audit-actor-role-administrator { color: var(--mint); border-color: rgba(101,217,193,.35); background: var(--mint-soft); }
+.audit-actor-role-operator { color: #93b7e5; border-color: rgba(147,183,229,.32); background: rgba(100,145,195,.08); }
+.audit-actor-role-system { color: #bb9bdb; border-color: rgba(187,155,219,.32); background: rgba(187,155,219,.08); }
+.audit-actor-role-unknown { color: var(--muted); }
+html[data-theme="light"] .audit-actor-ref { border-color: #e2eaed; color: #58717b; background: #f2f6f7; }
+html[data-theme="light"] .audit-actor-role-owner,html[data-theme="light"] .audit-actor-role-administrator { color: #238d7c; border-color: rgba(42,159,140,.3); background: rgba(42,159,140,.08); }
+html[data-theme="light"] .audit-actor-role-operator { color: #426e9e; border-color: rgba(66,110,158,.25); background: rgba(66,110,158,.06); }
+html[data-theme="light"] .audit-actor-role-system { color: #76539b; border-color: rgba(118,83,155,.25); background: rgba(118,83,155,.06); }
 .audit-request-id { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; margin-top: 8px; color: var(--muted); font-size: 10px; }
 .audit-event-details { margin-top: 10px; border-top: 1px solid var(--line-soft); padding-top: 9px; }
 .audit-event-details summary { width: fit-content; color: var(--muted); cursor: pointer; font-size: 10px; }
