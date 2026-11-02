@@ -249,6 +249,8 @@ export default function Home() {
   const [apiError, setApiError] = useState("");
   const [apiMetadata, setApiMetadata] = useState<ApiMetadata | null>(null);
   const [apiWorkspaceId, setApiWorkspaceId] = useState("");
+  const [apiWorkspaceName, setApiWorkspaceName] = useState("");
+  const [apiConnectedBaseUrl, setApiConnectedBaseUrl] = useState("");
   const [apiServices, setApiServices] = useState<ServiceSummary[]>([]);
   const [apiIncidents, setApiIncidents] = useState<IncidentSummary[]>([]);
 
@@ -328,6 +330,8 @@ export default function Home() {
         : [[], []];
       setApiMetadata(metadata);
       setApiWorkspaceId(firstWorkspace?.id ?? "");
+      setApiWorkspaceName(firstWorkspace?.name ?? "");
+      setApiConnectedBaseUrl(endpoint);
       setApiServices(serviceItems);
       setApiIncidents(incidentItems);
       setApiUrlInput(endpoint);
@@ -368,6 +372,8 @@ export default function Home() {
     setApiStatus("idle");
     setApiError("");
     setApiWorkspaceId("");
+    setApiWorkspaceName("");
+    setApiConnectedBaseUrl("");
   };
 
   const chooseNav = (label: string) => {
@@ -392,7 +398,7 @@ export default function Home() {
 
         <button className="workspace-switcher">
           <div className="workspace-avatar">O</div>
-          <div className="workspace-copy"><strong>ORBIT</strong><span>{language === "fa" ? "فضای کاری شخصی" : "Personal workspace"}</span></div>
+          <div className="workspace-copy"><strong>{apiStatus === "connected" && apiWorkspaceName ? apiWorkspaceName : "ORBIT"}</strong><span>{apiStatus === "connected" ? (language === "fa" ? "فضای کاری متصل" : "Connected workspace") : (language === "fa" ? "فضای کاری شخصی" : "Personal workspace")}</span></div>
           <ChevronDown size={15} className="muted-icon" />
         </button>
 
@@ -527,7 +533,7 @@ export default function Home() {
               <IncidentWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
             ) : telemetryView ? (
             sourceMode === "api" ? (
-              <TelemetryWorkspace view={telemetryView} apiBaseUrl={apiUrlInput} language={language} workspaceId={apiWorkspaceId} />
+              <TelemetryWorkspace view={telemetryView} apiBaseUrl={apiConnectedBaseUrl || apiUrlInput} language={language} workspaceId={apiWorkspaceId} />
             ) : (
               <section className="panel telemetry-connect-prompt">
                 <div className="source-placeholder-icon"><Activity size={18} /></div>
