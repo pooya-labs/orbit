@@ -18,12 +18,18 @@ ALTER TABLE workspace_audit_events
     ADD COLUMN actor_role TEXT NOT NULL DEFAULT 'unknown'
         CHECK (actor_role IN ('owner', 'administrator', 'operator', 'viewer', 'system', 'unknown'));
 
+-- Existing audit events are immutable during normal operation. Temporarily disable
+-- only their row-level UPDATE/DELETE guard while this transactional backfill runs.
+ALTER TABLE workspace_audit_events DISABLE TRIGGER workspace_audit_events_append_only;
+
 UPDATE workspace_audit_events AS events
 SET actor_ref = actors.actor_ref
 FROM workspace_audit_actors AS actors
 WHERE actors.workspace_id = events.workspace_id
   AND actors.actor_issuer = events.actor_issuer
   AND actors.actor_subject = events.actor_subject;
+
+ALTER TABLE workspace_audit_events ENABLE TRIGGER workspace_audit_events_append_only;
 
 ALTER TABLE workspace_audit_events
     ALTER COLUMN actor_ref SET NOT NULL,
