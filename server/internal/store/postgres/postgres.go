@@ -195,6 +195,7 @@ var allowedTelemetrySources = map[string]struct{}{
 	"prometheus": {},
 	"loki":       {},
 	"tempo":      {},
+	"otlp":       {},
 }
 
 var resourceAttributeNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
@@ -298,7 +299,7 @@ func (r *Repository) UpsertTelemetryServices(ctx context.Context, services []sto
 		err = tx.QueryRow(ctx, `
 			INSERT INTO telemetry_services (workspace_id, name, resource_attributes)
 			VALUES ((SELECT id FROM workspaces WHERE slug = 'legacy-default'), $1, $2::jsonb)
-			ON CONFLICT (name) DO UPDATE SET
+			ON CONFLICT (workspace_id, name) DO UPDATE SET
 				resource_attributes = telemetry_services.resource_attributes || EXCLUDED.resource_attributes,
 				last_seen_at = NOW(),
 				last_discovered_at = NOW(),
@@ -395,6 +396,7 @@ func (r *Repository) UpdateTelemetryServiceResourceAttributes(
 		SELECT id::text, resource_attribute_sources
 		FROM telemetry_services
 		WHERE name = $1
+		  AND workspace_id = (SELECT id FROM workspaces WHERE slug = 'legacy-default')
 		FOR UPDATE
 	`, name).Scan(&serviceID, &existingJSON)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -463,7 +465,8 @@ func (r *Repository) ListTelemetryServicesPage(
 		FROM telemetry_services AS services
 		LEFT JOIN telemetry_service_sources AS sources
 			ON sources.service_id = services.id
-		WHERE services.last_seen_at >= NOW() - INTERVAL '7 days'
+		WHERE services.workspace_id = (SELECT id FROM workspaces WHERE slug = 'legacy-default')
+		  AND services.last_seen_at >= NOW() - INTERVAL '7 days'
 		  AND ($1::text IS NULL OR (services.name, services.id) > ($1::text, $2::uuid))
 		GROUP BY services.id
 		ORDER BY services.name ASC, services.id ASC
@@ -528,7 +531,8 @@ func (r *Repository) ListTelemetryServices(ctx context.Context, limit int) ([]st
 		FROM telemetry_services AS services
 		LEFT JOIN telemetry_service_sources AS sources
 			ON sources.service_id = services.id
-		WHERE services.last_seen_at >= NOW() - INTERVAL '7 days'
+		WHERE services.workspace_id = (SELECT id FROM workspaces WHERE slug = 'legacy-default')
+		  AND services.last_seen_at >= NOW() - INTERVAL '7 days'
 		GROUP BY services.id
 		ORDER BY services.name ASC
 		LIMIT $1
