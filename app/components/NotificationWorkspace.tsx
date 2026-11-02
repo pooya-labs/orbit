@@ -128,6 +128,12 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
   }, [apiBaseUrl, language, sourceMode, user?.sub]);
 
   useEffect(() => {
+    setAttempts({});
+    setExpandedDeliveryId("");
+    setAttemptsLoadingId("");
+  }, [workspaceId]);
+
+  useEffect(() => {
     if (!workspaceId || sourceMode !== "api" || !user) return;
     const controller = new AbortController();
     let current = true;
@@ -136,9 +142,7 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
     Promise.all([
       getWorkspaceMembership(workspaceId, controller.signal, apiBaseUrl),
       listWorkspaceAlertNotificationChannels(workspaceId, controller.signal, apiBaseUrl),
-      listWorkspaceAlertNotificationDeliveries(
-        workspaceId, filter === "all" ? undefined : filter, controller.signal, apiBaseUrl,
-      ),
+      listWorkspaceAlertNotificationDeliveries(workspaceId, undefined, controller.signal, apiBaseUrl),
     ])
       .then(([role, channelItems, deliveryItems]) => {
         if (!current) return;
@@ -156,7 +160,7 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
       })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; controller.abort(); };
-  }, [apiBaseUrl, filter, language, sourceMode, user?.sub, workspaceId, reloadVersion]);
+  }, [apiBaseUrl, language, sourceMode, user?.sub, workspaceId, reloadVersion]);
 
   useEffect(() => {
     if (sourceMode !== "api" || !user || !workspaceId) return;
@@ -167,6 +171,10 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
   const canManage = Boolean(
     isOidcConfigured() && user && membership &&
     ["owner", "administrator", "operator"].includes(membership.role),
+  );
+  const visibleDeliveries = useMemo(
+    () => filter === "all" ? deliveries : deliveries.filter((item) => item.status === filter),
+    [deliveries, filter],
   );
   const channelEnabledCount = useMemo(() => channels.filter((channel) => channel.enabled).length, [channels]);
   const pendingCount = useMemo(
@@ -363,11 +371,11 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
                   ))}
                 </div>
               </div>
-              {deliveries.length === 0 && !loading ? (
+              {visibleDeliveries.length === 0 && !loading ? (
                 <div className="notification-empty">{t(language, "notificationNoDeliveries")}</div>
               ) : (
                 <div className="notification-delivery-list">
-                  {deliveries.map((delivery) => (
+                  {visibleDeliveries.map((delivery) => (
                     <article className="notification-delivery-card" key={delivery.id}>
                       <div className="notification-delivery-top">
                         <span className={"notification-status-pill status-" + delivery.status}>
