@@ -35,13 +35,14 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 - [PostgreSQL backup and restore runbook](docs/postgres-backup-restore.md) — full-database logical dumps, safe restore checks, and the remaining production backup gates.
 - [Deployment and operations runbook](docs/operations-runbook.md) — production preflight, deployment verification, incident response, rollback, and recovery evidence.
 - [GitHub Pages deployment](docs/deployment/github-pages.md) — Actions-only publishing source, automated source validation, and the public project URL.
+- [Security threat model](docs/security-threat-model.md) — current trust boundaries, implemented controls, evidence, and remaining production go-live gates.
 
 ## Technology
 
 | Layer | Technology |
 | --- | --- |
 | Web application | Next.js · React · TypeScript |
-| API | Go 1.24+ |
+| API | Go 1.26+ |
 | Persistence | PostgreSQL 17 |
 | Cache | Redis 7 (stack provisioned; application integration pending) |
 | Event transport | NATS JetStream (stack provisioned; application integration pending) |
