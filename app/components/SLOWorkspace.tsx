@@ -498,7 +498,7 @@ export default function SLOWorkspace({ apiBaseUrl, language, sourceMode }: Props
               <div className="slo-objective-list">
                 {serviceSLOs.map((item) => (
                   <article className={"slo-objective-card " + (selectedSloId === item.id ? "is-selected" : "")} key={item.id}>
-                    <button type="button" className="slo-objective-select" onClick={() => {
+                    <button type="button" className="slo-objective-select" aria-pressed={selectedSloId === item.id} onClick={() => {
                       setSelectedSloId(item.id);
                       setBudget(null);
                     }}>
