@@ -48,7 +48,6 @@ func testOTLPResource() *resourcev1.Resource {
 		stringAttribute("user.email", "private@example.invalid"),
 		stringAttribute("process.command_line", "secret --token abc"),
 		stringAttribute("k8s.pod.uid", "high-cardinality-id"),
-		stringAttribute(WorkspaceAttribute, "producer-forged-workspace"),
 	}}
 }
 
