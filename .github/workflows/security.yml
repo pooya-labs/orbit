@@ -85,6 +85,49 @@ jobs:
           format: table
           timeout: 10m
 
+      - name: Create SBOM output directory
+        run: mkdir -p sbom
+
+      - name: Generate ORBIT API CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-api:ci
+          version: v0.76.1
+          format: cyclonedx
+          output: sbom/orbit-api.cdx.json
+
+      - name: Generate PostgreSQL CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-postgres:ci
+          version: v0.76.1
+          format: cyclonedx
+          output: sbom/orbit-postgres.cdx.json
+
+      - name: Generate telemetry smoke-runner CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-telemetry-smoke:ci
+          version: v0.76.1
+          format: cyclonedx
+          output: sbom/orbit-telemetry-smoke.cdx.json
+
+      - name: Generate telemetry demo CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-telemetry-demo:ci
+          version: v0.76.1
+          format: cyclonedx
+          output: sbom/orbit-telemetry-demo.cdx.json
+
+      - name: Upload first-party image SBOMs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-sboms-first-party-${{ github.run_id }}-${{ github.run_attempt }}
+          path: sbom/*.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+
   secrets:
     name: Full-history secret scan
     runs-on: ubuntu-latest
@@ -196,18 +239,25 @@ jobs:
       matrix:
         include:
           - name: Redis
+            id: redis
             image: redis:7-alpine
           - name: NATS
+            id: nats
             image: nats:2-alpine
           - name: Prometheus
+            id: prometheus
             image: prom/prometheus:v3.15.1
           - name: Loki
+            id: loki
             image: grafana/loki:3.7.9
           - name: Go API build and isolation-test base
+            id: go-api-build-base
             image: golang:1.27-alpine
           - name: Telemetry demo Go build base
+            id: telemetry-demo-build-base
             image: golang:1.27-alpine
           - name: Telemetry demo runtime base
+            id: telemetry-demo-runtime-base
             image: alpine:3.22
     steps:
       - name: Scan ${{ matrix.name }} for high and critical vulnerabilities
@@ -221,6 +271,22 @@ jobs:
           exit-code: "1"
           format: table
           timeout: 10m
+
+      - name: Generate ${{ matrix.name }} CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          version: v0.76.1
+          format: cyclonedx
+          output: sbom/${{ matrix.id }}.cdx.json
+
+      - name: Upload ${{ matrix.name }} SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-sbom-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: sbom/${{ matrix.id }}.cdx.json
+          if-no-files-found: error
+          retention-days: 30
 
   tempo-image:
     name: Build and scan patched Tempo image
@@ -247,6 +313,22 @@ jobs:
           format: table
           timeout: 20m
 
+      - name: Generate Tempo CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-tempo:ci
+          version: v0.76.1
+          format: cyclonedx
+          output: sbom/orbit-tempo.cdx.json
+
+      - name: Upload Tempo SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-sbom-tempo-${{ github.run_id }}-${{ github.run_attempt }}
+          path: sbom/orbit-tempo.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+
   otel-collector-image:
     name: Build and scan minimal ORBIT Collector image
     runs-on: ubuntu-latest
@@ -272,6 +354,22 @@ jobs:
           format: table
           timeout: 20m
 
+      - name: Generate ORBIT Collector CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-otel-collector:ci
+          version: v0.76.1
+          format: cyclonedx
+          output: sbom/orbit-otel-collector.cdx.json
+
+      - name: Upload ORBIT Collector SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-sbom-otel-collector-${{ github.run_id }}-${{ github.run_attempt }}
+          path: sbom/orbit-otel-collector.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+
   caddy-image:
     name: Build and scan patched Caddy ingress image
     runs-on: ubuntu-latest
@@ -296,3 +394,19 @@ jobs:
           exit-code: "1"
           format: table
           timeout: 15m
+
+      - name: Generate Caddy CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-caddy:ci
+          version: v0.76.1
+          format: cyclonedx
+          output: sbom/orbit-caddy.cdx.json
+
+      - name: Upload Caddy SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-sbom-caddy-${{ github.run_id }}-${{ github.run_attempt }}
+          path: sbom/orbit-caddy.cdx.json
+          if-no-files-found: error
+          retention-days: 30
