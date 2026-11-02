@@ -578,7 +578,7 @@ export function navLabel(language: Language, label: string): string {
     Overview: "overview", "Service map": "serviceMap", Services: "services",
     Infrastructure: "infrastructure", Metrics: "metrics", Traces: "traces",
     Logs: "logs", Incidents: "incidents", Deployments: "deployments",
-    "Alert rules": "alertRules", Notifications: "notifications"
+    "Alert rules": "alertRules", Notifications: "notifications", "SLOs": "SLOs"
   };
   const key = keyByLabel[label];
   return key ? t(language, key) : label;
