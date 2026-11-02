@@ -2,7 +2,7 @@
 FROM golang:1.27-alpine AS build
 RUN apk add --no-cache git
 WORKDIR /src
-ARG TEMPO_COMMIT=78f057d3c089f29205cce898c3ecb44102d794ff
+ARG TEMPO_COMMIT=9db7df79d2af105a90d96484e6403e1fda0d011e
 RUN git init . \
     && git remote add origin https://github.com/grafana/tempo.git \
     && git fetch --depth=1 origin "${TEMPO_COMMIT}" \
