@@ -17,6 +17,7 @@ tags:
   - name: Incidents
   - name: Alerting
   - name: Telemetry
+  - name: Audit
 paths:
   /health/live:
     get:
@@ -120,6 +121,54 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "503":
           description: Database or query dependency is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/workspaces/{workspaceID}/audit-events:
+    get:
+      tags: [Audit]
+      operationId: listWorkspaceAuditEvents
+      summary: List immutable workspace audit history
+      description: Returns the newest audit events for a workspace member. Each event includes a random, workspace-local pseudonymous actor reference and the actor's role captured at insertion time. Raw OIDC issuer and subject identifiers are never returned. Historical events created before actor-context migration 015 are marked with actor_role unknown.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: workspaceID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            enum: [10, 25, 50, 100]
+            default: 50
+      responses:
+        "200":
+          description: Newest immutable audit events for the workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceAuditEventListResponse"
+        "400":
+          description: Invalid workspace identifier or limit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Workspace audit history is unavailable.
           content:
             application/json:
               schema:
@@ -2748,6 +2797,46 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/IncidentTimelineEvent"
+    WorkspaceAuditEvent:
+      type: object
+      required: [id, workspace_id, actor_ref, actor_role, action, resource_type, details, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        actor_ref:
+          type: string
+          format: uuid
+          description: Random workspace-local pseudonymous actor reference. Never the raw OIDC subject.
+        actor_role:
+          type: string
+          enum: [owner, administrator, operator, viewer, system, unknown]
+          description: Role captured when the event was inserted; legacy records may be unknown.
+        action:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        request_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+    WorkspaceAuditEventListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceAuditEvent"
     ErrorResponse:
       type: object
       required: [error]
