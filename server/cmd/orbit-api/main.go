@@ -16,6 +16,7 @@ import (
 	"github.com/pooya16pg-spec/orbit/server/internal/config"
 	"github.com/pooya16pg-spec/orbit/server/internal/httpapi"
 	"github.com/pooya16pg-spec/orbit/server/internal/ingest"
+	"github.com/pooya16pg-spec/orbit/server/internal/notifications"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/store/postgres"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
@@ -52,6 +53,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	var webhookSender *notifications.WebhookSender
+	if len(cfg.AlertWebhookSecrets) > 0 {
+		webhookSender, err = notifications.NewWebhookSender(cfg.AlertWebhookSecrets, cfg.AlertWebhookAllowedHosts)
+		if err != nil {
+			logger.Error("alert webhook sender configuration is invalid", "error", err)
+			os.Exit(1)
+		}
+	}
+
 	var repository store.Repository
 	if cfg.DatabaseURL != "" {
 		startupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -73,6 +83,10 @@ func main() {
 			Version: cfg.Version, Environment: cfg.Environment, AllowedOrigins: cfg.AllowedOrigins,
 			Telemetry: telemetryClient, AuthVerifier: authVerifier,
 			RateLimitPerMinute: cfg.RateLimitPerMinute,
+			AlertWebhookSecretRefs: func() []string {
+				if webhookSender == nil { return []string{} }
+				return webhookSender.ConfiguredSecretRefs()
+			}(),
 		}, repository, logger),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
@@ -207,6 +221,20 @@ func main() {
 		logger.Info("workspace alert evaluator disabled; PostgreSQL alert storage and Prometheus are both required")
 	}
 
+	var notificationWorkerDone chan struct{}
+	if deliveryRepository, ok := repository.(store.AlertNotificationDeliveryRepository); ok &&
+		deliveryRepository != nil && webhookSender != nil {
+		worker := notifications.NewWorker(deliveryRepository, webhookSender, logger, 5*time.Second)
+		notificationWorkerDone = make(chan struct{})
+		go func() {
+			defer close(notificationWorkerDone)
+			worker.Run(ctx)
+		}()
+		logger.Info("alert notification delivery worker started", "interval", "5s")
+	} else {
+		logger.Info("alert notification delivery worker disabled; PostgreSQL and webhook secrets are required")
+	}
+
 	var runtimeErr error
 	select {
 	case err := <-serverErrors:
@@ -218,8 +246,17 @@ func main() {
 	case <-ctx.Done():
 	}
 
+	stop()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	if notificationWorkerDone != nil {
+		select {
+		case <-notificationWorkerDone:
+		case <-shutdownCtx.Done():
+			logger.Warn("alert notification worker did not stop before shutdown deadline")
+		}
+	}
 
 	if err := apiServer.Shutdown(shutdownCtx); err != nil {
 		logger.Error("API HTTP graceful shutdown failed", "error", err)
