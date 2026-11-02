@@ -56,7 +56,7 @@ var ErrNotConfigured = errors.New("telemetry backend is not configured")
 
 )
 
-var sloRoutePattern = regexp.MustCompile(\`^/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$\`)
+var sloRoutePattern = regexp.MustCompile(`^/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$`)
 
 type AvailabilityEvents struct {
 	GoodEvents float64
@@ -103,7 +103,7 @@ func (c *Client) WorkspaceAvailabilityEvents(
 		"orbit_workspace_id=" + strconv.Quote(workspaceID),
 		"service_name=" + strconv.Quote(service),
 		"slo_route=" + strconv.Quote(route),
-		\`slo_outcome=~"good|bad"\`,
+		`slo_outcome=~"good|bad"`,
 	}, ",")
 	query := fmt.Sprintf("sum by (slo_outcome) (increase(%s{%s}[%s]))", metricName, selector, window)
 	now := c.now().UTC()
@@ -120,9 +120,9 @@ func (c *Client) WorkspaceAvailabilityEvents(
 	}
 	var result struct {
 		Result []struct {
-			Metric map[string]string \`json:"metric"\`
-			Value []json.RawMessage \`json:"value"\`
-		} \`json:"result"\`
+			Metric map[string]string `json:"metric"`
+			Value []json.RawMessage `json:"value"`
+		} `json:"result"`
 	}
 	if err := json.Unmarshal(payload.Data, &result); err != nil {
 		return AvailabilityEvents{}, fmt.Errorf("decode workspace availability result: %w", err)
