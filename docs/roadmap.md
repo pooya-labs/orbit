@@ -52,7 +52,7 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 - [x] Discover service names across Prometheus, Loki, and Tempo, merge duplicates, and preserve backend provenance.
 - [x] Persist observed service names and backend provenance in a normalized PostgreSQL catalog.
 - [x] Expose persisted first-seen, last-seen, and last-discovered metadata through the service discovery API.
-- [x] Capture curated OpenTelemetry resource attributes directly from authenticated OTLP workloads over HTTP and gRPC, persist them per workspace with otlp provenance, and verify attribute isolation in the real PostgreSQL/Collector/backend E2E pipeline (PR #91; only a reviewed low-risk allowlist is accepted).
+- [x] Capture curated OpenTelemetry resource attributes directly from authenticated OTLP workloads over HTTP and gRPC, persist them per workspace with otlp provenance, and verify attribute isolation in the real PostgreSQL/Collector/backend E2E pipeline (PR #104; only a reviewed low-risk allowlist is accepted).
 - [ ] Expand the workload resource semantic-convention allowlist after privacy, cardinality, and operational review; arbitrary producer attributes remain intentionally unsupported.
 - [x] Persist bounded service resource attributes and per-attribute backend provenance in PostgreSQL.
 - [x] Add validated cursor-based pagination to the service catalog API and dashboard selector.
