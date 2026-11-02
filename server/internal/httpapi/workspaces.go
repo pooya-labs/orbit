@@ -81,6 +81,10 @@ type alertRuleListResponse struct {
 	Data []store.AlertRule `json:"data"`
 }
 
+type alertInstanceListResponse struct {
+	Data []store.AlertInstance `json:"data"`
+}
+
 func alertRuleError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, operation string, err error) {
 	switch {
 	case errors.Is(err, store.ErrWorkspaceMembershipNotFound),
@@ -466,6 +470,52 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 	alertRuleUnavailable := func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusServiceUnavailable, "alert_rule_store_unavailable", "Alert rule storage is not available")
 	}
+	evaluationRepository, evaluationRepositoryAvailable := repository.(store.AlertEvaluationRepository)
+	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alerts", func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := principalFromContext(r.Context())
+		if !ok {
+			unauthorized(w, r)
+			return
+		}
+		if !evaluationRepositoryAvailable || evaluationRepository == nil {
+			writeError(w, r, http.StatusServiceUnavailable, "alert_evaluator_unavailable", "Alert evaluation storage is not available")
+			return
+		}
+		limit, err := parseAlertRuleLimit(r)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_limit", err.Error())
+			return
+		}
+		status := r.URL.Query().Get("status")
+		switch status {
+		case "", "pending", "firing", "resolved", "cancelled":
+		default:
+			writeError(w, r, http.StatusBadRequest, "invalid_alert_status", "status must be pending, firing, resolved, or cancelled")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		items, err := evaluationRepository.ListWorkspaceAlertInstances(ctx,
+			r.PathValue("workspaceID"), principal.Issuer, principal.Subject, status, limit)
+		if errors.Is(err, store.ErrWorkspaceMembershipNotFound) {
+			writeError(w, r, http.StatusNotFound, "workspace_not_found", "Workspace was not found")
+			return
+		}
+		if errors.Is(err, store.ErrAlertRuleInvalidInput) {
+			writeError(w, r, http.StatusBadRequest, "invalid_alert_filter", "Workspace alert filter is invalid")
+			return
+		}
+		if err != nil {
+			logger.Error("list workspace alert instances failed", "error", err, "request_id", r.Header.Get("X-Request-ID"))
+			writeError(w, r, http.StatusServiceUnavailable, "workspace_alerts_unavailable", "Workspace alerts are temporarily unavailable")
+			return
+		}
+		if items == nil {
+			items = []store.AlertInstance{}
+		}
+		writeJSON(w, http.StatusOK, alertInstanceListResponse{Data: items})
+	})
+
 	mux.HandleFunc("GET /api/v1/workspaces/{workspaceID}/alert-rules", func(w http.ResponseWriter, r *http.Request) {
 		principal, ok := principalFromContext(r.Context())
 		if !ok {

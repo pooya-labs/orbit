@@ -517,6 +517,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/alerts:
+    get:
+      operationId: listWorkspaceAlerts
+      summary: List workspace alert instances
+      description: Returns persisted alert instances for workspace members. The evaluator processes only the allow-listed request_rate metric. Missing telemetry samples do not resolve existing state.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, firing, resolved, cancelled]
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [10, 25, 50, 100]
+      responses:
+        '200':
+          description: Workspace alert instances
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlertInstance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /api/v1/workspaces/{workspaceID}/alert-rules:
     get:
       tags: [Alerting]
@@ -1171,6 +1211,29 @@ components:
     AlertRuleUpdateRequest:
       allOf:
         - $ref: "#/components/schemas/AlertRuleCreateRequest"
+    AlertInstance:
+      type: object
+      required: [id, workspace_id, alert_rule_id, rule_name, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity, status, value, pending_since, last_evaluated_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        alert_rule_id: { type: string, format: uuid }
+        rule_name: { type: string }
+        service_name: { type: string }
+        metric: { type: string, enum: [request_rate] }
+        operator: { type: string, enum: [gt, gte, lt, lte] }
+        threshold: { type: number }
+        window_seconds: { type: integer, enum: [60, 300, 900] }
+        pending_seconds: { type: integer, minimum: 0, maximum: 3600 }
+        severity: { type: string, enum: [critical, high, medium, low] }
+        status: { type: string, enum: [pending, firing, resolved, cancelled] }
+        value: { type: number, minimum: 0 }
+        pending_since: { type: string, format: date-time }
+        fired_at: { type: string, format: date-time, nullable: true }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        last_evaluated_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     AlertRule:
       type: object
       required: [id, workspace_id, name, description, metric, operator, threshold, window_seconds, pending_seconds, severity, enabled, created_at, updated_at]
