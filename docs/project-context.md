@@ -528,3 +528,14 @@ Branch: `feat/m01-accessibility-review`.
 - Adds `scripts/check_accessibility_contract.py` to the web CI job. This static regression check is intentionally not presented as an axe/WCAG or assistive-technology audit.
 
 The M01 accessibility item remains partially open until manual keyboard-only and screen-reader testing with NVDA, VoiceOver, and TalkBack, plus contrast/chart alternatives and review of remaining demo-only controls. See `docs/accessibility-review.md` for the acceptance checklist.
+
+## M01 accessibility follow-through — truthful control affordances (2026-11-02)
+
+The existing M01 accessibility branch now also addresses the visible-control audit in PR #109:
+
+- The top-bar Notifications button opens the existing Notifications view instead of acting as a no-op.
+- The Docs affordance links to the repository documentation index.
+- The workspace switcher, Settings, Help/Support, and incident-options placeholders are native disabled controls with localized unavailable labels and a visible disabled treatment; they no longer masquerade as working actions.
+- The static accessibility contract checks guard these destinations, disabled states, and English/Persian unavailable text. docs/accessibility-review.md records the actual behavior and updates the remaining manual control checklist.
+
+This does not close the manual M01 acceptance gate. The application still requires real keyboard-only testing at browser breakpoints, NVDA/VoiceOver/TalkBack verification, contrast review in both themes, and review of chart/data alternatives. The latest connector-authored commits do not yet have a fresh GitHub Actions run; do not infer typecheck/build success from the static source review, and do not merge PR #109 before current-head CI and manual acceptance are complete.
