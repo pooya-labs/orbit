@@ -140,3 +140,48 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
         with:
           fail-on-severity: high
+
+  compose-images:
+    name: Scan Compose image (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: PostgreSQL
+            image: postgres:17-alpine
+          - name: Redis
+            image: redis:7-alpine
+          - name: NATS
+            image: nats:2-alpine
+          - name: OpenTelemetry Collector
+            image: otel/opentelemetry-collector-contrib:0.164.0
+          - name: Prometheus
+            image: prom/prometheus:v3.14.0
+          - name: Loki
+            image: grafana/loki:3.7.9
+          - name: Tempo
+            image: grafana/tempo:3.1.1
+          - name: Caddy production ingress
+            image: caddy:2.10.2-alpine
+          - name: Go API build and isolation-test base
+            image: golang:1.27-alpine
+          - name: Telemetry demo Go build base
+            image: golang:1.25-alpine
+          - name: Telemetry demo runtime base
+            image: alpine:3.22
+          - name: Telemetry smoke test base
+            image: python:3.13-alpine
+    steps:
+      - name: Scan ${{ matrix.name }} for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          version: v0.76.1
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          format: table
+          timeout: 10m
