@@ -810,7 +810,13 @@ func (f *fakeRepository) ListWorkspaceAuditEvents(_ context.Context, workspaceID
 	if workspaceID != "00000000-0000-4000-8000-000000000001" {
 		return nil, store.ErrWorkspaceNotFound
 	}
-	return []store.WorkspaceAuditEvent{{ID: "00000000-0000-4000-8000-000000000002", WorkspaceID: workspaceID, Action: "workspace.created"}}, nil
+	return []store.WorkspaceAuditEvent{{
+		ID: "00000000-0000-4000-8000-000000000002",
+		WorkspaceID: workspaceID,
+		ActorRef: "4f2a1c9d",
+		ActorRole: "owner",
+		Action: "workspace.created",
+	}}, nil
 }
 
 func TestWorkspaceRoutesRequireAuthenticatedMembership(t *testing.T) {
@@ -832,7 +838,11 @@ func TestWorkspaceRoutesRequireAuthenticatedMembership(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer valid-token")
 	recorder = httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "workspace.created") {
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "workspace.created") ||
+		!strings.Contains(recorder.Body.String(), `"actor_ref":"4f2a1c9d"`) ||
+		!strings.Contains(recorder.Body.String(), `"actor_role":"owner"`) ||
+		strings.Contains(recorder.Body.String(), "actor_issuer") ||
+		strings.Contains(recorder.Body.String(), "actor_subject") {
 		t.Fatalf("member audit read status/body = %d %s", recorder.Code, recorder.Body.String())
 	}
 
