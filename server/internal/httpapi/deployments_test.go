@@ -168,3 +168,39 @@ func TestWorkspaceDeploymentComparisonRejectsDifferentServices(t *testing.T) {
 		t.Fatalf("cross-service comparison status=%d body=%s", response.Code, response.Body.String())
 	}
 }
+
+
+func TestWorkspaceDeploymentComparisonRejectsDifferentEnvironments(t *testing.T) {
+	workspaceID := "11111111-1111-4111-8111-111111111111"
+	serviceID := "44444444-4444-4444-8444-444444444444"
+	now := time.Now().UTC().Truncate(time.Second)
+	repository := &deploymentRouteRepository{
+		incidentRouteRepository: &incidentRouteRepository{
+			fakeRepository: &fakeRepository{},
+			workspace: store.Workspace{ID: workspaceID},
+		},
+		items: []store.DeploymentAnnotation{
+			{
+				ID: "66666666-6666-4666-8666-666666666666",
+				WorkspaceID: workspaceID,
+				ServiceID: serviceID,
+				Environment: "staging",
+				DeployedAt: now,
+			},
+			{
+				ID: "77777777-7777-4777-8777-777777777777",
+				WorkspaceID: workspaceID,
+				ServiceID: serviceID,
+				Environment: "production",
+				DeployedAt: now.Add(time.Minute),
+			},
+		},
+	}
+	handler := newDeploymentRouteHandler(repository)
+	response := incidentRouteRequest(handler, http.MethodGet,
+		"/api/v1/workspaces/"+workspaceID+"/deployments/compare?from_id="+repository.items[0].ID+"&to_id="+repository.items[1].ID, "")
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("cross-environment comparison status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
