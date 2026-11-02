@@ -167,7 +167,7 @@ func (r *Repository) CreateWorkspaceSLO(
 		FOR SHARE
 	`, input.ServiceID, input.WorkspaceID).Scan(&serviceName, &environment)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return store.ServiceLevelObjective{}, store.ErrDeploymentAnnotationServiceNotFound
+		return store.ServiceLevelObjective{}, store.ErrSLOServiceNotFound
 	}
 	if err != nil {
 		return store.ServiceLevelObjective{}, fmt.Errorf("verify SLO service workspace: %w", err)
