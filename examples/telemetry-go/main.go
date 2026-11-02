@@ -125,11 +125,15 @@ func (t *telemetry) shutdown(ctx context.Context) error {
 	)
 }
 
-func (t *telemetry) recordSLORequest(ctx context.Context, route, method string, statusCode int) {
-	outcome := "bad"
+func sloOutcomeForHTTPStatus(statusCode int) string {
 	if statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices {
-		outcome = "good"
+		return "good"
 	}
+	return "bad"
+}
+
+func (t *telemetry) recordSLORequest(ctx context.Context, route, method string, statusCode int) {
+	outcome := sloOutcomeForHTTPStatus(statusCode)
 	t.requests.Add(ctx, 1, metricapi.WithAttributes(
 		attribute.String("http.route", route),
 		attribute.String("http.request.method", method),
