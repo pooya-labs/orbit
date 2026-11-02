@@ -60,6 +60,48 @@ export interface IncidentSummary {
   source: DataSource;
 }
 
+export type AlertRuleOperator = "gt" | "gte" | "lt" | "lte";
+export type AlertInstanceStatus = "pending" | "firing" | "resolved" | "cancelled";
+
+export interface WorkspaceAlertRule {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  service_name?: string;
+  metric: "request_rate";
+  operator: AlertRuleOperator;
+  threshold: number;
+  window_seconds: number;
+  pending_seconds: number;
+  severity: IncidentSeverity;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceAlertInstance {
+  id: string;
+  workspace_id: string;
+  alert_rule_id: string;
+  rule_name: string;
+  service_name: string;
+  metric: "request_rate";
+  operator: AlertRuleOperator;
+  threshold: number;
+  window_seconds: number;
+  pending_seconds: number;
+  severity: IncidentSeverity;
+  status: AlertInstanceStatus;
+  value: number;
+  pending_since: string;
+  fired_at: string | null;
+  resolved_at: string | null;
+  last_evaluated_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiMetadata {
   name: "orbit-api";
   version: string;
