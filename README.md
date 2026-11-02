@@ -40,7 +40,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 | Layer | Technology |
 | --- | --- |
 | Web application | Next.js · React · TypeScript |
-| API | Go 1.24+ |
+| API | Go 1.26+ |
 | Persistence | PostgreSQL 17 |
 | Cache | Redis 7 (stack provisioned; application integration pending) |
 | Event transport | NATS JetStream (stack provisioned; application integration pending) |
