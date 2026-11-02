@@ -69,7 +69,7 @@ Do not widen query access to arbitrary PromQL merely to complete metric selectio
 M05 adds operator workflows. These are state-changing capabilities and must not be exposed publicly before the security gate in section 7.
 
 1. **Incident lifecycle and timeline:** define allowed state transitions, append-only timeline events, assignment/acknowledgement, resolution metadata, and optimistic concurrency. Every mutation must be auditable.
-2. **Alert rules and notification adapters:** store versioned rules, validate a bounded expression model, evaluate rules in a worker (not inside an HTTP request), deduplicate firing alerts, support acknowledgement/silence/cooldown, and send through pluggable adapters. Secrets belong in environment/secret management, never database plaintext or source control.
+2. **Alert rules and notification adapters:** store bounded workspace rules, evaluate them in a worker, deduplicate firing alerts, persist delivery outbox state and append-only attempt history, and send through pluggable adapters. The first webhook adapter uses exact hostname allowlists and deployment-managed secret references; raw endpoint URLs and tokens never enter the API or database. Additional adapters, acknowledgement/silence/cooldown, and latency/error-rate policies remain follow-up work. Secrets belong in environment/secret management, never database plaintext or source control.
 3. **Deployment annotations and release comparison:** record service, environment, version, commit SHA, deployment time, actor, and optional change reference; correlate annotations with telemetry without inventing causal attribution.
 4. **SLOs and error budgets:** define an SLI from an explicit numerator/denominator and valid-event policy, target, and rolling period. Calculate remaining budget and burn rate using documented math and test boundary cases.
 5. **Audit trail:** append-only records for actor, role, action, entity, request ID, timestamp, and a redacted before/after representation. Audit writes must be transactional with the state change where possible.
@@ -290,4 +290,4 @@ The evaluator:
 
 The workspace read API exposes `GET /api/v1/workspaces/{workspaceID}/alerts` with status and bounded-limit filters. The event history is append-only. `fired_at` and `resolved_at` remain explicit nullable JSON fields.
 
-Still out of scope: webhook/email/chat notification adapters, delivery/retry history, SLO/error-budget calculations, and alert policies for latency or error rate. The only active metric is the instrumented demo request counter; production tenant ingestion remains disabled pending M06 environment gates.
+Still out of scope after PR #72: notification delivery adapters and delivery/retry history, SLO/error-budget calculations, and alert policies for latency or error rate. The only active metric is the instrumented demo request counter; production tenant ingestion remains disabled pending M06 environment gates.
