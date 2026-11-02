@@ -78,19 +78,28 @@ M05 acceptance requires API and database tests, lifecycle-transition tests, work
 
 ## 7. M06 security gate and production hardening
 
-The detailed proposed design is recorded in [ADR 0001 — OIDC access-token validation and API authorization](decisions/0001-oidc-access-token-authentication.md). It deliberately distinguishes OAuth access tokens from OIDC ID tokens and sets a Go 1.24-compatible JOSE dependency constraint.
+The detailed identity design is recorded in [ADR 0001 — OIDC access-token validation and API authorization](decisions/0001-oidc-access-token-authentication.md), and the machine-ingestion trust boundary is recorded in [ADR 0002 — authenticated workspace OTLP ingestion](decisions/0002-authenticated-workspace-otlp-ingestion.md). Both distinguish human and workload access tokens and require server-side authorization.
 
-The initial server-side authentication gate is implemented in `main` (`977ce49`) and CI-verified. It validates OIDC access-token signatures and claims against issuer discovery/JWKS, applies viewer/operator/administrator route policy, rejects missing credentials in staging/production, bounds request bodies and token sizes, and enforces PostgreSQL-backed shared per-IP/per-subject limits (`db45843`).
+The following implementation is merged and CI-verified:
 
-The remaining security work before multi-user or M05 operations deployment is:
+- Human OIDC access-token validation through issuer discovery/JWKS, RS256/ES256 allowlisting, viewer/operator/administrator route policy, fail-closed staging/production startup, request/token bounds, and shared PostgreSQL-backed API rate limits (`977ce49`, `db45843`).
+- Provider-neutral browser Authorization Code + PKCE with state/nonce and memory-only access/refresh tokens (PR #12); no real public-site issuer/client is configured.
+- Workspace membership, tenant-scoped reads, member/role enforcement, workload identity administration, per-signal workspace grants, and transactional audit records for M05 mutations.
+- Authenticated OTLP/HTTP and OTLP/gRPC gateways, canonical workspace attribution, producer-attribute rejection, mixed-resource batch rejection, bounded admission, shared rate limits, cross-replica revocation checks, and fail-closed dependency behavior.
+- PR #84 proves the local write-to-query boundary for metrics/logs/traces with real PostgreSQL, Collector and Prometheus/Loki/Tempo backends; workspace A sees its data and workspace B does not.
+- PostgreSQL logical backup/restore CI drill (PR #83) and seven-day local telemetry retention/cardinality controls are merged and verified.
+- The security threat model, full-history secret scanning, Go/Node dependency checks, Dependabot, and immutable action-pin policy are proposed in PR #90. Gitleaks, govulncheck, and npm audit have run; Dependency Review remains blocked until the repository Dependency Graph is enabled.
 
-- real OIDC provider registration, callback/CORS/audience end-to-end verification, and provider token revocation/global logout (the provider-neutral PKCE client is implemented in PR #12 but is not configured for the public site);
-- workspace/tenant membership and database scoping;
-- actor identity and transactional audit records for every state-changing operation;
-- bounded backend concurrency for horizontally scaled deployments;
-- secret management, CORS allowlists, dependency review, backups/retention, cardinality guardrails, and operational runbooks.
+Remaining before production tenant ingestion:
 
-Local development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is explicitly set. Startup must fail closed if staging/production is configured without valid authentication settings. Health/readiness endpoints should reveal status, not credentials or sensitive topology.
+- Real OIDC provider registration, browser callback/CORS/audience verification, workload-token issuance/rotation, and provider token revocation/global logout.
+- Real DNS/ACME, TLS termination, host firewall/trusted-proxy policy, cloud/Kubernetes network policy, and an explicit internal-hop mTLS decision.
+- Target-environment multi-replica load, query latency, backpressure, outage/recovery and revocation-latency measurements with real PostgreSQL and Collector dependencies.
+- Managed-backend per-workspace ingestion/cardinality/retention/cost budgets.
+- Encrypted off-host database backups, approved retention/PITR/WAL policy, backup alerting, a rehearsed managed restore, and measured RPO/RTO.
+- Secret/key rotation, container-image scanning, action SHA pinning, remediation ownership, deployment monitoring, and operator incident runbooks.
+
+Local development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is explicitly set. Staging/production startup must fail closed without valid human and workload authentication settings. Health/readiness endpoints should reveal status, not credentials or sensitive topology.
 
 ## 8. Related portfolio context
 
@@ -363,3 +372,12 @@ The refreshed PR #11 implementation is rebuilt on current `main` as PR #88. It c
 PR #86 was merged into `main` as `a412864c8639ed6530bdbe07569e878ee33a9e6a`. It adds `docs/operations-runbook.md`, covering production preflight, safe deployment, post-deployment verification, routine operations, incident response, rollback boundaries, backup/restore coordination, and evidence capture. Its full API, PostgreSQL restore, web, and telemetry CI passed before merge.
 
 The runbook is an operator procedure baseline, not production-readiness evidence. The environment-specific gates remain open: real human/workload OIDC provider configuration, DNS/ACME and firewall/network policy, managed per-workspace quotas, encrypted off-host backups/PITR and measured RPO/RTO, sustained target-environment load/backpressure testing, and hosted API/managed persistence. Production tenant ingestion remains disabled until those gates are evidenced. The README documentation index links the runbook.
+
+
+## M06 security automation handoff — PR #90
+
+The security work has been rebuilt on the current \`main\` in PR #90 to avoid the stale base of the superseded PR #85. It adds the threat-model baseline, full-history Gitleaks, Go \`govulncheck\`, npm audit, scheduled Dependabot, Node 22/\`npm ci\`, refreshed Go modules, and full-SHA pins for external GitHub Actions enforced by \`scripts/check_workflow_action_pins.py\`.
+
+Latest previously observed scan evidence: Gitleaks passed; \`govulncheck\` found no vulnerabilities affecting code paths (two vulnerabilities were reported in required modules that the application does not appear to call); npm audit reported zero vulnerabilities. The workflow action pin policy must pass on the refreshed branch before this slice is considered verified.
+
+**External blocker:** GitHub Dependency Review reports that the repository Dependency Graph is not enabled. The repository owner must enable it under Settings → Code security and analysis → Dependency graph, then rerun the Security workflow. Do not mark PR #90's full security gate complete or merge it as fully security-verified while Dependency Review is blocked. The connected GitHub action tools available in this workflow cannot change this repository setting.
