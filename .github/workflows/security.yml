@@ -32,6 +32,7 @@ jobs:
         with:
           image-ref: orbit-api:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           vuln-type: os,library
           severity: HIGH,CRITICAL
           ignore-unfixed: false
@@ -48,6 +49,7 @@ jobs:
         with:
           image-ref: orbit-postgres:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           vuln-type: os,library
           severity: HIGH,CRITICAL
           ignore-unfixed: false
@@ -63,6 +65,7 @@ jobs:
         with:
           image-ref: orbit-telemetry-smoke:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           vuln-type: os,library
           severity: HIGH,CRITICAL
           ignore-unfixed: false
@@ -78,6 +81,7 @@ jobs:
         with:
           image-ref: orbit-telemetry-demo:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           vuln-type: os,library
           severity: HIGH,CRITICAL
           ignore-unfixed: false
@@ -93,6 +97,7 @@ jobs:
         with:
           image-ref: orbit-api:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           format: cyclonedx
           output: sbom/orbit-api.cdx.json
 
@@ -101,6 +106,7 @@ jobs:
         with:
           image-ref: orbit-postgres:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           format: cyclonedx
           output: sbom/orbit-postgres.cdx.json
 
@@ -109,6 +115,7 @@ jobs:
         with:
           image-ref: orbit-telemetry-smoke:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           format: cyclonedx
           output: sbom/orbit-telemetry-smoke.cdx.json
 
@@ -117,6 +124,7 @@ jobs:
         with:
           image-ref: orbit-telemetry-demo:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           format: cyclonedx
           output: sbom/orbit-telemetry-demo.cdx.json
 
@@ -280,6 +288,7 @@ jobs:
         with:
           image-ref: ${{ matrix.image }}
           version: v0.76.1
+          trivy-config: trivy.yaml
           vuln-type: os,library
           severity: HIGH,CRITICAL
           ignore-unfixed: false
@@ -296,6 +305,7 @@ jobs:
         with:
           image-ref: ${{ matrix.image }}
           version: v0.76.1
+          trivy-config: trivy.yaml
           format: cyclonedx
           output: sbom/${{ matrix.id }}.cdx.json
 
@@ -325,6 +335,7 @@ jobs:
         with:
           image-ref: orbit-tempo:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           vuln-type: os,library
           severity: HIGH,CRITICAL
           ignore-unfixed: false
@@ -340,6 +351,7 @@ jobs:
         with:
           image-ref: orbit-tempo:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           format: cyclonedx
           output: sbom/orbit-tempo.cdx.json
 
@@ -369,6 +381,7 @@ jobs:
         with:
           image-ref: orbit-otel-collector:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           vuln-type: os,library
           severity: HIGH,CRITICAL
           ignore-unfixed: false
@@ -384,6 +397,7 @@ jobs:
         with:
           image-ref: orbit-otel-collector:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           format: cyclonedx
           output: sbom/orbit-otel-collector.cdx.json
 
@@ -413,6 +427,7 @@ jobs:
         with:
           image-ref: orbit-caddy:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           vuln-type: os,library
           severity: HIGH,CRITICAL
           ignore-unfixed: false
@@ -428,6 +443,7 @@ jobs:
         with:
           image-ref: orbit-caddy:ci
           version: v0.76.1
+          trivy-config: trivy.yaml
           format: cyclonedx
           output: sbom/orbit-caddy.cdx.json
 
