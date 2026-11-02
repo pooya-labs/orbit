@@ -55,7 +55,7 @@ jobs:
           format: table
           timeout: 10m
 
-      - name: Build the telemetry smoke-test image with patched Python packages
+      - name: Build the static Go telemetry smoke-test image
         run: docker build --pull --file deploy/observability/telemetry-smoke.Dockerfile --tag orbit-telemetry-smoke:ci .
 
       - name: Scan the telemetry smoke-test image for high and critical vulnerabilities
