@@ -127,6 +127,14 @@ func main() {
 		}
 		defer workloadVerifier.Close()
 
+		resourceAttributeRecorder, ok := repository.(store.WorkloadResourceAttributeRepository)
+		if !ok {
+			resourceAttributeRecorder = nil
+		}
+		onResourceAttributeError := func(err error) {
+			logger.Warn("persist workload OTLP resource attributes failed", "error", err)
+		}
+
 		authorizer, err := ingest.NewAuthorizer(workloadVerifier, workloadRepository)
 		if err != nil {
 			logger.Error("workload authorization initialization failed", "error", err)
@@ -148,6 +156,8 @@ func main() {
 			RequestsPerMinute: cfg.RateLimitPerMinute,
 			ForwardTimeout: 10 * time.Second,
 			RateLimitStore: rateLimitStore,
+			ResourceAttributeRecorder: resourceAttributeRecorder,
+			OnResourceAttributeError: onResourceAttributeError,
 		})
 		if err != nil {
 			logger.Error("OTLP HTTP gateway initialization failed", "error", err)
