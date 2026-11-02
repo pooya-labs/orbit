@@ -1,0 +1,32 @@
+dist:
+  module: github.com/pooya16pg-spec/orbit/otelcol
+  name: orbit-otel-collector
+  description: Minimal ORBIT OpenTelemetry Collector distribution
+  version: 0.164.1-orbit.1
+  output_path: ./_build
+  build_tags: "grpcnotrace"
+
+receivers:
+  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.164.0
+
+processors:
+  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.164.0
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.164.0
+
+exporters:
+  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.164.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.164.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.164.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter v0.164.1
+
+extensions:
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.164.1
+
+providers:
+  - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.70.0
+  - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.70.0
+  - gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.70.0
+
+telemetry:
+  gomod: go.opentelemetry.io/collector/service v0.164.0
+  import: go.opentelemetry.io/collector/service/telemetry/otelconftelemetry
