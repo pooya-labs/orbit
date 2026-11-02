@@ -71,7 +71,7 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 ## M05 — Operations workflows
 
 - [x] Backend incident lifecycle API and immutable timeline: workspace-scoped creation, validated status transitions/reopen, and atomic workspace audit (PR #66; migration 009; CI passing).
-- [ ] Dashboard UI for incident creation, status changes, detail, and timeline review.
+- [x] Workspace-scoped dashboard for incident creation, allowed status transitions/reopen, detail, and immutable timeline review (PR #71; CI-verified).
 - [x] Workspace-scoped alert rule definition CRUD with immutable workspace audit (PR #69; migration 010; CI passing). v1 is limited to the existing `request_rate` metric and rejects arbitrary query expressions.
 - [ ] Add a scheduled evaluator with persisted firing/resolved state, deduplication, and multi-replica coordination; stored rule definitions are not evaluated yet.
 - [ ] Add secure notification adapters and delivery/retry history.

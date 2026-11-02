@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getMetadata, listIncidents, listServices } from "../lib/orbit/client";
+import { getMetadata, listWorkspaceIncidents, listWorkspaceServices, listWorkspaces } from "../lib/orbit/client";
 import type { ApiMetadata, IncidentSummary, ServiceSummary } from "../lib/orbit/contracts";
 import { chartArea, chartPoints, demoIncidents, demoServices } from "../lib/orbit/demo";
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../lib/orbit/i18n";
 import type { ReactNode } from "react";
 import TelemetryWorkspace, { type TelemetryView } from "./components/TelemetryWorkspace";
 import AuthControls from "./components/AuthControls";
+import IncidentWorkspace from "./components/IncidentWorkspace";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -305,11 +306,17 @@ export default function Home() {
     setApiStatus("connecting");
     setApiError("");
     try {
-      const [metadata, serviceItems, incidentItems] = await Promise.all([
+      const [metadata, workspaceItems] = await Promise.all([
         getMetadata(undefined, endpoint),
-        listServices(undefined, endpoint),
-        listIncidents(undefined, undefined, endpoint),
+        listWorkspaces(undefined, endpoint),
       ]);
+      const firstWorkspace = workspaceItems[0];
+      const [serviceItems, incidentItems]: [ServiceSummary[], IncidentSummary[]] = firstWorkspace
+        ? await Promise.all([
+            listWorkspaceServices(firstWorkspace.id, undefined, endpoint),
+            listWorkspaceIncidents(firstWorkspace.id, undefined, undefined, endpoint),
+          ])
+        : [[], []];
       setApiMetadata(metadata);
       setApiServices(serviceItems);
       setApiIncidents(incidentItems);
@@ -495,7 +502,9 @@ export default function Home() {
             </section>
           )}
 
-{telemetryView ? (
+{activeNav === "Incidents" ? (
+              <IncidentWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
+            ) : telemetryView ? (
             sourceMode === "api" ? (
               <TelemetryWorkspace view={telemetryView} apiBaseUrl={apiUrlInput} language={language} />
             ) : (

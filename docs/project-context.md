@@ -263,3 +263,12 @@ The backend now stores and manages alert-rule definitions per workspace. Migrati
 Owner, administrator, and operator roles can mutate definitions; any workspace member can list them. Each create/update/enable/disable/delete operation writes a workspace audit event in the same PostgreSQL transaction. Rule configuration is strictly allow-listed: metric `request_rate` only, operators `gt/gte/lt/lte`, thresholds in a finite positive bounded range, windows of 60/300/900 seconds, pending duration of 0–3600 seconds, and known severities. No arbitrary query expression or webhook destination is accepted.
 
 Important boundary: definitions are persisted configuration only. There is not yet a periodic evaluator, alert-instance lifecycle/deduplication, multi-replica scheduler coordination, or notification delivery/retry adapter. The current metric is the request counter emitted by the instrumented demo workload; do not advertise error-rate or latency alerting until those metrics exist and are sourced safely.
+
+
+## M05 implementation update — PR #71 incident operations dashboard
+
+The dashboard now has a dedicated workspace-scoped Incident Operations view. It loads the signed-in user's workspaces and membership, then retrieves services and incidents only through the workspace-scoped API. Operators (owner, administrator, or operator roles) can create an incident and request only backend-approved status transitions; resolved incidents can be reopened into investigating. The detail view reads the immutable incident timeline. Every mutation is performed through the existing transactional API, which writes the timeline and workspace audit event atomically.
+
+The page's API connection flow now uses workspace-scoped inventory routes rather than the legacy unscoped global service/incident reads. Demo mode remains explicitly read-only. The public sign-in controls remain hidden until real OIDC provider settings are configured; the dashboard operations require a valid browser session.
+
+Validation for PR #71: pending CI at handoff.

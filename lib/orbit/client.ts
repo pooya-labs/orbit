@@ -3,9 +3,13 @@ import type {
   ApiErrorPayload,
   ApiMetadata,
   DataEnvelope,
+  IncidentSeverity,
   IncidentStatus,
   IncidentSummary,
+  IncidentTimelineEvent,
   ServiceSummary,
+  WorkspaceMembershipSummary,
+  WorkspaceSummary,
   TelemetryWindow,
   TelemetryMetricsResponse,
   TelemetryLogsResponse,
@@ -34,8 +38,10 @@ function resolveApiBaseUrl(override?: string): string {
     .replace(/\/+$/, "");
 }
 
-async function getJSON<T>(
+async function requestJSON<T>(
   path: string,
+  method: "GET" | "POST" | "PATCH",
+  body?: unknown,
   signal?: AbortSignal,
   baseUrlOverride?: string,
 ): Promise<T> {
@@ -51,14 +57,16 @@ async function getJSON<T>(
   const accessToken = await getAccessToken();
   const headers: HeadersInit = {
     Accept: "application/json",
+    ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
     ...(accessToken ? { Authorization: "Bearer " + accessToken } : {}),
   };
 
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
-      method: "GET",
+      method,
       headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       cache: "no-store",
       credentials: "omit",
       signal,
@@ -85,6 +93,108 @@ async function getJSON<T>(
     throw new OrbitApiError("The ORBIT API returned an empty response.", response.status, "invalid_response");
   }
   return payload as T;
+}
+
+async function getJSON<T>(
+  path: string,
+  signal?: AbortSignal,
+  baseUrlOverride?: string,
+): Promise<T> {
+  return requestJSON<T>(path, "GET", undefined, signal, baseUrlOverride);
+}
+
+
+export async function listWorkspaces(signal?: AbortSignal, baseUrl?: string): Promise<WorkspaceSummary[]> {
+  const response = await getJSON<DataEnvelope<WorkspaceSummary>>("/api/v1/workspaces", signal, baseUrl);
+  return response.data;
+}
+
+export async function getWorkspaceMembership(
+  workspaceId: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceMembershipSummary> {
+  const response = await getJSON<{ data: WorkspaceMembershipSummary }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/membership`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function listWorkspaceServices(
+  workspaceId: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<ServiceSummary[]> {
+  const response = await getJSON<DataEnvelope<ServiceSummary>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/services`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function listWorkspaceIncidents(
+  workspaceId: string,
+  status?: IncidentStatus,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<IncidentSummary[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  const response = await getJSON<DataEnvelope<IncidentSummary>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/incidents${query}`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function createWorkspaceIncident(
+  workspaceId: string,
+  input: { title: string; description: string; service_id: string; severity: IncidentSeverity },
+  baseUrl?: string,
+): Promise<IncidentSummary> {
+  const response = await requestJSON<{ data: IncidentSummary }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/incidents`,
+    "POST",
+    input,
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function transitionWorkspaceIncident(
+  workspaceId: string,
+  incidentId: string,
+  input: { status: IncidentStatus; comment?: string },
+  baseUrl?: string,
+): Promise<IncidentSummary> {
+  const response = await requestJSON<{ data: IncidentSummary }>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/incidents/${encodeURIComponent(incidentId)}/status`,
+    "PATCH",
+    input,
+    undefined,
+    baseUrl,
+  );
+  return response.data;
+}
+
+export async function listIncidentTimeline(
+  workspaceId: string,
+  incidentId: string,
+  limit = 50,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<IncidentTimelineEvent[]> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  const response = await getJSON<DataEnvelope<IncidentTimelineEvent>>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/incidents/${encodeURIComponent(incidentId)}/timeline?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+  return response.data;
 }
 
 export async function getMetadata(signal?: AbortSignal, baseUrl?: string): Promise<ApiMetadata> {
