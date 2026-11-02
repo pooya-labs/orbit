@@ -64,7 +64,7 @@ OpenTelemetry Collector
 - Versioned SQL migration ledger with sequential, transactional migrations.
 - Service and incident read models with indexed status, environment, and timestamp columns.
 - Initial data is deliberately tagged `demo_seed`; it is not observed production telemetry.
-- A separate `telemetry_services` table persists observed service identities and JSONB resource attributes; `telemetry_service_sources` stores normalized Prometheus / Loki / Tempo provenance with per-source observation timestamps.
+- The `telemetry_services` catalog is workspace-scoped: a service name is unique within one workspace, and `telemetry_service_sources` records Prometheus / Loki / Tempo discovery plus authenticated OTLP workload observations. OTLP attributes are extracted only after workload grant verification and canonical tenant attribution, filtered through a curated low-risk OpenTelemetry allowlist, bounded to 32 keys / 8 values per key / 256 bytes per string, and persisted with per-attribute source provenance. The legacy unscoped catalog endpoints are restricted to the `legacy-default` workspace; workspace members read their own catalog through `GET /api/v1/workspaces/{workspaceID}/telemetry/services`.
 - Catalog reads include services observed within the last seven days, ordered by name, with a 250-service cap.
 
 ### Local infrastructure

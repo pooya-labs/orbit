@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"sync"
@@ -707,5 +708,183 @@ func TestWorkspaceAuditActorContextMigrationBackfillsLegacyEvents(t *testing.T) 
 	}
 	if _, err := isolatedPool.Exec(ctx, "UPDATE workspace_audit_actors SET actor_ref = gen_random_uuid() WHERE workspace_id = $1::uuid", workspaceID); err == nil {
 		t.Fatal("audit actor mapping became mutable after the migration")
+	}
+}
+
+func TestWorkloadResourceAttributesRemainWorkspaceScoped(t *testing.T) {
+	databaseURL := os.Getenv("ORBIT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("ORBIT_TEST_DATABASE_URL is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	repository, err := Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("open repository: %v", err)
+	}
+	defer repository.Close()
+
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	create := func(label string) store.Workspace {
+		workspace, createErr := repository.CreateWorkspace(ctx, store.CreateWorkspaceInput{
+			Name: "Resource attributes " + label + " " + suffix,
+			Slug: "resource-attributes-" + label + "-" + suffix,
+			OwnerIssuer: "https://resource-attributes-test.example/",
+			OwnerSubject: label + "-" + suffix,
+		})
+		if createErr != nil {
+			t.Fatalf("create %s workspace: %v", label, createErr)
+		}
+		return workspace
+	}
+	workspaceA := create("alpha")
+	workspaceB := create("bravo")
+	serviceName := "shared-service-" + suffix
+
+	record := func(workspaceID, version string) {
+		t.Helper()
+		err := repository.RecordWorkloadResourceAttributes(ctx, workspaceID, []store.WorkloadResourceObservation{{
+			ServiceName: serviceName,
+			Attributes: map[string]any{
+				"service.name":    []any{serviceName},
+				"service.version": []any{version},
+				"cloud.region":    []any{"eu-central-1"},
+			},
+		}})
+		if err != nil {
+			t.Fatalf("record workload attributes for %s: %v", workspaceID, err)
+		}
+	}
+	record(workspaceA.ID, "1.2.3")
+	record(workspaceB.ID, "4.5.6")
+
+	assertWorkspace := func(workspaceID, wantVersion string) {
+		t.Helper()
+		items, listErr := repository.ListWorkspaceTelemetryServices(ctx, workspaceID, 50)
+		if listErr != nil {
+			t.Fatalf("list workspace telemetry services: %v", listErr)
+		}
+		if len(items) != 1 || items[0].Name != serviceName {
+			t.Fatalf("workspace %s telemetry = %+v, want only %q", workspaceID, items, serviceName)
+		}
+		versions, ok := items[0].ResourceAttributes["service.version"].([]any)
+		if !ok || len(versions) != 1 || versions[0] != wantVersion {
+			t.Fatalf("workspace %s service versions = %#v, want %q", workspaceID, items[0].ResourceAttributes["service.version"], wantVersion)
+		}
+		sources := items[0].ResourceAttributeSources["service.version"]
+		if len(sources) != 1 || sources[0] != "otlp" {
+			t.Fatalf("workspace %s service.version provenance = %#v, want [otlp]", workspaceID, sources)
+		}
+		if len(items[0].Sources) != 1 || items[0].Sources[0] != "otlp" {
+			t.Fatalf("workspace %s service sources = %#v, want [otlp]", workspaceID, items[0].Sources)
+		}
+	}
+	assertWorkspace(workspaceA.ID, "1.2.3")
+	assertWorkspace(workspaceB.ID, "4.5.6")
+
+	legacyItems, err := repository.ListTelemetryServices(ctx, 250)
+	if err != nil {
+		t.Fatalf("list legacy telemetry catalog: %v", err)
+	}
+	for _, item := range legacyItems {
+		if item.Name == serviceName {
+			t.Fatal("workspace workload service leaked into the legacy global telemetry catalog")
+		}
+	}
+}
+
+func TestMarshalWorkloadResourceAttributesEnforcesCuratedAllowlist(t *testing.T) {
+	valid := store.WorkloadResourceObservation{
+		ServiceName: "payments",
+		Attributes: map[string]any{
+			"service.name": []any{"payments"},
+			"service.version": []any{"1.2.3"},
+			"cloud.region": []any{"eu-central-1"},
+			"host.type": []any{"compute"},
+		},
+	}
+	if _, err := marshalWorkloadResourceAttributes(valid); err != nil {
+		t.Fatalf("valid curated resource attributes were rejected: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		mutate func(map[string]any)
+	}{
+		{
+			name: "private user identifier",
+			mutate: func(attributes map[string]any) {
+				attributes["user.email"] = []any{"private@example.invalid"}
+			},
+		},
+		{
+			name: "process command line",
+			mutate: func(attributes map[string]any) {
+				attributes["process.command_line"] = []any{"app --token secret"}
+			},
+		},
+		{
+			name: "high cardinality pod UID",
+			mutate: func(attributes map[string]any) {
+				attributes["k8s.pod.uid"] = []any{"random-uid"}
+			},
+		},
+		{
+			name: "producer tenant identity",
+			mutate: func(attributes map[string]any) {
+				attributes["orbit.workspace.id"] = []any{"another-workspace"}
+			},
+		},
+		{
+			name: "non-array value",
+			mutate: func(attributes map[string]any) {
+				attributes["cloud.region"] = "eu-central-1"
+			},
+		},
+		{
+			name: "missing canonical service name",
+			mutate: func(attributes map[string]any) {
+				delete(attributes, "service.name")
+			},
+		},
+		{
+			name: "mismatched service name",
+			mutate: func(attributes map[string]any) {
+				attributes["service.name"] = []any{"another-service"}
+			},
+		},
+		{
+			name: "oversized string value",
+			mutate: func(attributes map[string]any) {
+				attributes["host.name"] = []any{strings.Repeat("x", maxPersistedWorkloadResourceValueBytes+1)}
+			},
+		},
+		{
+			name: "non-finite floating point",
+			mutate: func(attributes map[string]any) {
+				attributes["host.type"] = []any{math.Inf(1)}
+			},
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			attributes := make(map[string]any, len(valid.Attributes)+1)
+			for key, value := range valid.Attributes {
+				values, ok := value.([]any)
+				if ok {
+					attributes[key] = append([]any(nil), values...)
+				} else {
+					attributes[key] = value
+				}
+			}
+			test.mutate(attributes)
+			observation := store.WorkloadResourceObservation{
+				ServiceName: valid.ServiceName,
+				Attributes: attributes,
+			}
+			if _, err := marshalWorkloadResourceAttributes(observation); err == nil {
+				t.Fatal("invalid workload resource attributes were accepted")
+			}
+		})
 	}
 }

@@ -52,7 +52,8 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 - [x] Discover service names across Prometheus, Loki, and Tempo, merge duplicates, and preserve backend provenance.
 - [x] Persist observed service names and backend provenance in a normalized PostgreSQL catalog.
 - [x] Expose persisted first-seen, last-seen, and last-discovered metadata through the service discovery API.
-- [ ] Populate the full OpenTelemetry resource attribute set from instrumented workloads (the current preview extracts a bounded allowlist of labels and tags from Prometheus, Loki, and Tempo).
+- [x] Capture curated OpenTelemetry resource attributes directly from authenticated OTLP workloads over HTTP and gRPC, persist them per workspace with otlp provenance, and verify attribute isolation in the real PostgreSQL/Collector/backend E2E pipeline (PR #104; only a reviewed low-risk allowlist is accepted).
+- [ ] Expand the workload resource semantic-convention allowlist after privacy, cardinality, and operational review; arbitrary producer attributes remain intentionally unsupported.
 - [x] Persist bounded service resource attributes and per-attribute backend provenance in PostgreSQL.
 - [x] Add validated cursor-based pagination to the service catalog API and dashboard selector.
 - [x] Add allow-listed multi-series grouping and separate line rendering for the request-rate metric; arbitrary metric-name selection remains future work.
@@ -65,7 +66,7 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 
 ORBIT's milestones are not a reason to expose unsafe operations early. The delivery order is:
 
-1. Finish and merge the verified M04 read-path work. Keep complete workload-side OpenTelemetry resource ingestion as an explicit M04 follow-up.
+1. Finish and merge the verified M04 read path and curated workspace-scoped OTLP resource capture. Expand semantic-convention coverage only through an explicit privacy/cardinality review; do not persist arbitrary producer attributes.
 2. The initial M06 API security gate from [ADR 0001](decisions/0001-oidc-access-token-authentication.md) is merged in `977ce49`. Shared PostgreSQL-backed IP and subject rate limiting is merged in `db45843` and CI-verified. Provider-neutral browser PKCE is implemented in PR #12; it remains isolated from the public site until a real provider is configured and end-to-end validation passes. Workspace membership and tenant-scoped data access remain the next security boundary.
 3. Deliver M05 in slices: incident lifecycle and immutable timeline first; alert rules and notification adapters second; deployment annotations third; SLO/error-budget calculations fourth; audit history across every mutation.
 4. Complete the remaining M06 operational hardening: retention/cardinality controls, load testing, backup/restore, dependency/security review, production deployment, and runbooks.

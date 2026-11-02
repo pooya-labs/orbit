@@ -1603,6 +1603,48 @@ paths:
           $ref: '#/components/responses/NotFound'
         "503":
           $ref: "#/components/responses/Unavailable"
+  /api/v1/workspaces/{workspaceID}/telemetry/services:
+    get:
+      tags: [Telemetry]
+      operationId: listWorkspaceTelemetryServices
+      summary: List workspace-scoped telemetry services and resource attributes
+      description: Returns only services observed in the selected workspace after membership verification. The catalog combines bounded attributes captured from authenticated OTLP workloads with Prometheus, Loki, and Tempo discovery where available. OTLP resource attributes are limited to a curated low-risk semantic-convention allowlist, capped per service and value, and tagged with per-attribute source provenance. Service names are unique within a workspace; this route never queries or returns another workspace's catalog.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [10, 25, 50, 100]
+            default: 50
+      responses:
+        "200":
+          description: Workspace telemetry services and their bounded resource metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTelemetryServicesResponse"
+        "400":
+          description: Invalid workspace identifier or page size.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Workspace telemetry catalog is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/telemetry/services:
     get:
       tags: [Telemetry]
@@ -2463,7 +2505,7 @@ components:
                 uniqueItems: true
                 items:
                   type: string
-                  enum: [prometheus, loki, tempo]
+                  enum: [prometheus, loki, tempo, otlp]
               first_seen_at:
                 type: string
                 format: date-time
@@ -2482,7 +2524,7 @@ components:
                   type: array
                   items:
                     type: string
-                    enum: [prometheus, loki, tempo]
+                    enum: [prometheus, loki, tempo, otlp]
     TelemetryResourceAttributesResponse:
       type: object
       required: [service, window, queried_at, sources_queried, attributes, attribute_sources]
@@ -2829,6 +2871,58 @@ components:
         created_at:
           type: string
           format: date-time
+    WorkspaceTelemetryServicesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [id, name, sources, resource_attributes, resource_attribute_sources]
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+                pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+              sources:
+                type: array
+                uniqueItems: true
+                items:
+                  type: string
+                  enum: [prometheus, loki, tempo, otlp]
+              first_seen_at:
+                type: string
+                format: date-time
+              last_seen_at:
+                type: string
+                format: date-time
+              last_discovered_at:
+                type: string
+                format: date-time
+              resource_attributes:
+                type: object
+                description: Curated low-risk attributes from authenticated OTLP resource scopes and bounded backend discovery; values are arrays with at most eight entries per key.
+                additionalProperties:
+                  type: array
+                  maxItems: 8
+                  items:
+                    oneOf:
+                      - type: string
+                        maxLength: 256
+                      - type: integer
+                      - type: number
+                      - type: boolean
+              resource_attribute_sources:
+                type: object
+                additionalProperties:
+                  type: array
+                  uniqueItems: true
+                  items:
+                    type: string
+                    enum: [prometheus, loki, tempo, otlp]
     WorkspaceAuditEventListResponse:
       type: object
       required: [data]

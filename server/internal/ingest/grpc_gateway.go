@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	logsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	metricsv1 "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	tracesv1 "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -36,6 +37,8 @@ type GRPCGatewayConfig struct {
 	RequestsPerMinute int
 	ForwardTimeout time.Duration
 	RateLimitStore WorkloadRateLimitStore
+	ResourceAttributeRecorder store.WorkloadResourceAttributeRepository
+	OnResourceAttributeError func(error)
 }
 
 type GRPCGateway struct {
@@ -43,6 +46,8 @@ type GRPCGateway struct {
 	forwarder GRPCForwarder
 	limiter *workspaceRateLimiter
 	sharedLimiter WorkloadRateLimitStore
+	resourceAttributeRecorder store.WorkloadResourceAttributeRepository
+	onResourceAttributeError func(error)
 	timeout time.Duration
 	concurrency chan struct{}
 }
@@ -65,6 +70,8 @@ func NewGRPCGatewayServer(authorizer *Authorizer, forwarder GRPCForwarder, cfg G
 		forwarder: forwarder,
 		limiter: newWorkspaceRateLimiter(cfg.RequestsPerMinute),
 		sharedLimiter: cfg.RateLimitStore,
+		resourceAttributeRecorder: cfg.ResourceAttributeRecorder,
+		onResourceAttributeError: cfg.OnResourceAttributeError,
 		timeout: cfg.ForwardTimeout,
 		concurrency: make(chan struct{}, maxConcurrentGRPCExports),
 	}
@@ -170,6 +177,7 @@ func (s *metricsGRPCService) Export(ctx context.Context, request *metricsv1.Expo
 		}
 		return nil, status.Error(codes.Unavailable, "OTLP Collector is temporarily unavailable")
 	}
+	recordWorkloadResourceAttributes(ctx, s.gateway.resourceAttributeRecorder, s.gateway.onResourceAttributeError, decision.WorkspaceID, ExtractWorkloadResourceAttributes(sanitized))
 	return response, nil
 }
 
@@ -213,6 +221,7 @@ func (s *logsGRPCService) Export(ctx context.Context, request *logsv1.ExportLogs
 		}
 		return nil, status.Error(codes.Unavailable, "OTLP Collector is temporarily unavailable")
 	}
+	recordWorkloadResourceAttributes(ctx, s.gateway.resourceAttributeRecorder, s.gateway.onResourceAttributeError, decision.WorkspaceID, ExtractWorkloadResourceAttributes(sanitized))
 	return response, nil
 }
 
@@ -256,6 +265,7 @@ func (s *tracesGRPCService) Export(ctx context.Context, request *tracesv1.Export
 		}
 		return nil, status.Error(codes.Unavailable, "OTLP Collector is temporarily unavailable")
 	}
+	recordWorkloadResourceAttributes(ctx, s.gateway.resourceAttributeRecorder, s.gateway.onResourceAttributeError, decision.WorkspaceID, ExtractWorkloadResourceAttributes(sanitized))
 	return response, nil
 }
 
