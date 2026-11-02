@@ -1115,3 +1115,83 @@ html[data-theme="light"] .alert-status-pill { background:#f7fafb; border-color:#
  .alert-panel-heading { flex-wrap:wrap; }
  .alert-filter { width:100%; justify-content:space-between; }
 }
+
+
+/* Workspace webhook channels and delivery history */
+.notification-operations-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; align-items:start; }
+.notification-panel,.notification-attempt-panel { min-width:0; padding:16px; }
+.notification-panel-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.notification-panel-heading h3 { margin:0 0 4px; color:#e2ecef; font-size:13px; }
+.notification-panel-heading p { margin:0; color:#81939b; font-size:10px; line-height:1.5; }
+.notification-channel-form { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; padding:12px; border:1px solid rgba(101,217,193,.23); border-radius:8px; background:#10191e; }
+.notification-channel-form label { display:flex; flex-direction:column; gap:6px; min-width:0; color:#92a3aa; font-size:10px; }
+.notification-channel-form input,.notification-delivery-filter { min-height:34px; width:100%; border:1px solid #2b3a40; border-radius:7px; padding:7px 9px; color:#dce8eb; background:#10191e; font:inherit; font-size:10px; outline:none; }
+.notification-channel-form input:focus,.notification-delivery-filter:focus { border-color:#65d9c1; box-shadow:0 0 0 2px rgba(101,217,193,.12); }
+.notification-form-help { grid-column:1/-1; margin:0; color:#85979f; font-size:9px; line-height:1.55; }
+.notification-form-actions { grid-column:1/-1; display:flex; justify-content:flex-end; gap:8px; }
+.notification-channel-list,.notification-delivery-list,.notification-attempt-list { display:flex; flex-direction:column; gap:7px; margin-top:14px; }
+.notification-channel-card { display:flex; align-items:center; gap:12px; min-width:0; padding:11px; border:1px solid #293940; border-radius:8px; background:#10191e; }
+.notification-channel-copy { display:flex; flex:1; flex-direction:column; gap:5px; min-width:0; }
+.notification-channel-title { display:flex; align-items:center; gap:8px; min-width:0; }
+.notification-channel-title strong { overflow:hidden; color:#d9e5e9; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.notification-channel-state { flex:0 0 auto; padding:3px 6px; border:1px solid #33464c; border-radius:20px; font-size:8px; }
+.notification-channel-state.is-enabled { color:#80d7b7; border-color:rgba(101,217,193,.25); }
+.notification-channel-state.is-disabled { color:#95a1a5; }
+.notification-channel-meta { display:flex; align-items:center; flex-wrap:wrap; gap:9px; color:#84969e; font-size:9px; }
+.notification-channel-meta span { display:inline-flex; align-items:center; gap:4px; }
+.notification-secret-ready { color:#7fd3b5; }
+.notification-secret-missing { color:#e0ad75; }
+.notification-channel-copy small { color:#81939b; font-size:9px; }
+.notification-channel-toggle { display:inline-flex; flex:0 0 auto; align-items:center; gap:5px; min-height:30px; padding:5px 8px; border:1px solid #33464c; border-radius:6px; color:#a9bac0; background:#152127; font-size:9px; cursor:pointer; }
+.notification-channel-toggle:hover { border-color:#65d9c1; color:#d9e5e9; }
+.notification-channel-toggle:disabled { opacity:.4; cursor:not-allowed; }
+.notification-delivery-filter { max-width:150px; }
+.notification-delivery-row { display:grid; grid-template-columns:8px minmax(0,1fr) auto auto; align-items:center; gap:9px; width:100%; min-width:0; padding:10px 9px; border:1px solid transparent; border-radius:8px; color:inherit; text-align:start; background:#10191e; cursor:pointer; }
+.notification-delivery-row:hover { border-color:#34494f; }
+.notification-delivery-row.selected { border-color:rgba(101,217,193,.38); background:rgba(101,217,193,.07); }
+.notification-delivery-dot { width:7px; height:7px; border-radius:50%; background:#a7b3b8; }
+.notification-delivery-dot.status-pending { background:#e4c27a; }
+.notification-delivery-dot.status-processing { background:#8bcbdc; }
+.notification-delivery-dot.status-delivered { background:#80d7b7; }
+.notification-delivery-dot.status-dead { background:#ef827a; }
+.notification-delivery-copy { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.notification-delivery-copy strong { overflow:hidden; color:#d9e5e9; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.notification-delivery-copy small { overflow:hidden; color:#81939b; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.notification-status-pill { display:inline-flex; align-items:center; padding:4px 7px; border:1px solid #33464c; border-radius:20px; color:#aebbc0; background:#19262c; font-size:8px; white-space:nowrap; }
+.notification-status-pill.status-pending { color:#e4c27a; border-color:rgba(228,194,122,.25); }
+.notification-status-pill.status-processing { color:#8bcbdc; border-color:rgba(139,203,220,.25); }
+.notification-status-pill.status-delivered { color:#80d7b7; border-color:rgba(128,215,183,.25); }
+.notification-status-pill.status-dead { color:#f09a91; border-color:rgba(240,154,145,.3); }
+.notification-delivery-attempts { color:#91a1a8; font:9px "DM Mono",monospace; white-space:nowrap; }
+.notification-empty { display:flex; align-items:center; justify-content:center; gap:8px; min-height:92px; color:#81939b; font-size:10px; text-align:center; }
+.notification-readonly-note { display:flex; align-items:center; gap:7px; margin:12px 0 0; color:#c5a978; font-size:9px; }
+.notification-attempt-panel { display:flex; flex-direction:column; gap:12px; }
+.notification-delivery-detail { display:flex; flex-wrap:wrap; gap:12px 22px; padding:10px 12px; border:1px solid #293940; border-radius:8px; background:#10191e; }
+.notification-delivery-detail span { display:flex; flex-direction:column; gap:4px; color:#81939b; font-size:9px; }
+.notification-delivery-detail strong { color:#d2e0e4; font:9px "DM Mono",monospace; overflow-wrap:anywhere; }
+.notification-attempt-list { margin-top:0; }
+.notification-attempt-row { display:grid; grid-template-columns:auto auto minmax(100px,1fr) auto minmax(90px,auto); align-items:center; gap:10px; padding:9px 10px; border:1px solid #293940; border-radius:7px; background:#10191e; }
+.notification-attempt-number { color:#a5b4ba; font:10px "DM Mono",monospace; }
+.notification-attempt-time,.notification-attempt-http,.notification-attempt-error { color:#85979f; font-size:9px; overflow-wrap:anywhere; }
+@media (max-width:900px) { .notification-operations-grid { grid-template-columns:1fr; } }
+@media (max-width:650px) {
+ .notification-panel-heading { flex-wrap:wrap; }
+ .notification-channel-form { grid-template-columns:1fr; }
+ .notification-form-help,.notification-form-actions { grid-column:auto; }
+ .notification-delivery-row { grid-template-columns:8px minmax(0,1fr) auto; }
+ .notification-delivery-attempts { grid-column:2/-1; }
+ .notification-attempt-row { grid-template-columns:auto auto minmax(0,1fr); }
+ .notification-attempt-http,.notification-attempt-error { grid-column:2/-1; }
+}
+html[data-theme="light"] .notification-panel-heading h3 { color:#263b44; }
+html[data-theme="light"] .notification-panel-heading p,html[data-theme="light"] .notification-channel-copy small,html[data-theme="light"] .notification-empty { color:#778991; }
+html[data-theme="light"] .notification-channel-form,html[data-theme="light"] .notification-delivery-detail,html[data-theme="light"] .notification-channel-card,html[data-theme="light"] .notification-attempt-row { border-color:#e2eaed; background:#f8fafb; }
+html[data-theme="light"] .notification-channel-form label { color:#71838c; }
+html[data-theme="light"] .notification-channel-form input,html[data-theme="light"] .notification-delivery-filter { border-color:#dce5e9; color:#344a53; background:#f8fafb; }
+html[data-theme="light"] .notification-channel-title strong,html[data-theme="light"] .notification-delivery-copy strong,html[data-theme="light"] .notification-delivery-detail strong { color:#30444d; }
+html[data-theme="light"] .notification-channel-meta,html[data-theme="light"] .notification-delivery-copy small,html[data-theme="light"] .notification-delivery-attempts,html[data-theme="light"] .notification-attempt-time,html[data-theme="light"] .notification-attempt-http,html[data-theme="light"] .notification-attempt-error { color:#778991; }
+html[data-theme="light"] .notification-channel-toggle { border-color:#dce5e9; color:#637780; background:#f7fafb; }
+html[data-theme="light"] .notification-channel-toggle:hover { color:#176f62; }
+html[data-theme="light"] .notification-delivery-row { background:#f8fafb; }
+html[data-theme="light"] .notification-delivery-row.selected { border-color:#aadbd0; background:#eff8f5; }
+html[data-theme="light"] .notification-status-pill { background:#f7fafb; border-color:#dce5e9; }
