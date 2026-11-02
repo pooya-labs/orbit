@@ -113,7 +113,7 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
 - [ ] Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
 - [ ] Threat model, dependency review, and secret scanning.
-- [ ] Production deployment guide and operational runbooks.
+- [x] Publish an operator runbook template covering production preflight gates, safe deployment and post-deploy verification, incident response, rollback boundaries, backup/restore coordination, and evidence capture (`docs/operations-runbook.md`). Executing its environment-specific gates remains open above.
 - [ ] Hosted API and managed persistence deployment.
 
 ## Definition of done
