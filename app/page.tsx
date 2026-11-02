@@ -519,7 +519,7 @@ export default function Home() {
           <div className="page-heading">
             <div>
               <div className="eyebrow"><span className="eyebrow-line" /> {telemetryView ? `${language === "fa" ? "زنده" : "LIVE"} ${navLabel(language, telemetryView).toUpperCase()}` : tr("systemOverview")} <span className="demo-tag">{sourceMode === "api" ? tr("apiConnected") : tr("demoEnvironment")}</span></div>
-              <h1>{activeNav === "Overview" ? tr("goodMorning") : navLabel(language, activeNav)}</h1>
+              <h1 aria-live="polite" aria-atomic="true">{activeNav === "Overview" ? tr("goodMorning") : navLabel(language, activeNav)}</h1>
               <p className="page-subtitle">{telemetryView ? tr("liveQuerySubtitle").replace("{view}", navLabel(language, telemetryView).toLowerCase()) : tr("overviewSubtitle")}</p>
             </div>
             <div className="heading-actions">
