@@ -2141,11 +2141,26 @@ components:
           type: integer
           enum: [1, 3, 7]
     SLOUpdateRequest:
-      allOf:
-        - $ref: "#/components/schemas/SLOCreateRequest"
-      not:
-        required: [service_id]
-      description: Update fields without service_id; an SLO remains attached to its original service.
+      type: object
+      additionalProperties: false
+      required: [name, route, target, rolling_window_days]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        route:
+          type: string
+          minLength: 2
+          maxLength: 128
+          pattern: "^/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$"
+        target:
+          type: number
+          minimum: 0.9
+          maximum: 0.9999
+        rolling_window_days:
+          type: integer
+          enum: [1, 3, 7]
     ServiceLevelObjective:
       type: object
       required: [id, workspace_id, service_id, service_name, environment, name, route, target, rolling_window_days, enabled, created_at, updated_at]
