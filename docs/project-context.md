@@ -312,3 +312,10 @@ Migration 013 and the deployment annotation API add immutable, workspace-scoped 
 Migration 014 adds workspace/service-scoped SLO definitions. The API supports create, list, update, enable/disable, delete, and live budget calculation. Definition changes and workspace audit events are transactional. Target is a fraction from 0.90 to 0.9999; allowed rolling windows are 1/3/7 days to match Prometheus retention.
 
 The only SLI is the instrumented HTTP request-success ratio: 2xx/3xx responses are good and other instrumented responses are bad. Query selectors are fixed by the server and include canonical workspace ID, service name, normalized route, and outcome. An empty result vector is `insufficient_data`, never an assumed 100% availability. The local Compose telemetry demo sends unscoped metrics directly to the Collector, so it is excluded from workspace SLO calculations unless an instrumented workload sends through authenticated workspace ingestion. Current SLO evaluation is on-demand; there is no scheduled budget snapshot or alerting/burn-rate notification yet.
+
+
+## M05 handoff update — workspace audit log UI
+
+The main branch already contained the membership-protected `GET /api/v1/workspaces/{workspaceID}/audit-events` endpoint and PostgreSQL append-only event store. The audit UI slice adds a typed client method, an authenticated workspace page, category filters, request-ID visibility, expandable bounded event details, 30-second refresh, English/Persian copy, and dark/light responsive styling. It covers the existing audit event families without displaying raw actor issuer/subject identifiers or webhook-secret fields.
+
+Remaining audit-quality work is deliberately explicit: add a safe actor display reference and historical role snapshot, review before/after detail consistency, and ensure future state-changing/background workflows either write the shared audit stream or maintain an equally clear append-only lifecycle history. This UI does not imply those remaining controls are complete.
