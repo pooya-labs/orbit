@@ -113,16 +113,16 @@ OpenTelemetry Collector
 - Authentication and authorization are mandatory before multi-user deployment.
 - Secrets stay in environment variables or a dedicated secret manager, never in source control.
 - Avoid logging tokens, credentials, or sensitive payload bodies.
-- Enforce query timeouts, a 1 MiB request-body cap, a 16 KiB bearer-token cap, and fixed-window per-IP/per-subject request limits. The current limiter is process-local; it is not a distributed quota or tenant boundary.
+- Enforce query timeouts, request/token caps, shared PostgreSQL-backed per-IP/per-subject API rate limits, workload grants, and bounded OTLP admission. Shared rate limits are not a substitute for managed per-workspace quotas or production capacity validation.
 - Readiness must verify required dependencies; liveness must remain a process-level check.
 - Every asynchronous operation should carry correlation context.
 - The local Compose profile sets a seven-day retention baseline for metrics/logs/traces and explicit scrape, label, stream, trace-size and attribute-size caps (see [observability retention policy](observability-retention.md)). These are single-tenant development limits, not per-workspace production quotas; managed production budgets remain a go-live gate.
 
 ## Current limitations
 
-- The OIDC resource-server and API role-enforcement slice is merged in `main` (`977ce49`). Browser Authorization Code + PKCE, workspace membership/isolation, and user management are not yet implemented.
-- Rate limits are process-local and need a shared limiter for multi-instance production deployments.
-- M05 mutation routes, transactional audit records, and operator workflows remain disabled/not implemented until the security gate is merged and the corresponding audit/data model is delivered.
+- The OIDC resource-server and API role-enforcement slice is merged in `main` (`977ce49`). Workspace membership, tenant-scoped reads, workload identity/grants, authenticated OTLP HTTP/gRPC ingestion, and write-to-query isolation are implemented and CI-verified. The browser Authorization Code + PKCE client exists (PR #12), but a real provider and public sign-in deployment are not configured.
+- API and workload rate limits use a shared PostgreSQL-backed limiter across gateway replicas. These limits are not a managed per-workspace quota, global multi-region budget, or proof of production capacity.
+- M05 incident, alert, notification, deployment, SLO, and audit workflows are implemented behind authenticated workspace/role checks with transactional or append-only history. They are not exposed by the static GitHub Pages site; a hosted production API and real-provider browser session remain deployment gates.
 - The local OTLP pipeline and a dedicated instrumented demo workload are available; the production Go API is not instrumented yet.
 - ORBIT's API now performs fixed, bounded read queries against Prometheus, Tempo, and Loki (15m–24h windows, capped results, 6-second backend timeout, 2 MiB response cap).
 - The dashboard has separate Metrics, Logs, and Traces views that call the typed query methods, display backend provenance and query timestamps, and support 15m/1h/6h/24h windows with 30-second refresh.
