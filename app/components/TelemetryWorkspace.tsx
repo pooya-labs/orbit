@@ -187,50 +187,6 @@ export default function TelemetryWorkspace({
   const resourceError = serviceError;
 
   useEffect(() => {
-    let mounted = true;
-    const controller = new AbortController();
-
-    if (serviceLoading || !selectedServiceDiscovered) {
-      setResourceAttributes(null);
-      setResourceError("");
-      setResourceLoading(false);
-      return () => {
-        mounted = false;
-        controller.abort();
-      };
-    }
-
-    const loadAttributes = async () => {
-      setResourceLoading(true);
-      setResourceAttributes(null);
-      setResourceError("");
-      try {
-        const response = await getTelemetryServiceAttributes(
-          selectedService,
-          windowRange,
-          controller.signal,
-          apiBaseUrl,
-        );
-        if (mounted && !controller.signal.aborted) setResourceAttributes(response);
-      } catch (cause) {
-        if (controller.signal.aborted || !mounted) return;
-        setResourceAttributes(null);
-        setResourceError(cause instanceof Error ? cause.message : tr("resourceAttributeUnavailable"));
-      } finally {
-        if (mounted && !controller.signal.aborted) setResourceLoading(false);
-      }
-    };
-
-    void loadAttributes();
-    const interval = window.setInterval(() => void loadAttributes(), 60_000);
-    return () => {
-      mounted = false;
-      controller.abort();
-      window.clearInterval(interval);
-    };
-  }, [selectedService, selectedServiceDiscovered, serviceLoading, windowRange, apiBaseUrl, reloadKey, language]);
-
-  useEffect(() => {
     const controller = new AbortController();
     let mounted = true;
 
