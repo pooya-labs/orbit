@@ -214,6 +214,6 @@ The SLI counts only explicitly instrumented routes: HTTP 2xx/3xx responses are g
 
 ## M05 workspace audit history
 
-The authenticated workspace Audit log page reads the latest 100 workspace audit events through `GET /api/v1/workspaces/{workspaceID}/audit-events`. Members can filter incident, alert-rule, notification-channel, deployment, SLO, and workspace events. Each record shows its action, resource, request ID, timestamp, and bounded details; the UI refreshes every 30 seconds and defensively suppresses sensitive-looking detail keys.
+PR #79 adds the authenticated workspace Audit log page, which reads the latest 100 workspace audit events through `GET /api/v1/workspaces/{workspaceID}/audit-events`. Members can filter incident, alert-rule, notification-channel, deployment, SLO, and workspace events. Each record shows its action, resource, request ID, timestamp, and bounded details; the UI refreshes every 30 seconds and defensively suppresses sensitive-looking detail keys.
 
 The API verifies workspace membership before returning events. Raw OIDC issuer and subject identifiers are intentionally omitted from the browser response. Audit events are append-only; role snapshots and a browser-visible actor-safe identity remain separate follow-up work.
