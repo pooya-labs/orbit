@@ -127,8 +127,8 @@ export interface WorkspaceAlertNotificationDelivery {
   status: AlertNotificationDeliveryStatus;
   attempts: number;
   next_attempt_at: string;
-  last_attempt_at: string | null;
-  delivered_at: string | null;
+  last_attempt_at?: string | null;
+  delivered_at?: string | null;
   last_error: string;
   created_at: string;
   updated_at: string;
@@ -148,8 +148,8 @@ export interface WorkspaceAlertNotificationAttempt {
   delivery_id: string;
   attempt_number: number;
   outcome: AlertNotificationAttemptOutcome;
-  http_status: number | null;
-  error_code: string;
+  http_status?: number | null;
+  error_code?: string;
   attempted_at: string;
 }
 
