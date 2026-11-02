@@ -159,6 +159,13 @@ func (r *alertRouteRepository) ListWorkspaceAlertInstances(_ context.Context, wo
 	return items, nil
 }
 
+func (r *alertRouteRepository) GetWorkspaceMembership(_ context.Context, workspaceID, issuer, subject string) (store.WorkspaceMembership, error) {
+	if workspaceID != r.workspace.ID || issuer != "https://orbit.test/issuer" || subject != "alert-route-operator" {
+		return store.WorkspaceMembership{}, store.ErrWorkspaceMembershipNotFound
+	}
+	return store.WorkspaceMembership{WorkspaceID: workspaceID, Role: "operator"}, nil
+}
+
 func newAlertRouteRepository() *alertRouteRepository {
 	incident := &incidentRouteRepository{
 		fakeRepository: &fakeRepository{},
