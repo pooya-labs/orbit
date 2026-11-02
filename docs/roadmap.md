@@ -75,7 +75,7 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 - [x] Workspace-scoped alert rule definition CRUD with immutable workspace audit (PR #69; migration 010; CI passing). v1 is limited to the existing `request_rate` metric and rejects arbitrary query expressions.
 - [x] Add a scheduled workspace-aware evaluator for the allow-listed `request_rate` metric, with persisted pending/firing/resolved/cancelled instances, append-only events, deduplication, telemetry-gap handling, and PostgreSQL advisory-lock coordination across API replicas (PR #72; migration 011; CI-verified).
 - [x] Secure webhook notification delivery and retry history: workspace-scoped channels, transactional outbox, multi-replica claims, bounded retries, and append-only attempts (PR #74; migration 012; CI-verified).
-- [ ] Deployment annotations and release comparison.
+- [x] Workspace-scoped immutable deployment annotations with derived service/environment metadata, transactional workspace audit, and same-service chronological release comparison (PR #76; migration 013; CI-verified).
 - [ ] SLO definitions and error-budget burn calculations.
 - [ ] Extend audit-backed history to every operator mutation and workflow.
 
@@ -212,3 +212,10 @@ PR #69 is merged into `main` (squash merge commit `64c4c4f1d36fd0c17ae444ac5736f
 Migration 010 adds workspace-owned alert rule definitions with a case-insensitive unique name per workspace and database constraints for the supported metric, operators, threshold, evaluation window, pending duration, severity, and description bounds. The API supports list, create, replace, enable/disable, and delete. Owner/administrator/operator roles may mutate; workspace members may list. Every mutation and its append-only workspace audit event are committed in one transaction.
 
 Version 1 deliberately supports only `request_rate`, the metric currently emitted by the instrumented demo. It accepts fixed comparison operators and bounded settings, not arbitrary PromQL/LogQL. PR #69 delivered the workspace-scoped definitions; PR #72 adds scheduled evaluation, durable lifecycle instances, deduplication, and multi-replica coordination. Notification delivery/retry remains open.
+
+
+## M05 PR #76 — immutable deployment annotations
+
+Migration 013 adds workspace-scoped `deployment_annotations` linked to the owning service and workspace. The API derives service name and environment from that service, validates release/version metadata and deployment time, and writes the annotation plus `deployment.annotation_created` audit event in one transaction. Database triggers prevent UPDATE, DELETE, and TRUNCATE.
+
+Workspace members can list or read deployment annotations. Release comparison accepts two different annotations for the same service in chronological order and reports version/commit changes plus elapsed time. It does not claim that a release caused a telemetry change. The operator dashboard follows in the next UI slice.
