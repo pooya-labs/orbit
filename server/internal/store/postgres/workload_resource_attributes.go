@@ -17,6 +17,44 @@ var (
 	workloadResourceServiceNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`)
 )
 
+var workloadResourceAttributePersistenceAllowlist = map[string]struct{}{
+	"service.name": {},
+	"service.namespace": {},
+	"service.version": {},
+	"deployment.environment.name": {},
+	"cloud.provider": {},
+	"cloud.region": {},
+	"cloud.availability_zone": {},
+	"cloud.platform": {},
+	"host.name": {},
+	"host.type": {},
+	"host.arch": {},
+	"os.type": {},
+	"os.name": {},
+	"os.version": {},
+	"os.description": {},
+	"container.name": {},
+	"container.image.name": {},
+	"container.image.tag": {},
+	"k8s.cluster.name": {},
+	"k8s.namespace.name": {},
+	"k8s.deployment.name": {},
+	"k8s.statefulset.name": {},
+	"k8s.daemonset.name": {},
+	"k8s.job.name": {},
+	"k8s.cronjob.name": {},
+	"k8s.pod.name": {},
+	"k8s.container.name": {},
+	"k8s.node.name": {},
+	"process.runtime.name": {},
+	"process.runtime.version": {},
+	"telemetry.sdk.name": {},
+	"telemetry.sdk.language": {},
+	"telemetry.sdk.version": {},
+	"telemetry.distro.name": {},
+	"telemetry.distro.version": {},
+}
+
 const (
 	maxPersistedWorkloadResourceObservations = 32
 	maxPersistedWorkloadResourceAttributes = 32
@@ -147,6 +185,9 @@ func marshalWorkloadResourceAttributes(observation store.WorkloadResourceObserva
 		if !resourceAttributeNamePattern.MatchString(key) {
 			return nil, errors.New("invalid workload resource attribute key")
 		}
+		if _, allowed := workloadResourceAttributePersistenceAllowlist[key]; !allowed {
+			return nil, errors.New("workload resource attribute key is not allow-listed")
+		}
 		values, ok := rawValues.([]any)
 		if !ok || len(values) == 0 || len(values) > maxPersistedWorkloadResourceValues {
 			return nil, errors.New("workload resource attribute values must be bounded arrays")
@@ -177,3 +218,4 @@ func marshalWorkloadResourceAttributes(observation store.WorkloadResourceObserva
 	return encoded, nil
 }
 
+var _ store.WorkloadResourceAttributeRepository = (*Repository)(nil)
