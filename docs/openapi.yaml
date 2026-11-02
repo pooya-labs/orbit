@@ -1645,6 +1645,174 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/telemetry/metrics:
+    get:
+      tags: [Telemetry]
+      operationId: queryWorkspaceTelemetryMetrics
+      summary: Query allow-listed metrics for one workspace service
+      description: Runs the fixed ORBIT request-rate PromQL expression with a server-enforced workspace matcher. The authenticated caller must be a member of the selected workspace. Arbitrary PromQL and metric names are not accepted.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [15m, 1h, 6h, 24h]
+            default: 1h
+        - name: service
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        - name: group_by
+          in: query
+          required: false
+          description: Comma-separated allow-list of grouping labels. Use none for one aggregate series.
+          schema:
+            type: string
+            default: instance,service_version,deployment_environment
+            pattern: "^(none|((instance|job|service_version|deployment_environment|container_name|host_name|cloud_region)(,(instance|job|service_version|deployment_environment|container_name|host_name|cloud_region))*))$"
+      responses:
+        "200":
+          description: Workspace-filtered Prometheus range query result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryMetricsResponse"
+        "400":
+          description: Invalid workspace, query window, service identifier, or grouping labels.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Prometheus is not configured or temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/telemetry/logs:
+    get:
+      tags: [Telemetry]
+      operationId: queryWorkspaceTelemetryLogs
+      summary: Query recent logs for a workspace service
+      description: Uses a bounded Loki service selector and a server-enforced workspace matcher. The authenticated caller must be a member of the selected workspace. Arbitrary LogQL is not accepted.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [15m, 1h, 6h, 24h]
+            default: 1h
+        - name: service
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Workspace-filtered Loki log streams.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryLogsResponse"
+        "400":
+          description: Invalid workspace, query window, service identifier, or result limit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Loki is not configured or temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/telemetry/traces:
+    get:
+      tags: [Telemetry]
+      operationId: queryWorkspaceTelemetryTraces
+      summary: Search traces for a workspace service
+      description: Uses a bounded Tempo service.name tag search and a server-enforced workspace matcher. The authenticated caller must be a member of the selected workspace.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [15m, 1h, 6h, 24h]
+            default: 1h
+        - name: service
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Workspace-filtered Tempo trace results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryTracesResponse"
+        "400":
+          description: Invalid workspace, query window, service identifier, or result limit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Tempo is not configured or temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/telemetry/services:
     get:
       tags: [Telemetry]
