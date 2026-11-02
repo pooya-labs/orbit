@@ -118,6 +118,10 @@ type WorkloadIdentityRepository interface {
 	ListWorkspaceWorkloadGrants(ctx context.Context, workspaceID string) ([]WorkloadIdentityGrant, error)
 }
 
+type WorkloadResourceAttributeRepository interface {
+	RecordWorkloadResourceAttributes(ctx context.Context, workspaceID string, observations []WorkloadResourceObservation) error
+}
+
 type WorkspaceDataRepository interface {
 	ListWorkspaceServices(ctx context.Context, workspaceID string) ([]Service, error)
 	ListWorkspaceIncidents(ctx context.Context, workspaceID, status string) ([]Incident, error)
