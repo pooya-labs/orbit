@@ -771,12 +771,24 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			writeError(w, r, http.StatusBadRequest, "invalid_alert_notification_channel", "Channel name and secret_ref must be provided in one valid JSON object")
 			return
 		}
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		membership, err := workspaceRepository.GetWorkspaceMembership(ctx,
+			r.PathValue("workspaceID"), principal.Issuer, principal.Subject)
+		if err != nil {
+			alertNotificationError(w, r, logger, "verify notification-channel workspace membership failed", err)
+			return
+		}
+		switch membership.Role {
+		case "owner", "administrator", "operator":
+		default:
+			alertNotificationError(w, r, logger, "notification-channel mutation forbidden", store.ErrAlertRuleForbidden)
+			return
+		}
 		if !configuredWebhookSecretRef(strings.TrimSpace(input.SecretRef), webhookSecretRefs) {
 			writeError(w, r, http.StatusServiceUnavailable, "webhook_secret_not_configured", "The referenced webhook secret is not configured in this deployment")
 			return
 		}
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
 		channel, err := notificationRepository.CreateWorkspaceAlertNotificationChannel(ctx, store.CreateAlertNotificationChannelInput{
 			WorkspaceID: r.PathValue("workspaceID"), Name: input.Name, SecretRef: input.SecretRef,
 			ActorIssuer: principal.Issuer, ActorSubject: principal.Subject, RequestID: r.Header.Get("X-Request-ID"),
