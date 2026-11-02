@@ -33,6 +33,8 @@ type WorkspaceMembership struct {
 type WorkspaceAuditEvent struct {
 	ID string `json:"id"`
 	WorkspaceID string `json:"workspace_id"`
+	ActorRef string `json:"actor_ref"`
+	ActorRole string `json:"actor_role"`
 	ActorIssuer string `json:"-"`
 	ActorSubject string `json:"-"`
 	Action string `json:"action"`
