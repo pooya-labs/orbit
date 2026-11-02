@@ -153,6 +153,28 @@ export interface WorkspaceAlertNotificationAttempt {
   attempted_at: string;
 }
 
+export interface WorkspaceDeploymentAnnotation {
+  id: string;
+  workspace_id: string;
+  service_id: string;
+  service_name: string;
+  environment: string;
+  version: string;
+  commit_sha?: string;
+  change_reference?: string;
+  release_notes?: string;
+  deployed_at: string;
+  created_at: string;
+}
+
+export interface DeploymentAnnotationComparison {
+  from: WorkspaceDeploymentAnnotation;
+  to: WorkspaceDeploymentAnnotation;
+  elapsed_seconds: number;
+  version_changed: boolean;
+  commit_changed: boolean;
+}
+
 export interface ApiMetadata {
   name: "orbit-api";
   version: string;
