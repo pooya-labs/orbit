@@ -26,7 +26,7 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 archive="$work_dir/orbit.dump"
-fixture_suffix="$(date +%s)_$$"
+fixture_suffix="$(date +%s)-$"
 workspace_name="Backup restore drill $fixture_suffix"
 workspace_slug="backup-restore-$fixture_suffix"
 issuer="https://identity.example.test/"
