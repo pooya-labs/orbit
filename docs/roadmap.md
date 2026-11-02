@@ -13,7 +13,8 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 - [x] Add automated Pages deployment.
 - [x] Require GitHub Actions as the Pages publishing source and verify it before deployment; document the branch/Jekyll conflict and recovery steps (PR #88; Pages-source check and full CI verified).
 - [x] Add a user-selectable, persistent light/dark dashboard theme while retaining the established dark palette (PR #35).
-- [ ] Accessibility review with keyboard and screen readers.
+- [x] Add baseline keyboard accessibility: skip-to-main link, explicit main/navigation landmarks, current-page announcement, visible focus indicators, and mobile navigation Escape/Tab/focus-return behavior with an automated CI contract check (PR under review; automated coverage only).
+- [ ] Complete manual keyboard-only and screen-reader review with NVDA, VoiceOver, and TalkBack; verify color contrast in both themes, charts/data alternatives, and all remaining controls before closing the M01 accessibility review.
 
 ## M02 — API and persistence foundation
 
