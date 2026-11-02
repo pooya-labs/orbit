@@ -28,6 +28,8 @@ type Config struct {
 	CollectorOTLPHTTPURL        string
 	CollectorOTLPGRPCEndpoint   string
 	RateLimitPerMinute          int
+	AlertWebhookSecrets         map[string]string
+	AlertWebhookAllowedHosts    []string
 }
 
 func Load() Config {
@@ -50,12 +52,39 @@ func Load() Config {
 		CollectorOTLPHTTPURL:      strings.TrimSpace(os.Getenv("ORBIT_COLLECTOR_OTLP_HTTP_URL")),
 		CollectorOTLPGRPCEndpoint: strings.TrimSpace(os.Getenv("ORBIT_COLLECTOR_OTLP_GRPC_ENDPOINT")),
 		RateLimitPerMinute:        integerOrDefault("ORBIT_RATE_LIMIT_PER_MINUTE", 120),
+		AlertWebhookSecrets:       alertWebhookSecretsFromEnv(),
+		AlertWebhookAllowedHosts:  lowerCaseList(os.Getenv("ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS")),
 	}
 }
 
 func (c Config) Validate() error {
 	if c.RateLimitPerMinute < 1 || c.RateLimitPerMinute > 10000 {
 		return fmt.Errorf("ORBIT_RATE_LIMIT_PER_MINUTE must be between 1 and 10000")
+	}
+	if len(c.AlertWebhookSecrets) > 0 && len(c.AlertWebhookAllowedHosts) == 0 {
+		return fmt.Errorf("ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS is required when webhook secrets are configured")
+	}
+	allowedHosts := make(map[string]struct{}, len(c.AlertWebhookAllowedHosts))
+	for _, host := range c.AlertWebhookAllowedHosts {
+		host = strings.ToLower(strings.TrimSpace(host))
+		if !validWebhookHostname(host) {
+			return fmt.Errorf("ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS contains an invalid hostname")
+		}
+		allowedHosts[host] = struct{}{}
+	}
+	for ref, endpoint := range c.AlertWebhookSecrets {
+		if !validWebhookSecretRef(ref) {
+			return fmt.Errorf("an ORBIT_ALERT_WEBHOOK_SECRET_ variable has an invalid reference name")
+		}
+		parsed, err := url.Parse(strings.TrimSpace(endpoint))
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil ||
+			parsed.RawQuery != "" || parsed.Fragment != "" || net.ParseIP(parsed.Hostname()) != nil ||
+			(parsed.Port() != "" && parsed.Port() != "443") {
+			return fmt.Errorf("webhook secret %s must contain an HTTPS URL on port 443 without userinfo, query, or fragment", ref)
+		}
+		if _, ok := allowedHosts[strings.ToLower(parsed.Hostname())]; !ok {
+			return fmt.Errorf("webhook secret %s points to a hostname outside ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS", ref)
+		}
 	}
 	if (c.OIDCIssuer == "") != (c.OIDCAudience == "") {
 		return fmt.Errorf("ORBIT_OIDC_ISSUER and ORBIT_OIDC_AUDIENCE must be configured together")
@@ -108,6 +137,60 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+func alertWebhookSecretsFromEnv() map[string]string {
+	const prefix = "ORBIT_ALERT_WEBHOOK_SECRET_"
+	secrets := make(map[string]string)
+	for _, entry := range os.Environ() {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok || !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		ref := strings.TrimPrefix(key, prefix)
+		if ref == "" || strings.TrimSpace(value) == "" {
+			continue
+		}
+		secrets[ref] = strings.TrimSpace(value)
+	}
+	return secrets
+}
+
+func validWebhookSecretRef(value string) bool {
+	if len(value) < 1 || len(value) > 64 || value[0] < 'A' || value[0] > 'Z' {
+		return false
+	}
+	for _, char := range value {
+		if !(char >= 'A' && char <= 'Z') && !(char >= '0' && char <= '9') && char != '_' {
+			return false
+		}
+	}
+	return true
+}
+
+func validWebhookHostname(value string) bool {
+	if len(value) == 0 || len(value) > 253 || strings.HasSuffix(value, ".") || net.ParseIP(value) != nil {
+		return false
+	}
+	for _, label := range strings.Split(value, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, char := range label {
+			if !(char >= 'a' && char <= 'z') && !(char >= '0' && char <= '9') && char != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func lowerCaseList(value string) []string {
+	items := commaSeparated(value)
+	for index := range items {
+		items[index] = strings.ToLower(items[index])
+	}
+	return items
 }
 
 func validateCollectorHTTPURL(value string) error {
