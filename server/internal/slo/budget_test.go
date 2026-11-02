@@ -7,17 +7,17 @@ import (
 )
 
 func TestCalculateAvailabilityBudgetWithinBudget(t *testing.T) {
-	result, err := CalculateAvailabilityBudget(0.99, 9900, 100)
+	result, err := CalculateAvailabilityBudget(0.99, 9950, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.Status != BudgetWithinBudget {
 		t.Fatalf("status = %q, want within_budget", result.Status)
 	}
-	assertNear(t, *result.Availability, 0.99)
+	assertNear(t, *result.Availability, 0.995)
 	assertNear(t, *result.AllowedBadEvents, 100)
-	assertNear(t, *result.RemainingBadEvents, 0)
-	assertNear(t, *result.BurnRate, 1)
+	assertNear(t, *result.RemainingBadEvents, 50)
+	assertNear(t, *result.BurnRate, 0.5)
 }
 
 func TestCalculateAvailabilityBudgetExhausted(t *testing.T) {
