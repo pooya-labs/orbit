@@ -165,7 +165,8 @@ func (s *WebhookSender) Send(ctx context.Context, delivery store.AlertNotificati
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "ORBIT-Alert-Notifier/1.0")
 	request.Header.Set("X-ORBIT-Delivery-ID", delivery.ID)
-	request.Header.Set("Idempotency-Key", delivery.AlertInstanceEventID)
+	request.Header.Set("X-ORBIT-Event-ID", delivery.AlertInstanceEventID)
+	request.Header.Set("Idempotency-Key", delivery.ID)
 
 	response, err := s.client.Do(request)
 	if err != nil {
