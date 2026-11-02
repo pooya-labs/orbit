@@ -174,17 +174,17 @@ jobs:
           - name: OpenTelemetry Collector
             image: otel/opentelemetry-collector-contrib:0.164.0
           - name: Prometheus
-            image: prom/prometheus:v3.14.0
+            image: prom/prometheus:v3.15.1
           - name: Loki
             image: grafana/loki:3.7.9
           - name: Tempo
             image: grafana/tempo:3.1.1
           - name: Caddy production ingress
-            image: caddy:2.10.2-alpine
+            image: caddy:2.11.7-alpine
           - name: Go API build and isolation-test base
             image: golang:1.27-alpine
           - name: Telemetry demo Go build base
-            image: golang:1.25-alpine
+            image: golang:1.27-alpine
           - name: Telemetry demo runtime base
             image: alpine:3.22
           - name: Telemetry smoke test base
