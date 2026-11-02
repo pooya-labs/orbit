@@ -74,7 +74,7 @@ M05 state-changing operations are exposed only through authenticated workspace-s
 - [x] Workspace-scoped dashboard for incident creation, allowed status transitions/reopen, detail, and immutable timeline review (PR #71; CI-verified).
 - [x] Workspace-scoped alert rule definition CRUD with immutable workspace audit (PR #69; migration 010; CI passing). v1 is limited to the existing `request_rate` metric and rejects arbitrary query expressions.
 - [x] Add a scheduled workspace-aware evaluator for the allow-listed `request_rate` metric, with persisted pending/firing/resolved/cancelled instances, append-only events, deduplication, telemetry-gap handling, and PostgreSQL advisory-lock coordination across API replicas (PR #72; migration 011; CI-verified).
-- [ ] Add secure notification adapters and delivery/retry history.
+- [ ] Complete secure webhook notification delivery and retry history (implementation underway on `feat/m05-alert-notification-delivery`; migration 012).
 - [ ] Deployment annotations and release comparison.
 - [ ] SLO definitions and error-budget burn calculations.
 - [ ] Extend audit-backed history to every operator mutation and workflow.
