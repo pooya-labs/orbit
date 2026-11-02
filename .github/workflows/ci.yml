@@ -71,7 +71,7 @@ jobs:
   observability:
     name: Local telemetry pipeline end-to-end smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -130,6 +130,9 @@ jobs:
 
       - name: Verify Prometheus scrapes the ORBIT Collector
         run: docker compose --profile observability run --rm telemetry-smoke scripts/check_prometheus_scrape.py
+
+      - name: Verify authenticated workspace telemetry write-to-query isolation
+        run: docker compose --profile observability run --rm workspace-tenant-isolation-smoke
 
       - name: Stop telemetry stack and demo
         if: always()
