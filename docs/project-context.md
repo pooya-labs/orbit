@@ -36,7 +36,7 @@ The version labels above describe the progression documented by the project; the
 - **M04 workload resource attributes are now captured directly from authenticated OTLP metrics, logs, and traces.** The gateways inject the canonical workspace after identity/grant checks and persist a bounded, reviewed low-risk allowlist with per-attribute provenance in a workspace-scoped catalog. This intentionally does not mean arbitrary or complete SDK resource data is stored; allowlist expansion remains review-gated.
 - **Redis and NATS are provisioned but not yet integrated into application behavior.** Do not claim caching or event delivery until the API actually uses them and tests cover those paths.
 - **M06 API and browser security foundation:** OIDC access-token verification through issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and PostgreSQL-backed shared per-IP/per-subject rate limits are merged and CI-verified. The provider-neutral browser Authorization Code + PKCE (S256) client is implemented in PR #12: state/nonce and ID-token signature/issuer/audience validation are enforced, API calls receive an in-memory Bearer token, and access/refresh tokens are not persisted. The browser sign-in controls stay hidden unless a real issuer and public client are configured at build time.
-- **Security and production work still open:** real OIDC provider registration and browser/API end-to-end verification (including callback URI, token-endpoint CORS and API audience), provider token revocation/global logout, real DNS/ACME and host/network policy validation, telemetry retention/cardinality, dependency/secrets review, backup/restore, and operational runbooks. Workspace membership, workspace-scoped data reads, authenticated workspace-aware OTLP ingestion and transactional audit for incident/alert-rule-definition mutations are implemented; production tenant ingestion remains disabled until environment-level gates pass.
+- **Repository security baseline is merged and CI-verified.** PR #90 added the threat model, full-history Gitleaks, govulncheck, npm audit, Dependency Review, immutable full-SHA action pins, production-image scanning, and 11 retained CycloneDX SBOM artifacts. Local telemetry retention/cardinality controls, PostgreSQL backup/restore CI, and operator runbook templates are also complete. **Production gates still open:** real human/workload OIDC provider configuration and end-to-end PKCE, token/key rotation and revocation, DNS/ACME and host/network policy, sustained target-environment load/backpressure, encrypted off-host backups/PITR and measured restore, durable-history retention/archive policy, signed provenance, and hosted API/managed persistence. Production tenant ingestion remains disabled.
 
 ## 4. Established UX and engineering decisions
 
@@ -52,17 +52,14 @@ The version labels above describe the progression documented by the project; the
 
 ## 5. M04 handoff state
 
-M04 is substantially complete for the current preview. The latest verified CI run covers:
-- Go tests, race detector, vet, and build;
-- frontend typecheck and production build;
-- the local OTLP → Collector → Prometheus/Loki/Tempo → ORBIT API end-to-end smoke test.
+M04's current bounded telemetry read path and authenticated workspace-scoped resource-attribute capture are implemented and CI-verified. PR #104 added direct capture from authenticated OTLP metrics, logs, and traces, canonical workspace attribution, a reviewed low-risk attribute allowlist, per-attribute provenance, and PostgreSQL/Collector/backend isolation coverage.
 
-Remaining M04 work:
-- full OpenTelemetry resource attributes from workload instrumentation, with semantic-convention mapping and provenance;
-- arbitrary metric-name discovery and selection, after a safe metrics model and cardinality budget are defined;
-- user-facing access to individual traces/log context can be improved in later UX iterations.
+Remaining M04 follow-ups are deliberately narrow:
+- expand the workload resource semantic-convention allowlist only after privacy, cardinality, and operational review; arbitrary producer attributes remain unsupported;
+- add arbitrary metric-name discovery/selection only after a safe metrics model and cardinality budget are defined;
+- improve user-facing access to individual trace/log context in a later UX iteration.
 
-Do not widen query access to arbitrary PromQL merely to complete metric selection.
+Do not widen query access to arbitrary PromQL merely to complete metric selection. See `docs/roadmap.md` and the PR #104 handoff below for the verified implementation boundary.
 
 ## 6. M05 delivery sequence
 
@@ -88,16 +85,18 @@ The following implementation is merged and CI-verified:
 - Authenticated OTLP/HTTP and OTLP/gRPC gateways, canonical workspace attribution, producer-attribute rejection, mixed-resource batch rejection, bounded admission, shared rate limits, cross-replica revocation checks, and fail-closed dependency behavior.
 - PR #84 proves the local write-to-query boundary for metrics/logs/traces with real PostgreSQL, Collector and Prometheus/Loki/Tempo backends; workspace A sees its data and workspace B does not.
 - PostgreSQL logical backup/restore CI drill (PR #83) and seven-day local telemetry retention/cardinality controls are merged and verified.
-- The security threat model, full-history secret scanning, Go/Node dependency checks, Dependabot, and immutable action-pin policy are proposed in PR #90. Gitleaks, govulncheck, and npm audit have run; Dependency Review remains blocked until the repository Dependency Graph is enabled.
+- The repository security baseline is merged in PR #90 (`4a4c464`). Its final head passed all 13 Security jobs, including Dependency Review, Gitleaks, govulncheck, npm audit, action-pin enforcement, production image scans, and the complete 11-artifact CycloneDX SBOM upload (run `41406376150`).
 
 Remaining before production tenant ingestion:
 
-- Real OIDC provider registration, browser callback/CORS/audience verification, workload-token issuance/rotation, and provider token revocation/global logout.
-- Real DNS/ACME, TLS termination, host firewall/trusted-proxy policy, cloud/Kubernetes network policy, and an explicit internal-hop mTLS decision.
-- Target-environment multi-replica load, query latency, backpressure, outage/recovery and revocation-latency measurements with real PostgreSQL and Collector dependencies.
-- Managed-backend per-workspace ingestion/cardinality/retention/cost budgets.
-- Encrypted off-host database backups, approved retention/PITR/WAL policy, backup alerting, a rehearsed managed restore, and measured RPO/RTO.
-- Secret/key rotation, container-image scanning, action SHA pinning, remediation ownership, deployment monitoring, and operator incident runbooks.
+- Register and end-to-end verify real human and workload OIDC providers, browser callback/CORS/API audience, workload-token issuance/rotation, and provider token revocation/global logout.
+- Verify real DNS/ACME, TLS termination, host firewall/trusted-proxy policy, cloud/Kubernetes network policy, and the internal-hop mTLS decision.
+- Record target-environment multi-replica ingestion/query load, latency percentiles, backpressure, outage/recovery, and revocation-latency evidence using real PostgreSQL and Collector dependencies.
+- Define managed-backend per-workspace ingestion/cardinality/retention/cost budgets and an approved durable-history retention/archive policy.
+- Configure encrypted off-host backups, retention/PITR/WAL policy, backup alerting, and a rehearsed managed restore with measured RPO/RTO.
+- Complete signed build/release provenance, remediation ownership/SLAs, deployment monitoring, execution of the operator runbooks, and hosted API/managed persistence.
+
+The repository-level dependency, secret-scanning, action-pin, image-scan, SBOM, local retention, and backup/restore CI gates are already complete; do not repeat them as implementation tasks. Production tenant ingestion remains disabled until the environment-specific gates above are evidenced.
 
 Local development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is explicitly set. Staging/production startup must fail closed without valid human and workload authentication settings. Health/readiness endpoints should reveal status, not credentials or sensitive topology.
 
@@ -105,11 +104,13 @@ Local development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is exp
 
 The GitHub account also contains separate portfolio projects (Pooya.OS, AuraPulse, NexusCanvas, and LuminaGlass). ORBIT is its own repository and backend architecture, not a shared monorepo. Reuse visual/design conventions where appropriate, but do not couple their runtime state, APIs, or deployment pipelines without an explicit product decision.
 
-## 9. M06 security handoff
+## 9. M06 security handoff — current status
 
-The initial server-side OIDC access-token and RBAC gate is merged and CI-verified. The provider-neutral browser Authorization Code + PKCE implementation is in PR #12; it adds S256, state/nonce validation, ID-token signature/issuer/audience verification and an in-memory token lifecycle. A real issuer/client, callback and token-endpoint CORS, API audience alignment, provider revocation/global logout, production deployment, retention, dependency/secrets review, backup/restore and runbooks remain open.
+PR #90 is merged into `main` as `4a4c46445d7f6b0129cba647d1bd71c49bbd0d45`. The final PR head passed CI run `41406376148`, all 13 Security jobs in run `41406376150`, and the Pages-source check in run `41406376156`. All 11 planned CycloneDX SBOM artifacts were uploaded with 30-day retention. Repository-level Gitleaks, Dependency Review, govulncheck, npm audit, immutable action-pin enforcement, and production image scanning are complete.
 
-The API accepts access tokens only through `Authorization: Bearer`; it never reads credentials from URLs or persistent browser storage. PR #12 adds the static-dashboard PKCE client. The short-lived PKCE verifier/state/nonce transaction uses `sessionStorage`; access and refresh tokens remain in JavaScript memory. A reload clears the session. No real issuer/client is configured yet, so the public preview does not show sign-in controls by default.
+The provider-neutral browser Authorization Code + PKCE client remains implemented but is not connected to a real issuer/client; public sign-in stays hidden until deployment configuration and end-to-end validation are complete. The API accepts access tokens only through `Authorization: Bearer`; credentials are not read from URLs or persistent browser storage. Access/refresh tokens remain in JavaScript memory, while the short-lived PKCE transaction uses `sessionStorage`.
+
+The remaining M06 work is deployment/policy-specific: real human/workload OIDC and key/token lifecycle, DNS/ACME/firewall/trusted-proxy/network policy, sustained target-environment load and backpressure, encrypted off-host backup/PITR and measured restore, managed retention/quotas, durable-history archive policy, signed provenance, hosted API/managed persistence, and execution of operational runbooks. Production tenant ingestion remains disabled until those gates are evidenced.
 
 ## 10. Continuity rule
 
@@ -123,6 +124,8 @@ Then continue on a feature branch, update tests and docs with implementation, an
 
 
 ## 11. Workspace and audit foundation (M06)
+
+> Historical implementation snapshot. For current milestone status and remaining gates, use `docs/roadmap.md` and sections 7 and 9 above; the incremental notes below record how the workspace boundary was built and are not a live checklist.
 
 The shared PostgreSQL rate limiter is merged. The provider-neutral browser PKCE implementation is in PR #12; public sign-in remains disabled until a real identity provider, public client, callback URL, CORS policy and API audience are configured and verified.
 
@@ -151,6 +154,8 @@ The workspace API exposes separate metrics, logs, and traces query routes under 
 
 
 ## 12. Workload identity administration and runtime ingestion (M06)
+
+> Historical implementation snapshot. The current ingestion and production-readiness status is maintained in `docs/roadmap.md` and sections 7 and 9 above.
 
 The authenticated OTLP runtime listeners are wired in `server/cmd/orbit-api`: the human API verifier and the dedicated strict workload-token verifier are separate, and HTTP/gRPC ingestion listeners start only when workload OIDC is explicitly configured. The gateways require the shared PostgreSQL rate-limit store, use bounded request/concurrency limits, and forward only to the private Collector endpoints. The listeners default to loopback. PR #56 adds an optional Caddy TLS edge-ingress Compose overlay; a live deployment still requires real DNS/ACME, host firewall and trusted-proxy verification, production secret delivery, and deployment-specific private-network policy as described in ADR 0002.
 
