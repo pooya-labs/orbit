@@ -951,7 +951,7 @@ paths:
       tags: [Deployments]
       operationId: compareWorkspaceDeploymentAnnotations
       summary: Compare two deployments of the same service
-      description: Compares immutable deployment metadata for two different deployments of the same service, in chronological order. Returns elapsed time and whether the version or commit changed. This endpoint does not infer causal relationships or compute telemetry deltas.
+      description: Compares immutable deployment metadata for two different deployments of the same service and environment, in chronological order. Returns elapsed time and whether the version or commit changed. This endpoint does not infer causal relationships or compute telemetry deltas.
       security:
         - BearerAuth: []
       parameters:
