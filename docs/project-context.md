@@ -376,7 +376,7 @@ The runbook is an operator procedure baseline, not production-readiness evidence
 
 ## M06 security automation handoff — PR #90
 
-The security work has been rebuilt on the current `main` in PR #90 to avoid the stale base of the superseded PR #85. It adds the threat-model baseline, full-history Gitleaks, Go `govulncheck`, npm audit, scheduled Dependabot, Node 22/`npm ci`, refreshed Go modules, and full-SHA pins for external GitHub Actions enforced by `scripts/check_workflow_action_pins.py`.
+The security work has been rebuilt on the current `main` in PR #90 to avoid the stale base of the superseded PR #85. It adds the threat-model baseline, full-history Gitleaks, Go `govulncheck`, npm audit, scheduled Dependabot, Node 22/`npm ci`, refreshed Go modules, and full-SHA pins for external GitHub Actions enforced by `scripts/check_workflow_action_pins.py`. It also adds a pinned Trivy scan of the built production API image using the current patched scanner line; the image scan result is pending CI.
 
 Latest previously observed scan evidence: Gitleaks passed; `govulncheck` found no vulnerabilities affecting code paths (two vulnerabilities were reported in required modules that the application does not appear to call); npm audit reported zero vulnerabilities. The workflow action pin policy must pass on the refreshed branch before this slice is considered verified.
 
