@@ -17,7 +17,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -trimpath \
     -ldflags="-s -w -X main.Version=3.1.1" \
     -o /out/tempo ./cmd/tempo \
     && go version -m /out/tempo | tee /tmp/tempo-build-info \
-    && grep -F "build vcs.revision=${TEMPO_COMMIT}" /tmp/tempo-build-info
+    && grep -F "vcs.revision=${TEMPO_COMMIT}" /tmp/tempo-build-info
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata \
