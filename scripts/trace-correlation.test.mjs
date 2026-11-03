@@ -42,4 +42,5 @@ test("rejects zero, malformed, truncated, and unrelated identifiers", () => {
 
 test("does not accept a 32-character prefix of a longer hexadecimal value", () => {
   assert.equal(extractTraceIdFromLog(`trace_id=${traceId}a`), null);
+  assert.equal(extractTraceIdFromLog(`trace_id=${traceId}g`), null);
 });
