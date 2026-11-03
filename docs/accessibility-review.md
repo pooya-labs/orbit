@@ -41,7 +41,9 @@ The web CI job now installs Playwright Test 1.64.1, axe-core/playwright 4.14.0, 
 npx playwright test --config=playwright.config.cjs
 ```
 
-Current verified run: [CI 41572533211](https://github.com/pooya16pg-spec/orbit/actions/runs/41572533211), commit `8beaef6e159b76c09847b30ace63ab3aaacddc0b`. All **10 Playwright tests passed**.
+Latest code head: `f9f170abf785a68396a5de2d8081da432b2264cf` on `feat/m01-accessibility-review` (PR #109).
+
+The web job in [CI run 41577030551](https://github.com/pooya16pg-spec/orbit/actions/runs/41577030551) passed on this head. It completed the static accessibility checks, theme contrast guard, TypeScript typecheck, production build, generated-HTML audit, and all **13 Playwright tests**. The source accessibility contract passed **68 checks**; the generated-HTML audit passed for **5 pages / 791 elements**.
 
 Coverage:
 1. First-Tab skip-link reveal and activation, followed by focus on the main landmark.
@@ -50,10 +52,18 @@ Coverage:
 4. Mobile drawer keyboard focus, Tab/Shift+Tab containment, Escape close, and trigger-focus restoration.
 5. Mobile route selection and focus restoration.
 6. Theme switching and Persian RTL direction/labels.
-7. Metrics chart table populated from a controlled API mock, selected-window update, semantic table structure, and axe scan.
+7. Metrics chart table populated from a controlled API mock, selected-window update, and semantic table structure.
 8. axe WCAG 2.1 A/AA and WCAG 2.2 AA scan on dark Overview.
 9. The same axe scan with the mobile drawer open.
 10. The same axe scan on light-theme Overview.
+11. All primary dashboard views expose an announced heading and pass the axe scan.
+12. Invalid API base paths are announced as an accessible error.
+13. Overview reflows at a 320 CSS-pixel viewport without page-level horizontal overflow.
+
+The same CI run's Go API tests/build and workflow action-pin policy jobs also passed. The local telemetry pipeline end-to-end job was still running when this snapshot was recorded; overall CI must not be described as fully green until that job completes. [Security run 41577030522](https://github.com/pooya16pg-spec/orbit/actions/runs/41577030522) passed all **13 jobs**, including dependency checks, full-history secret scanning, container-image scans, and the Tempo SBOM upload. [Pages-source verification 41577030465](https://github.com/pooya16pg-spec/orbit/actions/runs/41577030465) passed.
+
+The latest automated evidence is tied to the exact application/test-code head above. A subsequent documentation-only update does not change that tested code. The PR remains open and unmerged; `main` is unchanged.
+
 
 The rendered axe scans found and helped correct low-contrast secondary text in dark Metrics/Overview, several light-theme badge/status/avatar colors, and a workspace-switcher visible-label mismatch. The regression script now explicitly guards the affected dark and light selectors. The final current-head run passed the browser interactions and all axe scans with no reported violations in the scanned states.
 

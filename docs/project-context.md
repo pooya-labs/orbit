@@ -595,14 +595,13 @@ The source-level accessibility contract checks the table, caption, selected-wind
 
 ## M01 verification snapshot — current PR head (2026-11-03)
 
-Current reviewed branch head: `8beaef6e159b76c09847b30ace63ab3aaacddc0b` on `feat/m01-accessibility-review` (PR #109). This snapshot supersedes the earlier M01 verification snapshot above.
+Current application/test-code head: `f9f170abf785a68396a5de2d8081da432b2264cf` on `feat/m01-accessibility-review` (PR #109). The exact head passed its web verification; this snapshot supersedes older 10-test / 66-contract-check snapshots above.
 
-- CI run [41572533211](https://github.com/pooya16pg-spec/orbit/actions/runs/41572533211) passed all four jobs: browser/static web verification, workflow action-pin policy, Go API tests/vet/build plus PostgreSQL backup/restore, and the full local telemetry end-to-end smoke test.
-- The Chromium suite ran 10 Playwright tests and passed 10/10. The axe WCAG 2.1 A/AA and WCAG 2.2 AA scans passed on dark Overview, Metrics with mocked Prometheus data, the open mobile drawer, and light-theme Overview.
-- Source accessibility contract (66 checks), dark/light contrast guard, TypeScript typecheck, production build, and generated-HTML accessibility audit all passed.
-- The telemetry E2E passed Compose and network-isolation checks, retention/cardinality guardrails, stack startup/readiness, OTLP/API queries, Prometheus scraping, authenticated workspace write-to-query isolation, and cleanup.
-- Security run [41572533228](https://github.com/pooya16pg-spec/orbit/actions/runs/41572533228) passed all 13 jobs, including full-history secret scanning, dependency vulnerability checks, and container-image scans.
-- Pages-source verification [41572533194](https://github.com/pooya16pg-spec/orbit/actions/runs/41572533194) passed. The last confirmed successful Pages deployment remains [41565547071](https://github.com/pooya16pg-spec/orbit/actions/runs/41565547071), from `fc798de`; it predates the latest contrast and workspace-name fixes. Do not treat the public Pages site as the current PR head until a matching deployment succeeds.
-- PR #109 remains open and unmerged; branch is 96 commits ahead of `main`, 0 behind. `main` is unchanged.
+- CI run [41577030551](https://github.com/pooya16pg-spec/orbit/actions/runs/41577030551): web typecheck/production build job passed. All **13 Playwright tests** passed, including mobile drawer keyboard containment/focus restoration, live Metrics table behavior, axe scans, invalid API error announcements, all-view headings, and 320 CSS-pixel reflow.
+- The source accessibility contract passed **68 checks**. The theme contrast regression guard, TypeScript typecheck, production build, and generated-HTML structural audit also passed; the latter checked **5 pages / 791 elements**.
+- The Go API tests/build and workflow action-pin policy jobs passed on the same CI run. The full local telemetry pipeline end-to-end job was still in progress at the time of this snapshot; do not claim the entire CI workflow passed until its final result is successful.
+- Security run [41577030522](https://github.com/pooya16pg-spec/orbit/actions/runs/41577030522) passed all **13 jobs**, including dependency vulnerability checks, full-history secret scanning, patched Tempo/Caddy and first-party image scans, and CycloneDX SBOM generation/upload.
+- Pages-source verification [41577030465](https://github.com/pooya16pg-spec/orbit/actions/runs/41577030465) passed. No newer successful Pages deployment for this PR head was verified; the canonical public site should not be assumed to show this branch.
+- PR #109 remains open and unmerged. `main` is unchanged.
 
-Automated browser/axe checks do not replace M01's manual acceptance: keyboard-only operation across all views/forms, NVDA/VoiceOver/TalkBack behavior, responsive reflow/zoom, reduced-motion behavior, rendered contrast in all interactive states, and a human review of chart/table reading experience and visible controls remain outstanding. Do not mark M01 complete or merge PR #109 solely from these CI results.
+Automated Chromium/axe checks do not replace M01's manual acceptance: keyboard-only operation across all views/forms, NVDA/VoiceOver/TalkBack behavior, responsive zoom/reflow and RTL, reduced-motion behavior, rendered contrast in all interactive states, and a human review of chart/table reading experience and visible controls remain outstanding. Do not mark M01 complete or merge PR #109 solely from these CI results.
