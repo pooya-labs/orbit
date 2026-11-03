@@ -763,7 +763,7 @@ Current main: 0348f8831d8f008970ad6c42532620a12ff5a0e0. PR #120 is squash-merged
 
 ### Next work — do not repeat merged regressions
 
-1. Finish the post-merge CI run [41612768223](https://github.com/pooya16pg-spec/orbit/actions/runs/41612768223) and record its final conclusion.
+1. Post-merge CI [41612768223](https://github.com/pooya16pg-spec/orbit/actions/runs/41612768223) is complete and passed all four jobs. No additional run is needed for that commit; use CI on any subsequent code/documentation PR as the new verification point.
 2. Complete M01's human acceptance using the step-by-step manual acceptance guide (manual-acceptance-guide.md). The guide covers keyboard-only, NVDA/Windows, TalkBack/Android, VoiceOver/Apple when available, visual states, and a safe evidence template. Automated tests are not a substitute.
 3. For M06, ask the deployment owner to select the target cloud/host, real OIDC provider, DNS names, and data-retention/RPO/RTO policy before attempting infrastructure-specific rollout. The local Compose/Caddy scaffold is not production. Keep tenant-facing production ingestion disabled until evidence is recorded for each preflight gate in docs/operations-runbook.md.
 4. Do not repeat PR #110 PostgreSQL+Collector backpressure/recovery, PR #111 PostgreSQL clean restart, PR #112 SIGKILL/WAL recovery, or PR #115 multi-pool outbox claim exclusivity; all are merged and CI-verified.
