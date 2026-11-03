@@ -20,22 +20,25 @@ function Invoke-WinApp {
 }
 
 function Get-SpeechText {
-  foreach ($controlType in @("Edit", "Document")) {
-    try {
-      $raw = Invoke-WinApp -Arguments @(
-        "ui", "get-value", "", "-w", $script:speechWindowHandle,
-        "--type", $controlType, "--json"
-      )
-      $result = $raw | ConvertFrom-Json
-      if ($null -ne $result.text) {
-        return [string]$result.text
-      }
-    } catch {
-      # wx.TextCtrl is normally exposed as Edit; retry Document for provider variants.
-    }
-  }
   $tree = Invoke-WinApp -Arguments @("ui", "inspect", "-w", $script:speechWindowHandle)
-  throw ("Could not read NVDA Speech Viewer text through UI Automation." + [Environment]::NewLine + $tree)
+  $cleanTree = [regex]::Replace($tree, "\x1B\[[0-9;]*m", "")
+  $documentMatch = [regex]::Match(
+    $cleanTree,
+    '(?im)^\s*(-\d+)\s+Document\s+"RichEdit Control"',
+  )
+  if (-not $documentMatch.Success) {
+    throw ("NVDA Speech Viewer RichEdit Document was not found in UI Automation." + [Environment]::NewLine + $cleanTree)
+  }
+
+  $documentSelector = $documentMatch.Groups[1].Value
+  $raw = Invoke-WinApp -Arguments @(
+    "ui", "get-value", $documentSelector, "-w", $script:speechWindowHandle, "--json"
+  )
+  $result = $raw | ConvertFrom-Json
+  if ($null -eq $result.text) {
+    throw ("NVDA Speech Viewer get-value returned no text. Raw result: " + $raw)
+  }
+  return [string]$result.text
 }
 
 function Get-SpeechDelta([string]$Before, [string]$After) {
@@ -222,7 +225,15 @@ enableOnPageLoad = True
   }
   Write-Host $edgeWindows
 
-  Invoke-WinApp -Arguments @("ui", "focus", "-a", "msedge") | Write-Host
+  $cleanEdgeWindows = [regex]::Replace($edgeWindows, "\x1B\[[0-9;]*m", "")
+  $edgeHandleMatch = [regex]::Match($cleanEdgeWindows, '(?im)^\s*HWND\s+(\d+):\s+"ORBIT — Systems Observatory"')
+  if (-not $edgeHandleMatch.Success) {
+    throw ("Could not identify the ORBIT Edge window handle." + [Environment]::NewLine + $cleanEdgeWindows)
+  }
+  $edgeWindowHandle = $edgeHandleMatch.Groups[1].Value
+  Invoke-WinApp -Arguments @(
+    "ui", "focus", "ORBIT — Systems Observatory", "-w", $edgeWindowHandle
+  ) | Write-Host
   Start-Sleep -Seconds 1
 
   Write-Host "=== Move focus into the web document ==="
