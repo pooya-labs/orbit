@@ -16,7 +16,7 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 - [x] Add baseline keyboard accessibility: skip-to-main link, explicit main/navigation landmarks, current-page announcement, visible focus indicators, and mobile navigation Escape/Tab/focus-return behavior. CI now guards source semantics, theme palette contrast, and the generated static HTML export (PR #109; automated coverage only).
 - [ ] Complete manual keyboard-only and screen-reader review with NVDA, VoiceOver, and TalkBack; verify rendered-state contrast (including hover/selected/disabled/error states), charts/data alternatives, responsive reflow, and all remaining controls before closing the M01 accessibility review.
 
-The contrast regression check covers the base palette plus explicit light-theme text colors against a reviewed set of pale surfaces. The live Metrics chart now exposes an expandable table alternative with localized timestamps, series labels, and values. These checks do not provide a data table for the illustrative Overview chart; visual and screen-reader acceptance of both charts remains manual.
+The contrast regression check covers the base palette plus explicit light-theme text colors against a reviewed set of pale surfaces. Both the live Metrics chart and illustrative Overview chart now expose expandable table alternatives. Metrics uses its Prometheus response; Overview uses clearly labelled samples derived from the same SVG fixture and updates its time labels to the selected window. Manual verification of the chart/table relationship and assistive-technology experience remains open.
 
 ## M02 — API and persistence foundation
 
