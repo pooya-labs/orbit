@@ -196,6 +196,26 @@ func ParseMetricGroupBy(value string) ([]string, error) {
 	return result, nil
 }
 
+func normalizeMetricGroupBy(groupBy []string) ([]string, error) {
+	if len(groupBy) > maxMetricGroupDimensions {
+		return nil, fmt.Errorf("group_by accepts at most %d dimensions", maxMetricGroupDimensions)
+	}
+	seen := make(map[string]struct{}, len(groupBy))
+	result := make([]string, 0, len(groupBy))
+	for _, label := range groupBy {
+		if _, ok := allowedMetricGroupLabels[label]; !ok {
+			return nil, errors.New("unsupported metric grouping dimension")
+		}
+		if _, exists := seen[label]; exists {
+			continue
+		}
+		seen[label] = struct{}{}
+		result = append(result, label)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
 func ValidateServiceName(value string) error {
 	if !serviceNamePattern.MatchString(value) {
 		return fmt.Errorf("service must contain only letters, numbers, dots, underscores, colons, or hyphens")
@@ -374,6 +394,8 @@ func (c *Client) Metrics(ctx context.Context, window QueryWindow, service, metri
 		return QueryResult{}, err
 	}
 	metricID, err := ParseMetricID(metricID)
+	if err != nil { return QueryResult{}, err }
+	groupBy, err = normalizeMetricGroupBy(groupBy)
 	if err != nil { return QueryResult{}, err }
 	groupLabels := []string{"service_name"}
 	for _, label := range groupBy {
@@ -666,6 +688,8 @@ func (c *Client) WorkspaceMetrics(ctx context.Context, workspaceID string, windo
 	if c == nil || c.prometheusURL == "" { return QueryResult{}, ErrNotConfigured }
 	if err := ValidateServiceName(service); err != nil { return QueryResult{}, err }
 	metricID, err := ParseMetricID(metricID)
+	if err != nil { return QueryResult{}, err }
+	groupBy, err = normalizeMetricGroupBy(groupBy)
 	if err != nil { return QueryResult{}, err }
 	groupLabels := []string{"service_name", "orbit_workspace_id"}
 	for _, label := range groupBy {
