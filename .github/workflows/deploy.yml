@@ -2,7 +2,10 @@ name: Deploy ORBIT to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      # Temporary live preview: this branch publishes over the single Pages site.
+      - feat/m01-accessibility-review
   workflow_dispatch:
 
 permissions:
