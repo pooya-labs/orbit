@@ -5,6 +5,24 @@ test.beforeEach(async ({ page }) => {
   await page.goto("./");
 });
 
+// The sidebar animates color/background on theme and route changes. Axe must
+// inspect the settled UI, not an intermediate animation frame whose blended
+// colors can sit just below the 4.5:1 text threshold.
+async function waitForNavigationTransitions(navigation) {
+  await navigation.evaluate(async (element) => {
+    // Flush style changes before querying the Web Animations API.
+    void getComputedStyle(element).color;
+    const nodes = [element, ...element.querySelectorAll("*")];
+    const transitions = nodes
+      .flatMap((node) => node.getAnimations())
+      .filter((animation) => (
+        animation.playState === "running"
+        && animation.effect?.getTiming().iterations !== Infinity
+      ));
+    await Promise.all(transitions.map((animation) => animation.finished.catch(() => undefined)));
+  });
+}
+
 test("keyboard users can reveal the skip link and reach the main landmark", async ({ page }) => {
   const skipLink = page.getByRole("link", { name: "Skip to main content" });
   const before = await skipLink.evaluate((element) => element.getBoundingClientRect().top);
@@ -294,6 +312,7 @@ test("all primary dashboard views expose an announced heading and pass axe in da
     if (theme === "light") {
       await page.getByRole("button", { name: "Switch to light theme" }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+      await waitForNavigationTransitions(navigation);
     }
 
     for (const label of labels) {
@@ -301,6 +320,7 @@ test("all primary dashboard views expose an announced heading and pass axe in da
       await item.click();
       await expect(item).toHaveAttribute("aria-current", "page");
       await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
+      await waitForNavigationTransitions(navigation);
 
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])

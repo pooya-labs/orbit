@@ -217,6 +217,9 @@ def main() -> int:
         (".demo-footnote", "#78501f", "#ffffff"),
         (".incident-open", "#80531b", "#ffffff"),
         (".footer-version", "#52646e", "#f4f7f9"),
+        # Sidebar links use settled colors that retain readable contrast in light mode.
+        (".nav-item", "#5b6c76", "#f9fcfc"),
+        (".nav-item.active", "#127868", "#e6f4f0"),
     )
     for selector, expected_foreground, surface in light_rendered_text:
         rules = [
