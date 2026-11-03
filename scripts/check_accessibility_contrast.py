@@ -106,7 +106,7 @@ def main() -> int:
     if not nav_transition:
         fail("primary navigation background transition is missing")
     transition_properties = nav_transition.group(1).split(",")
-    if any(re.search(r"(^|\\s)(color|all)(\\s|$)", item.strip()) for item in transition_properties):
+    if any(re.search(r"(^|\s)(color|all)(\s|$)", item.strip()) for item in transition_properties):
         fail("primary navigation text color must not interpolate between contrast-checked colors")
     print("PASS: primary navigation text color changes instantly; only its background may transition")
 
