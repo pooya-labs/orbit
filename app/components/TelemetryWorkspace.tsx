@@ -28,8 +28,6 @@ import type {
   TelemetryMetricsResponse,
   TelemetryTracesResponse,
   TelemetryWindow,
-  DiscoveredTelemetryService,
-  TelemetryResourceAttributesResponse,
   WorkspaceMembershipSummary,
   WorkspaceSummary,
 } from "../../lib/orbit/contracts";
@@ -48,6 +46,12 @@ type TelemetryServiceOption = {
   sources: string[];
   resource_attributes?: Record<string, unknown>;
   resource_attribute_sources?: Record<string, string[]>;
+};
+
+type TelemetryResourceAttributesView = {
+  attributes: Record<string, unknown>;
+  attribute_sources: Record<string, string[]>;
+  warnings?: string[];
 };
 
 const windows: { value: TelemetryWindow; label: string }[] = [
@@ -152,7 +156,7 @@ export default function TelemetryWorkspace({
   const [serviceLoadingMore, setServiceLoadingMore] = useState(false);
   const servicePageController = useRef<AbortController | null>(null);
   const serviceDiscoveryController = useRef<AbortController | null>(null);
-  const [resourceAttributes, setResourceAttributes] = useState<TelemetryResourceAttributesResponse | null>(null);
+  const [resourceAttributes, setResourceAttributes] = useState<TelemetryResourceAttributesView | null>(null);
   const [resourceLoading, setResourceLoading] = useState(true);
   const [resourceError, setResourceError] = useState("");
   const [metrics, setMetrics] = useState<TelemetryMetricsResponse | null>(null);
@@ -180,6 +184,8 @@ export default function TelemetryWorkspace({
         setWorkspaces([]);
         setWorkspaceId("");
         setMembership(null);
+        setServiceLoading(false);
+        setResourceLoading(false);
       }
       return;
     }
@@ -243,6 +249,7 @@ export default function TelemetryWorkspace({
           id: service.id,
           name: service.name,
           sources: service.sources,
+          last_discovered_at: service.last_discovered_at,
           resource_attributes: Object.fromEntries(
             Object.entries(service.resource_attributes ?? {}).map(([key, values]) => [
               key,
@@ -375,10 +382,6 @@ export default function TelemetryWorkspace({
       const attributes = selected?.resource_attributes ?? {};
       const sources = selected?.resource_attribute_sources ?? {};
       setResourceAttributes(selected ? {
-        service: selected.name,
-        window: windowRange,
-        queried_at: selectedService,
-        sources_queried: [],
         attributes,
         attribute_sources: sources,
       } : null);
@@ -434,7 +437,7 @@ export default function TelemetryWorkspace({
     const controller = new AbortController();
     let mounted = true;
 
-    if (!useLegacyDevelopmentReads && (!user || !workspaceId || !membership)) {
+    if (!useLegacyDevelopmentReads && (!user || !workspaceId || !membership || !selectedService)) {
       setLoading(false);
       setRefreshing(false);
       setMetrics(null);
@@ -740,7 +743,8 @@ export default function TelemetryWorkspace({
         <div className="incident-inline-notice" role="status">{tr("incidentNoWorkspaces")}</div>
       )}
       {workspaceError && <div className="telemetry-error" role="alert"><AlertCircle size={15} /><span>{workspaceError}</span></div>}
-      {serviceStatusMarker} role="group" aria-label={tr("groupBy")}>
+      {view === "Metrics" && (
+        <div className="telemetry-grouping-panel" role="group" aria-label={tr("groupBy")}>
           <span className="telemetry-kicker">{tr("groupBy")}</span>
           <button
             type="button"
