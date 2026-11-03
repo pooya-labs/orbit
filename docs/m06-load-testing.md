@@ -98,6 +98,6 @@ The existing restart smoke now runs two sequential failure phases through the sa
 1. A normal Compose `stop` followed by `start`, preserving the already-verified clean shutdown recovery case.
 2. An ungraceful `SIGKILL` of the actual PostgreSQL container followed by `start` of the same container with the same persistent data volume. The test requires the original pool to observe the outage, reconnect, and query PostgreSQL after crash/WAL recovery.
 
-Each phase checks that `pg_postmaster_start_time()` advances, so a pre-existing healthy connection cannot make the assertion pass. The runner cleanup still attempts to start PostgreSQL even when the integration test fails.
+Each phase checks that `pg_postmaster_start_time()` advances, so a pre-existing healthy connection cannot make the assertion pass. The test also commits a unique probe row before either restart and reads the same payload back after both phases, validating survival of committed data through PostgreSQL WAL crash recovery. The runner cleanup still attempts to start PostgreSQL even when the integration test fails.
 
 A process SIGKILL with a persistent Docker volume is a useful crash-recovery regression, but it is not equivalent to host power loss, torn/corrupt storage, disk failure, replication failover, network partition, or a measured production RPO/RTO.

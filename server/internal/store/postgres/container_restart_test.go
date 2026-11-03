@@ -59,6 +59,27 @@ func TestRepositoryRecoversAfterPostgresContainerRestart(t *testing.T) {
 
 	originalPool := repository.pool
 	var currentPostmasterStart time.Time
+	probeID := fmt.Sprintf("postgres-restart-%d", time.Now().UnixNano())
+	const probePayload = "committed-before-postgres-restart"
+	if _, err := repository.pool.Exec(openCtx, `
+		CREATE TABLE IF NOT EXISTS orbit_postgres_restart_probe (
+			probe_id TEXT PRIMARY KEY,
+			payload TEXT NOT NULL
+		)
+	`); err != nil {
+		t.Fatalf("create PostgreSQL restart durability probe: %v", err)
+	}
+	if _, err := repository.pool.Exec(openCtx,
+		"INSERT INTO orbit_postgres_restart_probe (probe_id, payload) VALUES ($1, $2)",
+		probeID, probePayload,
+	); err != nil {
+		t.Fatalf("commit PostgreSQL restart durability probe: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cleanupCancel()
+		_, _ = repository.pool.Exec(cleanupCtx, "DELETE FROM orbit_postgres_restart_probe WHERE probe_id = $1", probeID)
+	})
 	if err := repository.pool.QueryRow(openCtx, "SELECT pg_postmaster_start_time()").Scan(&currentPostmasterStart); err != nil {
 		t.Fatalf("read original PostgreSQL postmaster start time: %v", err)
 	}
@@ -69,7 +90,7 @@ func TestRepositoryRecoversAfterPostgresContainerRestart(t *testing.T) {
 	// Run a clean stop/start first, then an ungraceful SIGKILL/restart. Both
 	// cycles use the same Repository and pgxpool instance.
 	for _, phase := range []string{"clean", "crash"} {
-		t.Run(phase, func(t *testing.T) {
+		if !t.Run(phase, func(t *testing.T) {
 			// Force and return an established connection before the host stops
 			// the database container. This is not a first-dial retry test.
 			warmCtx, warmCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -150,9 +171,23 @@ func TestRepositoryRecoversAfterPostgresContainerRestart(t *testing.T) {
 			t.Logf("same pgxpool recovered after PostgreSQL %s restart: postmaster start time %s -> %s", phase, currentPostmasterStart.Format(time.RFC3339Nano), recoveredPostmasterStart.Format(time.RFC3339Nano))
 			currentPostmasterStart = recoveredPostmasterStart
 
+			var recoveredPayload string
+			if err := repository.pool.QueryRow(
+				openCtx,
+				"SELECT payload FROM orbit_postgres_restart_probe WHERE probe_id = $1",
+				probeID,
+			).Scan(&recoveredPayload); err != nil {
+				t.Fatalf("read committed WAL durability probe after %s restart: %v", phase, err)
+			}
+			if recoveredPayload != probePayload {
+				t.Fatalf("committed WAL durability probe changed after %s restart: got %q, want %q", phase, recoveredPayload, probePayload)
+			}
+
 			if err := writePostgresRestartMarker(controlDir, "recovered-"+phase); err != nil {
 				t.Fatal(err)
 			}
-		})
+		}) {
+			return
+		}
 	}
 }
