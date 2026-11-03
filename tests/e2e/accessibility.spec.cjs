@@ -190,6 +190,20 @@ test("Metrics chart table renders Prometheus samples and updates with the API ti
   await expect(disclosure).toHaveAttribute("open", "");
   await expect(table.locator("caption")).toContainText("6h");
   await expect(table.locator("tbody tr")).toHaveCount(6);
+
+  const metricsAxe = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  const metricsViolations = metricsAxe.violations.map((violation) => ({
+    id: violation.id,
+    impact: violation.impact,
+    help: violation.help,
+    nodes: violation.nodes.map((node) => ({
+      target: node.target,
+      summary: node.failureSummary,
+    })),
+  }));
+  expect(metricsViolations, JSON.stringify(metricsViolations, null, 2)).toEqual([]);
 });
 
 test("axe finds no WCAG 2.1 A/AA or WCAG 2.2 AA violations on Overview", async ({ page }) => {
@@ -214,6 +228,28 @@ test("axe finds no WCAG 2.1 A/AA or WCAG 2.2 AA violations in the open mobile dr
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Open navigation" }).click();
   await expect(page.getByRole("button", { name: "Close navigation" })).toBeFocused();
+
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+
+  const violations = results.violations.map((violation) => ({
+    id: violation.id,
+    impact: violation.impact,
+    help: violation.help,
+    nodes: violation.nodes.map((node) => ({
+      target: node.target,
+      summary: node.failureSummary,
+    })),
+  }));
+
+  expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+});
+
+
+test("axe finds no WCAG 2.1 A/AA or WCAG 2.2 AA violations in the light theme", async ({ page }) => {
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
