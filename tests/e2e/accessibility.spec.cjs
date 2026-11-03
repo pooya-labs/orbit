@@ -282,7 +282,7 @@ test("staging telemetry requires workspace authentication and never calls legacy
   await navigation.getByRole("button", { name: "Metrics", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Metrics" })).toBeVisible();
   await expect(page.locator(".incident-inline-notice")).toContainText(
-    "Browser sign-in is not configured for this deployment.",
+    "Browser sign-in is not configured for this deployment. Workspace telemetry is unavailable.",
   );
 
   await expect.poll(() => legacyRequests.length).toBe(0);
