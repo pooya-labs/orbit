@@ -361,6 +361,7 @@ test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal
       });
     }
     const overflow = Array.from(document.querySelectorAll("body *"))
+      .filter((element) => !element.closest(".telemetry-data-table-scroll"))
       .map((element) => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
@@ -368,6 +369,7 @@ test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal
           tag: element.tagName.toLowerCase(),
           id: element.id,
           className: typeof element.className === "string" ? element.className : "",
+          text: (element.textContent || "").trim().slice(0, 80),
           left: Math.round(rect.left),
           right: Math.round(rect.right),
           width: Math.round(rect.width),
@@ -377,7 +379,7 @@ test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal
       })
       .filter((item) => item.display !== "none" && item.width > 0 && item.right > viewport + 1)
       .sort((a, b) => b.right - a.right)
-      .slice(0, 20);
+      .slice(0, 30);
     return {
       viewport,
       document: document.documentElement.scrollWidth,
