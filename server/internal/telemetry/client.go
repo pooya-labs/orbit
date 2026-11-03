@@ -26,6 +26,7 @@ const (
 
 var ErrNotConfigured = errors.New("telemetry backend is not configured")
 var ErrWorkspaceTraceNotFound = errors.New("workspace trace not found")
+var ErrInvalidTraceID = errors.New("invalid trace ID")
 
 var traceIDPattern = regexp.MustCompile("^[0-9a-fA-F]{32}$")
 
@@ -596,7 +597,7 @@ func (c *Client) WorkspaceTrace(ctx context.Context, workspaceID, traceID string
 	}
 	normalizedTraceID := strings.ToLower(strings.TrimSpace(traceID))
 	if !traceIDPattern.MatchString(normalizedTraceID) || normalizedTraceID == strings.Repeat("0", 32) {
-		return TraceDetailResult{}, errors.New("trace ID must be a non-zero 32-character hexadecimal value")
+		return TraceDetailResult{}, ErrInvalidTraceID
 	}
 	if c == nil || c.tempoURL == "" {
 		return TraceDetailResult{}, ErrNotConfigured
