@@ -53,7 +53,14 @@ def color_value(value: str, label: str) -> str:
     return value
 
 
+def normalize_hex(color: str) -> str:
+    if len(color) == 4:
+        return "#" + "".join(character * 2 for character in color[1:]).lower()
+    return color.lower()
+
+
 def luminance(color: str) -> float:
+    color = normalize_hex(color)
     channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
     linear = [
         value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
@@ -120,7 +127,7 @@ def main() -> int:
     )
     if not light_focus:
         fail("light-theme focus outline color is missing")
-    focus_color = light_focus.group(1).lower()
+    focus_color = normalize_hex(light_focus.group(1))
     for name, surfaces in (("dark", dark_surfaces), ("light", light_surfaces)):
         ratio = minimum_ratio(
             root["--mint"] if name == "dark" else focus_color,
@@ -129,6 +136,19 @@ def main() -> int:
         if ratio < 3.0:
             fail(f"{name} keyboard focus outline contrast is {ratio:.2f}:1 (needs 3.0:1)")
         print(f"PASS: {name} keyboard focus outline contrast >= 3.0:1 (minimum {ratio:.2f}:1)")
+
+    primary_rule = next(
+        (
+            body for selector, body in RULE_PATTERN.findall(css)
+            if 'html[data-theme="light"]' in selector and ".button-primary" in selector
+            and re.search(r"background\\s*:", body)
+        ),
+        "",
+    )
+    primary_background_match = re.search(r"background\\s*:\\s*(#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?)", primary_rule)
+    if not primary_background_match:
+        fail("light primary button background is missing")
+    primary_background = normalize_hex(primary_background_match.group(1))
 
     checked_light_colors = 0
     for match in RULE_PATTERN.finditer(css):
