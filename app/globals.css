@@ -1386,6 +1386,10 @@ html[data-theme="light"] .audit-filter.active { background: rgba(42,159,140,.1);
 
 /* Accessible data alternative for telemetry time-series charts */
 .telemetry-data-table {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   margin-top: 12px;
   border-top: 1px solid var(--line-soft);
   padding-top: 8px;
@@ -1399,8 +1403,12 @@ html[data-theme="light"] .audit-filter.active { background: rgba(42,159,140,.1);
   font-weight: 600;
 }
 .telemetry-data-table-scroll {
+  display: block;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 .telemetry-data-table table {
   width: 100%;
