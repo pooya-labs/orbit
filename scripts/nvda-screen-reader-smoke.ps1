@@ -47,7 +47,7 @@ function Get-SpeechDelta([string]$Before, [string]$After) {
 
 function Wait-SpeechDelta {
   param(
-    [Parameter(Mandatory = $true)][string]$Before,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Before,
     [Parameter(Mandatory = $true)][string]$ExpectedPattern,
     [int]$TimeoutSeconds = 10
   )
