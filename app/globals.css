@@ -493,6 +493,7 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 
 
 /* M04 — telemetry service discovery selector */
+.telemetry-metric-select { width: min(270px, 100%); max-width: 270px; margin-bottom: 8px; }
 .telemetry-grouping-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
 .telemetry-grouping-panel > span { margin-right: 4px; }
 .telemetry-grouping-panel button { min-height: 27px; padding: 0 9px; border: 1px solid #2a3a42; border-radius: 5px; color: #91a0a8; background: #10191f; font-size: 9px; }
