@@ -96,7 +96,8 @@ func TestWorkspaceMetricsBuildOnlyCuratedTenantScopedPromQL(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
 				if r.URL.Path != "/api/v1/query_range" {
-					t.Fatalf("Prometheus path = %q", r.URL.Path)
+					t.Errorf("Prometheus path = %q", r.URL.Path)
+					return
 				}
 				query := r.URL.Query()
 				if query.Get("query") != test.query {
