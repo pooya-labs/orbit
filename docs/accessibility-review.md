@@ -14,6 +14,7 @@ The keyboard and landmark baseline is implemented on `feat/m01-accessibility-rev
 - English and Persian labels are supplied for the skip link and primary navigation.
 - The demo chart time-range selector is a named group; its selected option is exposed with `aria-pressed`, with localized group names in English and Persian.
 - Incident and alert filters, notification delivery filters, the selected incident, and the selected SLO objective expose their state with `aria-pressed`; Audit filters and telemetry grouping already did so.
+- The live Metrics time-series chart has an expandable native data table with localized time, series, and request-rate columns; its caption identifies the selected service and time window. The Overview demo chart remains illustrative and is still part of manual chart-alternative acceptance.
 - Preview-only controls without an implemented action are disabled and expose a localized unavailable description. The top-bar Notifications control opens the implemented Notifications view, and the Docs affordance links to the repository documentation.
 
 ## Automated verification
