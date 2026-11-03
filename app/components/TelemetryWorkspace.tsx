@@ -565,6 +565,15 @@ export default function TelemetryWorkspace({
     };
   }, [apiBaseUrl, language, membership, membershipWorkspaceId, selectedTraceId, user?.sub, useLegacyDevelopmentReads, workspaceId]);
 
+  useEffect(() => {
+    if (view !== "Traces" && selectedTraceId) {
+      setSelectedTraceId("");
+      setTraceDetail(null);
+      setTraceDetailError("");
+      setTraceDetailLoading(false);
+    }
+  }, [view, selectedTraceId]);
+
   const metricSeries = useMemo(() => {
     if (!metrics) return [];
     return metrics.data.map((series, index) => {
@@ -659,7 +668,7 @@ export default function TelemetryWorkspace({
 
   const traceRows = traces?.data ?? [];
   const traceSpanRows = useMemo(() => {
-    const spans = traceDetail?.data.batches.flatMap((batch) =>
+    const spans: TempoTraceSpan[] = traceDetail?.data.batches.flatMap((batch) =>
       (batch.scopeSpans ?? []).flatMap((scope) => scope.spans ?? []),
     ) ?? [];
     const byId = new Map(spans.map((span) => [span.spanId, span]));
