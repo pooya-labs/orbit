@@ -112,3 +112,17 @@ PR #113 was squash-merged into `main` as `661ee0b7ea3faaa39197d03579e3775a5cdefd
 Stable light-theme contrast: normal text `#5b6c76` is 5.45:1 on white and 4.82:1 on the active pale background; active text `#127868` is 5.37:1 on white and 4.74:1 on the pale background.
 
 Exact PR head `8af075d01fd3178857e6aafe867d5f091a3525e6` passed CI run [41599111532](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111532): all 4 jobs and 14/14 Playwright tests, including the full 12-view dark/light axe matrix. Security run [41599111683](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111683) passed all 13 jobs. The manual keyboard, rendered-state, and real NVDA/VoiceOver/TalkBack acceptance items above remain open.
+
+
+## M01 interaction-state coverage — merged PR #114 (2026-11-03)
+
+PR #114 was squash-merged into `main` as `91f60ba15f9df37095c92d12e58e056589fec455`. It extends the rendered browser/axe checks without changing axe rules or reducing contrast thresholds.
+
+New browser coverage:
+- Keyboard-focus the active Overview navigation link to exercise the real `:focus-visible` indicator, hover Services, and run axe in both dark and light themes after transitions settle.
+- Hold the API metadata request at a deterministic test gate; assert that the connecting label is announced and the submit button is disabled, then run axe against the loading form.
+- Release the request with a structured HTTP 503 response; assert the alert and restored submit control, then run axe against the visible error state.
+
+The exact PR head `0f8d87245840d638d2a6ca886180683848282ca2` passed CI [41603839829](https://github.com/pooya16pg-spec/orbit/actions/runs/41603839829): all 4 jobs and **16/16 Playwright tests** (42.2 seconds), including the prior 12-view dark/light axe matrix, focus/hover states, loading/error states, Go tests/race/vet/build, PostgreSQL backup/restore, and the full Docker observability E2E. Security [41603839542](https://github.com/pooya16pg-spec/orbit/actions/runs/41603839542) passed all **13/13 jobs** including secret/dependency scans, image scans, and SBOMs.
+
+This closes the added automated interaction-state coverage. It does not replace manual keyboard-only acceptance or real NVDA/VoiceOver/TalkBack sessions. M01 remains open for human review and no WCAG conformance or screen-reader certification is claimed.
