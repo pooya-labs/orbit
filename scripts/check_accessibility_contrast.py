@@ -98,6 +98,18 @@ def main() -> int:
     dark_surfaces = check_theme("dark", root)
     light_surfaces = tuple(dict.fromkeys(check_theme("light", light) + SURFACE_TINTS))
 
+    nav_rule = next(
+        (body for selector, body in RULE_PATTERN.findall(css) if selector.strip() == ".nav-item"),
+        "",
+    )
+    nav_transition = re.search(r"transition\s*:\s*([^;]+)", nav_rule)
+    if not nav_transition:
+        fail("primary navigation background transition is missing")
+    transition_properties = nav_transition.group(1).split(",")
+    if any(re.search(r"(^|\s)(color|all)(\s|$)", item.strip()) for item in transition_properties):
+        fail("primary navigation text color must not interpolate between contrast-checked colors")
+    print("PASS: primary navigation text color changes instantly; only its background may transition")
+
     if ":focus-visible" not in css or "outline: 2px solid var(--mint)" not in css:
         fail("shared dark-theme keyboard focus indicator is missing")
     light_focus = re.search(
@@ -217,6 +229,11 @@ def main() -> int:
         (".demo-footnote", "#78501f", "#ffffff"),
         (".incident-open", "#80531b", "#ffffff"),
         (".footer-version", "#52646e", "#f4f7f9"),
+        # Sidebar text colors stay fixed while the active background transitions.
+        (".nav-item", "#5b6c76", "#f9fcfc"),
+        (".nav-item", "#5b6c76", "#e6f4f0"),
+        (".nav-item.active", "#127868", "#ffffff"),
+        (".nav-item.active", "#127868", "#e6f4f0"),
     )
     for selector, expected_foreground, surface in light_rendered_text:
         rules = [
