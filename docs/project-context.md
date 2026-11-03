@@ -587,7 +587,7 @@ The selected locale formats both timestamps and metric values. New English and P
 This does not complete chart acceptance: the Overview graph remains illustrative and does not expose its underlying sample points as a table. Verify both chart experiences with keyboard-only and screen-reader testing before closing M01.
 ## M01 chart alternative follow-through — Overview sample table (2026-11-03)
 
-The Overview SVG chart's static coordinate fixture has been factored into a shared coordinate list in `lib/orbit/demo.ts`. The SVG polyline/polygon path and the accessible table rows are derived from the same list. Each illustrative value is explicitly documented as estimated from the displayed 0–30k axis; it is not production or measured telemetry.
+The Overview SVG chart's static coordinate fixture has been factored into a shared coordinate list in `lib/orbit/demo.ts`. The SVG polyline/polygon path and the accessible table rows are derived from the same list. Each illustrative value is explicitly documented as an estimated requests-per-minute sample derived from the displayed 0–30k axis; the table labels the unit as requests/minute and marks it illustrative. These are not production or measured telemetry.
 
 The Overview disclosure table includes a caption stating the data is illustrative, localized time/value columns, and timestamps positioned across the currently selected one-hour, six-hour, or 24-hour window. Its x-axis labels use the same range-aware formatter, fixing the previous mismatch where the graph always displayed 09:00–10:00 regardless of selected range.
 
