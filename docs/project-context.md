@@ -681,3 +681,19 @@ Exact PR head `8af075d01fd3178857e6aafe867d5f091a3525e6` passed:
 - Security [41599111683](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111683): all **13/13 jobs**, including dependency/secret checks, image scans, and CycloneDX SBOM generation.
 
 M01 is still not fully closed: real NVDA, VoiceOver and TalkBack sessions, human keyboard-only acceptance, and rendered component-state review remain open. Do not claim WCAG certification.
+
+
+## Current handoff — after M01 navigation contrast PR #113 (2026-11-03)
+
+The M01 post-merge contrast regression is fixed and merged. PR #113 squash commit: `661ee0b7ea3faaa39197d03579e3775a5cdefd3b`. The code change keeps sidebar text colors out of CSS interpolation while background selection remains animated; the axe test waits for finite navigation transitions, and the contrast guard enforces the stable normal/active light-theme colors against both endpoint surfaces.
+
+Exact PR head `8af075d01fd3178857e6aafe867d5f091a3525e6` passed CI run `41599111532` (all 4 jobs, **14/14 browser tests**) and Security run `41599111683` (**13/13 jobs**). The full Docker pipeline on that head also passed OTLP metrics/logs/traces, ORBIT API queries, Prometheus scrape, workspace A/B isolation, and PostgreSQL restart.
+
+Documentation handoff commit before this update: `2fad9d95c907b1d815a2db8cfd901ac29c7052c7`. The only remaining open pull requests are none. Keep the human M01 keyboard/screen-reader review open; no NVDA, VoiceOver or TalkBack sessions were executed remotely and no WCAG certification is claimed.
+
+Repository-owned M06 fault/load regression work now merged:
+- PR #110: real PostgreSQL + Collector admission/backpressure/recovery, with 639 successful exports in the 20-second CI steady phase.
+- PR #111: graceful PostgreSQL container stop/start and same-pool recovery.
+- PR #112: SIGKILL-triggered PostgreSQL startup/WAL recovery, with committed probe data surviving both restarts.
+
+Do not repeat those repository tests. Remaining work requires real external decisions or infrastructure: real OIDC provider and key lifecycle, DNS/ACME and host/firewall/trusted-proxy/network policies, target-environment ingestion/query load and multi-replica p50/p95/p99 evidence, encrypted off-host backups/PITR plus measured RPO/RTO, HA/storage/power-loss fault testing, durable-history retention/archive policy approval, hosted API/managed persistence, and operational rollout. Workload semantic-convention expansion also remains blocked on privacy/cardinality/operational review. Production tenant ingestion remains disabled until those gates have recorded evidence.
