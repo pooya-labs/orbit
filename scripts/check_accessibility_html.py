@@ -122,7 +122,7 @@ def audit_file(path: Path) -> tuple[list[str], int]:
     if not any(node.text_content for node in elements if node.tag == "title"):
         errors.append(f"{prefix}: document title is missing or empty")
 
-    relative_parts = path.relative(ROOT / "out").parts
+    relative_parts = path.relative_to(ROOT / "out").parts
     is_framework_not_found = (
         path.name == "404.html"
         or any(part in {"404", "_not-found"} for part in relative_parts)
