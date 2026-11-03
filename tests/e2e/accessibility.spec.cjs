@@ -652,7 +652,7 @@ test("Chromium accessibility tree exposes NVDA-style heading and landmark naviga
   expect(navigation, "Named primary navigation must exist in Chromium's accessibility tree").toBeTruthy();
   expect(main, "Main content landmark must exist in Chromium's accessibility tree").toBeTruthy();
   expect(pageTitle, "The visible page H1 must be exposed as a level-one heading").toBeTruthy();
-  expect(sidebarGroups).toEqual(expect.arrayContaining(["Observe", "Investigate", "Deliver"]));
+  expect(sidebarGroups).toEqual(expect.arrayContaining(["OBSERVE", "INVESTIGATE", "DELIVER"]));
 
   // Report the exact keyboard-reader targets discovered by Chromium.
   console.log("ORBIT heading navigation targets:", JSON.stringify(headings, null, 2));
