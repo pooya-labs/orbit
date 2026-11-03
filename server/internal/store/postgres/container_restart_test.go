@@ -171,13 +171,16 @@ func TestRepositoryRecoversAfterPostgresContainerRestart(t *testing.T) {
 			t.Logf("same pgxpool recovered after PostgreSQL %s restart: postmaster start time %s -> %s", phase, currentPostmasterStart.Format(time.RFC3339Nano), recoveredPostmasterStart.Format(time.RFC3339Nano))
 			currentPostmasterStart = recoveredPostmasterStart
 
+			probeCtx, probeCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			var recoveredPayload string
-			if err := repository.pool.QueryRow(
-				openCtx,
+			probeErr := repository.pool.QueryRow(
+				probeCtx,
 				"SELECT payload FROM orbit_postgres_restart_probe WHERE probe_id = $1",
 				probeID,
-			).Scan(&recoveredPayload); err != nil {
-				t.Fatalf("read committed WAL durability probe after %s restart: %v", phase, err)
+			).Scan(&recoveredPayload)
+			probeCancel()
+			if probeErr != nil {
+				t.Fatalf("read committed WAL durability probe after %s restart: %v", phase, probeErr)
 			}
 			if recoveredPayload != probePayload {
 				t.Fatalf("committed WAL durability probe changed after %s restart: got %q, want %q", phase, recoveredPayload, probePayload)
