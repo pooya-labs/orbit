@@ -27,33 +27,8 @@ const (
 var ErrNotConfigured = errors.New("telemetry backend is not configured")
 var ErrWorkspaceTraceNotFound = errors.New("workspace trace not found")
 
-var traceIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{32}package telemetry
+var traceIDPattern = regexp.MustCompile("^[0-9a-fA-F]{32}$")
 
-import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"math"
-	"io"
-	"net/http"
-	"net/url"
-	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-)
-
-const (
-	maxResponseBytes = 2 << 20
-	maxResultLimit   = 100
-	maxServiceCount  = 250
-	metricName       = "orbit_demo_requests_total"
-)
-
-)
 var sloRoutePattern = regexp.MustCompile("^/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$")
 
 type AvailabilityEvents struct {
