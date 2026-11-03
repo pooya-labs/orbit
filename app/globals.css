@@ -1361,3 +1361,53 @@ html[data-theme="light"] .audit-filter.active { background: rgba(42,159,140,.1);
 .audit-page-heading h2 { margin: 7px 0 5px; color: var(--text); font: 700 20px Manrope, sans-serif; }
 .audit-page-heading p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
 .audit-heading-mark { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid rgba(101,217,193,.24); border-radius: 12px; background: var(--mint-soft); color: var(--mint); }
+
+/* Accessible data alternative for telemetry time-series charts */
+.telemetry-data-table {
+  margin-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 8px;
+}
+.telemetry-data-table > summary {
+  width: fit-content;
+  padding: 6px 0;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+}
+.telemetry-data-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.telemetry-data-table table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 10px;
+  text-align: start;
+}
+.telemetry-data-table caption {
+  padding: 2px 0 8px;
+  color: var(--muted);
+  text-align: start;
+}
+.telemetry-data-table th,
+.telemetry-data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: start;
+  white-space: nowrap;
+}
+.telemetry-data-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.telemetry-data-table td {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.telemetry-data-table th:last-child,
+.telemetry-data-table td:last-child {
+  text-align: end;
+}
