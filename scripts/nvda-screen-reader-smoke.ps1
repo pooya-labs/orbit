@@ -179,10 +179,7 @@ enableOnPageLoad = True
     # Strip ANSI color sequences before parsing the human-readable window list.
     # WinApp CLI colors HWND numbers, which otherwise breaks a simple digit regex.
     $cleanWindowList = [regex]::Replace($speechViewerOutput, "\x1B\[[0-9;]*m", "")
-    $handleMatch = [regex]::Match(
-      $cleanWindowList,
-      '(?im)HWND\s+(\d+):\s+"NVDA Speech Viewer"',
-    )
+    $handleMatch = [regex]::Match($cleanWindowList, '(?im)HWND\s+(\d+):\s+"NVDA Speech Viewer"')
     if ($handleMatch.Success) {
       $speechWindowHandle = $handleMatch.Groups[1].Value
       break
