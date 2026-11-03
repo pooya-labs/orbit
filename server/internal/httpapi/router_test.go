@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -1113,7 +1115,9 @@ func TestWorkspaceTraceDetailRouteRequiresMembershipBeforeTempoRead(t *testing.T
 			t.Errorf("Tempo path = %q; want trace detail path", request.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"batches":[{"resource":{"attributes":[{"key":"orbit.workspace.id","value":{"stringValue":"`+workspaceID+`"}}]},"scopeSpans":[{"spans":[{"traceId":"`+traceID+`","spanId":"`+strings.Repeat("b", 16)+`","name":"GET /checkout","startTimeUnixNano":"1000000","endTimeUnixNano":"2000000"}]}]}]}`))
+		traceBytes, _ := hex.DecodeString(traceID)
+		spanBytes, _ := hex.DecodeString(strings.Repeat("b", 16))
+		_, _ = w.Write([]byte(`{"trace":{"resourceSpans":[{"resource":{"attributes":[{"key":"orbit.workspace.id","value":{"stringValue":"`+workspaceID+`"}}]},"scopeSpans":[{"spans":[{"traceId":"`+base64.StdEncoding.EncodeToString(traceBytes)+`","spanId":"`+base64.StdEncoding.EncodeToString(spanBytes)+`","name":"GET /checkout","startTimeUnixNano":"1000000","endTimeUnixNano":"2000000"}]}]}]}}`))
 	}))
 	defer tempoServer.Close()
 
