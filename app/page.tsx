@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getMetadata, listWorkspaceIncidents, listWorkspaceServices, listWorkspaces } from "../lib/orbit/client";
 import type { ApiMetadata, IncidentSummary, ServiceSummary } from "../lib/orbit/contracts";
-import { chartArea, chartPoints, demoIncidents, demoServices } from "../lib/orbit/demo";
+import { chartArea, chartPoints, chartSamples, demoIncidents, demoServices } from "../lib/orbit/demo";
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../lib/orbit/i18n";
 import type { ReactNode } from "react";
 import TelemetryWorkspace, { type TelemetryView } from "./components/TelemetryWorkspace";
@@ -236,9 +236,64 @@ export default function Home() {
   const [themeReady, setThemeReady] = useState(false);
   const tr = (key: TranslationKey) => t(language, key);
   const [range, setRange] = useState("1 hour");
+  const demoChartWindowMinutes = range === "6 hours" ? 360 : range === "24 hours" ? 1440 : 60;
+  const demoChartTimeAt = (elapsedFraction: number) =>
+    new Intl.DateTimeFormat(formatLocale(language), { hour: "2-digit", minute: "2-digit" })
+      .format(Date.now() - ((1 - elapsedFraction) * demoChartWindowMinutes * 60_000));
+  const demoChartTickLabels = Array.from({ length: 7 }, (_, index) => demoChartTimeAt(index / 6));
+  const demoChartRangeLabel = language === "fa"
+    ? range === "1 hour" ? "۱ ساعت" : range === "6 hours" ? "۶ ساعت" : "۲۴ ساعت"
+    : range;
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+
+    const sidebar = sidebarRef.current;
+    if (!sidebar) return;
+
+    sidebarCloseButtonRef.current?.focus();
+
+    const getFocusableElements = () =>
+      Array.from(sidebar.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => element.getClientRects().length > 0);
+
+    const handleNavigationKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobileNavOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = getFocusableElements();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleNavigationKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleNavigationKeyDown);
+      window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
+    };
+  }, [mobileNavOpen]);
   const [showAllServices, setShowAllServices] = useState(false);
   const [sourceMode, setSourceMode] = useState<SourceMode>("demo");
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
@@ -378,27 +433,28 @@ export default function Home() {
       : null;
 
   return (
-    <main className="app-shell" data-theme={theme} dir={language === "fa" ? "rtl" : "ltr"} lang={language}>
-      {mobileNavOpen && <button className="mobile-scrim" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)} />}
-      <aside className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
+    <div className="app-shell" data-theme={theme} dir={language === "fa" ? "rtl" : "ltr"} lang={language}>
+      <a className="skip-link" href="#main-content">{tr("skipToMainContent")}</a>
+      {mobileNavOpen && <button type="button" className="mobile-scrim" aria-hidden="true" tabIndex={-1} onClick={() => setMobileNavOpen(false)} />}
+      <aside ref={sidebarRef} className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
         <div className="brand-lockup">
           <div className="brand-mark"><span /><span /><span /></div>
           <div className="brand-wordmark">ORBIT<span>.</span><small>OBSERVABILITY</small></div>
-          <button className="icon-button sidebar-close" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)}><X size={18} /></button>
+          <button ref={sidebarCloseButtonRef} type="button" className="icon-button sidebar-close" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)}><X size={18} /></button>
         </div>
 
-        <button className="workspace-switcher">
-          <div className="workspace-avatar">O</div>
+        <button type="button" className="workspace-switcher preview-unavailable" disabled title={tr("notAvailableInPreview")}>
+          <div className="workspace-avatar" aria-hidden="true">O</div>
           <div className="workspace-copy"><strong>ORBIT</strong><span>{language === "fa" ? "فضای کاری شخصی" : "Personal workspace"}</span></div>
           <ChevronDown size={15} className="muted-icon" />
         </button>
 
-        <div className="sidebar-scroll">
+        <nav className="sidebar-scroll" id="primary-navigation" aria-label={tr("primaryNavigation")}>
           {navGroups.map((group) => (
             <div className="nav-group" key={group.label}>
-              <div className="nav-group-label">{group.label === "OBSERVE" ? tr("observe") : group.label === "INVESTIGATE" ? tr("investigate") : tr("deliver")}</div>
+              <div className="nav-group-label" role="heading" aria-level={2}>{group.label === "OBSERVE" ? tr("observe") : group.label === "INVESTIGATE" ? tr("investigate") : tr("deliver")}</div>
               {group.items.map(({ label, icon: Icon, count, alert }) => (
-                <button key={label} className={`nav-item ${activeNav === label ? "active" : ""}`} onClick={() => chooseNav(label)}>
+                <button type="button" key={label} className={`nav-item ${activeNav === label ? "active" : ""}`} aria-current={activeNav === label ? "page" : undefined} onClick={() => chooseNav(label)}>
                   <Icon size={17} strokeWidth={1.75} />
                   <span>{navLabel(language, label)}</span>
                   {count && <span className={`nav-count ${alert ? "nav-alert" : ""}`}>{count}</span>}
@@ -406,7 +462,7 @@ export default function Home() {
               ))}
             </div>
           ))}
-        </div>
+        </nav>
 
         <div className="sidebar-bottom">
           <div className="usage-card">
@@ -414,8 +470,8 @@ export default function Home() {
             <div className="usage-track"><span /></div>
             <p>6.8 GB <span>{language === "fa" ? "از ۱۰ گیگابایت در ماه" : "of 10 GB monthly"}</span></p>
           </div>
-          <button className="nav-item"><Settings2 size={17} /><span>{tr("settings")}</span></button>
-          <button className="nav-item"><CircleHelp size={17} /><span>{tr("helpSupport")}</span><ExternalLink size={12} className="nav-external" /></button>
+          <button type="button" className="nav-item preview-unavailable" disabled aria-label={`${tr("settings")} — ${tr("notAvailableInPreview")}`} title={tr("notAvailableInPreview")}><Settings2 size={17} /><span>{tr("settings")}</span></button>
+          <button type="button" className="nav-item preview-unavailable" disabled aria-label={`${tr("helpSupport")} — ${tr("notAvailableInPreview")}`} title={tr("notAvailableInPreview")}><CircleHelp size={17} /><span>{tr("helpSupport")}</span><ExternalLink size={12} className="nav-external" /></button>
           <div className="profile-row">
             <div className="profile-avatar">P</div>
             <div className="profile-copy"><strong>Pooya</strong><a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a></div>
@@ -427,7 +483,7 @@ export default function Home() {
       <section className="main-panel">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="icon-button mobile-menu" aria-label={tr("openNavigation")} onClick={() => setMobileNavOpen(true)}><Menu size={19} /></button>
+            <button ref={mobileMenuButtonRef} type="button" className="icon-button mobile-menu" aria-label={tr("openNavigation")} aria-expanded={mobileNavOpen} aria-controls="primary-navigation" onClick={() => setMobileNavOpen(true)}><Menu size={19} /></button>
             <div className="breadcrumbs"><span>{tr("workspace")}</span><span className="crumb-separator">/</span><strong>{navLabel(language, activeNav)}</strong></div>
             <span className="environment-pill"><span /> {tr("production")}</span>
           </div>
@@ -445,7 +501,7 @@ export default function Home() {
             >
               {sourceMode === "api" ? <RefreshCw size={16} /> : refreshing ? <Pause size={16} /> : <Play size={16} />}
             </button>
-            <button className="icon-button notification-button" aria-label={tr("notifications")}><Bell size={17} /><i /></button>
+            <button type="button" className="icon-button notification-button" aria-label={tr("notifications")} onClick={() => chooseNav("Notifications")}><Bell size={17} /><i /></button>
             <div className="topbar-divider" />
             <AuthControls language={language} />
             <div className="topbar-divider" />
@@ -463,15 +519,15 @@ export default function Home() {
               <button type="button" className={language === "en" ? "selected" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button>
               <button type="button" className={language === "fa" ? "selected" : ""} aria-pressed={language === "fa"} onClick={() => changeLanguage("fa")}>فارسی</button>
             </div>
-            <button className="help-button"><CircleHelp size={16} /><span>{tr("docs")}</span></button>
+            <a className="help-button" href="https://github.com/pooya16pg-spec/orbit/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp size={16} /><span>{tr("docs")}</span></a>
           </div>
         </header>
 
-        <div className="content-wrap">
+        <main className="content-wrap" id="main-content" tabIndex={-1}>
           <div className="page-heading">
             <div>
               <div className="eyebrow"><span className="eyebrow-line" /> {telemetryView ? `${language === "fa" ? "زنده" : "LIVE"} ${navLabel(language, telemetryView).toUpperCase()}` : tr("systemOverview")} <span className="demo-tag">{sourceMode === "api" ? tr("apiConnected") : tr("demoEnvironment")}</span></div>
-              <h1>{activeNav === "Overview" ? tr("goodMorning") : navLabel(language, activeNav)}</h1>
+              <h1 aria-live="polite" aria-atomic="true">{activeNav === "Overview" ? tr("goodMorning") : navLabel(language, activeNav)}</h1>
               <p className="page-subtitle">{telemetryView ? tr("liveQuerySubtitle").replace("{view}", navLabel(language, telemetryView).toLowerCase()) : tr("overviewSubtitle")}</p>
             </div>
             <div className="heading-actions">
@@ -550,8 +606,8 @@ export default function Home() {
           <section className="panel traffic-panel">
             <div className="panel-header">
               <div><div className="panel-title-line"><h2>{tr("trafficPerformance")}</h2><span className="live-indicator"><i /> {tr("sample")}</span></div><p>{tr("incomingRequests")}</p></div>
-              <div className="range-switcher" role="group" aria-label={tr("last24Hours")}>
-                {["1 hour", "6 hours", "24 hours"].map((item) => <button key={item} className={range === item ? "selected" : ""} onClick={() => setRange(item)}>{language === "fa" ? (item === "1 hour" ? "۱ ساعت" : item === "6 hours" ? "۶ ساعت" : "۲۴ ساعت") : item}</button>)}
+              <div className="range-switcher" role="group" aria-label={tr("timeRange")}>
+                {["1 hour", "6 hours", "24 hours"].map((item) => <button key={item} className={range === item ? "selected" : ""} aria-pressed={range === item} onClick={() => setRange(item)}>{language === "fa" ? (item === "1 hour" ? "۱ ساعت" : item === "6 hours" ? "۶ ساعت" : "۲۴ ساعت") : item}</button>)}
               </div>
             </div>
             <div className="chart-summary">
@@ -568,10 +624,32 @@ export default function Home() {
                   <polyline points={chartPoints} fill="none" stroke="#65d9c1" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
                   <circle cx="494" cy="20" r="4" fill="#65d9c1" stroke="#101820" strokeWidth="2" vectorEffect="non-scaling-stroke" />
                 </svg>
-                <div className="chart-x-labels"><span>09:00</span><span>09:10</span><span>09:20</span><span>09:30</span><span>09:40</span><span>09:50</span><span>10:00</span></div>
+                <div className="chart-x-labels">{demoChartTickLabels.map((label, index) => <span key={index}>{label}</span>)}</div>
               </div>
             </div>
-            <div className="chart-legend"><span><i className="legend-line" /> {tr("requestsPerMin")}</span><span><i className="legend-dash" /> {tr("previousPeriod")}</span><span className="chart-footnote">{tr("illustrativeTelemetry")} · {range}</span></div>
+            <div className="chart-legend"><span><i className="legend-line" /> {tr("requestsPerMin")}</span><span><i className="legend-dash" /> {tr("previousPeriod")}</span><span className="chart-footnote">{tr("illustrativeTelemetry")} · {demoChartRangeLabel}</span></div>
+            <details className="telemetry-data-table overview-chart-data-table">
+              <summary>{tr("showOverviewChartData")}</summary>
+              <div className="telemetry-data-table-scroll" role="region" aria-label={tr("overviewChartDataCaption").replace("{range}", demoChartRangeLabel)} tabIndex={0}>
+                <table>
+                  <caption>{tr("overviewChartDataCaption").replace("{range}", demoChartRangeLabel)}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{tr("chartTime")}</th>
+                      <th scope="col">{tr("overviewChartValue")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chartSamples.map((sample) => (
+                      <tr key={sample.id}>
+                        <td>{demoChartTimeAt(sample.elapsedFraction)}</td>
+                        <td>{new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 0 }).format(sample.requestsPerMinute)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
           </section>
           ) : null}
 
@@ -599,7 +677,7 @@ export default function Home() {
             <section className="panel incidents-panel">
               <div className="panel-header compact">
                 <div><div className="panel-title-line"><h2>{tr("activeIncidents")}</h2><span className="incident-count">{incidentRows.length}</span></div><p>{tr("issuesAttention")}</p></div>
-                <button className="icon-button subtle-more" aria-label={tr("incidentOptions")}><MoreHorizontal size={18} /></button>
+                <button type="button" className="icon-button subtle-more preview-unavailable" disabled aria-label={`${tr("incidentOptions")} — ${tr("notAvailableInPreview")}`} title={tr("notAvailableInPreview")}><MoreHorizontal size={18} /></button>
               </div>
               <div className="incident-list">
                 {incidentRows.length > 0 ? incidentRows.map((incident) => (
@@ -629,8 +707,8 @@ export default function Home() {
           )}
 
           <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v0.9.0</span></span><span className="owner-credit"><strong>{tr("projectOwner")}:</strong> <a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a> <span>·</span> <a href="https://github.com/pooya16pg-spec/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a></span></footer>
-        </div>
+        </main>
       </section>
-    </main>
+    </div>
   );
 }

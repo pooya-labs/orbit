@@ -396,6 +396,7 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
                 <div className="incident-filter notification-filter">
                   {deliveryFilters.map((item) => (
                     <button key={item.value} type="button" className={filter === item.value ? "selected" : ""}
+                      aria-pressed={filter === item.value}
                       onClick={() => setFilter(item.value)}>{t(language, item.label)}</button>
                   ))}
                 </div>

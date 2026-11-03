@@ -33,10 +33,10 @@ The version labels above describe the progression documented by the project; the
 - **The optional telemetry profile** routes OTLP metrics to Prometheus, traces to Tempo, and logs to Loki. The instrumented demo workload is the verified end-to-end source. The production API itself is not yet instrumented.
 - **Prometheus, Loki, and Tempo remain the source of raw telemetry.** PostgreSQL stores service identities, source observations, discovery metadata, and bounded resource attributes; it is not intended to become a second raw metrics/logs/traces store.
 - **Telemetry query APIs stay bounded and read-only.** Windows, result counts, dimensions, and query expressions are validated. Never accept arbitrary PromQL or LogQL directly from the browser.
-- **M04 attribute extraction is still a preview.** It maps an allowlist of labels/tags into OpenTelemetry-style names. It does not yet ingest the complete resource-attribute set directly from workload SDKs or the Collector.
+- **M04 workload resource attributes are now captured directly from authenticated OTLP metrics, logs, and traces.** The gateways inject the canonical workspace after identity/grant checks and persist a bounded, reviewed low-risk allowlist with per-attribute provenance in a workspace-scoped catalog. This intentionally does not mean arbitrary or complete SDK resource data is stored; allowlist expansion remains review-gated.
 - **Redis and NATS are provisioned but not yet integrated into application behavior.** Do not claim caching or event delivery until the API actually uses them and tests cover those paths.
 - **M06 API and browser security foundation:** OIDC access-token verification through issuer discovery/JWKS, RS256/ES256 allowlisting, centralized viewer/operator/administrator route policy, explicit development mode, fail-closed staging/production startup, body/token caps, and PostgreSQL-backed shared per-IP/per-subject rate limits are merged and CI-verified. The provider-neutral browser Authorization Code + PKCE (S256) client is implemented in PR #12: state/nonce and ID-token signature/issuer/audience validation are enforced, API calls receive an in-memory Bearer token, and access/refresh tokens are not persisted. The browser sign-in controls stay hidden unless a real issuer and public client are configured at build time.
-- **Security and production work still open:** real OIDC provider registration and browser/API end-to-end verification (including callback URI, token-endpoint CORS and API audience), provider token revocation/global logout, real DNS/ACME and host/network policy validation, telemetry retention/cardinality, dependency/secrets review, backup/restore, and operational runbooks. Workspace membership, workspace-scoped data reads, authenticated workspace-aware OTLP ingestion and transactional audit for incident/alert-rule-definition mutations are implemented; production tenant ingestion remains disabled until environment-level gates pass.
+- **Repository security baseline is merged and CI-verified.** PR #90 added the threat model, full-history Gitleaks, govulncheck, npm audit, Dependency Review, immutable full-SHA action pins, production-image scanning, and 11 retained CycloneDX SBOM artifacts. Local telemetry retention/cardinality controls, PostgreSQL backup/restore CI, and operator runbook templates are also complete. **Production gates still open:** real human/workload OIDC provider configuration and end-to-end PKCE, token/key rotation and revocation, DNS/ACME and host/network policy, sustained target-environment load/backpressure, encrypted off-host backups/PITR and measured restore, durable-history retention/archive policy, signed provenance, and hosted API/managed persistence. Production tenant ingestion remains disabled.
 
 ## 4. Established UX and engineering decisions
 
@@ -52,21 +52,18 @@ The version labels above describe the progression documented by the project; the
 
 ## 5. M04 handoff state
 
-M04 is substantially complete for the current preview. The latest verified CI run covers:
-- Go tests, race detector, vet, and build;
-- frontend typecheck and production build;
-- the local OTLP → Collector → Prometheus/Loki/Tempo → ORBIT API end-to-end smoke test.
+M04's current bounded telemetry read path and authenticated workspace-scoped resource-attribute capture are implemented and CI-verified. PR #104 added direct capture from authenticated OTLP metrics, logs, and traces, canonical workspace attribution, a reviewed low-risk attribute allowlist, per-attribute provenance, and PostgreSQL/Collector/backend isolation coverage.
 
-Remaining M04 work:
-- full OpenTelemetry resource attributes from workload instrumentation, with semantic-convention mapping and provenance;
-- arbitrary metric-name discovery and selection, after a safe metrics model and cardinality budget are defined;
-- user-facing access to individual traces/log context can be improved in later UX iterations.
+Remaining M04 follow-ups are deliberately narrow:
+- expand the workload resource semantic-convention allowlist only after privacy, cardinality, and operational review; arbitrary producer attributes remain unsupported;
+- add arbitrary metric-name discovery/selection only after a safe metrics model and cardinality budget are defined;
+- improve user-facing access to individual trace/log context in a later UX iteration.
 
-Do not widen query access to arbitrary PromQL merely to complete metric selection.
+Do not widen query access to arbitrary PromQL merely to complete metric selection. See `docs/roadmap.md` and the PR #104 handoff below for the verified implementation boundary.
 
 ## 6. M05 delivery sequence
 
-M05 adds operator workflows. These are state-changing capabilities and must not be exposed publicly before the security gate in section 7.
+M05's defined operator-workflow scope is implemented and CI-verified; see `docs/roadmap.md` for the current completion record. The sequence below is retained as design history, not an active implementation backlog. State-changing operations must remain workspace-scoped and protected by the existing authentication and role checks.
 
 1. **Incident lifecycle and timeline:** define allowed state transitions, append-only timeline events, assignment/acknowledgement, resolution metadata, and optimistic concurrency. Every mutation must be auditable.
 2. **Alert rules and notification adapters:** store bounded workspace rules, evaluate them in a worker, deduplicate firing alerts, persist delivery outbox state and append-only attempt history, and send through pluggable adapters. The first webhook adapter uses exact hostname allowlists and deployment-managed secret references; raw endpoint URLs and tokens never enter the API or database. Additional adapters, acknowledgement/silence/cooldown, and latency/error-rate policies remain follow-up work. Secrets belong in environment/secret management, never database plaintext or source control.
@@ -88,16 +85,18 @@ The following implementation is merged and CI-verified:
 - Authenticated OTLP/HTTP and OTLP/gRPC gateways, canonical workspace attribution, producer-attribute rejection, mixed-resource batch rejection, bounded admission, shared rate limits, cross-replica revocation checks, and fail-closed dependency behavior.
 - PR #84 proves the local write-to-query boundary for metrics/logs/traces with real PostgreSQL, Collector and Prometheus/Loki/Tempo backends; workspace A sees its data and workspace B does not.
 - PostgreSQL logical backup/restore CI drill (PR #83) and seven-day local telemetry retention/cardinality controls are merged and verified.
-- The security threat model, full-history secret scanning, Go/Node dependency checks, Dependabot, and immutable action-pin policy are proposed in PR #90. Gitleaks, govulncheck, and npm audit have run; Dependency Review remains blocked until the repository Dependency Graph is enabled.
+- The repository security baseline is merged in PR #90 (`4a4c464`). Its final head passed all 13 Security jobs, including Dependency Review, Gitleaks, govulncheck, npm audit, action-pin enforcement, production image scans, and the complete 11-artifact CycloneDX SBOM upload (run `41406376150`).
 
 Remaining before production tenant ingestion:
 
-- Real OIDC provider registration, browser callback/CORS/audience verification, workload-token issuance/rotation, and provider token revocation/global logout.
-- Real DNS/ACME, TLS termination, host firewall/trusted-proxy policy, cloud/Kubernetes network policy, and an explicit internal-hop mTLS decision.
-- Target-environment multi-replica load, query latency, backpressure, outage/recovery and revocation-latency measurements with real PostgreSQL and Collector dependencies.
-- Managed-backend per-workspace ingestion/cardinality/retention/cost budgets.
-- Encrypted off-host database backups, approved retention/PITR/WAL policy, backup alerting, a rehearsed managed restore, and measured RPO/RTO.
-- Secret/key rotation, container-image scanning, action SHA pinning, remediation ownership, deployment monitoring, and operator incident runbooks.
+- Register and end-to-end verify real human and workload OIDC providers, browser callback/CORS/API audience, workload-token issuance/rotation, and provider token revocation/global logout.
+- Verify real DNS/ACME, TLS termination, host firewall/trusted-proxy policy, cloud/Kubernetes network policy, and the internal-hop mTLS decision.
+- Record target-environment multi-replica ingestion/query load, latency percentiles, backpressure, outage/recovery, and revocation-latency evidence using real PostgreSQL and Collector dependencies.
+- Define managed-backend per-workspace ingestion/cardinality/retention/cost budgets and an approved durable-history retention/archive policy.
+- Configure encrypted off-host backups, retention/PITR/WAL policy, backup alerting, and a rehearsed managed restore with measured RPO/RTO.
+- Complete signed build/release provenance, remediation ownership/SLAs, deployment monitoring, execution of the operator runbooks, and hosted API/managed persistence.
+
+The repository-level dependency, secret-scanning, action-pin, image-scan, SBOM, local retention, and backup/restore CI gates are already complete; do not repeat them as implementation tasks. Production tenant ingestion remains disabled until the environment-specific gates above are evidenced.
 
 Local development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is explicitly set. Staging/production startup must fail closed without valid human and workload authentication settings. Health/readiness endpoints should reveal status, not credentials or sensitive topology.
 
@@ -105,11 +104,13 @@ Local development may omit OIDC only when `ORBIT_ENVIRONMENT=development` is exp
 
 The GitHub account also contains separate portfolio projects (Pooya.OS, AuraPulse, NexusCanvas, and LuminaGlass). ORBIT is its own repository and backend architecture, not a shared monorepo. Reuse visual/design conventions where appropriate, but do not couple their runtime state, APIs, or deployment pipelines without an explicit product decision.
 
-## 9. M06 security handoff
+## 9. M06 security handoff — current status
 
-The initial server-side OIDC access-token and RBAC gate is merged and CI-verified. The provider-neutral browser Authorization Code + PKCE implementation is in PR #12; it adds S256, state/nonce validation, ID-token signature/issuer/audience verification and an in-memory token lifecycle. A real issuer/client, callback and token-endpoint CORS, API audience alignment, provider revocation/global logout, production deployment, retention, dependency/secrets review, backup/restore and runbooks remain open.
+PR #90 is merged into `main` as `4a4c46445d7f6b0129cba647d1bd71c49bbd0d45`. The final PR head passed CI run `41406376148`, all 13 Security jobs in run `41406376150`, and the Pages-source check in run `41406376156`. All 11 planned CycloneDX SBOM artifacts were uploaded with 30-day retention. Repository-level Gitleaks, Dependency Review, govulncheck, npm audit, immutable action-pin enforcement, and production image scanning are complete.
 
-The API accepts access tokens only through `Authorization: Bearer`; it never reads credentials from URLs or persistent browser storage. PR #12 adds the static-dashboard PKCE client. The short-lived PKCE verifier/state/nonce transaction uses `sessionStorage`; access and refresh tokens remain in JavaScript memory. A reload clears the session. No real issuer/client is configured yet, so the public preview does not show sign-in controls by default.
+The provider-neutral browser Authorization Code + PKCE client remains implemented but is not connected to a real issuer/client; public sign-in stays hidden until deployment configuration and end-to-end validation are complete. The API accepts access tokens only through `Authorization: Bearer`; credentials are not read from URLs or persistent browser storage. Access/refresh tokens remain in JavaScript memory, while the short-lived PKCE transaction uses `sessionStorage`.
+
+The remaining M06 work is deployment/policy-specific: real human/workload OIDC and key/token lifecycle, DNS/ACME/firewall/trusted-proxy/network policy, sustained target-environment load and backpressure, encrypted off-host backup/PITR and measured restore, managed retention/quotas, durable-history archive policy, signed provenance, hosted API/managed persistence, and execution of operational runbooks. Production tenant ingestion remains disabled until those gates are evidenced.
 
 ## 10. Continuity rule
 
@@ -123,6 +124,8 @@ Then continue on a feature branch, update tests and docs with implementation, an
 
 
 ## 11. Workspace and audit foundation (M06)
+
+> Historical implementation snapshot. For current milestone status and remaining gates, use `docs/roadmap.md` and sections 7 and 9 above; the incremental notes below record how the workspace boundary was built and are not a live checklist.
 
 The shared PostgreSQL rate limiter is merged. The provider-neutral browser PKCE implementation is in PR #12; public sign-in remains disabled until a real identity provider, public client, callback URL, CORS policy and API audience are configured and verified.
 
@@ -151,6 +154,8 @@ The workspace API exposes separate metrics, logs, and traces query routes under 
 
 
 ## 12. Workload identity administration and runtime ingestion (M06)
+
+> Historical implementation snapshot. The current ingestion and production-readiness status is maintained in `docs/roadmap.md` and sections 7 and 9 above.
 
 The authenticated OTLP runtime listeners are wired in `server/cmd/orbit-api`: the human API verifier and the dedicated strict workload-token verifier are separate, and HTTP/gRPC ingestion listeners start only when workload OIDC is explicitly configured. The gateways require the shared PostgreSQL rate-limit store, use bounded request/concurrency limits, and forward only to the private Collector endpoints. The listeners default to loopback. PR #56 adds an optional Caddy TLS edge-ingress Compose overlay; a live deployment still requires real DNS/ACME, host firewall and trusted-proxy verification, production secret delivery, and deployment-specific private-network policy as described in ADR 0002.
 
@@ -443,7 +448,7 @@ Next steps after PR #90 merge:
 2. Prioritize the remaining environment-specific M06 gates: target-environment sustained ingestion/query load and backpressure; encrypted off-host backups/PITR plus a measured restore rehearsal; real DNS/ACME, host firewall, trusted-proxy and cloud/Kubernetes network policy; and real-provider browser PKCE validation.
 3. Define and approve a compliant retention/archive policy for durable workspace audit, incident, alert, notification, and deployment history before implementing any pruning.
 4. Keep signed build/release provenance and attestation, remediation ownership/SLAs, credential rotation, and hosted API/managed persistence deployment as distinct release/deployment work.
-5. M04/M01/M02 follow-ups remain visible in `docs/roadmap.md`: full OpenTelemetry resource ingestion, accessibility review, Redis/NATS integration only where justified, and hosted API integration.
+5. M01/M04/M02 follow-ups remain visible in `docs/roadmap.md`: manual screen-reader/contrast acceptance, reviewed expansion of the OTLP resource allowlist, Redis/NATS integration only where justified, and hosted API integration.
 
 Verified final PR #90 evidence (all tied to the final PR head, not older runs):
 - PR #90 merged by squash on 2026-11-02; merge commit on `main`: `4a4c46445d7f6b0129cba647d1bd71c49bbd0d45`.
@@ -499,3 +504,104 @@ Branch: `feat/m04-workload-resource-attributes`.
 - Adds the workspace telemetry catalog route to OpenAPI and documents the source provenance. The TypeScript client now exposes a separate workspace catalog source type (including `otlp`) and `listWorkspaceTelemetryServices`, leaving the backend-discovery source union unchanged.
 
 PR #104 was squash-merged into `main` on 2026-11-02 as `fa3223e16811f61bf760d8d0b54adee7ad5245f4`. The final PR head was `ec4a5ff70fb9b1344698df5049ebbd63423dd381`; its CI and Security checks passed. GitHub Pages deploy run `41414101646` on the merge commit succeeded. Post-merge `main` CI run `41414101520` and Security run `41414101510` were started to revalidate the merge commit. Production tenant ingestion remains disabled pending the separate production ingress, real identity-provider, encrypted off-host backup/PITR, sustained-load, and operational acceptance gates.
+
+## M01 accessibility baseline — keyboard navigation and landmarks
+
+Branch: `feat/m01-accessibility-review`.
+
+- Adds an English/Persian skip link to the primary content and a focusable `main` landmark. The application shell itself is a neutral container rather than incorrectly acting as the page's main landmark.
+- Gives the sidebar an explicitly labelled `nav` landmark, semantic section headings, and `aria-current="page"` on the active view.
+- The mobile navigation trigger exposes `aria-expanded` and `aria-controls`. Opening the drawer moves focus to its close control; Escape closes it; Tab/Shift+Tab stay within it; closing returns focus to the trigger. A closed off-canvas drawer is hidden from keyboard navigation.
+- Applies a shared `:focus-visible` indicator to buttons, links, inputs, selects, textareas, and focusable targets. Existing reduced-motion support is retained.
+- Adds `scripts/check_accessibility_contract.py` to the web CI job to prevent regressions in the static keyboard/landmark contract.
+
+This is a baseline implementation, not a completed screen-reader audit. NVDA, VoiceOver, and TalkBack have not been exercised by CI and require manual verification. Color contrast in both themes, chart/data alternatives, and remaining non-functional demo controls also require manual review. Keep the second M01 accessibility checkbox open until those acceptance checks are performed.
+
+## M01 accessibility baseline — keyboard and landmark improvements
+
+Branch: `feat/m01-accessibility-review`.
+
+- Adds a localized skip link to a focusable `main` landmark; the app shell remains a neutral container.
+- Gives the sidebar a named primary-navigation landmark, semantic group headings, and an `aria-current="page"` marker for the active view. The current view heading is announced politely after client-side navigation changes.
+- Adds expanded/controlled state to the mobile menu button, initial focus on the drawer close button, Escape close, Tab/Shift+Tab containment, focus restoration, and removes the closed off-canvas drawer from keyboard navigation.
+- Adds visible focus styles for links and form controls, including a darker outline against light-theme surfaces. Skip-link positioning uses logical inline-start for RTL.
+- Adds `scripts/check_accessibility_contract.py` to the web CI job. This static regression check is intentionally not presented as an axe/WCAG or assistive-technology audit.
+
+The M01 accessibility item remains partially open until manual keyboard-only and screen-reader testing with NVDA, VoiceOver, and TalkBack, rendered-state contrast verification, manual verification of both implemented chart tables, and review of remaining demo-only controls. See `docs/accessibility-review.md` for the acceptance checklist.
+
+## M01 accessibility follow-through — truthful control affordances (2026-11-02)
+
+The existing M01 accessibility branch now also addresses the visible-control audit in PR #109:
+
+- The top-bar Notifications button opens the existing Notifications view instead of acting as a no-op.
+- The Docs affordance links to the repository documentation index.
+- The workspace switcher, Settings, Help/Support, and incident-options placeholders are native disabled controls with localized unavailable labels and a visible disabled treatment; they no longer masquerade as working actions.
+- The static accessibility contract checks guard these destinations, disabled states, and English/Persian unavailable text. docs/accessibility-review.md records the actual behavior and updates the remaining manual control checklist.
+
+This does not close the manual M01 acceptance gate. The application still requires real keyboard-only testing at browser breakpoints, NVDA/VoiceOver/TalkBack verification, contrast review in both themes, and review of chart/data alternatives. Always inspect CI and Security against the exact latest PR head before merging; a passing run on an older commit does not validate later code or documentation changes. Do not infer typecheck/build success from static source review, and do not merge PR #109 before current-head CI and manual acceptance are complete.
+
+
+## M01 accessibility follow-through — selected-state semantics and verification (2026-11-03)
+
+PR #109 continues on `feat/m01-accessibility-review`. In addition to the keyboard/landmark baseline and truthful control affordances, its current implementation exposes selected state to assistive technology for:
+
+- the overview demo chart time-range selector (named group, localized in English/Persian);
+- incident status filters and the selected incident;
+- alert-instance filters;
+- notification-delivery filters;
+- the selected SLO objective.
+
+Audit-log filters and telemetry metric-group controls already exposed selected state and were preserved. The static accessibility contract now checks these additions; `docs/accessibility-review.md` carries the user-facing implementation and manual-acceptance checklist.
+
+The code head `086137db0a05fbdf8ca050a6f8ce4730a31bb0ba` passed CI run `41473967465` (all four jobs) and Security run `41473967524` (all 13 jobs). The web job explicitly passed the accessibility contract, TypeScript typecheck, and production build. All 11 expected CycloneDX SBOM artifacts were uploaded and unexpired. These automated results do not close manual acceptance: keyboard-only browser testing, NVDA/VoiceOver/TalkBack, contrast in both themes, chart/data alternatives, and final control review remain open. Do not merge PR #109 or mark M01 accessibility complete solely from these CI results.
+
+Production tenant ingestion remains disabled until the environment-specific M06 gates elsewhere in this document and `docs/roadmap.md` have recorded evidence.
+
+## M01 accessibility follow-through — generated HTML regression audit (2026-11-03)
+
+PR #109 adds `scripts/check_accessibility_html.py` and runs it after `npm run build` in the web CI job. It inspects the actual static HTML export (rather than only checking JSX source strings) for the document language/title, primary landmarks, heading presence, skip-link target, duplicate IDs, accessible names on rendered links/buttons and role-based controls, form-control labels, image alternatives, and ARIA ID references.
+
+The checker uses only Python's standard library and needs the production export in `out/`. It is a structural regression check, not browser automation, an accessibility-tree/axe scan, contrast verification, WCAG certification, or screen-reader evidence. Keep the M01 manual acceptance checkbox open until the keyboard, NVDA/VoiceOver/TalkBack, contrast, chart-alternative, and control review has been completed. The new checker and its CI integration must be verified on the exact latest PR head; do not reuse a run from a preceding commit.
+
+## Temporary Pages preview — M01 accessibility branch (2026-11-03)
+
+The GitHub Pages workflow temporarily includes `feat/m01-accessibility-review` as a push deployment source. Pages is a single-site target: this branch's deployment replaces the currently published static site at the canonical Pages URL; it is not an isolated preview URL. A later successful deployment from `main` restores the main-branch version.
+
+The deploy job selects the protected `github-pages` environment for `main`, but selects a separate `github-pages-preview` environment for the temporary review branch. The first attempt to publish directly from the feature branch was rejected before a runner started because the existing `github-pages` environment restricts deployment branches. Keep that protection intact; do not weaken the main environment merely to preview. The separate preview environment is intentional and exists only to let the owner inspect the branch UI. Remove the feature-branch trigger and the preview-specific environment routing after the preview session or when the PR is merged, unless the owner explicitly chooses to keep it.
+## M01 accessibility follow-through — theme contrast regression baseline (2026-11-03)
+
+- The theme palette was checked for low-contrast text. The `--subtle` token was below 4.5:1 on common dark and light surfaces; multiple explicit light-theme text colors were also too pale for normal-sized text.
+- Updated dark/light `--text`, `--muted`, `--subtle`, and `--mint` palette values so their tested combinations meet at least 4.5:1. Dark and light keyboard focus indicators are checked against the palette at 3:1 or better.
+- Darkened 75 explicit light-theme text/icon/status colors against the known pale dashboard surfaces. The light primary-action background was also darkened so its white label has sufficient contrast.
+- Added `scripts/check_accessibility_contrast.py` to the web CI job. It checks base theme tokens, focus outline contrast, and explicit light-theme text colors against the project's pale surface set.
+- This is a focused CSS palette regression check, not a rendered-page computed-style scan. Keep the manual contrast acceptance item open for actual browser states, hover/selected/disabled/loading/error states, overlays, and any component-specific surfaces not represented in the static palette set. Do not claim WCAG conformance from this script alone.
+
+The generated HTML structural audit remains in the same CI job after production build. Together, the source contract, contrast palette check, and generated HTML audit are intended to catch regressions early; they do not replace real keyboard-only and NVDA/VoiceOver/TalkBack testing.
+
+## M01 chart alternative follow-through — Metrics time-series data table (2026-11-03)
+
+The live Metrics view now renders an expandable native HTML table under the time-series chart. It exposes a caption naming the selected service and time window plus semantic column headers for localized time, series, and request rate. Values come from the same bounded Prometheus response as the chart, not a separate or synthetic data source. The table is styled for horizontal scrolling on narrow screens and inherits the application's LTR/RTL direction.
+
+The selected locale formats both timestamps and metric values. New English and Persian strings label the disclosure, caption, and columns. The source-level accessibility contract checks the details/summary, caption, headers, locale formatting calls, translations, and responsive table container.
+
+This Metrics-table note predates the Overview table added below. Both charts now expose expandable table alternatives; verify both chart experiences with keyboard-only and screen-reader testing before closing M01.
+## M01 chart alternative follow-through — Overview sample table (2026-11-03)
+
+The Overview SVG chart's static coordinate fixture has been factored into a shared coordinate list in `lib/orbit/demo.ts`. The SVG polyline/polygon path and the accessible table rows are derived from the same list. Each illustrative value is explicitly documented as an estimated requests-per-minute sample derived from the displayed 0–30k axis; the table labels the unit as requests/minute and marks it illustrative. These are not production or measured telemetry.
+
+The Overview disclosure table includes a caption stating the data is illustrative, localized time/value columns, and timestamps positioned across the currently selected one-hour, six-hour, or 24-hour window. Its x-axis labels use the same range-aware formatter, fixing the previous mismatch where the graph always displayed 09:00–10:00 regardless of selected range.
+
+The source-level accessibility contract checks the table, caption, selected-window time formatting, shared sample fixture, and Persian/English labels. Both Overview and live Metrics charts now have an expandable table alternative. Manual browser/keyboard/screen-reader checks remain mandatory.
+
+## M01 verification snapshot — current PR head (2026-11-03)
+
+Current code/test head: `5e1e37cf789bfed9baf971f914a9df895e328ea3` on `feat/m01-accessibility-review` (PR #109).
+
+- CI run [41578302352](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302352): web verification passed. All **14 Playwright tests** passed, including axe scans across all 12 primary views in both dark and light themes, plus dedicated Overview/Metrics/mobile-drawer/error scans, reduced-motion behavior, keyboard navigation, and 320 CSS-pixel reflow.
+- The source accessibility contract passed **68 checks**. The theme contrast regression guard, TypeScript typecheck, production build, and generated-HTML audit also passed; the latter checked **5 pages / 791 elements**.
+- Go API tests/build and workflow action-pin policy passed. The full local telemetry pipeline end-to-end job was still running at the latest status check; the whole CI workflow is not yet recorded as green.
+- Security run [41578302399](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302399) passed all **13 jobs**, including dependency checks, full-history secret scanning, production/telemetry image scans, and SBOM generation.
+- Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) and branch deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) passed. The current public preview is https://pooya16pg-spec.github.io/orbit/. Pages is a single-site target; publishing the feature branch replaces the canonical site until a later successful main deployment.
+- PR #109 remains open and unmerged. `main` is unchanged.
+
+Automated Chromium/axe checks do not replace M01's manual acceptance: keyboard-only operation across all views/forms, NVDA/VoiceOver/TalkBack behavior, responsive zoom/reflow and RTL, reduced-motion behavior, rendered contrast in all interactive states, and a human review of chart/table reading experience and visible controls remain outstanding. Do not mark M01 complete or merge PR #109 solely from these CI results.
