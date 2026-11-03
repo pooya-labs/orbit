@@ -373,6 +373,8 @@ func (c *Client) Metrics(ctx context.Context, window QueryWindow, service, metri
 	if err := ValidateServiceName(service); err != nil {
 		return QueryResult{}, err
 	}
+	metricID, err := ParseMetricID(metricID)
+	if err != nil { return QueryResult{}, err }
 	groupLabels := []string{"service_name"}
 	for _, label := range groupBy {
 		if _, ok := allowedMetricGroupLabels[label]; !ok {
@@ -663,6 +665,8 @@ func (c *Client) WorkspaceMetrics(ctx context.Context, workspaceID string, windo
 	if err := validateWorkspaceID(workspaceID); err != nil { return QueryResult{}, err }
 	if c == nil || c.prometheusURL == "" { return QueryResult{}, ErrNotConfigured }
 	if err := ValidateServiceName(service); err != nil { return QueryResult{}, err }
+	metricID, err := ParseMetricID(metricID)
+	if err != nil { return QueryResult{}, err }
 	groupLabels := []string{"service_name", "orbit_workspace_id"}
 	for _, label := range groupBy {
 		if _, ok := allowedMetricGroupLabels[label]; !ok { return QueryResult{}, errors.New("unsupported metric grouping dimension") }
