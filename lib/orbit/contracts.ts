@@ -251,6 +251,19 @@ export interface DataEnvelope<T> {
 
 export type TelemetryWindow = "15m" | "1h" | "6h" | "24h";
 
+export type TelemetryMetricID = "request_rate" | "successful_request_rate" | "failed_request_rate";
+
+export interface TelemetryMetricDefinition {
+  id: TelemetryMetricID;
+  unit: "requests/second";
+  description: string;
+  group_by: string[];
+}
+
+export interface TelemetryMetricCatalogResponse {
+  data: TelemetryMetricDefinition[];
+}
+
 export interface TelemetryQueryResponse<T> {
   source: "prometheus" | "loki" | "tempo";
   window: TelemetryWindow;
@@ -259,6 +272,7 @@ export interface TelemetryQueryResponse<T> {
   step?: string;
   service?: string;
   group_by?: string[];
+  metric?: TelemetryMetricID;
   limit?: number;
   data: T;
 }
