@@ -31,7 +31,33 @@ python3 scripts/check_accessibility_html.py
 
 The source-level Python contract is a static regression guard for landmarks, labels, focus handling, and CSS hooks. The contrast check verifies the dark/light base text palette, the explicit light-theme text colors against the project's pale surfaces, and visible keyboard focus indicators. The generated-HTML audit inspects the exported pages for document language/title, main and named navigation landmarks, a working skip-link target, heading presence, duplicate IDs, missing accessible names on interactive controls, unlabeled form fields, missing image alternatives, and broken ARIA ID references. All three checks use only Python's standard library.
 
-These checks are targeted regression guards. The palette script does not sample every computed color/background combination at runtime, and none of the scripts is an axe scan, browser accessibility-tree inspection, a full contrast audit, WCAG conformance report, or screen-reader test.
+These Python checks are targeted source, palette, and generated-HTML regression guards. The palette script does not sample every computed color/background combination at runtime. Browser-level axe checks are run separately by the Playwright suite described below; neither the static scripts nor axe alone provide a full contrast audit, WCAG conformance report, or screen-reader test.
+
+## Browser verification — 2026-11-03
+
+The web CI job now installs Playwright Test 1.64.1, axe-core/playwright 4.14.0, and Chromium. It serves the production static export under the GitHub Pages `/orbit/` base path and runs the browser suite with:
+
+```sh
+npx playwright test --config=playwright.config.cjs
+```
+
+Current verified run: [CI 41572533211](https://github.com/pooya16pg-spec/orbit/actions/runs/41572533211), commit `8beaef6e159b76c09847b30ace63ab3aaacddc0b`. All **10 Playwright tests passed**.
+
+Coverage:
+1. First-Tab skip-link reveal and activation, followed by focus on the main landmark.
+2. Primary navigation selection, active state, and announced page heading.
+3. Overview chart table, selected time range, semantic headers, and range-aware labels.
+4. Mobile drawer keyboard focus, Tab/Shift+Tab containment, Escape close, and trigger-focus restoration.
+5. Mobile route selection and focus restoration.
+6. Theme switching and Persian RTL direction/labels.
+7. Metrics chart table populated from a controlled API mock, selected-window update, semantic table structure, and axe scan.
+8. axe WCAG 2.1 A/AA and WCAG 2.2 AA scan on dark Overview.
+9. The same axe scan with the mobile drawer open.
+10. The same axe scan on light-theme Overview.
+
+The rendered axe scans found and helped correct low-contrast secondary text in dark Metrics/Overview, several light-theme badge/status/avatar colors, and a workspace-switcher visible-label mismatch. The regression script now explicitly guards the affected dark and light selectors. The final current-head run passed the browser interactions and all axe scans with no reported violations in the scanned states.
+
+This suite tests the built Chromium page, not NVDA, VoiceOver, or TalkBack. It does not establish WCAG conformance or replace the manual acceptance below.
 
 ## Manual acceptance still required
 
@@ -42,4 +68,4 @@ Before closing the M01 accessibility review, test the deployed and local applica
 3. Visual access: text and control contrast in dark and light themes, focus visibility, status information that may rely on color, and reduced-motion behavior.
 4. Control audit: confirm each visible control has a real action or is clearly presented as unavailable; verify that the Notifications control opens the Notifications view, and review the unavailable workspace, settings, incident-options, and help affordances.
 
-Record browser/OS/assistive-technology versions, findings, and remediations here. Do not claim screen-reader support or WCAG conformance solely from a passing typecheck/build or this static contract check.
+Record browser/OS/assistive-technology versions, findings, and remediations here. Do not claim screen-reader support or WCAG conformance solely from passing static checks or the automated Chromium/axe suite.

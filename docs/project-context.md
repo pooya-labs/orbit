@@ -593,15 +593,16 @@ The Overview disclosure table includes a caption stating the data is illustrativ
 
 The source-level accessibility contract checks the table, caption, selected-window time formatting, shared sample fixture, and Persian/English labels. Both Overview and live Metrics charts now have an expandable table alternative. Manual browser/keyboard/screen-reader checks remain mandatory.
 
-## M01 verification snapshot — latest PR head (2026-11-03)
+## M01 verification snapshot — current PR head (2026-11-03)
 
-Latest reviewed branch head: `5682510d5161ca5a234e362510c00b586b9b02ec` on `feat/m01-accessibility-review` (PR #109).
+Current reviewed branch head: `8beaef6e159b76c09847b30ace63ab3aaacddc0b` on `feat/m01-accessibility-review` (PR #109). This snapshot supersedes the earlier M01 verification snapshot above.
 
-- CI run [41566740636](https://github.com/pooya16pg-spec/orbit/actions/runs/41566740636) passed all four jobs: web verification, workflow action-pin policy, Go API tests/vet/build plus PostgreSQL backup/restore, and the full local telemetry end-to-end smoke test.
-- The web job passed the source accessibility contract, theme contrast regression check, TypeScript typecheck, production build, and generated-HTML structural audit.
-- The telemetry end-to-end job passed Compose/network/retention validation, stack startup and readiness, OTLP signal/API queries, Prometheus scrape, and authenticated workspace write-to-query isolation.
-- Security run [41566740674](https://github.com/pooya16pg-spec/orbit/actions/runs/41566740674) passed all 13 jobs, including full-history secret scanning, dependency vulnerability checks, and container-image scans. All 11 expected CycloneDX SBOM artifacts were uploaded and were unexpired at verification time.
-- The currently published dashboard was deployed successfully from `fc798de541300eb1adef8a04c852179d945301b3` by run [41565547071](https://github.com/pooya16pg-spec/orbit/actions/runs/41565547071). The later `a5c01a0` and `5682510` commits only corrected static CI assertions, so they do not change the published UI.
-- No PR review comments or inline review threads were returned by the GitHub review/comment query at this check. PR #109 remains open and unmerged; its branch is 78 commits ahead of `main`, 0 behind.
+- CI run [41572533211](https://github.com/pooya16pg-spec/orbit/actions/runs/41572533211) passed all four jobs: browser/static web verification, workflow action-pin policy, Go API tests/vet/build plus PostgreSQL backup/restore, and the full local telemetry end-to-end smoke test.
+- The Chromium suite ran 10 Playwright tests and passed 10/10. The axe WCAG 2.1 A/AA and WCAG 2.2 AA scans passed on dark Overview, Metrics with mocked Prometheus data, the open mobile drawer, and light-theme Overview.
+- Source accessibility contract (66 checks), dark/light contrast guard, TypeScript typecheck, production build, and generated-HTML accessibility audit all passed.
+- The telemetry E2E passed Compose and network-isolation checks, retention/cardinality guardrails, stack startup/readiness, OTLP/API queries, Prometheus scraping, authenticated workspace write-to-query isolation, and cleanup.
+- Security run [41572533228](https://github.com/pooya16pg-spec/orbit/actions/runs/41572533228) passed all 13 jobs, including full-history secret scanning, dependency vulnerability checks, and container-image scans.
+- Pages-source verification [41572533194](https://github.com/pooya16pg-spec/orbit/actions/runs/41572533194) passed. The last confirmed successful Pages deployment remains [41565547071](https://github.com/pooya16pg-spec/orbit/actions/runs/41565547071), from `fc798de`; it predates the latest contrast and workspace-name fixes. Do not treat the public Pages site as the current PR head until a matching deployment succeeds.
+- PR #109 remains open and unmerged; branch is 96 commits ahead of `main`, 0 behind. `main` is unchanged.
 
-These passing automated checks do not replace M01's manual acceptance. Keyboard-only operation, NVDA/VoiceOver/TalkBack behavior, rendered-state contrast, responsive reflow, reduced-motion behavior, and the chart/table reading experience still need human verification. Do not mark M01 complete or merge PR #109 solely from these CI results.
+Automated browser/axe checks do not replace M01's manual acceptance: keyboard-only operation across all views/forms, NVDA/VoiceOver/TalkBack behavior, responsive reflow/zoom, reduced-motion behavior, rendered contrast in all interactive states, and a human review of chart/table reading experience and visible controls remain outstanding. Do not mark M01 complete or merge PR #109 solely from these CI results.
