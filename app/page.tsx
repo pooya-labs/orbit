@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getMetadata, listWorkspaceIncidents, listWorkspaceServices, listWorkspaces } from "../lib/orbit/client";
+import { getCurrentAuthUser } from "../lib/orbit/oidc";
 import type { ApiMetadata, IncidentSummary, ServiceSummary } from "../lib/orbit/contracts";
 import { chartArea, chartPoints, chartSamples, demoIncidents, demoServices } from "../lib/orbit/demo";
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../lib/orbit/i18n";
@@ -369,17 +370,22 @@ export default function Home() {
     setApiStatus("connecting");
     setApiError("");
     try {
-      const [metadata, workspaceItems] = await Promise.all([
-        getMetadata(undefined, endpoint),
-        listWorkspaces(undefined, endpoint),
-      ]);
-      const firstWorkspace = workspaceItems[0];
-      const [serviceItems, incidentItems]: [ServiceSummary[], IncidentSummary[]] = firstWorkspace
-        ? await Promise.all([
+      const metadata = await getMetadata(undefined, endpoint);
+      let serviceItems: ServiceSummary[] = [];
+      let incidentItems: IncidentSummary[] = [];
+      // Connecting an API is a metadata handshake, not a workspace authorization
+      // check. Let unauthenticated users connect so the workspace views can
+      // present the sign-in requirement without falling back to global data.
+      if (getCurrentAuthUser()) {
+        const workspaceItems = await listWorkspaces(undefined, endpoint);
+        const firstWorkspace = workspaceItems[0];
+        if (firstWorkspace) {
+          [serviceItems, incidentItems] = await Promise.all([
             listWorkspaceServices(firstWorkspace.id, undefined, endpoint),
             listWorkspaceIncidents(firstWorkspace.id, undefined, undefined, endpoint),
-          ])
-        : [[], []];
+          ]);
+        }
+      }
       setApiMetadata(metadata);
       setApiServices(serviceItems);
       setApiIncidents(incidentItems);
@@ -580,7 +586,7 @@ export default function Home() {
               <IncidentWorkspace apiBaseUrl={apiUrlInput} language={language} sourceMode={sourceMode} />
             ) : telemetryView ? (
             sourceMode === "api" ? (
-              <TelemetryWorkspace view={telemetryView} apiBaseUrl={apiUrlInput} language={language} />
+              <TelemetryWorkspace view={telemetryView} apiBaseUrl={apiUrlInput} language={language} apiEnvironment={apiMetadata?.environment ?? "unknown"} />
             ) : (
               <section className="panel telemetry-connect-prompt">
                 <div className="source-placeholder-icon"><Activity size={18} /></div>

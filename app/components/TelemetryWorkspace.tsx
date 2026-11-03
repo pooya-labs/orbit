@@ -15,6 +15,12 @@ import {
   listTelemetryTraces,
   listTelemetryServices,
   getTelemetryServiceAttributes,
+  getWorkspaceMembership,
+  getWorkspaceTelemetryMetrics,
+  listWorkspaceTelemetryLogs,
+  listWorkspaceTelemetryServices,
+  listWorkspaceTelemetryTraces,
+  listWorkspaces,
 } from "../../lib/orbit/client";
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../../lib/orbit/i18n";
 import type {
@@ -22,11 +28,32 @@ import type {
   TelemetryMetricsResponse,
   TelemetryTracesResponse,
   TelemetryWindow,
-  DiscoveredTelemetryService,
-  TelemetryResourceAttributesResponse,
+  WorkspaceMembershipSummary,
+  WorkspaceSummary,
 } from "../../lib/orbit/contracts";
+import {
+  getCurrentAuthUser,
+  isOidcConfigured,
+  subscribeToAuth,
+  type OrbitAuthUser,
+} from "../../lib/orbit/oidc";
 
 export type TelemetryView = "Metrics" | "Logs" | "Traces";
+
+type TelemetryServiceOption = {
+  id?: string;
+  last_discovered_at?: string;
+  name: string;
+  sources: string[];
+  resource_attributes?: Record<string, unknown>;
+  resource_attribute_sources?: Record<string, string[]>;
+};
+
+type TelemetryResourceAttributesView = {
+  attributes: Record<string, unknown>;
+  attribute_sources: Record<string, string[]>;
+  warnings?: string[];
+};
 
 const windows: { value: TelemetryWindow; label: string }[] = [
   { value: "15m", label: "15 min" },
@@ -103,16 +130,26 @@ export default function TelemetryWorkspace({
   view,
   apiBaseUrl,
   language,
+  apiEnvironment,
 }: {
   view: TelemetryView;
   apiBaseUrl: string;
   language: Language;
+  apiEnvironment: string;
 }) {
   const tr = (key: TranslationKey) => t(language, key);
+  const [user, setUser] = useState<OrbitAuthUser | null>(() => getCurrentAuthUser());
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [membership, setMembership] = useState<WorkspaceMembershipSummary | null>(null);
+  const [membershipWorkspaceId, setMembershipWorkspaceId] = useState("");
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState("");
+  const useLegacyDevelopmentReads = apiEnvironment.toLowerCase() === "development" && !isOidcConfigured();
   const [windowRange, setWindowRange] = useState<TelemetryWindow>("1h");
   const [selectedService, setSelectedService] = useState("orbit-telemetry-demo");
   const [metricGroupBy, setMetricGroupBy] = useState<string[]>(["instance", "service_version", "deployment_environment"]);
-  const [discoveredServices, setDiscoveredServices] = useState<DiscoveredTelemetryService[]>([]);
+  const [discoveredServices, setDiscoveredServices] = useState<TelemetryServiceOption[]>([]);
   const [serviceWarnings, setServiceWarnings] = useState<string[]>([]);
   const [serviceError, setServiceError] = useState("");
   const [serviceLoading, setServiceLoading] = useState(true);
@@ -121,7 +158,7 @@ export default function TelemetryWorkspace({
   const [serviceLoadingMore, setServiceLoadingMore] = useState(false);
   const servicePageController = useRef<AbortController | null>(null);
   const serviceDiscoveryController = useRef<AbortController | null>(null);
-  const [resourceAttributes, setResourceAttributes] = useState<TelemetryResourceAttributesResponse | null>(null);
+  const [resourceAttributes, setResourceAttributes] = useState<TelemetryResourceAttributesView | null>(null);
   const [resourceLoading, setResourceLoading] = useState(true);
   const [resourceError, setResourceError] = useState("");
   const [metrics, setMetrics] = useState<TelemetryMetricsResponse | null>(null);
@@ -134,7 +171,137 @@ export default function TelemetryWorkspace({
   const windowOptions = windows.map((item) => ({ ...item, label: language === "fa" ? (item.value === "15m" ? "۱۵ دقیقه" : item.value === "1h" ? "۱ ساعت" : item.value === "6h" ? "۶ ساعت" : "۲۴ ساعت") : item.label }));
 
 
+  useEffect(() => subscribeToAuth(() => {
+    setUser(getCurrentAuthUser());
+    setWorkspaces([]);
+    setWorkspaceId("");
+    setMembership(null);
+    setMembershipWorkspaceId("");
+    setDiscoveredServices([]);
+    setResourceAttributes(null);
+  }), []);
+
   useEffect(() => {
+    if (useLegacyDevelopmentReads || !user) {
+      if (!useLegacyDevelopmentReads) {
+        setWorkspaces([]);
+        setWorkspaceId("");
+        setMembership(null);
+        setMembershipWorkspaceId("");
+        setServiceLoading(false);
+        setResourceLoading(false);
+      }
+      return;
+    }
+    const controller = new AbortController();
+    let current = true;
+    setWorkspaceLoading(true);
+    setWorkspaceError("");
+    listWorkspaces(controller.signal, apiBaseUrl)
+      .then((items) => {
+        if (!current) return;
+        setWorkspaces(items);
+        setWorkspaceId((previous) => (
+          previous && items.some((workspace) => workspace.id === previous)
+            ? previous
+            : items[0]?.id ?? ""
+        ));
+      })
+      .catch((cause) => {
+        if (current && !controller.signal.aborted) {
+          setWorkspaces([]);
+          setWorkspaceId("");
+          setWorkspaceError(cause instanceof Error ? cause.message : tr("telemetryWorkspaceLoadFailed"));
+        }
+      })
+      .finally(() => {
+        if (current) setWorkspaceLoading(false);
+      });
+    return () => {
+      current = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, language, user?.sub, useLegacyDevelopmentReads]);
+
+  useEffect(() => {
+    if (useLegacyDevelopmentReads || !user || !workspaceId) {
+      if (!useLegacyDevelopmentReads) {
+        setMembership(null);
+        setDiscoveredServices([]);
+        setServiceLoading(false);
+        setServiceError("");
+        setServiceWarnings([]);
+        setServiceHasMore(false);
+        setServiceCursor(null);
+        setServiceLoadingMore(false);
+        setSelectedService("orbit-telemetry-demo");
+      }
+      return;
+    }
+    const controller = new AbortController();
+    let current = true;
+    setServiceLoading(true);
+    setServiceError("");
+    setWorkspaceError("");
+    setDiscoveredServices([]);
+    setServiceHasMore(false);
+    setServiceCursor(null);
+    setServiceLoadingMore(false);
+    setMembership(null);
+    setMembershipWorkspaceId("");
+    setResourceAttributes(null);
+    Promise.all([
+      getWorkspaceMembership(workspaceId, controller.signal, apiBaseUrl),
+      listWorkspaceTelemetryServices(workspaceId, 100, controller.signal, apiBaseUrl),
+    ])
+      .then(([role, response]) => {
+        if (!current) return;
+        const options: TelemetryServiceOption[] = response.data.map((service) => ({
+          id: service.id,
+          name: service.name,
+          sources: service.sources,
+          last_discovered_at: service.last_discovered_at,
+          resource_attributes: Object.fromEntries(
+            Object.entries(service.resource_attributes ?? {}).map(([key, values]) => [
+              key,
+              values.length === 1 ? values[0] : values,
+            ]),
+          ),
+          resource_attribute_sources: service.resource_attribute_sources,
+        }));
+        setMembership(role);
+        setMembershipWorkspaceId(workspaceId);
+        setDiscoveredServices(options);
+        setServiceWarnings([]);
+        setServiceCursor(null);
+        setServiceHasMore(false);
+        setSelectedService((currentService) => (
+          options.some((service) => service.name === currentService)
+            ? currentService
+            : options.find((service) => service.name === "orbit-telemetry-demo")?.name
+              ?? options[0]?.name
+              ?? ""
+        ));
+      })
+      .catch((cause) => {
+        if (current && !controller.signal.aborted) {
+          setMembership(null);
+          setMembershipWorkspaceId("");
+          setDiscoveredServices([]);
+          setServiceError(cause instanceof Error ? cause.message : tr("telemetryWorkspaceLoadFailed"));
+        }
+      })
+      .finally(() => {
+        if (current) setServiceLoading(false);
+      });
+    return () => {
+      current = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, language, user?.sub, workspaceId, reloadKey, useLegacyDevelopmentReads]);
+
+  useEffect(() => {
+    if (!useLegacyDevelopmentReads) return;
     let mounted = true;
 
     const loadServices = async () => {
@@ -185,10 +352,10 @@ export default function TelemetryWorkspace({
       servicePageController.current = null;
       window.clearInterval(interval);
     };
-  }, [windowRange, apiBaseUrl, reloadKey, language]);
+  }, [windowRange, apiBaseUrl, reloadKey, language, useLegacyDevelopmentReads]);
 
   const loadMoreServices = async () => {
-    if (!serviceCursor || !serviceHasMore || serviceLoadingMore || serviceLoading) return;
+    if (!useLegacyDevelopmentReads || !serviceCursor || !serviceHasMore || serviceLoadingMore || serviceLoading) return;
     servicePageController.current?.abort();
     const controller = new AbortController();
     servicePageController.current = controller;
@@ -222,6 +389,22 @@ export default function TelemetryWorkspace({
   useEffect(() => {
     let mounted = true;
     const controller = new AbortController();
+
+    if (!useLegacyDevelopmentReads) {
+      const selected = discoveredServices.find((service) => service.name === selectedService);
+      const attributes = selected?.resource_attributes ?? {};
+      const sources = selected?.resource_attribute_sources ?? {};
+      setResourceAttributes(selected ? {
+        attributes,
+        attribute_sources: sources,
+      } : null);
+      setResourceError("");
+      setResourceLoading(false);
+      return () => {
+        mounted = false;
+        controller.abort();
+      };
+    }
 
     if (serviceLoading || !selectedServiceDiscovered) {
       setResourceAttributes(null);
@@ -261,11 +444,23 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [selectedService, selectedServiceDiscovered, serviceLoading, windowRange, apiBaseUrl, reloadKey, language]);
+  }, [selectedService, selectedServiceDiscovered, discoveredServices, serviceLoading, windowRange, apiBaseUrl, reloadKey, language, useLegacyDevelopmentReads]);
 
   useEffect(() => {
     const controller = new AbortController();
     let mounted = true;
+
+    if (!useLegacyDevelopmentReads && (!user || !workspaceId || !membership || membershipWorkspaceId !== workspaceId || !selectedService)) {
+      setLoading(false);
+      setRefreshing(false);
+      setMetrics(null);
+      setLogs(null);
+      setTraces(null);
+      return () => {
+        mounted = false;
+        controller.abort();
+      };
+    }
 
     const load = async (initial: boolean) => {
       if (initial) {
@@ -278,21 +473,21 @@ export default function TelemetryWorkspace({
       try {
         if (view === "Metrics") {
           const groupBy = metricGroupBy.length > 0 ? [...metricGroupBy].sort().join(",") : "none";
-          const response = await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl, selectedService, groupBy);
+          const response = useLegacyDevelopmentReads
+            ? await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl, selectedService, groupBy)
+            : await getWorkspaceTelemetryMetrics(workspaceId, windowRange, selectedService, groupBy, controller.signal, apiBaseUrl);
           if (mounted) setMetrics(response);
         } else if (view === "Logs") {
-          const response = await listTelemetryLogs(
-            { window: windowRange, service: selectedService, limit: 50 },
-            controller.signal,
-            apiBaseUrl,
-          );
+          const options = { window: windowRange, service: selectedService, limit: 50 };
+          const response = useLegacyDevelopmentReads
+            ? await listTelemetryLogs(options, controller.signal, apiBaseUrl)
+            : await listWorkspaceTelemetryLogs(workspaceId, options, controller.signal, apiBaseUrl);
           if (mounted) setLogs(response);
         } else {
-          const response = await listTelemetryTraces(
-            { window: windowRange, service: selectedService, limit: 50 },
-            controller.signal,
-            apiBaseUrl,
-          );
+          const options = { window: windowRange, service: selectedService, limit: 50 };
+          const response = useLegacyDevelopmentReads
+            ? await listTelemetryTraces(options, controller.signal, apiBaseUrl)
+            : await listWorkspaceTelemetryTraces(workspaceId, options, controller.signal, apiBaseUrl);
           if (mounted) setTraces(response);
         }
       } catch (cause) {
@@ -316,7 +511,7 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy]);
+  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy, useLegacyDevelopmentReads, user?.sub, workspaceId, membership, membershipWorkspaceId]);
 
   const metricSeries = useMemo(() => {
     if (!metrics) return [];
@@ -431,9 +626,29 @@ export default function TelemetryWorkspace({
           </span>
           <div>
             <h2 id="telemetry-title">{navLabel(language, view)}</h2>
-            <p>{tr("liveQuery")} · {backend} · {selectedService}</p>
+            <p>{tr("liveQuery")} · {backend} · {selectedService}{!useLegacyDevelopmentReads && membership ? ` · ${membership.role}` : ""}</p>
           </div>
         </div>
+        {!useLegacyDevelopmentReads && user && (
+          <label className="incident-workspace-select telemetry-workspace-select">
+            <span>{tr("incidentSelectWorkspace")}</span>
+            <select
+              value={workspaceId}
+              onChange={(event) => {
+                setMembership(null);
+                setMembershipWorkspaceId("");
+                setWorkspaceId(event.target.value);
+              }}
+              disabled={workspaceLoading || workspaces.length === 0}
+              aria-label={tr("incidentSelectWorkspace")}
+            >
+              {workspaces.length === 0 && <option value="">{tr("incidentNoWorkspaces")}</option>}
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="telemetry-service-select">
           <span>{tr("service")}</span>
           <select
@@ -455,7 +670,7 @@ export default function TelemetryWorkspace({
               discoveredServices.length > 0 ? `${discoveredServices.length} ${tr("discovered")}` : tr("noDiscoveredServices")}
           </small>
         </label>
-        {serviceHasMore ? (
+        {useLegacyDevelopmentReads && serviceHasMore ? (
           <button className="telemetry-load-more" type="button" onClick={() => void loadMoreServices()} disabled={serviceLoadingMore || serviceLoading}>
             {serviceLoadingMore ? tr("loadingMoreServices") : tr("loadMoreServices")}
           </button>
@@ -535,6 +750,16 @@ export default function TelemetryWorkspace({
         </div>
       )}
 
+      {!useLegacyDevelopmentReads && !user && (
+        <div className="incident-inline-notice" role="status">
+          <AlertCircle size={15} />
+          {isOidcConfigured() ? tr("telemetrySignInRequired") : tr("telemetryAuthNotConfigured")}
+        </div>
+      )}
+      {!useLegacyDevelopmentReads && user && !workspaceLoading && workspaces.length === 0 && !workspaceError && (
+        <div className="incident-inline-notice" role="status">{tr("incidentNoWorkspaces")}</div>
+      )}
+      {workspaceError && <div className="telemetry-error" role="alert"><AlertCircle size={15} /><span>{workspaceError}</span></div>}
       {view === "Metrics" && (
         <div className="telemetry-grouping-panel" role="group" aria-label={tr("groupBy")}>
           <span className="telemetry-kicker">{tr("groupBy")}</span>
