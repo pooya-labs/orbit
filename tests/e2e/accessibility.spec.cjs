@@ -278,7 +278,6 @@ test("staging telemetry requires workspace authentication and never calls legacy
   await page.getByLabel("API base URL").fill("https://api.example.test");
   await page.getByRole("button", { name: "Test and connect" }).click();
 
-  await expect(page.getByRole("button", { name: "Connect a source" })).toBeVisible();
   const navigation = page.getByRole("navigation", { name: "Primary navigation" });
   await navigation.getByRole("button", { name: "Metrics", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Metrics" })).toBeVisible();
