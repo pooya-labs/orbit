@@ -744,3 +744,38 @@ Current `main` is `3c51233db44804e8040bd76d01590dc0a682845e`. PR #119 is merged.
 M01 remains open only for the separate human acceptance described in `docs/accessibility-review.md` and `docs/roadmap.md`: keyboard-only checks beyond the automated navigation path, rendered control/contrast review, and actual NVDA, VoiceOver, and TalkBack sessions. Do not claim WCAG conformance or screen-reader certification from CI alone.
 
 Do not repeat repository-owned M06 regressions already merged: PR #110 real PostgreSQL + Collector backpressure/recovery; PR #111 graceful PostgreSQL restart; PR #112 SIGKILL/WAL recovery and committed-data survival; PR #115 four-pool notification outbox claim exclusivity. Production rollout, OIDC provider/key lifecycle, DNS/ACME/firewall/trusted-proxy/network controls, target-environment load and p50/p95/p99, encrypted off-host backups/PITR and measured RPO/RTO, durable-history retention/archive policy, hosted API/managed persistence, and operational rollout remain environment- or policy-dependent gates. Production tenant ingestion remains disabled until evidence for those gates is recorded.
+
+
+## Current handoff — after ORBIT v0.10.0 footer correction PR #120 (2026-11-03)
+
+Current main: 0348f8831d8f008970ad6c42532620a12ff5a0e0. PR #120 is squash-merged. It corrected the dashboard footer from the stale v0.9.0 label to v0.10.0, added a Playwright regression that compares the footer against package.json, and refreshed the release/accessibility handoff. No API, database, auth, telemetry, or production-ingress behavior changed.
+
+### PR #120 — release-version display consistency
+
+- PR: https://github.com/pooya16pg-spec/orbit/pull/120
+- Merge commit: 0348f8831d8f008970ad6c42532620a12ff5a0e0
+- Exact PR head 23625b2916457947b44611872508d469ca064130 passed CI run [41611433209](https://github.com/pooya16pg-spec/orbit/actions/runs/41611433209): all four jobs, including 18/18 Playwright tests, Go API tests/build, the complete telemetry E2E path, workspace A/B write-to-query isolation, and PostgreSQL restart/connection-pool recovery.
+- Security run [41611433351](https://github.com/pooya16pg-spec/orbit/actions/runs/41611433351) passed all 13/13 jobs.
+- After merge, Pages deployment [41612768102](https://github.com/pooya16pg-spec/orbit/actions/runs/41612768102) succeeded from the exact merge commit. The release workflow [41612863226](https://github.com/pooya16pg-spec/orbit/actions/runs/41612863226) succeeded and updated the existing v0.10.0 preview release target to this commit; no version bump was made.
+- Post-merge Security run [41612767938](https://github.com/pooya16pg-spec/orbit/actions/runs/41612767938) passed all 13 jobs. Post-merge CI run [41612768223](https://github.com/pooya16pg-spec/orbit/actions/runs/41612768223) passed the action-pin, Go, and web jobs; at handoff capture its real Docker telemetry job had passed through OTLP/API, Prometheus scrape, and was executing authenticated workspace A/B isolation with no failures recorded. Do not state that the post-merge CI run is complete until the workflow itself reports completion.
+- Public preview: https://pooya16pg-spec.github.io/orbit/
+- Release: https://github.com/pooya16pg-spec/orbit/releases/tag/v0.10.0
+
+### Next work — do not repeat merged regressions
+
+1. Finish the post-merge CI run [41612768223](https://github.com/pooya16pg-spec/orbit/actions/runs/41612768223) and record its final conclusion.
+2. Complete M01's human acceptance using the step-by-step manual acceptance guide (manual-acceptance-guide.md). The guide covers keyboard-only, NVDA/Windows, TalkBack/Android, VoiceOver/Apple when available, visual states, and a safe evidence template. Automated tests are not a substitute.
+3. For M06, ask the deployment owner to select the target cloud/host, real OIDC provider, DNS names, and data-retention/RPO/RTO policy before attempting infrastructure-specific rollout. The local Compose/Caddy scaffold is not production. Keep tenant-facing production ingestion disabled until evidence is recorded for each preflight gate in docs/operations-runbook.md.
+4. Do not repeat PR #110 PostgreSQL+Collector backpressure/recovery, PR #111 PostgreSQL clean restart, PR #112 SIGKILL/WAL recovery, or PR #115 multi-pool outbox claim exclusivity; all are merged and CI-verified.
+5. Redis/NATS remain deferred by ADR 0004 until measured cache pressure, a tighter notification latency target, or a second independent durable consumer justifies them.
+
+### External gates and required owner input
+
+- Human accessibility: actual keyboard-only and screen-reader sessions, plus rendered visual review. The contributor must record browser/OS/assistive-technology versions and findings; do not claim WCAG conformance.
+- Provider-backed browser PKCE: choose a real OIDC provider and register the static site's callback URL plus the hosted API audience; provider/client/issuer/key lifecycle must be verified end-to-end.
+- Production edge/network: choose DNS names and a host/cloud network model; verify ACME, firewall/security groups, trusted proxy behavior, private API/Collector/database/backend networks, and assess internal-hop mTLS.
+- Persistence/recovery: select managed PostgreSQL or an operated HA topology; configure encrypted off-host backups/PITR and rehearse restore with measured RPO/RTO.
+- Capacity/resilience: run sustained multi-replica ingestion and query loads on target infrastructure, capture p50/p95/p99, saturation, rejections, and recovery; host/storage loss and HA/network partitions require target-environment evidence.
+- Durable history: policy owner must approve retention/archive/legal requirements before a TTL or archive implementation is built.
+
+No production tenant ingestion is enabled. Unknown infrastructure or policy choices must remain open; do not fabricate environment evidence.
