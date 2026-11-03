@@ -561,7 +561,7 @@ test("axe covers the API source connecting, disabled-submit, and request-error s
 
   await expect(submit).toBeDisabled();
   await expect(submit).toContainText("Connecting");
-  await expect(page.getByRole("heading", { name: "Connect API" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connect an ORBIT API" })).toBeVisible();
   await expectNoAxeViolations(page, "API source connecting with submit disabled");
 
   // Release the held request only after the in-flight UI has been inspected.
