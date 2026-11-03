@@ -98,3 +98,17 @@ Verified evidence:
 - Security run 41578754427 passed all 13 jobs on the latest documentation/code head, including image scans and the CycloneDX SBOM set. Pages-source check and the temporary branch deployment also succeeded before cleanup.
 
 The automated baseline is merged, but the manual M01 acceptance checkbox remains open. No NVDA, VoiceOver, or TalkBack session was run in the remote CI environment; no WCAG conformance or screen-reader certification is claimed. Rendered visual-state contrast and human keyboard/chart-table review remain open.
+
+
+## M01 navigation contrast transition regression — merged PR #113 (2026-11-03)
+
+A post-merge axe run (CI `41597808873`) exposed two contrast violations on Service map in light theme immediately after navigation/theme transitions. The foregrounds were intermediate blended values, `#277d72` (4.42:1) and `#648085` (4.09:1), not the stable CSS values. The threshold remains 4.5:1.
+
+PR #113 was squash-merged into `main` as `661ee0b7ea3faaa39197d03579e3775a5cdefd3b`:
+- Sidebar text color changes instantly; only its background may transition. This removes the below-threshold color interpolation from the visible UI.
+- The all-view axe suite waits for finite navigation transitions to finish after route and theme changes.
+- The static contrast regression guard prevents a future color/all transition and checks the stable nav text against both endpoint surfaces.
+
+Stable light-theme contrast: normal text `#5b6c76` is 5.45:1 on white and 4.82:1 on the active pale background; active text `#127868` is 5.37:1 on white and 4.74:1 on the pale background.
+
+Exact PR head `8af075d01fd3178857e6aafe867d5f091a3525e6` passed CI run [41599111532](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111532): all 4 jobs and 14/14 Playwright tests, including the full 12-view dark/light axe matrix. Security run [41599111683](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111683) passed all 13 jobs. The manual keyboard, rendered-state, and real NVDA/VoiceOver/TalkBack acceptance items above remain open.

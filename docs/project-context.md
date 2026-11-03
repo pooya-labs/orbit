@@ -668,3 +668,16 @@ The second cycle exercises PostgreSQL startup crash/WAL recovery after an ungrac
 ## Current M06 handoff after PR #112 — 2026-11-03
 
 Current `main` at this handoff: `035fd2b2f52917a099d8b074dc1fcb016ffec3bb` (documentation-only commit after PR #112 merge `15fc476f422afbc632542e292d1c17d9a0af2796`). PR #112 merged with exact head passing CI and Security. The latest crash recovery regression is complete; do not repeat it. Remaining items are external/operational: host power loss and real storage failure, HA/replication failover, partition behavior, production throughput and latency percentiles, dashboard-query load, encrypted off-host backups/PITR and measured RPO/RTO, real DNS/ACME/firewall/trusted proxy/network controls, real-provider PKCE, durable-history retention, hosted API/managed persistence, and operational rollout. Production tenant ingestion remains disabled until those gates have evidence.
+
+
+## M01 navigation contrast follow-through — merged PR #113 (2026-11-03)
+
+PR #113 was squash-merged into `main` as `661ee0b7ea3faaa39197d03579e3775a5cdefd3b`. It addresses the axe failure on merge commit `15fc476f422afbc632542e292d1c17d9a0af2796` (CI run `41597808873`) without weakening automated checks.
+
+The failure was observed while axe scanned Service map in light theme immediately after navigation/theme changes. It reported blended transition-frame colors `#277d72` at 4.42:1 and `#648085` at 4.09:1. The stable light-theme nav colors were compliant, but interpolating the text color meant the visible transition could briefly cross below 4.5:1. The nav now switches text color immediately while allowing the background to transition. The all-view test waits for finite navigation transitions before axe runs, and the contrast guard explicitly verifies both normal and active text against both endpoints. Stable minimums: 4.82:1 normal and 4.74:1 active.
+
+Exact PR head `8af075d01fd3178857e6aafe867d5f091a3525e6` passed:
+- CI [41599111532](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111532): all 4 jobs; web job passed all **14/14 Playwright tests**, typecheck/build, accessibility contract, contrast guard, and generated HTML audit. Go race/vet/build, PostgreSQL backup/restore, action-pin policy and full Docker observability E2E also passed.
+- Security [41599111683](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111683): all **13/13 jobs**, including dependency/secret checks, image scans, and CycloneDX SBOM generation.
+
+M01 is still not fully closed: real NVDA, VoiceOver and TalkBack sessions, human keyboard-only acceptance, and rendered component-state review remain open. Do not claim WCAG certification.

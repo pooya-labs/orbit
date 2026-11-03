@@ -294,3 +294,14 @@ The same Repository/pgxpool instance completed two sequential failure phases:
 The test required the existing pool to observe both outages, reconnect, and query after each server process restart. It also committed a unique database probe row before the two phases and read the unchanged payload back after both restarts, validating committed-data survival through PostgreSQL startup/WAL recovery. Both subtests passed; total test time was **2.768 seconds**. Full CI passed 4/4 jobs, and Security passed 13/13 jobs.
 
 This closes the repository-level clean-stop and SIGKILL crash-recovery regression for a single PostgreSQL container with a persistent Docker volume. It does not simulate host power loss, corrupted/lost storage, disk/controller failure, replication failover, network partitions, PITR, or production RPO/RTO. Those remain distinct deployment and operational gates.
+
+
+## M01 PR #113 — stable contrast during navigation transitions
+
+PR #113 was squash-merged into `main` as `661ee0b7ea3faaa39197d03579e3775a5cdefd3b`. It fixes the real axe failure observed on merge commit `15fc476f422afbc632542e292d1c17d9a0af2796` in CI run `41597808873`: axe sampled two blended sidebar text colors during route/theme transitions (4.42:1 and 4.09:1), below the required 4.5:1. The stable light-theme colors were already above threshold; the failure was caused by interpolating text color during the transition.
+
+The nav label color now changes instantly while only its background may animate. The axe matrix waits for finite sidebar transitions to finish after a route/theme change. The static contrast guard prevents reintroducing a text-color or `all` transition and checks the settled foregrounds on both endpoint backgrounds:
+- Normal nav `#5b6c76`: 5.45:1 on white and 4.82:1 on the active pale background.
+- Active nav `#127868`: 5.37:1 on white and 4.74:1 on its pale background.
+
+Exact PR head `8af075d01fd3178857e6aafe867d5f091a3525e6` passed [CI run 41599111532](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111532) (**4/4 jobs, 14/14 Playwright tests**) and [Security run 41599111683](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111683) (**13/13 jobs**). The same CI verified the full Docker telemetry pipeline, workspace isolation, and PostgreSQL restart regression. Manual screen-reader and rendered-state review remains open.
