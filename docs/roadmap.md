@@ -158,7 +158,7 @@ The test establishes read-after-commit revocation for requests authorized after 
 - [x] Add deterministic sustained-concurrency tests and handler-path throughput/allocation benchmarks for OTLP HTTP and gRPC; see [M06 load-testing guide](m06-load-testing.md).
 - [x] Verify recovery after real local Collector listener stop/restart (PR #62) and PostgreSQL TCP-path disconnect/restoration (PR #64). These are local integration fault tests, not container/process restart or production network-partition tests.
 - [ ] Run sustained target-environment load tests with real PostgreSQL and Collector dependencies, then capture throughput, latency percentiles, saturation, and rejection behavior.
-- [ ] Add explicit backpressure and recovery-under-sustained-load tests across the real dependency boundary.
+- [x] Add explicit backpressure and recovery-under-sustained-load tests across the real dependency boundary (PR #110, squash merge `b42b4b56a82a2f977b373731ae6e85a1ceb0760e`; CI run `41580189083` passed using real CI PostgreSQL + OTLP Collector: 64 admitted, 8 over-capacity HTTP 503, three 16-export recovery waves, and 639 successful exports over 20 seconds).
 - [x] Add an optional Caddy TLS edge-ingress Compose overlay for OTLP/HTTP and OTLP/gRPC (PR #56; merged with CI passing). CI validates the Caddyfile, the rendered Compose topology, and that only the edge proxy publishes ingress ports.
 - [ ] Deploy and verify the ingress scaffold with real DNS/ACME certificates, host-firewall rules, trusted-proxy behavior, and deployment-specific NetworkPolicy/cloud controls; assess internal-hop mTLS.
 - [ ] Configure and end-to-end verify a real OIDC provider for browser PKCE, including callback, state/nonce, issuer/audience validation, and key rotation.
@@ -261,3 +261,14 @@ For observed good and bad events, availability is `good / (good + bad)`, allowed
 
 
 M01 baseline merge record (2026-11-03): PR #109 was squash-merged into `main` as `e9e7d74387dddcf76226cfab32dd979f56af4dc9`. The automation and implementation checkboxes above describe the merged baseline. The separate manual keyboard/screen-reader and rendered-state review checkbox intentionally remains unchecked; it is a gate for declaring the full accessibility review complete, not a claim that automation was skipped.
+
+
+## M06 PR #110 — real-dependency backpressure and sustained recovery
+
+PR #110 was squash-merged into `main` as `b42b4b56a82a2f977b373731ae6e85a1ceb0760e`. Exact PR head `e00b0308bf0bf3d61e095975ee69546e349d0c43` passed [CI run 41580189083](https://github.com/pooya16pg-spec/orbit/actions/runs/41580189083) and [Security run 41580189031](https://github.com/pooya16pg-spec/orbit/actions/runs/41580189031).
+
+The Docker Compose workspace smoke runs the new `TestWorkspaceOTLPSustainedBackpressureAndRecovery` beside the existing real write-to-query workspace isolation test. It uses the real PostgreSQL-backed workload authorization and shared rate-limit repository plus the real OTLP Collector. A deterministic in-process HTTP gate holds the 64 HTTP gateway admission slots; eight additional requests must receive HTTP 503 and must not be forwarded. After release, all 64 admitted requests succeed. Three more concurrent recovery waves of 16 exports each succeed. The test then sustains eight producer loops over 20 seconds and requires at least 100 successful exports.
+
+Observed CI result: **639 successful sustained exports over 20 seconds**. The new test passed in 20.10 seconds; both workspace tests completed in 66.18 seconds. The full CI run passed all 4 jobs; Security passed all 13 jobs, including dependency/secret scans, first-party and Compose image scans, and SBOM generation.
+
+This closes the deterministic repository-level real-dependency regression only. The separate target-environment test at line 160 remains open for intended deployment hardware/topology: sustained ingestion and dashboard-query throughput, p50/p95/p99, rejection rates, queue/pool saturation, multiple replicas, and measured recovery. Production tenant ingestion remains disabled until all environment-specific M06 gates are evidenced.

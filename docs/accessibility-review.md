@@ -41,7 +41,7 @@ The web CI job now installs Playwright Test 1.64.1, axe-core/playwright 4.14.0, 
 npx playwright test --config=playwright.config.cjs
 ```
 
-Current code/test head: `5e1e37cf789bfed9baf971f914a9df895e328ea3` on `feat/m01-accessibility-review` (PR #109).
+Pre-merge application/test head: `5e1e37cf789bfed9baf971f914a9df895e328ea3` from PR #109.
 
 The web job in [CI run 41578302352](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302352) passed on this head. It completed the static accessibility checks, theme contrast guard, TypeScript typecheck, production build, generated-HTML audit, and all **14 Playwright tests**. The source accessibility contract passed **68 checks**; the generated-HTML audit passed for **5 pages / 791 elements**.
 
@@ -63,9 +63,9 @@ Coverage:
 
 The same CI run's Go API tests/build and workflow action-pin policy jobs passed. The full local telemetry pipeline end-to-end job subsequently completed successfully in CI run 41578302352 on this exact application/test head, verifying OTLP metrics/logs/traces through ORBIT API, Prometheus Collector scrape, workspace A/B isolation, and cleanup.
 
-The latest [Security run 41578302399](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302399) completed all **13 jobs successfully**, including the full-history secret scan, dependency review, API/Collector/Caddy/Tempo image scans, and all Compose image scans with SBOM generation. Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) passed. The latest branch Pages deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) succeeded; the public preview is https://pooya16pg-spec.github.io/orbit/.
+The latest [Security run 41578302399](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302399) completed all **13 jobs successfully**, including the full-history secret scan, dependency review, API/Collector/Caddy/Tempo image scans, and all Compose image scans with SBOM generation. Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) passed. The temporary branch Pages deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) succeeded before merge. After merging PR #109, the temporary branch trigger and preview environment were removed; the main-only Pages deployment [41579531993](https://github.com/pooya16pg-spec/orbit/actions/runs/41579531993) then succeeded from the protected `github-pages` environment. The canonical site is https://pooya16pg-spec.github.io/orbit/.
 
-PR #109 remains open and unmerged. `main` is unchanged. GitHub Pages is a single public site, so the branch deployment replaces the canonical site until a subsequent `main` deployment succeeds.
+PR #109 was squash-merged into `main` as `e9e7d74387dddcf76226cfab32dd979f56af4dc9`. The merged baseline is on `main`; the separate human acceptance gate below remains open.
 
 
 

@@ -64,3 +64,12 @@ The observability Compose profile also runs `TestWorkspaceOTLPSustainedBackpress
 This is an integration regression for bounded admission and recovery after transient downstream backpressure. It is not a production capacity result: the test uses one gateway process, CI-sized PostgreSQL and Collector services, a controlled local delay proxy, and a short workload. It does not measure target-environment p95/p99 latency, sustained production throughput, or multi-replica behavior.
 
 The steady phase deliberately stays well below the configured shared 10,000-requests/minute test limit. Each producer has its own service series and emits fresh monotonically increasing points, avoiding out-of-order samples across concurrent workers.
+
+
+## Observed CI result — PR #110
+
+PR #110 was squash-merged into `main` as `b42b4b56a82a2f977b373731ae6e85a1ceb0760e`. Exact PR head `e00b0308bf0bf3d61e095975ee69546e349d0c43` passed CI run [41580189083](https://github.com/pooya16pg-spec/orbit/actions/runs/41580189083) and Security run [41580189031](https://github.com/pooya16pg-spec/orbit/actions/runs/41580189031).
+
+The new test logged **639 successful exports over its 20-second sustained phase** (about 32 successful exports/second in this CI topology). The complete real-dependency workspace smoke command, including the pre-existing workspace A/B write-to-query test, passed in 66.18 seconds. The 64-slot admission saturation, eight HTTP 503 overflows, 64 admitted forwards, and three 16-export recovery waves all passed before the steady phase.
+
+These are observed results from a single gateway process and CI-sized PostgreSQL/Collector services. The ~32 exports/second figure is not a target capacity or SLO claim. Do not infer p50/p95/p99, production throughput, multi-replica behavior, or host/network recovery from this CI run. Keep the target-environment load and production rollout gates open until evidence is collected on the intended deployment topology.

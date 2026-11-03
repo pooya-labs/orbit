@@ -538,12 +538,12 @@ The existing M01 accessibility branch now also addresses the visible-control aud
 - The workspace switcher, Settings, Help/Support, and incident-options placeholders are native disabled controls with localized unavailable labels and a visible disabled treatment; they no longer masquerade as working actions.
 - The static accessibility contract checks guard these destinations, disabled states, and English/Persian unavailable text. docs/accessibility-review.md records the actual behavior and updates the remaining manual control checklist.
 
-This does not close the manual M01 acceptance gate. The application still requires real keyboard-only testing at browser breakpoints, NVDA/VoiceOver/TalkBack verification, contrast review in both themes, and review of chart/data alternatives. Always inspect CI and Security against the exact latest PR head before merging; a passing run on an older commit does not validate later code or documentation changes. Do not infer typecheck/build success from static source review, and do not merge PR #109 before current-head CI and manual acceptance are complete.
+PR #109 has since merged this tested keyboard/landmark baseline into `main`. The merge does not close the manual M01 acceptance gate: the application still requires real keyboard-only testing at browser breakpoints, NVDA/VoiceOver/TalkBack verification, rendered contrast review in both themes, and review of chart/data alternatives. Always inspect CI and Security against the exact latest PR head before merging future changes; passing runs on older commits do not validate later code or documentation changes. Do not mark M01 complete or claim screen-reader/WCAG conformance until the human findings are recorded.
 
 
 ## M01 accessibility follow-through — selected-state semantics and verification (2026-11-03)
 
-PR #109 continues on `feat/m01-accessibility-review`. In addition to the keyboard/landmark baseline and truthful control affordances, its current implementation exposes selected state to assistive technology for:
+The implementation described in this historical PR #109 follow-through was merged into `main`. In addition to the keyboard/landmark baseline and truthful control affordances, it exposes selected state to assistive technology for:
 
 - the overview demo chart time-range selector (named group, localized in English/Persian);
 - incident status filters and the selected incident;
@@ -565,9 +565,7 @@ The checker uses only Python's standard library and needs the production export 
 
 ## Temporary Pages preview — M01 accessibility branch (2026-11-03)
 
-The GitHub Pages workflow temporarily includes `feat/m01-accessibility-review` as a push deployment source. Pages is a single-site target: this branch's deployment replaces the currently published static site at the canonical Pages URL; it is not an isolated preview URL. A later successful deployment from `main` restores the main-branch version.
-
-The deploy job selects the protected `github-pages` environment for `main`, but selects a separate `github-pages-preview` environment for the temporary review branch. The first attempt to publish directly from the feature branch was rejected before a runner started because the existing `github-pages` environment restricts deployment branches. Keep that protection intact; do not weaken the main environment merely to preview. The separate preview environment is intentional and exists only to let the owner inspect the branch UI. Remove the feature-branch trigger and the preview-specific environment routing after the preview session or when the PR is merged, unless the owner explicitly chooses to keep it.
+PR #109 temporarily added a feature-branch publishing trigger and a separate `github-pages-preview` environment. Pages is a single-site target, so that preview replaced the canonical static site rather than creating a separate URL. After PR #109 merged, commit `5649a1f01fdb832fcf886021cfdf647fc5851cc0` removed the feature-branch trigger and alternate environment routing. The protected `github-pages` environment remains the only deployment environment and `main` is the only push publishing source. The main-only deployment completed successfully in run [41579531993](https://github.com/pooya16pg-spec/orbit/actions/runs/41579531993). Do not weaken the protected environment or re-add feature branches as deployment sources for ordinary review.
 ## M01 accessibility follow-through — theme contrast regression baseline (2026-11-03)
 
 - The theme palette was checked for low-contrast text. The `--subtle` token was below 4.5:1 on common dark and light surfaces; multiple explicit light-theme text colors were also too pale for normal-sized text.
@@ -593,18 +591,18 @@ The Overview disclosure table includes a caption stating the data is illustrativ
 
 The source-level accessibility contract checks the table, caption, selected-window time formatting, shared sample fixture, and Persian/English labels. Both Overview and live Metrics charts now have an expandable table alternative. Manual browser/keyboard/screen-reader checks remain mandatory.
 
-## M01 verification snapshot — current PR head (2026-11-03)
+## M01 verification snapshot — pre-merge PR head (2026-11-03)
 
-Current code/test head: `5e1e37cf789bfed9baf971f914a9df895e328ea3` on `feat/m01-accessibility-review` (PR #109).
+Pre-merge application/test head: `5e1e37cf789bfed9baf971f914a9df895e328ea3` from PR #109.
 
 - CI run [41578302352](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302352): web verification passed. All **14 Playwright tests** passed, including axe scans across all 12 primary views in both dark and light themes, plus dedicated Overview/Metrics/mobile-drawer/error scans, reduced-motion behavior, keyboard navigation, and 320 CSS-pixel reflow.
 - The source accessibility contract passed **68 checks**. The theme contrast regression guard, TypeScript typecheck, production build, and generated-HTML audit also passed; the latter checked **5 pages / 791 elements**.
-- Go API tests/build and workflow action-pin policy passed. The full local telemetry pipeline end-to-end job was still running at the latest status check; the whole CI workflow is not yet recorded as green.
+- Go API tests/race/vet/build, workflow action-pin policy, PostgreSQL backup/restore round-trip, and the full local telemetry pipeline end-to-end job all completed successfully in run [41578302352](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302352).
 - Security run [41578302399](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302399) passed all **13 jobs**, including dependency checks, full-history secret scanning, production/telemetry image scans, and SBOM generation.
-- Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) and branch deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) passed. The current public preview is https://pooya16pg-spec.github.io/orbit/. Pages is a single-site target; publishing the feature branch replaces the canonical site until a later successful main deployment.
-- PR #109 remains open and unmerged. `main` is unchanged.
+- Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) and temporary branch deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) passed before merge. After PR #109 merged, the feature-branch publishing trigger was removed; main-only Pages deployment [41579531993](https://github.com/pooya16pg-spec/orbit/actions/runs/41579531993) succeeded from the protected `github-pages` environment. Canonical site: https://pooya16pg-spec.github.io/orbit/.
+- PR #109 was squash-merged into `main` as `e9e7d74387dddcf76226cfab32dd979f56af4dc9`.
 
-Automated Chromium/axe checks do not replace M01's manual acceptance: keyboard-only operation across all views/forms, NVDA/VoiceOver/TalkBack behavior, responsive zoom/reflow and RTL, reduced-motion behavior, rendered contrast in all interactive states, and a human review of chart/table reading experience and visible controls remain outstanding. Do not mark M01 complete or merge PR #109 solely from these CI results.
+Automated Chromium/axe checks do not replace M01's manual acceptance: keyboard-only operation across all views/forms, NVDA/VoiceOver/TalkBack behavior, responsive zoom/reflow and RTL, reduced-motion behavior, rendered contrast in all interactive states, and a human review of chart/table reading experience and visible controls remain outstanding. PR #109's automated baseline is merged; do not mark M01 complete solely from CI results.
 
 
 ## M01 accessibility baseline merge and current handoff — 2026-11-03
@@ -622,11 +620,23 @@ The temporary feature-branch GitHub Pages publishing trigger and alternate previ
 
 **M01 is not fully closed:** the human keyboard-only and rendered-state review, and real NVDA/VoiceOver/TalkBack sessions, remain open in `docs/roadmap.md` and `docs/accessibility-review.md`. Remote automation did not run those assistive technologies and does not establish WCAG conformance. Keep this explicitly open until actual OS/browser/AT versions and findings are recorded.
 
-Next repository-owned hardening candidate: add deterministic sustained-load/backpressure/recovery coverage at the real PostgreSQL + Collector dependency boundary. Existing in-process 512-export concurrency tests and 64-slot burst tests are not production load certification; target-environment throughput, percentile latency, saturation, and recovery evidence remain separate M06 gates.
+Repository-level deterministic backpressure/recovery coverage at the real PostgreSQL + Collector boundary is now merged in PR #110 (`b42b4b56a82a2f977b373731ae6e85a1ceb0760e`). The current remaining M06 load gate is target-environment sustained ingestion and dashboard-query testing with p50/p95/p99 latency, rejection/saturation metrics, multiple replicas, and measured recovery; CI-sized local dependencies do not certify production capacity.
 
 
 ## M06 backpressure integration test — current follow-through
 
-The Docker Compose workspace-tenant smoke now also exercises `TestWorkspaceOTLPSustainedBackpressureAndRecovery`. The test uses the real PostgreSQL-backed workload authorization and shared rate-limit repository plus the real local OTLP Collector. A deterministic HTTP gate holds 64 in-flight exports at the network boundary, verifies eight excess exports are rejected with 503, releases the admitted exports, and sends three more 16-export concurrent waves to prove recovery through the same gateway and dependencies.
+The Docker Compose workspace-tenant smoke runs `TestWorkspaceOTLPSustainedBackpressureAndRecovery` against real PostgreSQL-backed workload authorization/shared rate limiting and the real local OTLP Collector. A deterministic HTTP gate holds 64 in-flight exports at the network boundary; eight excess exports must be rejected with 503; the admitted exports must succeed after release; and three 16-export concurrent waves must recover through the same gateway and dependencies. The test then sustains eight producer streams for 20 seconds.
 
-The gate is a test synchronization mechanism only; it is not a substitute for the Collector. This closes the repository-level deterministic real-dependency backpressure/recovery regression item when the PR's full CI passes. Target-environment sustained load, percentile latency, multiple replicas, host/network failure, and production recovery remain separate M06 deployment gates.
+PR #110 was squash-merged into `main` as `b42b4b56a82a2f977b373731ae6e85a1ceb0760e`. CI run `41580189083` passed all four jobs and logged **639 successful exports over 20 seconds** in the sustained real-PostgreSQL + Collector phase. Security run `41580189031` passed all 13 jobs. This closes the repository-level deterministic real-dependency backpressure/recovery regression. It does not certify target-environment throughput, p50/p95/p99 latency, multiple replicas, host/network failure, or production recovery; those gates remain open.
+
+
+## Current handoff — after M06 backpressure PR #110 (2026-11-03)
+
+Latest main commit at handoff: `b42b4b56a82a2f977b373731ae6e85a1ceb0760e`. PR #110 is merged; there are no unmerged M06 backpressure changes. Exact final PR head `e00b0308bf0bf3d61e095975ee69546e349d0c43` passed:
+- CI [41580189083](https://github.com/pooya16pg-spec/orbit/actions/runs/41580189083): all 4/4 jobs successful (14 Playwright tests and web/a11y/build checks; Go tests/race/vet/build and PostgreSQL backup/restore; action-pin policy; full Docker observability integration).
+- The actual Compose PostgreSQL + Collector integration test filled 64 gateway admission positions, verified 8 over-capacity HTTP 503 responses, passed three concurrent 16-export recovery waves, and then completed **639 successful exports during the 20-second steady phase**. The new test passed in 20.10 seconds; combined with the existing workspace isolation test the command passed in 66.18 seconds.
+- Security [41580189031](https://github.com/pooya16pg-spec/orbit/actions/runs/41580189031): all 13/13 jobs passed, including full-history secret scan, dependency vulnerability checks, image scans, and CycloneDX SBOM generation.
+
+Roadmap item “explicit backpressure and recovery-under-sustained-load tests across the real dependency boundary” is now complete (PR #110). Keep “target-environment load tests” open: measure throughput and p50/p95/p99 on intended hardware, test dashboard queries, multi-replica behavior, rejection/saturation, and recovery. Keep production DNS/ACME/firewall/trusted-proxy/network controls, provider-backed PKCE, off-host backup/PITR and measured restore, durable-history retention policy, hosted API/managed persistence, and operational rollout gates open. Production tenant ingestion remains disabled until these deployment-level gates are evidenced.
+
+PR #109's automated M01 keyboard/landmark baseline is merged. The separate human keyboard-only, rendered-state visual, and actual NVDA/VoiceOver/TalkBack acceptance checklist remains open; no WCAG or screen-reader certification is claimed.
