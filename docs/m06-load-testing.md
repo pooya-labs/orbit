@@ -80,3 +80,12 @@ These are observed results from a single gateway process and CI-sized PostgreSQL
 The CI observability stack now includes a coordinated restart regression. A Go integration test opens the repository against the actual Compose PostgreSQL service, warms and releases a pooled connection, and signals the runner through a shared temporary control directory. The runner stops the PostgreSQL container and signals completion. The same test must observe a failed pool ping; only then does the runner start the same Compose service again. The test waits for a successful query on the original repository/pool and verifies `pg_postmaster_start_time()` advanced across the restart.
 
 This verifies a real PostgreSQL process/container stop and start, not only a TCP proxy disconnect. It is still a single-node, clean-stop/restart CI test: it does not establish crash recovery after SIGKILL/power loss, disk failure, failover/replication, multi-zone network partition, or a production RPO/RTO.
+
+
+## Observed PostgreSQL container restart result — PR #111
+
+PR #111 was squash-merged as `5b3c0fc344f043640b01c670a84deb6c78d09a5c`. Exact PR head `ac70f81103ced4e9c5ef5e4968f35ccd3115cce1` passed CI run [41581322810](https://github.com/pooya16pg-spec/orbit/actions/runs/41581322810) and Security run [41581322826](https://github.com/pooya16pg-spec/orbit/actions/runs/41581322826).
+
+The CI runner stopped the actual Compose PostgreSQL container and started it again. The test confirmed the original Repository/pgxpool saw the outage and recovered without being replaced. PostgreSQL `pg_postmaster_start_time()` advanced from `2026-11-03T05:07:11.802744Z` to `2026-11-03T05:10:29.836093Z`; the test passed in 1.094 seconds.
+
+This is a clean single-node container restart test, not crash or disk recovery, HA failover, replication, PITR, or production RPO/RTO evidence.

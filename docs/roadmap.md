@@ -156,7 +156,7 @@ The test establishes read-after-commit revocation for requests authorized after 
 - [x] Verify deterministic recovery after transient workload-grant database, shared rate-limit-store, and Collector failures for HTTP and gRPC using the same long-lived gateway instance (PR #58; merged and CI-passing).
 - [x] Verify the default 64-slot admission bound under a synchronized HTTP/gRPC burst, reject requests over capacity before Collector forwarding, and release admitted requests cleanly (PR #60; merged and CI-passing).
 - [x] Add deterministic sustained-concurrency tests and handler-path throughput/allocation benchmarks for OTLP HTTP and gRPC; see [M06 load-testing guide](m06-load-testing.md).
-- [x] Verify recovery after real local Collector listener stop/restart (PR #62) and PostgreSQL TCP-path disconnect/restoration (PR #64). These are local integration fault tests, not container/process restart or production network-partition tests.
+- [x] Verify recovery after real local Collector listener stop/restart (PR #62), PostgreSQL TCP-path disconnect/restoration (PR #64), and actual PostgreSQL Compose container/process stop-start with the same repository pool recovering (PR #111; CI run `41581322810`). These are single-node clean-stop recovery tests, not crash/failover/PITR or production network-partition tests.
 - [ ] Run sustained target-environment load tests with real PostgreSQL and Collector dependencies, then capture throughput, latency percentiles, saturation, and rejection behavior.
 - [x] Add explicit backpressure and recovery-under-sustained-load tests across the real dependency boundary (PR #110, squash merge `b42b4b56a82a2f977b373731ae6e85a1ceb0760e`; CI run `41580189083` passed using real CI PostgreSQL + OTLP Collector: 64 admitted, 8 over-capacity HTTP 503, three 16-export recovery waves, and 639 successful exports over 20 seconds).
 - [x] Add an optional Caddy TLS edge-ingress Compose overlay for OTLP/HTTP and OTLP/gRPC (PR #56; merged with CI passing). CI validates the Caddyfile, the rendered Compose topology, and that only the edge proxy publishes ingress ports.
@@ -198,7 +198,7 @@ PR #58 is merged into `main` (squash merge commit `fd7c7d23d952bdb6f08250c2dcd69
 
 The new HTTP and gRPC tests inject transient failures into the workload-grant repository, shared rate-limit store, and Collector forwarder. They verify that authorization/rate-limit database failures fail closed without forwarding, Collector failures map to the established transport status, and a subsequent request succeeds through the same gateway instance after the dependency is restored.
 
-These are deterministic in-process fault-injection tests. PR #62 separately adds real local TCP listener stop/restart coverage for both production Collector forwarders; it does not simulate Docker/container orchestration, packet loss, PostgreSQL process restarts, or sustained-load recovery. Broader sustained-load/burst benchmarking, PostgreSQL process/container restart testing, network-partition scenarios beyond the test TCP proxy, and backpressure behavior remain open. Production tenant ingestion remains disabled.
+These are deterministic in-process fault-injection tests. PR #62 separately adds real local TCP listener stop/restart coverage for both production Collector forwarders. PR #111 now separately verifies an actual PostgreSQL Compose container stop/start and same-pool recovery. Crash/power-loss recovery, disk failure, packet loss or multi-zone network partition, HA failover, and production recovery behavior remain open. Production tenant ingestion remains disabled.
 
 
 ## M06 PR #60 — default gateway burst-capacity boundary
@@ -214,7 +214,7 @@ PR #62 is merged into `main` (squash merge commit `534f6d02c04616a5d27831460b24f
 
 The new HTTP test starts a real local TCP OTLP/HTTP endpoint behind the production Collector HTTP forwarder, verifies success, stops the listener and verifies the gateway returns 502, restarts a listener on the same address, and verifies the same long-lived gateway/forwarder succeeds again. The gRPC test performs the equivalent listener stop/restart using a real gRPC Collector server and the production gRPC forwarder; the same client connection eventually reconnects and succeeds.
 
-This validates process-local TCP listener recovery and client reconnection behavior. It does not simulate container orchestration, packet loss or network partitions, database process restarts, cross-zone failures, or recovery under sustained load. Real PostgreSQL restart/fault injection, longer-duration load and backpressure, and production deployment verification remain open. Production tenant ingestion remains disabled.
+This validates process-local Collector TCP listener recovery and client reconnection behavior. It does not simulate packet loss or network partitions, cross-zone failures, or recovery under sustained load. PR #111 separately verifies PostgreSQL container restart; longer-duration target-environment load/backpressure and production deployment verification remain open. Production tenant ingestion remains disabled.
 
 
 ## M06 PR #64 — PostgreSQL pool recovery after network interruption
@@ -223,7 +223,7 @@ PR #64 is merged into `main` (squash merge commit `6b2e3418be2e8fdff0c9634b361ac
 
 The new PostgreSQL integration test opens the real repository through a local TCP proxy, warms an established pgxpool connection, then closes active TCP tunnels and rejects new dials while the test network path is offline. The existing repository must report a Ping failure. The proxy is then restored and the same pgxpool/repository must reconnect and return to healthy Ping without being recreated.
 
-This proves connection-pool recovery after a real TCP path interruption against the CI PostgreSQL service. The database process remains running; PostgreSQL process/container restart, packet loss and partition simulation, prolonged outage behavior, sustained request load, and backpressure remain open.
+This proves connection-pool recovery after a real TCP path interruption against the CI PostgreSQL service; the database process remains running during this specific test. PR #111 separately proves clean PostgreSQL container/process stop-start and recovery through the same pgxpool. Crash/power-loss, disk failure, packet-loss/partition, HA failover, prolonged outage, and production RPO/RTO evidence remain open.
 
 
 ## M05 PR #66 — workspace incident lifecycle backend
@@ -272,3 +272,12 @@ The Docker Compose workspace smoke runs the new `TestWorkspaceOTLPSustainedBackp
 Observed CI result: **639 successful sustained exports over 20 seconds**. The new test passed in 20.10 seconds; both workspace tests completed in 66.18 seconds. The full CI run passed all 4 jobs; Security passed all 13 jobs, including dependency/secret scans, first-party and Compose image scans, and SBOM generation.
 
 This closes the deterministic repository-level real-dependency regression only. The separate target-environment test at line 160 remains open for intended deployment hardware/topology: sustained ingestion and dashboard-query throughput, p50/p95/p99, rejection rates, queue/pool saturation, multiple replicas, and measured recovery. Production tenant ingestion remains disabled until all environment-specific M06 gates are evidenced.
+
+
+## M06 PR #111 — PostgreSQL container restart and same-pool recovery
+
+PR #111 was squash-merged into `main` as `5b3c0fc344f043640b01c670a84deb6c78d09a5c`. Exact PR head `ac70f81103ced4e9c5ef5e4968f35ccd3115cce1` passed [CI run 41581322810](https://github.com/pooya16pg-spec/orbit/actions/runs/41581322810) and [Security run 41581322826](https://github.com/pooya16pg-spec/orbit/actions/runs/41581322826).
+
+The Compose test starts one Repository/pgxpool, warms a real PostgreSQL connection, stops the actual PostgreSQL container, waits until the original pool observes a failed Ping, and starts the same service again. It verifies a successful query through the original pool and checks that `pg_postmaster_start_time()` advanced, proving the server process restarted. Observed timestamps: `2026-11-03T05:07:11.802744Z` before and `2026-11-03T05:10:29.836093Z` after restart. The test passed in 1.094 seconds; the observability E2E job and all four CI jobs passed. Security passed all 13 jobs.
+
+This closes the repository-level clean-stop PostgreSQL container/process restart regression. It does not establish crash/power-loss recovery, disk failure recovery, HA failover/replication, network partition behavior, PITR, or production RPO/RTO. The broader production operational gates remain open.

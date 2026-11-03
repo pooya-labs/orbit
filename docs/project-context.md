@@ -238,7 +238,7 @@ This covers local listener restart and reconnect semantics, not Docker orchestra
 
 PR #64 is merged into `main` (squash merge commit `6b2e3418be2e8fdff0c9634b361acaa5bb6d6da1`). CI run `41357596656` passed all three jobs. A PostgreSQL integration test routes the real pgxpool through a local TCP proxy, warms an established session, closes active tunnels and refuses new connections while offline, observes a repository Ping failure, then restores the same proxy and verifies the existing repository/pool reconnects and becomes healthy.
 
-The PostgreSQL process remains running during the simulated network outage. This is real TCP-path disruption and pgxpool reconnect coverage, not a database process/container restart, packet-loss or cross-zone partition test, or sustained-load benchmark. Continue with DB process lifecycle tests where the deployment environment permits, long-duration load/backpressure, and remaining production go-live gates. Tenant ingestion remains disabled.
+The PostgreSQL process remains running during this simulated TCP-path outage. PR #111 now separately covers an actual Compose PostgreSQL container/process stop-start and confirms the original pgxpool reconnects; that clean stop/start test does not prove crash/power-loss recovery, HA failover, disk/PITR recovery, packet-loss or cross-zone partition handling, or production RPO/RTO. Target-environment load/backpressure and remaining production go-live gates remain open. Tenant ingestion remains disabled.
 
 
 ## M05 implementation update — PR #66 incident lifecycle backend
@@ -642,8 +642,17 @@ Roadmap item “explicit backpressure and recovery-under-sustained-load tests ac
 PR #109's automated M01 keyboard/landmark baseline is merged. The separate human keyboard-only, rendered-state visual, and actual NVDA/VoiceOver/TalkBack acceptance checklist remains open; no WCAG or screen-reader certification is claimed.
 
 
-## M06 PostgreSQL container-restart recovery regression — PR #111 in progress
+## M06 PostgreSQL container-restart recovery regression — merged PR #111
 
 The next repository-level M06 test uses the Compose PostgreSQL service rather than a TCP proxy. A coordinated host script stops and restarts the actual PostgreSQL container while a Go test retains the original Repository/pgxpool instance. The test requires an established connection to fail during the stop, then a query to succeed from the same pool after restart, and compares `pg_postmaster_start_time()` to prove that the PostgreSQL server process itself restarted.
 
 The test uses a shared temporary marker directory only for runner/test synchronization. The test itself performs all database observations and recovery assertions. The Compose runner always attempts to start PostgreSQL in its cleanup trap so a failed test cannot strand the rest of the telemetry stack. This is a CI single-node clean-restart regression, not crash/failover/PITR or production recovery evidence.
+
+
+## Current handoff — after PostgreSQL container-restart PR #111 (2026-11-03)
+
+Latest main commit at this handoff: `5b3c0fc344f043640b01c670a84deb6c78d09a5c`. PR #111 is merged; its exact head passed CI 4/4 and Security 13/13. The Docker observability job tested OTLP end-to-end, workspace isolation, and an actual PostgreSQL container stop/start; the same Repository/pgxpool recovered and observed a newer `pg_postmaster_start_time()` after restart.
+
+Repository-level M06 regression coverage now includes: actual Collector listener stop/restart, PostgreSQL TCP-path interruption/recovery, sustained real-PostgreSQL + Collector backpressure (PR #110; 639 successful exports in its 20-second CI phase), and clean PostgreSQL container/process restart (PR #111). Avoid repeating these tests or adding duplicate roadmap entries.
+
+Remaining deployment gates are distinct: target-environment sustained load and p50/p95/p99 measurements, dashboard-query load, multiple gateway replicas under real workload, crash/power-loss and storage failure testing, HA/failover/replication and partition behavior, encrypted off-host backups/PITR with measured RPO/RTO, real DNS/ACME/firewall/trusted-proxy/network controls, provider-backed PKCE, durable-history retention/archive policy, hosted API/managed persistence, and operational rollout. Production tenant ingestion remains disabled until those environment-specific gates are evidenced.
