@@ -364,6 +364,18 @@ export default function TelemetryWorkspace({
     }));
   }, [metricSeries]);
 
+  const accessibleMetricRows = useMemo(
+    () => metricSeries.flatMap((series) =>
+      series.points.map((point) => ({
+        key: series.key,
+        series: series.label,
+        timestamp: point.timestamp,
+        value: point.value,
+      })),
+    ).sort((a, b) => a.timestamp - b.timestamp || a.series.localeCompare(b.series)),
+    [metricSeries],
+  );
+
   const metricQuality = useMemo(() => {
     const allPoints = metricSeries.flatMap((series) => series.points);
     if (allPoints.length === 0) return { stale: false, hasGaps: false };
@@ -594,6 +606,30 @@ export default function TelemetryWorkspace({
                         </span>
                       ))}
                     </div>
+                    <details className="telemetry-data-table">
+                      <summary>{tr("showChartData")}</summary>
+                      <div className="telemetry-data-table-scroll">
+                        <table>
+                          <caption>{tr("chartDataCaption").replace("{service}", selectedService).replace("{window}", windowRange)}</caption>
+                          <thead>
+                            <tr>
+                              <th scope="col">{tr("chartTime")}</th>
+                              <th scope="col">{tr("chartSeries")}</th>
+                              <th scope="col">{tr("chartValue")}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {accessibleMetricRows.map((row, index) => (
+                              <tr key={`${row.key}-${row.timestamp}-${index}`}>
+                                <td>{formatClock(row.timestamp * 1000, language)}</td>
+                                <td>{row.series}</td>
+                                <td>{formatRate(row.value, language)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
                   </>
                 ) : <TelemetryEmpty title={tr("notEnoughSamples")} message={tr("singleSample")} />}
               </div>
