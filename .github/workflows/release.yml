@@ -41,33 +41,29 @@ jobs:
           body: |
             ## ORBIT — Distributed Systems Intelligence & Observability
 
-            **Public preview:** https://pooya16pg-spec.github.io/orbit/
+            **Public preview:** https://pooya-labs.github.io/orbit/
 
             ### Included
-            - Responsive Next.js observability dashboard with Overview, Metrics, Logs, and Traces views.
-            - Explicit Demo / API source switch for service and incident inventory.
-            - Live telemetry views that query the ORBIT API, with 15m / 1h / 6h / 24h windows, query timestamps, refresh, and loading / empty / error states.
-            - Cross-backend service discovery across Prometheus, Loki, and Tempo, with merged names, source provenance, and a shared service selector.
-            - Persisted PostgreSQL telemetry service catalog with normalized service identities, source relationships, first-seen / last-seen / last-discovered timestamps, bounded JSONB resource attributes, and per-attribute backend provenance.
-            - Cursor-based service-catalog pagination, with a dashboard control to load additional pages.
-            - Allow-listed Prometheus grouping for the demo request-rate metric, independent chart lines per series, and per-series stale-sample / telemetry-gap warnings.
-            - English and Persian dashboard localization, persistent language selection, locale-aware formatting, and responsive right-to-left layout.
-            - Public creator / project-owner attribution linked to the GitHub profile and source repository.
-            - Go API with health, metadata, PostgreSQL-backed service and incident endpoints, plus bounded Prometheus, Loki, and Tempo query endpoints.
-            - Optional local Docker Compose observability profile with OpenTelemetry Collector, Prometheus, Loki, Tempo, and an instrumented Go demo workload.
-            - OpenAPI 3.1 contract, typed TypeScript API client, and GitHub Actions checks that verify metrics, logs, and traces through both their backends and the ORBIT API.
+            - Responsive Next.js dashboard with Overview, Metrics, Logs, and Traces views; English and Persian localization, RTL support, and persistent light/dark themes.
+            - Explicit Demo / API source switch; bounded service and incident inventory APIs.
+            - Bounded Metrics, Logs, and Traces queries through Prometheus, Loki, and Tempo, with shared service discovery, source provenance, refresh, and loading/empty/error states.
+            - PostgreSQL-backed workspace service catalog, cursor pagination, curated OpenTelemetry resource metadata, and per-attribute provenance.
+            - Authenticated human OIDC resource-server validation and role enforcement; workspace membership and tenant-scoped API reads.
+            - Authenticated OTLP/HTTP and OTLP/gRPC workload gateways with workspace/signal grants, canonical tenant attribution, shared rate limits, bounded admission, revocation checks, and fail-closed behavior.
+            - Workspace operations: incident lifecycle and immutable timelines, alert rules/evaluation, webhook notification outbox and attempt history, deployment annotations, SLO/error budgets, and searchable audit history.
+            - CI-verified workspace A/B telemetry write-to-query isolation using PostgreSQL, Collector, Prometheus, Loki, and Tempo.
+            - Local Docker Compose stack, instrumented Go telemetry demo, OpenAPI 3.1 contract, Go/TypeScript tests, accessibility automation, NVDA Speech Viewer smoke coverage, security scans, SBOM generation, and PostgreSQL backup/restore CI.
 
-            ### Important limitations
-            - The public GitHub Pages site hosts the frontend only; it does not host the Go API or telemetry backends.
-            - Live telemetry on the hosted site requires a separately hosted HTTPS ORBIT API and telemetry stack, with the Pages origin added to ORBIT_ALLOWED_ORIGINS.
-            - The current request-rate metric is the instrumented orbit-telemetry-demo counter. Other discovered services appear in the shared selector, but may not expose that demo-specific metric.
-            - Resource-attribute discovery currently uses a bounded allowlist of Prometheus labels, Loki labels, and Tempo resource tags. Full semantic-convention resource ingestion directly from workload instrumentation remains future work.
-            - Metric grouping is available only for the instrumented demo request-rate counter; arbitrary metric-name discovery and selection are not implemented.
-            - The production ORBIT API is not yet self-instrumented.
-            - Redis and NATS are provisioned for local development but are not yet wired into application behavior.
-            - The API has no production authentication, workspace isolation, or role-based access control yet; no public state-changing operations are enabled.
-            - M05 incident, alert, notification, deployment, SLO, and audit workflows are implemented behind authenticated workspace/role checks. M06 production environment gates remain open; Redis and NATS are provisioned locally but are not yet integrated.
+            ### Known limitations and v1 readiness
+            - GitHub Pages hosts the static frontend only. It does not host the ORBIT API, PostgreSQL, or telemetry data plane; the hosted dashboard is a demo preview until a separately deployed HTTPS API and managed services are configured.
+            - Browser PKCE and server-side OIDC verification are implemented as provider-neutral foundations, but no real identity provider/client is configured or verified end-to-end.
+            - Production tenant ingestion remains disabled pending real DNS/TLS, firewall/trusted-proxy and private-network controls, deployment-specific quotas, target-environment capacity/recovery evidence, encrypted off-host backups/PITR, measured RPO/RTO, and an approved durable-history retention/archive policy.
+            - Metrics grouping is limited to the allow-listed demo \`request_rate\` metric. A safe general metric catalog/selection model is not yet implemented.
+            - Traces currently provide bounded search summaries; an interactive span-detail view and explicit log-to-trace correlation remain planned.
+            - The production Go API is not yet self-instrumented.
+            - Redis and NATS are provisioned for local development but remain intentionally deferred until measured demand justifies application integration (ADR 0004).
+            - Human keyboard-only and assistive-technology review on real Android/Apple devices remains open. Automated axe/Playwright and Windows NVDA Speech Viewer coverage are not a substitute for those sessions.
 
-            This is an early public preview, not a production monitoring service.
+            This is a prerelease preview, not a production monitoring service or a claim of WCAG conformance.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
