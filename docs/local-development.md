@@ -6,12 +6,12 @@
 - Git
 - Node.js 20+ and npm
 - Docker Desktop (for the backend stack)
-- Go 1.24+ (API); Docker builds the Go 1.25 telemetry demo
+- Go 1.26+ (API and telemetry demo)
 
 ## Clone the repository
 
 ```powershell
-git clone https://github.com/pooya16pg-spec/orbit.git
+git clone https://github.com/pooya-labs/orbit.git
 cd orbit
 ```
 
@@ -132,7 +132,7 @@ go run ./cmd/orbit-api
 - Set `ORBIT_ENVIRONMENT=development` explicitly for a local API without authentication. Do not rely on an implicit default.
 - To enable OIDC in development, set both `ORBIT_OIDC_ISSUER` and `ORBIT_OIDC_AUDIENCE`. The issuer must publish a matching `/.well-known/openid-configuration` document and a reachable `jwks_uri`. `ORBIT_OIDC_ROLES_CLAIM` defaults to `roles`; supported values are `viewer`, `operator`, and `administrator`.
 - Staging and production require both OIDC settings and fail startup if discovery/JWKS validation fails. API data routes then require `Authorization: Bearer <access-token>`; the token must target the configured API audience. The public `/health/live` and `/api/v1/meta` endpoints remain unauthenticated.
-- The dashboard does not yet implement OIDC PKCE, so do not connect the static frontend to an auth-protected API until the browser-authentication milestone is implemented.
+- The dashboard includes a provider-neutral OIDC Authorization Code + PKCE client. It is not production-integrated until a real provider/client is configured and the complete browser-to-API flow is tested; keep the hosted dashboard on demo/read-only mode until then.
 - `ORBIT_RATE_LIMIT_PER_MINUTE` defaults to 120 per IP and authenticated subject, per API process. This is a development safety limit, not a distributed production quota.
 - Compose currently has a deliberately local development password. Change all credentials before deploying any service outside localhost.
 - Never commit `.env.local`, production secrets, API keys, or real telemetry payloads.
