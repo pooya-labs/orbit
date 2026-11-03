@@ -640,3 +640,10 @@ Latest main commit at handoff: `b42b4b56a82a2f977b373731ae6e85a1ceb0760e`. PR #1
 Roadmap item “explicit backpressure and recovery-under-sustained-load tests across the real dependency boundary” is now complete (PR #110). Keep “target-environment load tests” open: measure throughput and p50/p95/p99 on intended hardware, test dashboard queries, multi-replica behavior, rejection/saturation, and recovery. Keep production DNS/ACME/firewall/trusted-proxy/network controls, provider-backed PKCE, off-host backup/PITR and measured restore, durable-history retention policy, hosted API/managed persistence, and operational rollout gates open. Production tenant ingestion remains disabled until these deployment-level gates are evidenced.
 
 PR #109's automated M01 keyboard/landmark baseline is merged. The separate human keyboard-only, rendered-state visual, and actual NVDA/VoiceOver/TalkBack acceptance checklist remains open; no WCAG or screen-reader certification is claimed.
+
+
+## M06 PostgreSQL container-restart recovery regression — PR #111 in progress
+
+The next repository-level M06 test uses the Compose PostgreSQL service rather than a TCP proxy. A coordinated host script stops and restarts the actual PostgreSQL container while a Go test retains the original Repository/pgxpool instance. The test requires an established connection to fail during the stop, then a query to succeed from the same pool after restart, and compares `pg_postmaster_start_time()` to prove that the PostgreSQL server process itself restarted.
+
+The test uses a shared temporary marker directory only for runner/test synchronization. The test itself performs all database observations and recovery assertions. The Compose runner always attempts to start PostgreSQL in its cleanup trap so a failed test cannot strand the rest of the telemetry stack. This is a CI single-node clean-restart regression, not crash/failover/PITR or production recovery evidence.
