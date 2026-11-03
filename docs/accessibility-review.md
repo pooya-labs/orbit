@@ -24,9 +24,12 @@ The web CI job runs:
 python3 scripts/check_accessibility_contract.py
 npm run typecheck
 npm run build
+python3 scripts/check_accessibility_html.py
 ```
 
-The Python check is a static regression guard for the landmarks, labels, focus handling, and CSS hooks. It is not an axe scan, browser automation, WCAG conformance report, or screen-reader test.
+The source-level Python check is a static regression guard for the landmarks, labels, focus handling, and CSS hooks. After the production build, the generated-HTML audit inspects the exported pages for document language/title, main and named navigation landmarks, a working skip-link target, heading presence, duplicate IDs, missing accessible names on interactive controls, unlabeled form fields, missing image alternatives, and broken ARIA ID references. Both checks use only Python's standard library.
+
+These checks are structural regression guards. They are not an axe scan, a browser accessibility-tree inspection, a WCAG conformance report, a contrast measurement, or a screen-reader test.
 
 ## Manual acceptance still required
 
