@@ -228,8 +228,19 @@ enableOnPageLoad = True
     throw ("Could not identify the ORBIT Edge window handle." + [Environment]::NewLine + $cleanEdgeWindows)
   }
   $edgeWindowHandle = $edgeHandleMatch.Groups[1].Value
+  $edgeTree = Invoke-WinApp -Arguments @("ui", "inspect", "-w", $edgeWindowHandle)
+  $cleanEdgeTree = [regex]::Replace($edgeTree, "\x1B\[[0-9;]*m", "")
+  $webDocumentMatch = [regex]::Match(
+    $cleanEdgeTree,
+    '(?im)^\s*(doc-[a-z0-9-]+)\s+Document\s+"ORBIT — Systems Observatory"',
+  )
+  if (-not $webDocumentMatch.Success) {
+    throw ("Could not identify the ORBIT web-document selector." + [Environment]::NewLine + $cleanEdgeTree)
+  }
+  $webDocumentSelector = $webDocumentMatch.Groups[1].Value
+  Write-Host ("ORBIT web-document selector: " + $webDocumentSelector)
   Invoke-WinApp -Arguments @(
-    "ui", "focus", "ORBIT — Systems Observatory", "-w", $edgeWindowHandle
+    "ui", "focus", $webDocumentSelector, "-w", $edgeWindowHandle
   ) | Write-Host
   Start-Sleep -Seconds 1
 
