@@ -75,6 +75,8 @@ This suite tests the built Chromium page, not NVDA, VoiceOver, or TalkBack. It d
 
 ## Manual acceptance still required
 
+Follow the [step-by-step manual acceptance guide](manual-acceptance-guide.md) for setup instructions, keyboard-only checks, NVDA, TalkBack, VoiceOver, visual review, and the evidence template. It is written for contributors starting from zero and does not require a local checkout.
+
 Before closing the M01 accessibility review, test the deployed and local application with:
 
 1. Keyboard only: skip link, every primary view, forms and validation errors, drawer open/close, Escape, tab order, focus restoration, zoom/reflow, both LTR and RTL layouts.
