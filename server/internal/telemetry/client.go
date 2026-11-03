@@ -775,7 +775,7 @@ func normalizeTempoIdentifier(value string, expectedBytes int) (string, bool) {
 	if expectedBytes <= 0 || value == "" {
 		return "", false
 	}
-	if len(value) == expectedBytes*2 && regexp.MustCompile("^[0-9a-fA-F]+$").MatchString(value) {
+	if len(value) == expectedBytes*2 {
 		decoded, err := hex.DecodeString(value)
 		if err == nil && len(decoded) == expectedBytes {
 			return hex.EncodeToString(decoded), true
