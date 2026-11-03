@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -98,8 +99,8 @@ func (g *workspacePipelineCollectorGate) ServeHTTP(w http.ResponseWriter, r *htt
 // requests briefly so the 64-slot gateway bound can be exercised
 // deterministically; it forwards every admitted request to the real Collector.
 func TestWorkspaceOTLPSustainedBackpressureAndRecovery(t *testing.T) {
-	databaseURL := strings.TrimSpace(t.Getenv("ORBIT_TEST_DATABASE_URL"))
-	collectorURL := strings.TrimSpace(t.Getenv("ORBIT_TEST_COLLECTOR_OTLP_HTTP_URL"))
+	databaseURL := strings.TrimSpace(os.Getenv("ORBIT_TEST_DATABASE_URL"))
+	collectorURL := strings.TrimSpace(os.Getenv("ORBIT_TEST_COLLECTOR_OTLP_HTTP_URL"))
 	if databaseURL == "" || collectorURL == "" {
 		t.Skip("backpressure integration test requires PostgreSQL and a real OTLP Collector URL")
 	}
