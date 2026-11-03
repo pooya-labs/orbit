@@ -623,3 +623,10 @@ The temporary feature-branch GitHub Pages publishing trigger and alternate previ
 **M01 is not fully closed:** the human keyboard-only and rendered-state review, and real NVDA/VoiceOver/TalkBack sessions, remain open in `docs/roadmap.md` and `docs/accessibility-review.md`. Remote automation did not run those assistive technologies and does not establish WCAG conformance. Keep this explicitly open until actual OS/browser/AT versions and findings are recorded.
 
 Next repository-owned hardening candidate: add deterministic sustained-load/backpressure/recovery coverage at the real PostgreSQL + Collector dependency boundary. Existing in-process 512-export concurrency tests and 64-slot burst tests are not production load certification; target-environment throughput, percentile latency, saturation, and recovery evidence remain separate M06 gates.
+
+
+## M06 backpressure integration test — current follow-through
+
+The Docker Compose workspace-tenant smoke now also exercises `TestWorkspaceOTLPSustainedBackpressureAndRecovery`. The test uses the real PostgreSQL-backed workload authorization and shared rate-limit repository plus the real local OTLP Collector. A deterministic HTTP gate holds 64 in-flight exports at the network boundary, verifies eight excess exports are rejected with 503, releases the admitted exports, and sends three more 16-export concurrent waves to prove recovery through the same gateway and dependencies.
+
+The gate is a test synchronization mechanism only; it is not a substitute for the Collector. This closes the repository-level deterministic real-dependency backpressure/recovery regression item when the PR's full CI passes. Target-environment sustained load, percentile latency, multiple replicas, host/network failure, and production recovery remain separate M06 deployment gates.

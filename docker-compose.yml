@@ -162,7 +162,7 @@ services:
       - test
       - ./internal/ingest
       - -run
-      - ^TestWorkspaceOTLPWriteToQueryIsolation$
+      - ^TestWorkspaceOTLP(WriteToQueryIsolation|SustainedBackpressureAndRecovery)$
       - -count=1
       - -v
     environment:
