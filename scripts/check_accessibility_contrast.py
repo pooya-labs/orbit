@@ -230,10 +230,7 @@ def main() -> int:
         colors = [
             normalize_hex(match.group(1))
             for body in rules
-            for match in re.finditer(
-                r"(?<![-\\w])color\\s*:\\s*(#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?)\\b",
-                body,
-            )
+            for match in HEX_COLOR_PATTERN.finditer(body)
         ]
         if expected_foreground not in colors:
             fail(
