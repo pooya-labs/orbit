@@ -636,7 +636,7 @@ export default function Home() {
                   <thead>
                     <tr>
                       <th scope="col">{tr("chartTime")}</th>
-                      <th scope="col">{tr("chartValue")}</th>
+                      <th scope="col">{tr("overviewChartValue")}</th>
                     </tr>
                   </thead>
                   <tbody>
