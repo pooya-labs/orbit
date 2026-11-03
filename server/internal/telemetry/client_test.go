@@ -224,7 +224,7 @@ func TestUnconfiguredBackendReturnsTypedError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo", nil); err != ErrNotConfigured {
+	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo", MetricRequestRate, nil); err != ErrNotConfigured {
 		t.Fatalf("error = %v, want ErrNotConfigured", err)
 	}
 }
@@ -239,7 +239,7 @@ func TestUpstreamErrorDoesNotBecomeAResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo", nil); err == nil {
+	if _, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo", MetricRequestRate, nil); err == nil {
 		t.Fatal("expected upstream HTTP error")
 	}
 }
