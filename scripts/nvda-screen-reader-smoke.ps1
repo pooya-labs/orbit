@@ -248,36 +248,13 @@ public static class OrbitWin32Cursor {
   Write-Host "Moved pointer to (900,650) inside ORBIT content and outside the Speech Viewer text area."
   Start-Sleep -Seconds 1
 
-  Write-Host "=== Move focus into the web document ==="
-  $beforeTab = Get-SpeechText
-  Invoke-WinApp -Arguments @("ui", "send-keys", "tab", "-a", "msedge", "--via", "send-input") | Write-Host
-  $tabSpeech = Wait-SpeechDelta -Before $beforeTab -ExpectedPattern "(?i)Skip to main content" -TimeoutSeconds 12
-  Write-Host ("NVDA Tab announcement: " + $tabSpeech)
-
-  $beforeEnter = Get-SpeechText
-  Invoke-WinApp -Arguments @("ui", "send-keys", "enter", "-a", "msedge", "--via", "send-input") | Write-Host
-  $enterSpeech = Wait-SpeechDelta -Before $beforeEnter -ExpectedPattern "(?i)(main|content)" -TimeoutSeconds 8
-  Write-Host ("NVDA skip-link announcement: " + $enterSpeech)
-
-  Write-Host "=== Ensure NVDA Browse Mode is active ==="
-  $beforeMode = Get-SpeechText
-  Invoke-WinApp -Arguments @("ui", "send-keys", "insert+space", "-a", "msedge", "--via", "send-input") | Write-Host
-  $modeSpeech = Wait-SpeechDelta -Before $beforeMode -ExpectedPattern "(?i)(Browse mode|Focus mode)" -TimeoutSeconds 8
-  Write-Host ("NVDA mode announcement: " + $modeSpeech)
-
-  if ($modeSpeech -match "(?i)Focus mode") {
-    $beforeMode = Get-SpeechText
-    Invoke-WinApp -Arguments @("ui", "send-keys", "insert+space", "-a", "msedge", "--via", "send-input") | Write-Host
-    $modeSpeech = Wait-SpeechDelta -Before $beforeMode -ExpectedPattern "(?i)Browse mode" -TimeoutSeconds 8
-    Write-Host ("NVDA mode switch: " + $modeSpeech)
-  }
-  if ($modeSpeech -notmatch "(?i)Browse mode") {
-    throw ("Could not establish NVDA Browse Mode. Latest mode announcement: " + $modeSpeech)
-  }
-
-  Write-Host "=== Exercise NVDA H quick-navigation against the live browser ==="
+  Write-Host "=== Navigate the document with NVDA heading quick-navigation ==="
+  # NVDA starts web documents in Browse Mode by default. Do not toggle
+  # Insert+Space here: that changes the mode and is unnecessary for H navigation.
+  # Ctrl+Home places the browse caret at the document start; H then follows
+  # the real heading order exposed by Edge/Chromium to NVDA.
   Invoke-WinApp -Arguments @("ui", "send-keys", "ctrl+home", "-a", "msedge", "--via", "send-input") | Write-Host
-  Start-Sleep -Milliseconds 500
+  Start-Sleep -Milliseconds 700
 
   $headingTargets = @("OBSERVE", "INVESTIGATE", "DELIVER")
   foreach ($heading in $headingTargets) {
@@ -292,6 +269,20 @@ public static class OrbitWin32Cursor {
     if ($headingSpeech -notmatch "(?i)heading") {
       throw ("NVDA announced '" + $heading + "' without identifying it as a heading: " + $headingSpeech)
     }
+    if ($headingSpeech -notmatch "(?i)level 2") {
+      throw ("NVDA announced '" + $heading + "' without identifying it as a level-two heading: " + $headingSpeech)
+    }
+  }
+
+  $beforePageTitle = Get-SpeechText
+  Invoke-WinApp -Arguments @("ui", "send-keys", "h", "-a", "msedge", "--via", "send-input") | Write-Host
+  $pageTitleSpeech = Wait-SpeechDelta -Before $beforePageTitle -ExpectedPattern "(?i)Good morning, team\." -TimeoutSeconds 8
+  Write-Host ("NVDA H -> page title: " + $pageTitleSpeech)
+  if ($pageTitleSpeech -notmatch "(?i)Good morning, team\.") {
+    throw ("NVDA H did not reach the current page H1. Speech Viewer reported: " + $pageTitleSpeech)
+  }
+  if ($pageTitleSpeech -notmatch "(?i)heading.*level 1|level 1.*heading") {
+    throw ("NVDA did not announce the current page title as a level-one heading: " + $pageTitleSpeech)
   }
 
   Write-Host "=== NVDA screen-reader smoke test passed ==="
