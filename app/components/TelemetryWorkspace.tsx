@@ -349,7 +349,7 @@ export default function TelemetryWorkspace({
   }, [windowRange, apiBaseUrl, reloadKey, language, useLegacyDevelopmentReads]);
 
   const loadMoreServices = async () => {
-    if (!serviceCursor || !serviceHasMore || serviceLoadingMore || serviceLoading) return;
+    if (!useLegacyDevelopmentReads || !serviceCursor || !serviceHasMore || serviceLoadingMore || serviceLoading) return;
     servicePageController.current?.abort();
     const controller = new AbortController();
     servicePageController.current = controller;
@@ -664,7 +664,7 @@ export default function TelemetryWorkspace({
               discoveredServices.length > 0 ? `${discoveredServices.length} ${tr("discovered")}` : tr("noDiscoveredServices")}
           </small>
         </label>
-        {serviceHasMore ? (
+        {useLegacyDevelopmentReads && serviceHasMore ? (
           <button className="telemetry-load-more" type="button" onClick={() => void loadMoreServices()} disabled={serviceLoadingMore || serviceLoading}>
             {serviceLoadingMore ? tr("loadingMoreServices") : tr("loadMoreServices")}
           </button>
