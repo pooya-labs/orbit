@@ -19,6 +19,7 @@ import {
   getTelemetryServiceAttributes,
   getWorkspaceMembership,
   getWorkspaceTelemetryMetrics,
+  listWorkspaceTelemetryMetricCatalog,
   getWorkspaceTelemetryTrace,
   listWorkspaceTelemetryLogs,
   listWorkspaceTelemetryServices,
@@ -30,6 +31,8 @@ import { extractTraceIdFromLog } from "../../lib/orbit/trace-correlation.mjs";
 import type {
   TelemetryLogsResponse,
   TelemetryMetricsResponse,
+  TelemetryMetricDefinition,
+  TelemetryMetricID,
   TelemetryTracesResponse,
   TempoTraceSpan,
   TelemetryWindow,
@@ -66,6 +69,12 @@ const windows: { value: TelemetryWindow; label: string }[] = [
   { value: "1h", label: "1 hour" },
   { value: "6h", label: "6 hours" },
   { value: "24h", label: "24 hours" },
+];
+
+const legacyMetricCatalog: TelemetryMetricDefinition[] = [
+  { id: "request_rate", unit: "requests/second", description: "All instrumented HTTP requests per second.", group_by: ["instance", "service_version", "deployment_environment"] },
+  { id: "successful_request_rate", unit: "requests/second", description: "Instrumented successful HTTP 2xx and 3xx requests per second.", group_by: ["instance", "service_version", "deployment_environment"] },
+  { id: "failed_request_rate", unit: "requests/second", description: "Instrumented failed HTTP requests per second.", group_by: ["instance", "service_version", "deployment_environment"] },
 ];
 
 const metricGroupOptions = [
@@ -155,6 +164,10 @@ export default function TelemetryWorkspace({
   const [windowRange, setWindowRange] = useState<TelemetryWindow>("1h");
   const [selectedService, setSelectedService] = useState("orbit-telemetry-demo");
   const [metricGroupBy, setMetricGroupBy] = useState<string[]>(["instance", "service_version", "deployment_environment"]);
+  const [selectedMetric, setSelectedMetric] = useState<TelemetryMetricID>("request_rate");
+  const [metricCatalog, setMetricCatalog] = useState<TelemetryMetricDefinition[]>([]);
+  const [metricCatalogLoading, setMetricCatalogLoading] = useState(false);
+  const [metricCatalogError, setMetricCatalogError] = useState("");
   const [discoveredServices, setDiscoveredServices] = useState<TelemetryServiceOption[]>([]);
   const [serviceWarnings, setServiceWarnings] = useState<string[]>([]);
   const [serviceError, setServiceError] = useState("");
@@ -461,6 +474,47 @@ export default function TelemetryWorkspace({
   }, [selectedService, selectedServiceDiscovered, discoveredServices, serviceLoading, windowRange, apiBaseUrl, reloadKey, language, useLegacyDevelopmentReads]);
 
   useEffect(() => {
+    if (useLegacyDevelopmentReads) {
+      setMetricCatalog(legacyMetricCatalog);
+      setMetricCatalogLoading(false);
+      setMetricCatalogError("");
+      return;
+    }
+    if (!user || !workspaceId || !membership || membershipWorkspaceId !== workspaceId) {
+      setMetricCatalog([]);
+      setMetricCatalogLoading(false);
+      setMetricCatalogError("");
+      return;
+    }
+
+    const controller = new AbortController();
+    let mounted = true;
+    setMetricCatalogLoading(true);
+    setMetricCatalogError("");
+    listWorkspaceTelemetryMetricCatalog(workspaceId, controller.signal, apiBaseUrl)
+      .then((response) => {
+        if (!mounted || controller.signal.aborted) return;
+        setMetricCatalog(response.data);
+        setSelectedMetric((current) => response.data.some((metric) => metric.id === current)
+          ? current
+          : response.data[0]?.id ?? "request_rate");
+      })
+      .catch(() => {
+        if (!mounted || controller.signal.aborted) return;
+        setMetricCatalog([]);
+        setMetricCatalogError(tr("metricCatalogUnavailable"));
+      })
+      .finally(() => {
+        if (mounted && !controller.signal.aborted) setMetricCatalogLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, language, membership, membershipWorkspaceId, user?.sub, useLegacyDevelopmentReads, workspaceId]);
+
+  useEffect(() => {
     const controller = new AbortController();
     let mounted = true;
 
@@ -488,8 +542,8 @@ export default function TelemetryWorkspace({
         if (view === "Metrics") {
           const groupBy = metricGroupBy.length > 0 ? [...metricGroupBy].sort().join(",") : "none";
           const response = useLegacyDevelopmentReads
-            ? await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl, selectedService, groupBy)
-            : await getWorkspaceTelemetryMetrics(workspaceId, windowRange, selectedService, groupBy, controller.signal, apiBaseUrl);
+            ? await getTelemetryMetrics(windowRange, controller.signal, apiBaseUrl, selectedService, groupBy, selectedMetric)
+            : await getWorkspaceTelemetryMetrics(workspaceId, windowRange, selectedService, groupBy, controller.signal, apiBaseUrl, selectedMetric);
           if (mounted) setMetrics(response);
         } else if (view === "Logs") {
           const options = { window: windowRange, service: selectedService, limit: 50 };
@@ -525,7 +579,7 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy, useLegacyDevelopmentReads, user?.sub, workspaceId, membership, membershipWorkspaceId]);
+  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy, selectedMetric, useLegacyDevelopmentReads, user?.sub, workspaceId, membership, membershipWorkspaceId]);
 
   useEffect(() => {
     if (!selectedTraceId) {
@@ -583,7 +637,7 @@ export default function TelemetryWorkspace({
         .filter((point) => Number.isFinite(point.value))
         .sort((a, b) => a.timestamp - b.timestamp);
       const dimensions = Object.entries(series.metric)
-        .filter(([key, value]) => key !== "service_name" && value !== "")
+        .filter(([key, value]) => key !== "service_name" && key !== "orbit_workspace_id" && value !== "")
         .sort(([a], [b]) => a.localeCompare(b));
       const label = dimensions.length > 0
         ? dimensions.map(([key, value]) => `${key}=${value}`).join(" · ")
@@ -595,6 +649,17 @@ export default function TelemetryWorkspace({
       };
     }).filter((series) => series.points.length > 0);
   }, [metrics, language]);
+
+  const selectedMetricLabel = selectedMetric === "successful_request_rate"
+    ? tr("successfulRequestRate")
+    : selectedMetric === "failed_request_rate"
+      ? tr("failedRequestRate")
+      : tr("requestRate");
+  const selectedMetricDescription = selectedMetric === "successful_request_rate"
+    ? tr("successfulRequestRateDescription")
+    : selectedMetric === "failed_request_rate"
+      ? tr("failedRequestRateDescription")
+      : tr("requestRateDescription");
 
   const metricSamples = useMemo(
     () => metricSeries.flatMap((series) => series.points).sort((a, b) => a.timestamp - b.timestamp),
@@ -915,6 +980,25 @@ export default function TelemetryWorkspace({
       )}
       {workspaceError && <div className="telemetry-error" role="alert"><AlertCircle size={15} /><span>{workspaceError}</span></div>}
       {view === "Metrics" && (
+        <label className="telemetry-service-select telemetry-metric-select">
+          <span>{tr("metricLabel")}</span>
+          <select
+            aria-label={tr("metricLabel")}
+            value={selectedMetric}
+            onChange={(event) => setSelectedMetric(event.target.value as TelemetryMetricID)}
+            disabled={metricCatalogLoading || metricCatalog.length === 0 || (!useLegacyDevelopmentReads && (!user || !membership || membershipWorkspaceId !== workspaceId))}
+          >
+            {metricCatalog.map((metric) => (
+              <option key={metric.id} value={metric.id}>
+                {metric.id === "successful_request_rate" ? tr("successfulRequestRate") : metric.id === "failed_request_rate" ? tr("failedRequestRate") : tr("requestRate")}
+              </option>
+            ))}
+          </select>
+          <small>{metricCatalogLoading ? tr("metricCatalogLoading") : metricCatalogError || selectedMetricDescription}</small>
+        </label>
+      )}
+
+      {view === "Metrics" && (
         <div className="telemetry-grouping-panel" role="group" aria-label={tr("groupBy")}>
           <span className="telemetry-kicker">{tr("groupBy")}</span>
           <button
@@ -952,18 +1036,18 @@ export default function TelemetryWorkspace({
       {view === "Metrics" && (
         <div className="panel telemetry-content-panel">
           {loading && !metrics ? <TelemetryLoading language={language} /> : metricSamples.length === 0 ? (
-            <TelemetryEmpty title={tr("noMetricSamplesTitle")} message={language === "fa" ? tr("noMetricSamplesMessage").replace("این سرویس", selectedService) : tr("noMetricSamplesMessage").replace("this service", selectedService)} />
+            <TelemetryEmpty title={tr("noMetricSamplesTitle")} message={tr("noMetricSamplesMessage").replace("{metric}", selectedMetricLabel).replace("this service", selectedService).replace("این سرویس", selectedService)} />
           ) : (
             <>
               <div className="telemetry-stat-row">
-                <div><span className="telemetry-kicker">{tr("requestRate")}</span><strong>{formatRate(latestMetricRate, language)}<small> req/s</small></strong><p>{tr("latestPrometheus")}</p></div>
+                <div><span className="telemetry-kicker">{selectedMetricLabel}</span><strong>{formatRate(latestMetricRate, language)}<small>{tr("requestRateUnit")}</small></strong><p>{tr("latestPrometheus")}</p></div>
                 <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("samples")}</span><strong>{metricSamples.length}</strong><p>{chartSeries.length} {tr("series")} · {tr("acrossWindow")} {windowRange}</p></div>
                 <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("queryStep")}</span><strong>{metrics?.step ?? "—"}</strong><p>{tr("prometheusResolution")}</p></div>
               </div>
               <div className="telemetry-chart">
                 {chartSeries.length > 0 ? (
                   <>
-                    <svg viewBox="0 0 600 120" role="img" aria-label={`${tr("requestRate")} · ${windowRange}`}>
+                    <svg viewBox="0 0 600 120" role="img" aria-label={`${selectedMetricLabel} · ${windowRange}`}>
                       {chartSeries.map((series) => {
                         const points = series.points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
                         return (
@@ -987,9 +1071,9 @@ export default function TelemetryWorkspace({
                     </div>
                     <details className="telemetry-data-table">
                       <summary>{tr("showChartData")}</summary>
-                      <div className="telemetry-data-table-scroll" role="region" aria-label={tr("chartDataCaption").replace("{service}", selectedService).replace("{window}", windowRange)} tabIndex={0}>
+                      <div className="telemetry-data-table-scroll" role="region" aria-label={tr("chartDataCaption").replace("{metric}", selectedMetricLabel).replace("{service}", selectedService).replace("{window}", windowRange)} tabIndex={0}>
                         <table>
-                          <caption>{tr("chartDataCaption").replace("{service}", selectedService).replace("{window}", windowRange)}</caption>
+                          <caption>{tr("chartDataCaption").replace("{metric}", selectedMetricLabel).replace("{service}", selectedService).replace("{window}", windowRange)}</caption>
                           <thead>
                             <tr>
                               <th scope="col">{tr("chartTime")}</th>

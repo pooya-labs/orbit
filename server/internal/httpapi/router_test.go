@@ -1009,6 +1009,7 @@ func TestWorkspaceTelemetryQueriesRequireMembershipAndBackendTenantMatcher(t *te
 	handler := NewHandler(Config{Environment: "production", AuthVerifier: viewer, Telemetry: client}, &fakeRepository{}, testLogger())
 	paths := []string{
 		"/api/v1/workspaces/" + workspaceID + "/telemetry/metrics?service=api-gateway",
+		"/api/v1/workspaces/" + workspaceID + "/telemetry/metrics/catalog",
 		"/api/v1/workspaces/" + workspaceID + "/telemetry/logs?service=api-gateway",
 		"/api/v1/workspaces/" + workspaceID + "/telemetry/traces?service=api-gateway",
 	}
@@ -1103,6 +1104,40 @@ func TestWorkspaceTelemetryQueriesRequireMembershipBeforeBackendAccess(t *testin
 	}
 }
 
+
+func TestWorkspaceMetricSelectorRejectsArbitraryMetricBeforePrometheus(t *testing.T) {
+	const workspaceID = "00000000-0000-4000-8000-000000000001"
+	backendCalls := 0
+	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		backendCalls++
+		t.Errorf("invalid metric reached Prometheus: %s %s", r.Method, r.URL.String())
+		http.Error(w, "unexpected backend call", http.StatusInternalServerError)
+	}))
+	defer prometheus.Close()
+
+	client, err := telemetry.NewClient(prometheus.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	viewer := fixedTokenVerifier{principal: auth.Principal{
+		Issuer: "https://identity.example", Subject: "member-1", Roles: []string{"viewer"},
+	}}
+	handler := NewHandler(Config{Environment: "production", AuthVerifier: viewer, Telemetry: client}, &fakeRepository{}, testLogger())
+
+	request := httptest.NewRequest(http.MethodGet,
+		"/api/v1/workspaces/"+workspaceID+"/telemetry/metrics?service=api-gateway&metric=orbit_demo_requests_total%7Bjob%3D~%22.%2A%22%7D",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "invalid_metric") {
+		t.Fatalf("invalid metric status/body = %d %s, want 400 invalid_metric", recorder.Code, recorder.Body.String())
+	}
+	if backendCalls != 0 {
+		t.Fatalf("invalid metric reached Prometheus %d times", backendCalls)
+	}
+}
 
 func TestWorkspaceTraceDetailRouteRequiresMembershipBeforeTempoRead(t *testing.T) {
 	const workspaceID = "00000000-0000-4000-8000-000000000001"

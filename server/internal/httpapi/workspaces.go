@@ -1232,6 +1232,9 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 
 	// Keep the routes registered when telemetry is unavailable so authorized
 	// workspace members receive a dependency error rather than a misleading 404.
+		registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/metrics/catalog", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+			writeJSON(w, http.StatusOK, telemetry.ListMetricCatalog())
+		})
 		registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/metrics", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
 		if telemetryClient == nil {
 			writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Workspace telemetry backends are not configured")
@@ -1241,9 +1244,11 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_window",err.Error()); return }
 			service := r.URL.Query().Get("service")
 			if err := telemetry.ValidateServiceName(service); err != nil { writeError(w,r,http.StatusBadRequest,"invalid_service",err.Error()); return }
+			metricID, err := telemetry.ParseMetricID(r.URL.Query().Get("metric"))
+			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_metric",err.Error()); return }
 			groupBy, err := telemetry.ParseMetricGroupBy(r.URL.Query().Get("group_by"))
 			if err != nil { writeError(w,r,http.StatusBadRequest,"invalid_group_by",err.Error()); return }
-			result, err := telemetryClient.WorkspaceMetrics(ctx,workspaceID,window,service,groupBy)
+			result, err := telemetryClient.WorkspaceMetrics(ctx,workspaceID,window,service,metricID,groupBy)
 			if err != nil { writeTelemetryError(w,r,logger,"Workspace Prometheus",err); return }
 			writeJSON(w,http.StatusOK,result)
 		})

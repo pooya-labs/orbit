@@ -1603,6 +1603,93 @@ paths:
           $ref: '#/components/responses/NotFound'
         "503":
           $ref: "#/components/responses/Unavailable"
+  /api/v1/workspaces/{workspaceID}/telemetry/metrics/catalog:
+    get:
+      tags: [Telemetry]
+      operationId: listWorkspaceTelemetryMetricCatalog
+      summary: List curated metric definitions available to a workspace
+      description: Returns the server-owned metric allow-list after workspace membership verification. Definitions are limited to request_rate, successful_request_rate, and failed_request_rate over orbit_demo_requests_total; arbitrary Prometheus metric names and PromQL are never accepted.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+      responses:
+        "200":
+          description: Curated metric definitions and their bounded grouping dimensions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTelemetryMetricCatalogResponse"
+        "404":
+          description: Workspace membership was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/telemetry/metrics:
+    get:
+      tags: [Telemetry]
+      operationId: queryWorkspaceTelemetryMetrics
+      summary: Query a curated metric for an authenticated workspace
+      description: Uses fixed PromQL templates over orbit_demo_requests_total with the exact workspace UUID and service name as matchers. The three metric IDs are server-defined. Grouping is limited to instance, service_version, and deployment_environment; at most three dimensions and ten series are returned. Windows are capped at 24 hours, query steps are fixed per window, and Prometheus requests have a five-second timeout. Arbitrary metric names, label matchers, and PromQL expressions are not accepted.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceID'
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [15m, 1h, 6h, 24h]
+            default: 1h
+        - name: service
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        - name: metric
+          in: query
+          required: false
+          description: Server-defined metric ID. Defaults to request_rate.
+          schema:
+            type: string
+            enum: [request_rate, successful_request_rate, failed_request_rate]
+            default: request_rate
+        - name: group_by
+          in: query
+          required: false
+          description: Up to three curated grouping labels. Use none for one aggregate series.
+          schema:
+            type: string
+            default: instance,service_version,deployment_environment
+            pattern: "^(none|((instance|service_version|deployment_environment)(,(instance|service_version|deployment_environment))*))$"
+      responses:
+        "200":
+          description: Bounded workspace-scoped Prometheus range query result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryMetricsResponse"
+        "400":
+          description: Invalid window, service, metric ID, or grouping dimensions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Workspace membership was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Prometheus is not configured or temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/workspaces/{workspaceID}/telemetry/services:
     get:
       tags: [Telemetry]
@@ -1785,8 +1872,8 @@ paths:
     get:
       tags: [Telemetry]
       operationId: queryTelemetryMetrics
-      summary: Query the bounded ORBIT demo request-rate metric
-      description: Runs a fixed PromQL expression. Arbitrary PromQL is not accepted.
+      summary: Query an allow-listed development telemetry metric
+      description: Local-development-only legacy route. Uses the same fixed server-defined metric templates as the authenticated workspace route. Arbitrary Prometheus metric names, matchers, and PromQL expressions are not accepted.
       parameters:
         - in: query
           name: window
@@ -1805,13 +1892,21 @@ paths:
             pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
             default: orbit-telemetry-demo
         - in: query
+          name: metric
+          required: false
+          description: Server-defined metric ID. Defaults to request_rate.
+          schema:
+            type: string
+            enum: [request_rate, successful_request_rate, failed_request_rate]
+            default: request_rate
+        - in: query
           name: group_by
           required: false
-          description: Comma-separated allow-list of grouping labels. Use none for one aggregate series; arbitrary PromQL is never accepted.
+          description: Up to three curated grouping labels. Use none for one aggregate series.
           schema:
             type: string
             default: instance,service_version,deployment_environment
-            pattern: "^(none|((instance|job|service_version|deployment_environment|container_name|host_name|cloud_region)(,(instance|job|service_version|deployment_environment|container_name|host_name|cloud_region))*))$"
+            pattern: "^(none|((instance|service_version|deployment_environment)(,(instance|service_version|deployment_environment))*))$"
       responses:
         "200":
           description: Prometheus range query result with source and query timestamp.
@@ -2599,9 +2694,36 @@ components:
             items:
               type: string
               enum: [prometheus, loki, tempo]
+    WorkspaceTelemetryMetricCatalogResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            type: object
+            required: [id, unit, description, group_by]
+            properties:
+              id:
+                type: string
+                enum: [request_rate, successful_request_rate, failed_request_rate]
+              unit:
+                type: string
+                const: requests/second
+              description:
+                type: string
+              group_by:
+                type: array
+                maxItems: 3
+                uniqueItems: true
+                items:
+                  type: string
+                  enum: [instance, service_version, deployment_environment]
     TelemetryMetricsResponse:
       type: object
-      required: [source, window, queried_at, query, step, data]
+      required: [source, window, queried_at, query, step, metric, data]
       properties:
         source:
           type: string
@@ -2614,14 +2736,18 @@ components:
           format: date-time
         query:
           type: string
-          description: Fixed service-scoped PromQL expression.
+          description: Fixed server-generated PromQL expression; no caller-supplied query is accepted.
         step:
           type: string
+        metric:
+          type: string
+          enum: [request_rate, successful_request_rate, failed_request_rate]
         group_by:
           type: array
+          maxItems: 3
           items:
             type: string
-            enum: [instance, job, service_version, deployment_environment, container_name, host_name, cloud_region]
+            enum: [instance, service_version, deployment_environment]
         data:
           type: array
           items:

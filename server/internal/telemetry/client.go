@@ -20,10 +20,16 @@ import (
 )
 
 const (
-	maxResponseBytes = 2 << 20
-	maxResultLimit   = 100
-	maxServiceCount  = 250
-	metricName       = "orbit_demo_requests_total"
+	maxResponseBytes         = 2 << 20
+	maxResultLimit           = 100
+	maxServiceCount          = 250
+	maxMetricSeries          = 10
+	maxMetricGroupDimensions = 3
+	metricName               = "orbit_demo_requests_total"
+
+	MetricRequestRate          = "request_rate"
+	MetricSuccessfulRequestRate = "successful_request_rate"
+	MetricFailedRequestRate     = "failed_request_rate"
 )
 
 var ErrNotConfigured = errors.New("telemetry backend is not configured")
@@ -90,12 +96,75 @@ func ParseLimit(value string, fallback int) (int, error) {
 
 var allowedMetricGroupLabels = map[string]struct{}{
 	"instance":               {},
-	"job":                    {},
 	"service_version":        {},
 	"deployment_environment": {},
-	"container_name":         {},
-	"host_name":              {},
-	"cloud_region":           {},
+}
+
+type MetricDefinition struct {
+	ID          string   `json:"id"`
+	Unit        string   `json:"unit"`
+	Description string   `json:"description"`
+	GroupBy     []string `json:"group_by"`
+}
+
+type MetricCatalogResponse struct {
+	Data []MetricDefinition `json:"data"`
+}
+
+var workspaceMetricCatalog = []MetricDefinition{
+	{ID: MetricRequestRate, Unit: "requests/second", Description: "All instrumented HTTP requests per second.", GroupBy: []string{"instance", "service_version", "deployment_environment"}},
+	{ID: MetricSuccessfulRequestRate, Unit: "requests/second", Description: "Instrumented successful HTTP 2xx and 3xx requests per second.", GroupBy: []string{"instance", "service_version", "deployment_environment"}},
+	{ID: MetricFailedRequestRate, Unit: "requests/second", Description: "Instrumented failed HTTP requests per second.", GroupBy: []string{"instance", "service_version", "deployment_environment"}},
+}
+
+// ListMetricCatalog returns the server-owned metric definitions. It deliberately
+// does not expose PromQL or discover arbitrary Prometheus metric names.
+func ListMetricCatalog() MetricCatalogResponse {
+	result := MetricCatalogResponse{Data: make([]MetricDefinition, 0, len(workspaceMetricCatalog))}
+	for _, definition := range workspaceMetricCatalog {
+		definition.GroupBy = append([]string(nil), definition.GroupBy...)
+		result.Data = append(result.Data, definition)
+	}
+	return result
+}
+
+// ParseMetricID accepts only stable IDs defined by the server-owned catalog.
+func ParseMetricID(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return MetricRequestRate, nil
+	}
+	switch value {
+	case MetricRequestRate, MetricSuccessfulRequestRate, MetricFailedRequestRate:
+		return value, nil
+	default:
+		return "", errors.New("metric must be one of request_rate, successful_request_rate, or failed_request_rate")
+	}
+}
+
+func buildMetricQuery(metricID string, groupLabels, matchers []string) (string, error) {
+	metricID, err := ParseMetricID(metricID)
+	if err != nil {
+		return "", err
+	}
+	selector := func(extra string) string {
+		parts := append([]string(nil), matchers...)
+		if extra != "" {
+			parts = append(parts, extra)
+		}
+		return metricName + "{" + strings.Join(parts, ",") + "}"
+	}
+	group := strings.Join(groupLabels, ", ")
+	switch metricID {
+	case MetricRequestRate:
+		return fmt.Sprintf("sum by (%s) (rate(%s[5m]))", group, selector("")), nil
+	case MetricSuccessfulRequestRate:
+		return fmt.Sprintf("sum by (%s) (rate(%s[5m]))", group, selector(`slo_outcome="good"`)), nil
+	case MetricFailedRequestRate:
+		return fmt.Sprintf("sum by (%s) (rate(%s[5m]))", group, selector(`slo_outcome="bad"`)), nil
+	default:
+		return "", errors.New("unsupported metric")
+	}
 }
 
 func ParseMetricGroupBy(value string) ([]string, error) {
@@ -107,8 +176,8 @@ func ParseMetricGroupBy(value string) ([]string, error) {
 		return []string{}, nil
 	}
 	parts := strings.Split(value, ",")
-	if len(parts) > len(allowedMetricGroupLabels) {
-		return nil, fmt.Errorf("group_by accepts at most %d dimensions", len(allowedMetricGroupLabels))
+	if len(parts) > maxMetricGroupDimensions {
+		return nil, fmt.Errorf("group_by accepts at most %d dimensions", maxMetricGroupDimensions)
 	}
 	seen := make(map[string]struct{}, len(parts))
 	result := make([]string, 0, len(parts))
@@ -116,6 +185,26 @@ func ParseMetricGroupBy(value string) ([]string, error) {
 		label := strings.TrimSpace(part)
 		if _, ok := allowedMetricGroupLabels[label]; !ok {
 			return nil, fmt.Errorf("group_by contains an unsupported dimension")
+		}
+		if _, exists := seen[label]; exists {
+			continue
+		}
+		seen[label] = struct{}{}
+		result = append(result, label)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func normalizeMetricGroupBy(groupBy []string) ([]string, error) {
+	if len(groupBy) > maxMetricGroupDimensions {
+		return nil, fmt.Errorf("group_by accepts at most %d dimensions", maxMetricGroupDimensions)
+	}
+	seen := make(map[string]struct{}, len(groupBy))
+	result := make([]string, 0, len(groupBy))
+	for _, label := range groupBy {
+		if _, ok := allowedMetricGroupLabels[label]; !ok {
+			return nil, errors.New("unsupported metric grouping dimension")
 		}
 		if _, exists := seen[label]; exists {
 			continue
@@ -210,6 +299,7 @@ type QueryResult struct {
 	Query     string          `json:"query,omitempty"`
 	Step      string          `json:"step,omitempty"`
 	Service   string          `json:"service,omitempty"`
+	Metric    string          `json:"metric,omitempty"`
 	GroupBy   []string        `json:"group_by,omitempty"`
 	Limit     int             `json:"limit,omitempty"`
 	Data      json.RawMessage `json:"data"`
@@ -296,13 +386,17 @@ func normalizeEndpoint(name, value string) (string, error) {
 	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
-func (c *Client) Metrics(ctx context.Context, window QueryWindow, service string, groupBy []string) (QueryResult, error) {
+func (c *Client) Metrics(ctx context.Context, window QueryWindow, service, metricID string, groupBy []string) (QueryResult, error) {
 	if c == nil || c.prometheusURL == "" {
 		return QueryResult{}, ErrNotConfigured
 	}
 	if err := ValidateServiceName(service); err != nil {
 		return QueryResult{}, err
 	}
+	metricID, err := ParseMetricID(metricID)
+	if err != nil { return QueryResult{}, err }
+	groupBy, err = normalizeMetricGroupBy(groupBy)
+	if err != nil { return QueryResult{}, err }
 	groupLabels := []string{"service_name"}
 	for _, label := range groupBy {
 		if _, ok := allowedMetricGroupLabels[label]; !ok {
@@ -311,7 +405,8 @@ func (c *Client) Metrics(ctx context.Context, window QueryWindow, service string
 		groupLabels = append(groupLabels, label)
 	}
 	sort.Strings(groupLabels)
-	query := fmt.Sprintf("sum by (%s) (rate(%s{service_name=%q}[5m]))", strings.Join(groupLabels, ", "), metricName, service)
+	query, err := buildMetricQuery(metricID, groupLabels, []string{fmt.Sprintf("service_name=%q", service)})
+	if err != nil { return QueryResult{}, err }
 	now := c.now().UTC()
 	values := url.Values{}
 	values.Set("query", query)
@@ -319,7 +414,7 @@ func (c *Client) Metrics(ctx context.Context, window QueryWindow, service string
 	values.Set("end", now.Format(time.RFC3339Nano))
 	values.Set("step", window.Step)
 	values.Set("timeout", "5s")
-	values.Set("limit", "10")
+	values.Set("limit", strconv.Itoa(maxMetricSeries))
 
 	payload, err := c.get(ctx, c.prometheusURL, "/api/v1/query_range", values)
 	if err != nil {
@@ -342,6 +437,7 @@ func (c *Client) Metrics(ctx context.Context, window QueryWindow, service string
 		Step:      window.Step,
 		Service:   service,
 		GroupBy:   append([]string(nil), groupBy...),
+		Metric:    metricID,
 		Data:      nonEmptyJSON(result.Result),
 	}, nil
 }
@@ -587,17 +683,25 @@ func (c *Client) WorkspaceAvailabilityEvents(
 }
 
 
-func (c *Client) WorkspaceMetrics(ctx context.Context, workspaceID string, window QueryWindow, service string, groupBy []string) (QueryResult, error) {
+func (c *Client) WorkspaceMetrics(ctx context.Context, workspaceID string, window QueryWindow, service, metricID string, groupBy []string) (QueryResult, error) {
 	if err := validateWorkspaceID(workspaceID); err != nil { return QueryResult{}, err }
 	if c == nil || c.prometheusURL == "" { return QueryResult{}, ErrNotConfigured }
 	if err := ValidateServiceName(service); err != nil { return QueryResult{}, err }
+	metricID, err := ParseMetricID(metricID)
+	if err != nil { return QueryResult{}, err }
+	groupBy, err = normalizeMetricGroupBy(groupBy)
+	if err != nil { return QueryResult{}, err }
 	groupLabels := []string{"service_name", "orbit_workspace_id"}
 	for _, label := range groupBy {
 		if _, ok := allowedMetricGroupLabels[label]; !ok { return QueryResult{}, errors.New("unsupported metric grouping dimension") }
 		groupLabels = append(groupLabels, label)
 	}
 	sort.Strings(groupLabels)
-	query := fmt.Sprintf("sum by (%s) (rate(%s{service_name=%q,orbit_workspace_id=%q}[5m]))", strings.Join(groupLabels, ", "), metricName, service, workspaceID)
+	query, err := buildMetricQuery(metricID, groupLabels, []string{
+		fmt.Sprintf("service_name=%q", service),
+		fmt.Sprintf("orbit_workspace_id=%q", workspaceID),
+	})
+	if err != nil { return QueryResult{}, err }
 	now := c.now().UTC()
 	values := url.Values{}
 	values.Set("query", query)
@@ -605,13 +709,13 @@ func (c *Client) WorkspaceMetrics(ctx context.Context, workspaceID string, windo
 	values.Set("end", now.Format(time.RFC3339Nano))
 	values.Set("step", window.Step)
 	values.Set("timeout", "5s")
-	values.Set("limit", "10")
+	values.Set("limit", strconv.Itoa(maxMetricSeries))
 	payload, err := c.get(ctx, c.prometheusURL, "/api/v1/query_range", values)
 	if err != nil { return QueryResult{}, fmt.Errorf("query workspace Prometheus: %w", err) }
 	if payload.Status != "success" { return QueryResult{}, errors.New("Prometheus returned an unsuccessful query status") }
 	var result map[string]json.RawMessage
 	if err := json.Unmarshal(payload.Data, &result); err != nil { return QueryResult{}, fmt.Errorf("decode Prometheus range result: %w", err) }
-	return QueryResult{Source:"prometheus", Window:window.Name, QueriedAt:now, Query:query, Step:window.Step, Service:service, GroupBy:append([]string(nil),groupBy...), Data:nonEmptyJSON(result["result"])}, nil
+	return QueryResult{Source:"prometheus", Window:window.Name, QueriedAt:now, Query:query, Step:window.Step, Service:service, Metric:metricID, GroupBy:append([]string(nil),groupBy...), Data:nonEmptyJSON(result["result"])}, nil
 }
 
 func (c *Client) WorkspaceLogs(ctx context.Context, workspaceID string, window QueryWindow, service string, limit int) (QueryResult, error) {

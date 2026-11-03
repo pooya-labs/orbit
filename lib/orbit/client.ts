@@ -24,6 +24,8 @@ import type {
   WorkspaceDeploymentAnnotation,
   DeploymentAnnotationComparison,
   TelemetryWindow,
+  TelemetryMetricID,
+  TelemetryMetricCatalogResponse,
   TelemetryMetricsResponse,
   TelemetryLogsResponse,
   TelemetryTracesResponse,
@@ -592,11 +594,25 @@ export async function getTelemetryMetrics(
   baseUrl?: string,
   service = "orbit-telemetry-demo",
   groupBy?: string,
+  metric?: TelemetryMetricID,
 ): Promise<TelemetryMetricsResponse> {
   const query = new URLSearchParams({ window, service });
   if (groupBy !== undefined) query.set("group_by", groupBy);
+  if (metric) query.set("metric", metric);
   return getJSON<TelemetryMetricsResponse>(
     `/api/v1/telemetry/metrics?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+}
+
+export async function listWorkspaceTelemetryMetricCatalog(
+  workspaceId: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<TelemetryMetricCatalogResponse> {
+  return getJSON<TelemetryMetricCatalogResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/telemetry/metrics/catalog`,
     signal,
     baseUrl,
   );
@@ -609,9 +625,11 @@ export async function getWorkspaceTelemetryMetrics(
   groupBy?: string,
   signal?: AbortSignal,
   baseUrl?: string,
+  metric?: TelemetryMetricID,
 ): Promise<TelemetryMetricsResponse> {
   const query = new URLSearchParams({ window, service });
   if (groupBy !== undefined) query.set("group_by", groupBy);
+  if (metric) query.set("metric", metric);
   return getJSON<TelemetryMetricsResponse>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/telemetry/metrics?${query.toString()}`,
     signal,

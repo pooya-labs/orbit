@@ -259,11 +259,11 @@ func TestWorkspaceOTLPWriteToQueryIsolation(t *testing.T) {
 
 	// Keep a direct client assertion alongside the HTTP route assertions so
 	// failures distinguish a backend matcher problem from router/membership code.
-	metricsA, err := telemetryClient.WorkspaceMetrics(ctx, workspaceA.ID, window, workspacePipelineService, []string{})
+	metricsA, err := telemetryClient.WorkspaceMetrics(ctx, workspaceA.ID, window, workspacePipelineService, telemetry.MetricRequestRate, []string{})
 	if err != nil {
 		t.Fatalf("workspace A Prometheus query: %v", err)
 	}
-	metricsB, err := telemetryClient.WorkspaceMetrics(ctx, workspaceB.ID, window, workspacePipelineService, []string{})
+	metricsB, err := telemetryClient.WorkspaceMetrics(ctx, workspaceB.ID, window, workspacePipelineService, telemetry.MetricRequestRate, []string{})
 	if err != nil {
 		t.Fatalf("workspace B Prometheus query: %v", err)
 	}
