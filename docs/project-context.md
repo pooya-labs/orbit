@@ -715,3 +715,24 @@ The alert notification worker is already implemented. The lifecycle event and de
 PR #115 adds a PostgreSQL CI test with four independent Repository/pgxpool instances racing to claim 24 queued notification deliveries. Each replica must claim exactly six, with unique IDs, and a fifth claim must be empty. CI runs this with the real Postgres 17 service and the Go race detector.
 
 ADR 0004 defers Redis cache and NATS JetStream publishing: the current read path has no measured cache bottleneck, there is one durable notification consumer, and the PostgreSQL outbox/lease model already supplies at-least-once delivery. A direct DB+NATS dual write would be unsafe without another transactional event outbox and idempotent consumers. Redis/NATS remain optional Compose services; the M03 roadmap item stays explicitly open/deferred. Revisit only after measured read pressure, a stricter notification latency target, or a second independent event consumer.
+
+
+## Current handoff — after M05 outbox concurrency PR #115 and M01 native keyboard order PR #116 (2026-11-03)
+
+Current `main`: `3acdadb9d79319928d9ed08cc978f386db4c4cb7`. There are no open pull requests at this handoff check. Two additional PRs were merged since the previous handoff:
+
+### PR #115 — multi-replica notification outbox claims
+
+Squash merge: `ac092e07e31639c691dd47b87d15c5973272746b`. Exact head `2f61f12756ddacace15174f77bc3e73cc8329565` passed CI [41605924678](https://github.com/pooya16pg-spec/orbit/actions/runs/41605924678) (4/4 jobs) and Security [41605924776](https://github.com/pooya16pg-spec/orbit/actions/runs/41605924776) (13/13 jobs). The Go race-enabled suite uses four separate Repository/pgxpool instances against real PostgreSQL. All four claim concurrently from one 24-delivery outbox; each must receive exactly six unique rows, each in processing/attempt 1 state, and a fifth claim must be empty.
+
+ADR 0004 is accepted: PostgreSQL remains source of truth and durable notification outbox. Redis caching and NATS publishing stay deferred until a measured read bottleneck/freshness need or a second independent durable consumer justifies them. The M03 item remains explicitly open/deferred; do not add these dependencies just because their optional Compose services exist.
+
+### PR #116 — native keyboard Tab order in M01
+
+Squash merge: `3acdadb9d79319928d9ed08cc978f386db4c4cb7`. Exact head `6bb1157734d39b45feb194961b6343a73b7a4da0` passed CI [41606123956](https://github.com/pooya16pg-spec/orbit/actions/runs/41606123956) (4/4 jobs, **16/16 Playwright tests**) and Security [41606123969](https://github.com/pooya16pg-spec/orbit/actions/runs/41606123969) (13/13 jobs). The test writes the requested theme preference before a fresh document reload, then uses the real sequential Tab order: first Tab focuses the skip link and second Tab focuses Overview. It verifies :focus-visible, hovers Services, waits for nav transitions, and runs axe in both themes.
+
+PR #117's alternative blur-based setup was closed as a duplicate because CI failed to focus the skip link after the first Tab (run [41606451824](https://github.com/pooya16pg-spec/orbit/actions/runs/41606451824)). Do not reopen or repeat the blur-based variant. The merged #116 implementation is the verified one.
+
+M01 automation now covers 12 primary views in both themes, keyboard focus/hover states, API loading/disabled/error states, mobile drawer focus behavior, reduced-motion, responsive reflow and chart-table keyboard access. **The manual M01 acceptance gate remains open** for actual NVDA, VoiceOver and TalkBack sessions, human keyboard-only checks across all remaining controls, and rendered visual-state review beyond the automated scenarios. Do not claim WCAG certification; no real screen-reader session was executed in CI.
+
+Repository-owned M06 test coverage remains merged and must not be repeated: PR #110 real PostgreSQL + Collector backpressure/recovery (639 successful exports in its 20-second CI phase); PR #111 graceful PostgreSQL container restart; PR #112 SIGKILL/WAL recovery with committed-data survival. PR #115 adds four-pool notification outbox claim exclusivity. Remaining gates require real external decisions or target infrastructure: host power loss/storage loss, HA/replication failover and network partitions, production sustained multi-replica ingestion/query load with p50/p95/p99, encrypted off-host backups/PITR and measured RPO/RTO, DNS/ACME/firewall/trusted-proxy/network policies, real OIDC provider/key lifecycle, durable-history retention/archive approval, hosted API/managed persistence, and operational rollout. Workload semantic-convention expansion remains blocked on privacy/cardinality/operational review. Production tenant ingestion remains disabled until environment-specific gates have evidence.
