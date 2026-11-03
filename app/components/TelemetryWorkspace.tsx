@@ -211,7 +211,7 @@ export default function TelemetryWorkspace({
         if (current && !controller.signal.aborted) {
           setWorkspaces([]);
           setWorkspaceId("");
-          setWorkspaceError(cause instanceof Error ? cause.message : tr("incidentWorkspaceLoadFailed"));
+          setWorkspaceError(cause instanceof Error ? cause.message : tr("telemetryWorkspaceLoadFailed"));
         }
       })
       .finally(() => {
@@ -231,6 +231,9 @@ export default function TelemetryWorkspace({
         setServiceLoading(false);
         setServiceError("");
         setServiceWarnings([]);
+        setServiceHasMore(false);
+        setServiceCursor(null);
+        setServiceLoadingMore(false);
         setSelectedService("orbit-telemetry-demo");
       }
       return;
@@ -241,6 +244,9 @@ export default function TelemetryWorkspace({
     setServiceError("");
     setWorkspaceError("");
     setDiscoveredServices([]);
+    setServiceHasMore(false);
+    setServiceCursor(null);
+    setServiceLoadingMore(false);
     setMembership(null);
     setMembershipWorkspaceId("");
     setResourceAttributes(null);
@@ -282,7 +288,7 @@ export default function TelemetryWorkspace({
           setMembership(null);
           setMembershipWorkspaceId("");
           setDiscoveredServices([]);
-          setServiceError(cause instanceof Error ? cause.message : tr("incidentWorkspaceLoadFailed"));
+          setServiceError(cause instanceof Error ? cause.message : tr("telemetryWorkspaceLoadFailed"));
         }
       })
       .finally(() => {
