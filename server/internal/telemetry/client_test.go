@@ -645,3 +645,128 @@ func TestWorkspaceAvailabilityEventsRejectsUnsafeScopeRouteAndWindowBeforeNetwor
 		}
 	}
 }
+
+
+func TestWorkspaceTraceDetailRequiresMatchingWorkspaceOnEveryBatch(t *testing.T) {
+	const workspaceA = "00000000-0000-4000-8000-000000000001"
+	const workspaceB = "00000000-0000-4000-8000-000000000002"
+	traceID := strings.Repeat("a", 32)
+	spanID := strings.Repeat("b", 16)
+
+	payload := func(workspaceIDs []string, spanTraceID string) string {
+		batches := make([]string, 0, len(workspaceIDs))
+		for _, workspaceID := range workspaceIDs {
+			batches = append(batches, `{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"api-gateway"}},{"key":"orbit.workspace.id","value":{"stringValue":"`+workspaceID+`"}}]},"scopeSpans":[{"spans":[{"traceId":"`+spanTraceID+`","spanId":"`+spanID+`","name":"GET /checkout","startTimeUnixNano":"1000000","endTimeUnixNano":"2000000"}]}]}`)
+		}
+		return `{"batches":[` + strings.Join(batches, ",") + `]}`
+	}
+
+	t.Run("returns a trace only when every batch is workspace-owned", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/api/v2/traces/"+traceID {
+				t.Errorf("Tempo request = %s %s; want GET /api/v2/traces/%s", r.Method, r.URL.Path, traceID)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(payload([]string{workspaceA, workspaceA}, traceID)))
+		}))
+		defer server.Close()
+
+		client, err := NewClient("", "", server.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := client.WorkspaceTrace(context.Background(), workspaceA, strings.ToUpper(traceID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Source != "tempo" || result.TraceID != traceID || result.QueriedAt.IsZero() || !strings.Contains(string(result.Data), "GET /checkout") {
+			t.Fatalf("unexpected trace detail response: %+v", result)
+		}
+	})
+
+	t.Run("rejects a trace from another workspace", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(payload([]string{workspaceB}, traceID)))
+		}))
+		defer server.Close()
+		client, _ := NewClient("", "", server.URL)
+		_, err := client.WorkspaceTrace(context.Background(), workspaceA, traceID)
+		if !errors.Is(err, ErrWorkspaceTraceNotFound) {
+			t.Fatalf("error = %v, want ErrWorkspaceTraceNotFound", err)
+		}
+	})
+
+	t.Run("rejects mixed-workspace batches", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(payload([]string{workspaceA, workspaceB}, traceID)))
+		}))
+		defer server.Close()
+		client, _ := NewClient("", "", server.URL)
+		_, err := client.WorkspaceTrace(context.Background(), workspaceA, traceID)
+		if !errors.Is(err, ErrWorkspaceTraceNotFound) {
+			t.Fatalf("error = %v, want ErrWorkspaceTraceNotFound", err)
+		}
+	})
+
+	t.Run("rejects missing workspace attribution", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"batches":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"api-gateway"}}]},"scopeSpans":[{"spans":[{"traceId":"`+traceID+`","spanId":"`+spanID+`"}]}]}]}`))
+		}))
+		defer server.Close()
+		client, _ := NewClient("", "", server.URL)
+		_, err := client.WorkspaceTrace(context.Background(), workspaceA, traceID)
+		if !errors.Is(err, ErrWorkspaceTraceNotFound) {
+			t.Fatalf("error = %v, want ErrWorkspaceTraceNotFound", err)
+		}
+	})
+
+	t.Run("rejects a mismatched span trace ID", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(payload([]string{workspaceA}, strings.Repeat("c", 32))))
+		}))
+		defer server.Close()
+		client, _ := NewClient("", "", server.URL)
+		_, err := client.WorkspaceTrace(context.Background(), workspaceA, traceID)
+		if !errors.Is(err, ErrWorkspaceTraceNotFound) {
+			t.Fatalf("error = %v, want ErrWorkspaceTraceNotFound", err)
+		}
+	})
+
+	t.Run("maps Tempo 404 to a workspace-safe not found", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+		client, _ := NewClient("", "", server.URL)
+		_, err := client.WorkspaceTrace(context.Background(), workspaceA, traceID)
+		if !errors.Is(err, ErrWorkspaceTraceNotFound) {
+			t.Fatalf("error = %v, want ErrWorkspaceTraceNotFound", err)
+		}
+	})
+}
+
+func TestWorkspaceTraceDetailRejectsInvalidTraceIDsBeforeBackendCall(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"batches":[]}`))
+	}))
+	defer server.Close()
+	client, err := NewClient("", "", server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, traceID := range []string{"", "not-a-trace-id", strings.Repeat("a", 31), strings.Repeat("0", 32), strings.Repeat("g", 32), strings.Repeat("a", 33)} {
+		if _, err := client.WorkspaceTrace(context.Background(), "00000000-0000-4000-8000-000000000001", traceID); err == nil {
+			t.Errorf("WorkspaceTrace(%q) succeeded; want invalid trace ID error", traceID)
+		}
+	}
+	if requests != 0 {
+		t.Fatalf("invalid trace IDs triggered %d Tempo requests; want none", requests)
+	}
+}
