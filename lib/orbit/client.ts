@@ -30,6 +30,7 @@ import type {
   TelemetryServicesResponse,
   TelemetryResourceAttributesResponse,
   WorkspaceTelemetryServicesResponse,
+  WorkspaceTraceDetailResponse,
 } from "./contracts";
 
 export class OrbitApiError extends Error {
@@ -647,6 +648,19 @@ export async function listWorkspaceTelemetryTraces(
   if (options.limit !== undefined) query.set("limit", String(options.limit));
   return getJSON<TelemetryTracesResponse>(
     `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/telemetry/traces?${query.toString()}`,
+    signal,
+    baseUrl,
+  );
+}
+
+export async function getWorkspaceTelemetryTrace(
+  workspaceId: string,
+  traceId: string,
+  signal?: AbortSignal,
+  baseUrl?: string,
+): Promise<WorkspaceTraceDetailResponse> {
+  return getJSON<WorkspaceTraceDetailResponse>(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/telemetry/traces/${encodeURIComponent(traceId)}`,
     signal,
     baseUrl,
   );
