@@ -2981,7 +2981,7 @@ components:
         data:
           type: object
           required: [batches]
-          description: Tempo v2 OTLP trace response. ORBIT checks every resource batch for the selected workspace before returning this payload.
+          description: Normalized Tempo v3.1.1 trace response. ORBIT verifies every resourceSpans batch, converts Base64 trace/span IDs to lowercase hexadecimal, returns only safe span fields, and checks workspace attribution before returning the batches.
           properties:
             batches:
               type: array
