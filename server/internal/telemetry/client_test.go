@@ -663,7 +663,7 @@ func TestWorkspaceTraceDetailRequiresMatchingWorkspaceOnEveryBatch(t *testing.T)
 	payload := func(workspaceIDs []string, spanTraceID string) string {
 		batches := make([]string, 0, len(workspaceIDs))
 		for _, workspaceID := range workspaceIDs {
-			batches = append(batches, `{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"api-gateway"}},{"key":"orbit.workspace.id","value":{"stringValue":"`+workspaceID+`"}}]},"scopeSpans":[{"spans":[{"traceId":"`+encodeID(spanTraceID)+`","spanId":"`+encodeID(spanID)+`","name":"GET /checkout","kind":"SPAN_KIND_SERVER","startTimeUnixNano":"1000000","endTimeUnixNano":"2000000","status":{"code":"STATUS_CODE_OK"},"attributes":[{"key":"http.authorization","value":{"stringValue":"should-not-leak"}}]}]}]}`)
+			batches = append(batches, `{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"api-gateway"}},{"key":"orbit.workspace.id","value":{"stringValue":"`+workspaceID+`"}}]},"scopeSpans":[{"scope":{"name":"orblib","version":"1.0.0","attributes":[{"key":"scope.secret","value":{"stringValue":"scope-private"}}]},"spans":[{"traceId":"`+encodeID(spanTraceID)+`","spanId":"`+encodeID(spanID)+`","name":"GET /checkout","kind":"SPAN_KIND_SERVER","startTimeUnixNano":"1000000","endTimeUnixNano":"2000000","status":{"code":"STATUS_CODE_OK"},"attributes":[{"key":"http.authorization","value":{"stringValue":"should-not-leak"}}]}]}]}`)
 		}
 		return `{"trace":{"resourceSpans":[` + strings.Join(batches, ",") + `]}}`
 	}
@@ -686,7 +686,7 @@ func TestWorkspaceTraceDetailRequiresMatchingWorkspaceOnEveryBatch(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if result.Source != "tempo" || result.TraceID != traceID || result.QueriedAt.IsZero() || !strings.Contains(string(result.Data), "GET /checkout") || !strings.Contains(string(result.Data), `"traceId":"`+traceID+`"`) || !strings.Contains(string(result.Data), `"spanId":"`+spanID+`"`) || !strings.Contains(string(result.Data), `"code":1`) || strings.Contains(string(result.Data), "should-not-leak") || strings.Contains(string(result.Data), workspaceA) {
+		if result.Source != "tempo" || result.TraceID != traceID || result.QueriedAt.IsZero() || !strings.Contains(string(result.Data), "GET /checkout") || !strings.Contains(string(result.Data), `"traceId":"`+traceID+`"`) || !strings.Contains(string(result.Data), `"spanId":"`+spanID+`"`) || !strings.Contains(string(result.Data), `"code":1`) || strings.Contains(string(result.Data), "should-not-leak") || strings.Contains(string(result.Data), "scope-private") || strings.Contains(string(result.Data), workspaceA) {
 			t.Fatalf("unexpected normalized trace detail response: %+v", result)
 		}
 	})
