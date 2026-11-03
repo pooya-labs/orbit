@@ -409,6 +409,16 @@ test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal
   expect(tableDimensions.viewport).toBeLessThanOrEqual(dimensions.viewport);
   expect(tableDimensions.content).toBeGreaterThanOrEqual(tableDimensions.viewport);
 
+  const scrollRegion = disclosure.getByRole("region", {
+    name: /Illustrative request-rate samples across the selected/,
+  });
+  await expect(scrollRegion).toHaveAttribute("tabindex", "0");
+  await scrollRegion.evaluate((element) => { element.scrollLeft = 0; });
+  await scrollRegion.focus();
+  await expect(scrollRegion).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => scrollRegion.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();
