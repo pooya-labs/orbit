@@ -577,3 +577,11 @@ The deploy job selects the protected `github-pages` environment for `main`, but 
 - This is a focused CSS palette regression check, not a rendered-page computed-style scan. Keep the manual contrast acceptance item open for actual browser states, hover/selected/disabled/loading/error states, overlays, and any component-specific surfaces not represented in the static palette set. Do not claim WCAG conformance from this script alone.
 
 The generated HTML structural audit remains in the same CI job after production build. Together, the source contract, contrast palette check, and generated HTML audit are intended to catch regressions early; they do not replace real keyboard-only and NVDA/VoiceOver/TalkBack testing.
+
+## M01 chart alternative follow-through — Metrics time-series data table (2026-11-03)
+
+The live Metrics view now renders an expandable native HTML table under the time-series chart. It exposes a caption naming the selected service and time window plus semantic column headers for localized time, series, and request rate. Values come from the same bounded Prometheus response as the chart, not a separate or synthetic data source. The table is styled for horizontal scrolling on narrow screens and inherits the application's LTR/RTL direction.
+
+The selected locale formats both timestamps and metric values. New English and Persian strings label the disclosure, caption, and columns. The source-level accessibility contract checks the details/summary, caption, headers, locale formatting calls, translations, and responsive table container.
+
+This does not complete chart acceptance: the Overview graph remains illustrative and does not expose its underlying sample points as a table. Verify both chart experiences with keyboard-only and screen-reader testing before closing M01.
