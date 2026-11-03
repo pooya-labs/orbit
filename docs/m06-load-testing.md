@@ -91,7 +91,7 @@ The CI runner stopped the actual Compose PostgreSQL container and started it aga
 This is a clean single-node container restart test, not crash or disk recovery, HA failover, replication, PITR, or production RPO/RTO evidence.
 
 
-## PostgreSQL crash recovery — PR #112 in progress
+## PostgreSQL crash recovery — merged PR #112
 
 The existing restart smoke now runs two sequential failure phases through the same Repository/pgxpool instance:
 
@@ -101,3 +101,14 @@ The existing restart smoke now runs two sequential failure phases through the sa
 Each phase checks that `pg_postmaster_start_time()` advances, so a pre-existing healthy connection cannot make the assertion pass. The test also commits a unique probe row before either restart and reads the same payload back after both phases, validating survival of committed data through PostgreSQL WAL crash recovery. The runner cleanup still attempts to start PostgreSQL even when the integration test fails.
 
 A process SIGKILL with a persistent Docker volume is a useful crash-recovery regression, but it is not equivalent to host power loss, torn/corrupt storage, disk failure, replication failover, network partition, or a measured production RPO/RTO.
+
+
+## Observed CI result — PR #112 PostgreSQL crash/WAL recovery
+
+PR #112 was squash-merged into `main` as `15fc476f422afbc632542e292d1c17d9a0af2796`. Exact PR head `7fb08afb6b312d3c3878fb4011021e39d5b14f51` passed CI run [41596787239](https://github.com/pooya16pg-spec/orbit/actions/runs/41596787239) and Security run [41596787190](https://github.com/pooya16pg-spec/orbit/actions/runs/41596787190).
+
+Observed postmaster starts:
+- Before/after graceful stop-start: `2026-11-03T07:35:45.535327Z` → `2026-11-03T07:38:44.698761Z`.
+- After graceful restart / after SIGKILL restart: `2026-11-03T07:38:44.698761Z` → `2026-11-03T07:38:45.596894Z`.
+
+The original Repository/pgxpool recovered in both phases. A committed probe record was read back unchanged after each restart. Both subtests passed in 2.768 seconds total. This is an actual single-node process SIGKILL plus persistent-volume startup/WAL recovery test; it is not host power-loss, storage corruption/disk loss, HA failover, PITR, or production RPO/RTO evidence.

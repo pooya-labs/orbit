@@ -231,14 +231,14 @@ PR #62 is merged into `main` (squash merge commit `534f6d02c04616a5d27831460b24f
 
 The new tests exercise the production HTTP and gRPC Collector forwarders against real local TCP servers. They stop each Collector listener, verify failure through the still-running gateway, restart the listener on the same address, and verify the same HTTP handler / gRPC client recovers without recreating the gateway or forwarder.
 
-This covers local listener restart and reconnect semantics, not Docker orchestration, packet loss/network partitions, PostgreSQL restart, or sustained-load recovery. Real PostgreSQL fault/restart testing, extended load/backpressure, production DNS/ACME and firewall validation, real-provider PKCE, retention, backup/restore, and runbooks remain open. Production tenant ingestion remains disabled.
+This covers local Collector listener restart and reconnect semantics, not packet loss/network partitions or sustained-load recovery. PR #111 and PR #112 now cover PostgreSQL clean container restart and ungraceful SIGKILL/WAL recovery through the same pool. Host power-loss/storage-loss, HA failover and network partitions, extended target-environment load/backpressure, production DNS/ACME and firewall validation, real-provider PKCE, durable retention, off-host backup/PITR, and remaining runbooks remain open. Production tenant ingestion remains disabled.
 
 
 ## M06 handoff update — PR #64 PostgreSQL network recovery
 
 PR #64 is merged into `main` (squash merge commit `6b2e3418be2e8fdff0c9634b361acaa5bb6d6da1`). CI run `41357596656` passed all three jobs. A PostgreSQL integration test routes the real pgxpool through a local TCP proxy, warms an established session, closes active tunnels and refuses new connections while offline, observes a repository Ping failure, then restores the same proxy and verifies the existing repository/pool reconnects and becomes healthy.
 
-The PostgreSQL process remains running during this simulated TCP-path outage. PR #111 now separately covers an actual Compose PostgreSQL container/process stop-start and confirms the original pgxpool reconnects; that clean stop/start test does not prove crash/power-loss recovery, HA failover, disk/PITR recovery, packet-loss or cross-zone partition handling, or production RPO/RTO. Target-environment load/backpressure and remaining production go-live gates remain open. Tenant ingestion remains disabled.
+The PostgreSQL process remains running during this simulated TCP-path outage. PR #111 separately covers clean Compose container stop/start; PR #112 now covers SIGKILL-triggered PostgreSQL crash/WAL recovery and verifies a committed probe row survives through the same pgxpool. These tests do not prove host power-loss, storage corruption/disk loss, HA failover, PITR, network partitions, or production RPO/RTO. Target-environment load/backpressure and remaining production go-live gates remain open. Tenant ingestion remains disabled.
 
 
 ## M05 implementation update — PR #66 incident lifecycle backend
@@ -649,17 +649,22 @@ The next repository-level M06 test uses the Compose PostgreSQL service rather th
 The test uses a shared temporary marker directory only for runner/test synchronization. The test itself performs all database observations and recovery assertions. The Compose runner always attempts to start PostgreSQL in its cleanup trap so a failed test cannot strand the rest of the telemetry stack. This is a CI single-node clean-restart regression, not crash/failover/PITR or production recovery evidence.
 
 
-## Current handoff — after PostgreSQL container-restart PR #111 (2026-11-03)
+## Current handoff — after PostgreSQL crash-recovery PR #112 (2026-11-03)
 
-Latest main commit at this handoff: `5b3c0fc344f043640b01c670a84deb6c78d09a5c`. PR #111 is merged; its exact head passed CI 4/4 and Security 13/13. The Docker observability job tested OTLP end-to-end, workspace isolation, and an actual PostgreSQL container stop/start; the same Repository/pgxpool recovered and observed a newer `pg_postmaster_start_time()` after restart.
+Latest main commit at this handoff: `15fc476f422afbc632542e292d1c17d9a0af2796`. PR #111 and PR #112 are merged. PR #112's exact head passed CI 4/4 and Security 13/13. The Docker observability job tested OTLP end-to-end, workspace isolation, clean PostgreSQL stop/start, and SIGKILL/WAL recovery; the same Repository/pgxpool recovered twice and read a committed probe row unchanged.
 
-Repository-level M06 regression coverage now includes: actual Collector listener stop/restart, PostgreSQL TCP-path interruption/recovery, sustained real-PostgreSQL + Collector backpressure (PR #110; 639 successful exports in its 20-second CI phase), and clean PostgreSQL container/process restart (PR #111). Avoid repeating these tests or adding duplicate roadmap entries.
+Repository-level M06 regression coverage now includes: actual Collector listener stop/restart, PostgreSQL TCP-path interruption/recovery, sustained real-PostgreSQL + Collector backpressure (PR #110; 639 successful exports in its 20-second CI phase), PostgreSQL clean container restart (PR #111), and ungraceful SIGKILL/WAL recovery with committed-data survival (PR #112). Avoid repeating these tests or adding duplicate roadmap entries.
 
 Remaining deployment gates are distinct: target-environment sustained load and p50/p95/p99 measurements, dashboard-query load, multiple gateway replicas under real workload, crash/power-loss and storage failure testing, HA/failover/replication and partition behavior, encrypted off-host backups/PITR with measured RPO/RTO, real DNS/ACME/firewall/trusted-proxy/network controls, provider-backed PKCE, durable-history retention/archive policy, hosted API/managed persistence, and operational rollout. Production tenant ingestion remains disabled until those environment-specific gates are evidenced.
 
 
-## M06 PostgreSQL crash-recovery regression — PR #112 in progress
+## M06 PostgreSQL crash-recovery regression — merged PR #112
 
-PR #112 extends the merged PR #111 PostgreSQL container restart test with a second failure phase. The same Repository/pgxpool instance first recovers from a graceful Compose stop/start, then recovers again after the PostgreSQL container is killed with SIGKILL and restarted with its existing persistent data volume. The test waits for an observable pool outage and proves the postmaster start timestamp advances after both phases.
+PR #112 extends the merged PR #111 PostgreSQL container restart test with a second failure phase. The same Repository/pgxpool instance first recovers from a graceful Compose stop/start, then recovers again after the PostgreSQL container is killed with SIGKILL and restarted with its existing persistent data volume. The test waits for an observable pool outage and proves the postmaster start timestamp advances after both phases. A committed probe row is read back unchanged after both restarts.
 
-The second cycle exercises PostgreSQL startup crash/WAL recovery after an ungraceful process termination. It does not simulate host power loss, storage corruption, disk loss, HA failover/replication, network partition, PITR, or production RPO/RTO.
+The second cycle exercises PostgreSQL startup crash/WAL recovery after an ungraceful process termination. Exact PR head `7fb08afb6b312d3c3878fb4011021e39d5b14f51` passed CI run `41596787239` (4/4 jobs) and Security run `41596787190` (13/13 jobs). The two restart phases passed in 2.768 seconds total. This does not simulate host power loss, storage corruption, disk loss, HA failover/replication, network partition, PITR, or production RPO/RTO.
+
+
+## Current M06 handoff after PR #112 — 2026-11-03
+
+Current `main`: `15fc476f422afbc632542e292d1c17d9a0af2796`. PR #112 merged with exact head passing CI and Security. The latest crash recovery regression is complete; do not repeat it. Remaining items are external/operational: host power loss and real storage failure, HA/replication failover, partition behavior, production throughput and latency percentiles, dashboard-query load, encrypted off-host backups/PITR and measured RPO/RTO, real DNS/ACME/firewall/trusted proxy/network controls, real-provider PKCE, durable-history retention, hosted API/managed persistence, and operational rollout. Production tenant ingestion remains disabled until those gates have evidence.
