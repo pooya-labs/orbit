@@ -394,7 +394,7 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 .telemetry-kicker { color: #70818b; font: 8px "DM Mono", monospace; letter-spacing: .09em; }
 .telemetry-stat-row strong { color: #e2ecef; font: 600 23px Manrope, sans-serif; letter-spacing: -.04em; }
 .telemetry-stat-row strong small { color: #76858e; font: 10px "DM Sans", sans-serif; letter-spacing: 0; }
-.telemetry-stat-row p { margin: 0; color: #6d7c86; font-size: 9px; }
+.telemetry-stat-row p { margin: 0; color: var(--subtle); font-size: 9px; }
 .telemetry-stat-secondary strong { font-size: 17px; }
 .telemetry-chart { min-height: 170px; padding: 20px 0 9px; }
 .telemetry-chart svg { width: 100%; height: 145px; overflow: visible; }
@@ -417,7 +417,7 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 .telemetry-trace-side { flex: 0 0 auto; display: grid; gap: 4px; text-align: right; }
 .telemetry-trace-side strong { color: #d1c1ed; font: 10px "DM Mono", monospace; }
 .telemetry-trace-side span { color: #71818b; font: 8px "DM Mono", monospace; }
-.telemetry-source-note { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 1px 3px; color: #687983; font: 8px "DM Mono", monospace; }
+.telemetry-source-note { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 1px 3px; color: var(--subtle); font: 8px "DM Mono", monospace; }
 .telemetry-connect-prompt { display: flex; align-items: center; gap: 14px; padding: 19px; }
 .telemetry-connect-prompt > div:nth-child(2) { min-width: 0; flex: 1; }
 .telemetry-connect-prompt h2 { margin: 0 0 6px; color: #dce5e9; font: 600 13px Manrope, sans-serif; }
@@ -455,7 +455,7 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 .telemetry-service-select > span { color: #71818b; font: 8px "DM Mono", monospace; letter-spacing: .08em; }
 .telemetry-service-select select { width: 100%; min-width: 0; height: 34px; padding: 0 27px 0 10px; border: 1px solid #2a3a42; border-radius: 6px; outline-offset: 2px; color: #d4e0e4; background: #10191f; font: 10px "DM Mono", monospace; }
 .telemetry-service-select select:disabled { opacity: .65; cursor: progress; }
-.telemetry-service-select small { color: #657781; font: 8px "DM Mono", monospace; }
+.telemetry-service-select small { color: var(--subtle); font: 8px "DM Mono", monospace; }
 .telemetry-service-warning { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border: 1px solid rgba(216,166,93,.22); border-radius: 6px; color: #d9b77f; background: rgba(125,90,36,.09); font-size: 9px; }
 .telemetry-freshness-warning { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border: 1px solid rgba(216,166,93,.22); border-radius: 6px; color: #d9b77f; background: rgba(125,90,36,.09); font-size: 9px; line-height: 1.6; }
 .telemetry-freshness-warning svg { flex: 0 0 auto; margin-top: 1px; }
@@ -836,6 +836,28 @@ html[data-theme="light"] .language-switch button.selected {
 }
 html[data-theme="light"] .theme-toggle { color: #96601c; }
 html[data-theme="light"] .theme-toggle:hover { color: #855216; background: #fff5e7; border-color: #efdfc4; }
+
+/* Rendered-state contrast corrections confirmed by axe in the light theme. */
+html[data-theme="light"] .demo-tag {
+  color: #78501f;
+  border-color: #efdfc4;
+  background: #fff5e7;
+}
+html[data-theme="light"] .live-indicator {
+  color: #52646e;
+  border-color: #dce5e9;
+  background: #f5f8f9;
+}
+html[data-theme="light"] .chart-summary-change { color: #237a55; }
+html[data-theme="light"] .subtle-count { color: #52646e; }
+html[data-theme="light"] .service-avatar.blue { color: #315a76; }
+html[data-theme="light"] .service-avatar.violet { color: #654f98; }
+html[data-theme="light"] .service-avatar.amber { color: #80531b; }
+html[data-theme="light"] .service-avatar.teal { color: #176f62; }
+html[data-theme="light"] .service-avatar.rose { color: #9b4545; }
+html[data-theme="light"] .demo-footnote { color: #78501f; }
+html[data-theme="light"] .incident-open { color: #80531b; }
+html[data-theme="light"] .footer-version { color: #52646e; }
 
 html[data-theme="light"] .telemetry-toolbar,
 html[data-theme="light"] .telemetry-content-panel,
