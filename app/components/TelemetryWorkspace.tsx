@@ -608,7 +608,7 @@ export default function TelemetryWorkspace({
                     </div>
                     <details className="telemetry-data-table">
                       <summary>{tr("showChartData")}</summary>
-                      <div className="telemetry-data-table-scroll">
+                      <div className="telemetry-data-table-scroll" role="region" aria-label={tr("chartDataCaption").replace("{service}", selectedService).replace("{window}", windowRange)} tabIndex={0}>
                         <table>
                           <caption>{tr("chartDataCaption").replace("{service}", selectedService).replace("{window}", windowRange)}</caption>
                           <thead>
