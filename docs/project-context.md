@@ -539,3 +539,20 @@ The existing M01 accessibility branch now also addresses the visible-control aud
 - The static accessibility contract checks guard these destinations, disabled states, and English/Persian unavailable text. docs/accessibility-review.md records the actual behavior and updates the remaining manual control checklist.
 
 This does not close the manual M01 acceptance gate. The application still requires real keyboard-only testing at browser breakpoints, NVDA/VoiceOver/TalkBack verification, contrast review in both themes, and review of chart/data alternatives. Always inspect CI and Security against the exact latest PR head before merging; a passing run on an older commit does not validate later code or documentation changes. Do not infer typecheck/build success from static source review, and do not merge PR #109 before current-head CI and manual acceptance are complete.
+
+
+## M01 accessibility follow-through — selected-state semantics and verification (2026-11-03)
+
+PR #109 continues on `feat/m01-accessibility-review`. In addition to the keyboard/landmark baseline and truthful control affordances, its current implementation exposes selected state to assistive technology for:
+
+- the overview demo chart time-range selector (named group, localized in English/Persian);
+- incident status filters and the selected incident;
+- alert-instance filters;
+- notification-delivery filters;
+- the selected SLO objective.
+
+Audit-log filters and telemetry metric-group controls already exposed selected state and were preserved. The static accessibility contract now checks these additions; `docs/accessibility-review.md` carries the user-facing implementation and manual-acceptance checklist.
+
+The code head `086137db0a05fbdf8ca050a6f8ce4730a31bb0ba` passed CI run `41473967465` (all four jobs) and Security run `41473967524` (all 13 jobs). The web job explicitly passed the accessibility contract, TypeScript typecheck, and production build. All 11 expected CycloneDX SBOM artifacts were uploaded and unexpired. These automated results do not close manual acceptance: keyboard-only browser testing, NVDA/VoiceOver/TalkBack, contrast in both themes, chart/data alternatives, and final control review remain open. Do not merge PR #109 or mark M01 accessibility complete solely from these CI results.
+
+Production tenant ingestion remains disabled until the environment-specific M06 gates elsewhere in this document and `docs/roadmap.md` have recorded evidence.
