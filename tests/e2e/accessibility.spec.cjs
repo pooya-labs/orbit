@@ -223,7 +223,7 @@ test("Metrics chart table renders Prometheus samples and updates with the API ti
   await navigation.getByRole("button", { name: "Metrics", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Metrics" })).toBeVisible();
 
-  const metricSelector = page.getByLabel("Metric");
+  const metricSelector = page.getByLabel("METRIC", { exact: true });
   await expect(metricSelector).toHaveValue("request_rate");
   await expect(metricSelector.locator("option")).toHaveCount(3);
   const failedMetricRequest = page.waitForRequest((request) => {
