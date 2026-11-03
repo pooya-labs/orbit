@@ -1138,6 +1138,17 @@ func TestWorkspaceTraceDetailRouteRequiresMembershipBeforeTempoRead(t *testing.T
 		t.Fatalf("Tempo calls = %d; want 1 after authorized read", tempoCalls)
 	}
 
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/telemetry/traces/not-a-trace-id", nil)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("invalid trace ID status = %d; want 400; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if tempoCalls != 1 {
+		t.Fatalf("invalid trace ID reached Tempo; calls = %d, want 1", tempoCalls)
+	}
+
 	request = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+otherWorkspaceID+"/telemetry/traces/"+traceID, nil)
 	request.Header.Set("Authorization", "Bearer valid-token")
 	recorder = httptest.NewRecorder()
