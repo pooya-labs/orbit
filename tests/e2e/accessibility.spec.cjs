@@ -657,3 +657,60 @@ test("Chromium accessibility tree exposes NVDA-style heading and landmark naviga
   // Report the exact keyboard-reader targets discovered by Chromium.
   console.log("ORBIT heading navigation targets:", JSON.stringify(headings, null, 2));
 });
+
+
+test("every primary view exposes its current H1 in Chromium's accessibility tree", async ({ page }) => {
+  const views = [
+    { label: "Overview", heading: "Good morning, team." },
+    { label: "Service map", heading: "Service map" },
+    { label: "Services", heading: "Services" },
+    { label: "Infrastructure", heading: "Infrastructure" },
+    { label: "Metrics", heading: "Metrics" },
+    { label: "Traces", heading: "Traces" },
+    { label: "Logs", heading: "Logs" },
+    { label: "Incidents", heading: "Incidents" },
+    { label: "Deployments", heading: "Deployments" },
+    { label: "Alert rules", heading: "Alert rules" },
+    { label: "Notifications", heading: "Notifications" },
+    { label: "SLOs", heading: "SLOs" },
+    { label: "Audit log", heading: "Audit log" },
+  ];
+
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Accessibility.enable");
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  const report = [];
+
+  for (const view of views) {
+    await navigation.getByRole("button", { name: view.label, exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: view.heading, exact: true })).toBeVisible();
+
+    // Read Chromium's accessibility tree after the client-side view transition.
+    // This checks the semantic tree exposed to assistive technology, not only
+    // React/DOM text or a successful visual render.
+    const { nodes } = await cdp.send("Accessibility.getFullAXTree");
+    const propertyValue = (node, propertyName) => (
+      node.properties?.find((property) => property.name === propertyName)?.value?.value
+    );
+    const exposed = nodes.filter((node) => !node.ignored);
+    const headings = exposed
+      .filter((node) => node.role?.value === "heading")
+      .map((node) => ({
+        name: node.name?.value ?? "",
+        level: propertyValue(node, "level") ?? null,
+      }));
+    const currentH1 = headings.filter((node) => node.level === 1 && node.name === view.heading);
+    const main = exposed.find((node) => node.role?.value === "main");
+    const primaryNavigation = exposed.find((node) => (
+      node.role?.value === "navigation" && node.name?.value === "Primary navigation"
+    ));
+
+    expect(currentH1, `${view.label}: current H1 must be exposed as a level-one AX heading; found ${JSON.stringify(headings)}`).toHaveLength(1);
+    expect(main, `${view.label}: main landmark must remain exposed`).toBeTruthy();
+    expect(primaryNavigation, `${view.label}: named primary navigation must remain exposed`).toBeTruthy();
+
+    report.push({ view: view.label, currentH1: currentH1[0], headings });
+  }
+
+  console.log("ORBIT all-view Chromium accessibility-tree report:", JSON.stringify(report, null, 2));
+});
