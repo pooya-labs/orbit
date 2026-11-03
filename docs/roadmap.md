@@ -47,7 +47,7 @@ The optional `observability` profile accepts OTLP over gRPC/HTTP and routes metr
 - [x] Add an optional OpenTelemetry Collector and Prometheus profile with a local smoke test.
 - [x] Add Loki and Tempo local backends with OTLP export pipelines.
 - [x] Add an instrumented Go service example with OTLP export for metrics, traces, and logs, plus an end-to-end backend smoke test.
-- [ ] Wire Redis cache and NATS event publishing into the API where justified.
+- [ ] Wire Redis cache and NATS event publishing into the API only if measured demand justifies them (deferred by [ADR 0004](decisions/0004-redis-nats-deferred.md): no current cache bottleneck or second durable event consumer; PostgreSQL remains the source of truth and notification outbox).
 
 ## M04 — Real telemetry
 
