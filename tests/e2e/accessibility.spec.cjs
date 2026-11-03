@@ -575,3 +575,41 @@ test("axe covers the API source connecting, disabled-submit, and request-error s
   await expect(submit).toBeEnabled();
   await expectNoAxeViolations(page, "API source request-error state");
 });
+
+test("keyboard users can reach and activate every primary view in natural tab order", async ({ page }) => {
+  const labels = [
+    "Overview",
+    "Service map",
+    "Services",
+    "Infrastructure",
+    "Metrics",
+    "Traces",
+    "Logs",
+    "Incidents",
+    "Deployments",
+    "Alert rules",
+    "Notifications",
+    "SLOs",
+    "Audit log",
+  ];
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  const skipLink = page.getByRole("link", { name: "Skip to main content" });
+
+  // The skip link is first. Continue from the document's natural Tab order;
+  // never programmatically focus a navigation item to simulate keyboard use.
+  await page.keyboard.press("Tab");
+  await expect(skipLink).toBeFocused();
+
+  for (const label of labels) {
+    await page.keyboard.press("Tab");
+    const item = navigation.getByRole("button", { name: label, exact: true });
+
+    await expect(item).toBeFocused();
+    expect(await item.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
+
+    await page.keyboard.press("Enter");
+    await expect(item).toHaveAttribute("aria-current", "page");
+    const headingLabel = label === "Overview" ? "Good morning, team." : label;
+    await expect(page.getByRole("heading", { level: 1, name: headingLabel, exact: true })).toBeVisible();
+  }
+});
