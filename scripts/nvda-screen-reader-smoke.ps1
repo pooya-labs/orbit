@@ -22,10 +22,7 @@ function Invoke-WinApp {
 function Get-SpeechText {
   $tree = Invoke-WinApp -Arguments @("ui", "inspect", "-w", $script:speechWindowHandle)
   $cleanTree = [regex]::Replace($tree, "\x1B\[[0-9;]*m", "")
-  $documentMatch = [regex]::Match(
-    $cleanTree,
-    '(?im)^\s*(-\d+)\s+Document\s+"RichEdit Control"',
-  )
+  $documentMatch = [regex]::Match($cleanTree, '(?im)^\s*(-\d+)\s+Document\s+"RichEdit Control"')
   if (-not $documentMatch.Success) {
     throw ("NVDA Speech Viewer RichEdit Document was not found in UI Automation." + [Environment]::NewLine + $cleanTree)
   }
