@@ -26,6 +26,7 @@ import {
   listWorkspaces,
 } from "../../lib/orbit/client";
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../../lib/orbit/i18n";
+import { extractTraceIdFromLog } from "../../lib/orbit/trace-correlation.mjs";
 import type {
   TelemetryLogsResponse,
   TelemetryMetricsResponse,
@@ -566,7 +567,7 @@ export default function TelemetryWorkspace({
   }, [apiBaseUrl, language, membership, membershipWorkspaceId, selectedTraceId, user?.sub, useLegacyDevelopmentReads, workspaceId]);
 
   useEffect(() => {
-    if (view !== "Traces" && selectedTraceId) {
+    if (view !== "Traces" && view !== "Logs" && selectedTraceId) {
       setSelectedTraceId("");
       setTraceDetail(null);
       setTraceDetailError("");
@@ -662,6 +663,7 @@ export default function TelemetryWorkspace({
         timestamp,
         line,
         labels: stream.stream,
+        traceId: extractTraceIdFromLog(line, stream.stream),
       })),
     ).sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
   }, [logs]);
@@ -705,6 +707,46 @@ export default function TelemetryWorkspace({
       return { span, depth, durationMs };
     });
   }, [traceDetail]);
+  const renderTraceDetails = (panelId: string) => (
+    <section id={panelId} className="telemetry-trace-detail" hidden={!selectedTraceId} aria-labelledby={`${panelId}-title`} aria-live="polite">
+        <header className="telemetry-trace-detail-header">
+          <div>
+            <h3 id={`${panelId}-title`}>{tr("traceDetails")}</h3>
+            <code>{traceDetail?.trace_id ?? selectedTraceId}</code>
+          </div>
+          <button type="button" onClick={() => setSelectedTraceId("")} aria-label={tr("closeTraceDetails")}>
+            <X size={14} />
+            <span>{tr("closeTraceDetails")}</span>
+          </button>
+        </header>
+        {traceDetailLoading ? (
+          <p className="telemetry-trace-detail-state" role="status">{tr("traceDetailsLoading")}</p>
+        ) : traceDetailError ? (
+          <p className="telemetry-trace-detail-state" role="alert">{traceDetailError}</p>
+        ) : !traceDetail || traceSpanRows.length === 0 ? (
+          <p className="telemetry-trace-detail-state">{tr("traceDetailsEmpty")}</p>
+        ) : (
+          <ol className="telemetry-span-list">
+            {traceSpanRows.map(({ span, depth, durationMs }) => (
+              <li className="telemetry-span-row" key={span.spanId} style={{ paddingInlineStart: `${depth * 16}px` }}>
+                <div className="telemetry-span-main">
+                  <strong>{span.name || (language === "fa" ? "بازهٔ بدون نام" : "Unnamed span")}</strong>
+                  <span className={`telemetry-span-status ${span.status?.code === 2 ? "error" : span.status?.code === 1 ? "ok" : "unset"}`}>
+                    {span.status?.code === 2 ? tr("spanStatusError") : span.status?.code === 1 ? tr("spanStatusOk") : tr("spanStatusUnset")}
+                  </span>
+                </div>
+                <div className="telemetry-span-meta">
+                  <code>{span.spanId}</code>
+                  <span>{Number.isFinite(durationMs) ? `${new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 2 }).format(durationMs)} ${tr("spanDurationUnit")}` : "—"}</span>
+                  <time>{span.startTimeUnixNano ? formatClock(nanoTimestamp(span.startTimeUnixNano), language) : t(language, "timeUnavailable")}</time>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+    </section>
+  );
+
   const queriedAt =
     view === "Metrics" ? metrics?.queried_at :
     view === "Logs" ? logs?.queried_at :
@@ -986,12 +1028,32 @@ export default function TelemetryWorkspace({
                 <article className="telemetry-log-row" key={`${entry.timestamp}-${index}`}>
                   <time>{formatClock(Number(entry.timestamp) / 1_000_000, language)}</time>
                   <span className="telemetry-log-level">{language === "fa" ? "اطلاعات" : "INFO"}</span>
-                  <code>{entry.line}</code>
+                  <div className="telemetry-log-message">
+                    <code>{entry.line}</code>
+                    {entry.traceId && !useLegacyDevelopmentReads && user && membership && membershipWorkspaceId === workspaceId && (
+                      <button
+                        type="button"
+                        className="telemetry-log-trace-action"
+                        onClick={() => {
+                          setSelectedTraceId(selectedTraceId === entry.traceId ? "" : entry.traceId!);
+                          setTraceDetail(null);
+                          setTraceDetailError("");
+                        }}
+                        aria-expanded={selectedTraceId === entry.traceId}
+                        aria-controls="telemetry-log-trace-detail"
+                        aria-label={(selectedTraceId === entry.traceId ? tr("closeTraceDetails") : tr("openTraceFromLog")) + ": " + entry.traceId}
+                      >
+                        {selectedTraceId === entry.traceId ? <X size={12} /> : <Eye size={12} />}
+                        <span>{selectedTraceId === entry.traceId ? tr("closeTraceDetails") : tr("openTraceFromLog")}</span>
+                      </button>
+                    )}
+                  </div>
                   <small>{entry.labels.service_name ?? (language === "fa" ? "سرویس نامشخص" : "unknown-service")}</small>
                 </article>
               ))}
             </div>
           )}
+          {renderTraceDetails("telemetry-log-trace-detail")}
         </div>
       )}
 
@@ -1038,43 +1100,7 @@ export default function TelemetryWorkspace({
                   );
                 })}
               </div>
-              <section id="telemetry-trace-detail" className="telemetry-trace-detail" hidden={!selectedTraceId} aria-labelledby="telemetry-trace-detail-title" aria-live="polite">
-                  <header className="telemetry-trace-detail-header">
-                    <div>
-                      <h3 id="telemetry-trace-detail-title">{tr("traceDetails")}</h3>
-                      <code>{traceDetail?.trace_id ?? selectedTraceId}</code>
-                    </div>
-                    <button type="button" onClick={() => setSelectedTraceId("")} aria-label={tr("closeTraceDetails")}>
-                      <X size={14} />
-                      <span>{tr("closeTraceDetails")}</span>
-                    </button>
-                  </header>
-                  {traceDetailLoading ? (
-                    <p className="telemetry-trace-detail-state" role="status">{tr("traceDetailsLoading")}</p>
-                  ) : traceDetailError ? (
-                    <p className="telemetry-trace-detail-state" role="alert">{traceDetailError}</p>
-                  ) : !traceDetail || traceSpanRows.length === 0 ? (
-                    <p className="telemetry-trace-detail-state">{tr("traceDetailsEmpty")}</p>
-                  ) : (
-                    <ol className="telemetry-span-list">
-                      {traceSpanRows.map(({ span, depth, durationMs }) => (
-                        <li className="telemetry-span-row" key={span.spanId} style={{ paddingInlineStart: `${depth * 16}px` }}>
-                          <div className="telemetry-span-main">
-                            <strong>{span.name || (language === "fa" ? "بازهٔ بدون نام" : "Unnamed span")}</strong>
-                            <span className={`telemetry-span-status ${span.status?.code === 2 ? "error" : span.status?.code === 1 ? "ok" : "unset"}`}>
-                              {span.status?.code === 2 ? tr("spanStatusError") : span.status?.code === 1 ? tr("spanStatusOk") : tr("spanStatusUnset")}
-                            </span>
-                          </div>
-                          <div className="telemetry-span-meta">
-                            <code>{span.spanId}</code>
-                            <span>{Number.isFinite(durationMs) ? `${new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 2 }).format(durationMs)} ${tr("spanDurationUnit")}` : "—"}</span>
-                            <time>{span.startTimeUnixNano ? formatClock(nanoTimestamp(span.startTimeUnixNano), language) : t(language, "timeUnavailable")}</time>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-              </section>
+              {renderTraceDetails("telemetry-trace-detail")}
             </>
           )}
         </div>
