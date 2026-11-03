@@ -994,7 +994,7 @@ export default function TelemetryWorkspace({
               </option>
             ))}
           </select>
-          <small>{metricCatalogError || selectedMetricDescription}</small>
+          <small>{metricCatalogLoading ? tr("metricCatalogLoading") : metricCatalogError || selectedMetricDescription}</small>
         </label>
       )}
 
@@ -1071,7 +1071,7 @@ export default function TelemetryWorkspace({
                     </div>
                     <details className="telemetry-data-table">
                       <summary>{tr("showChartData")}</summary>
-                      <div className="telemetry-data-table-scroll" role="region" aria-label={tr("chartDataCaption").replace("{service}", selectedService).replace("{window}", windowRange)} tabIndex={0}>
+                      <div className="telemetry-data-table-scroll" role="region" aria-label={tr("chartDataCaption").replace("{metric}", selectedMetricLabel).replace("{service}", selectedService).replace("{window}", windowRange)} tabIndex={0}>
                         <table>
                           <caption>{tr("chartDataCaption").replace("{metric}", selectedMetricLabel).replace("{service}", selectedService).replace("{window}", windowRange)}</caption>
                           <thead>
