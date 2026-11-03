@@ -527,7 +527,7 @@ Branch: `feat/m01-accessibility-review`.
 - Adds visible focus styles for links and form controls, including a darker outline against light-theme surfaces. Skip-link positioning uses logical inline-start for RTL.
 - Adds `scripts/check_accessibility_contract.py` to the web CI job. This static regression check is intentionally not presented as an axe/WCAG or assistive-technology audit.
 
-The M01 accessibility item remains partially open until manual keyboard-only and screen-reader testing with NVDA, VoiceOver, and TalkBack, plus contrast/chart alternatives and review of remaining demo-only controls. See `docs/accessibility-review.md` for the acceptance checklist.
+The M01 accessibility item remains partially open until manual keyboard-only and screen-reader testing with NVDA, VoiceOver, and TalkBack, rendered-state contrast verification, manual verification of both implemented chart tables, and review of remaining demo-only controls. See `docs/accessibility-review.md` for the acceptance checklist.
 
 ## M01 accessibility follow-through — truthful control affordances (2026-11-02)
 
@@ -584,7 +584,7 @@ The live Metrics view now renders an expandable native HTML table under the time
 
 The selected locale formats both timestamps and metric values. New English and Persian strings label the disclosure, caption, and columns. The source-level accessibility contract checks the details/summary, caption, headers, locale formatting calls, translations, and responsive table container.
 
-This does not complete chart acceptance: the Overview graph remains illustrative and does not expose its underlying sample points as a table. Verify both chart experiences with keyboard-only and screen-reader testing before closing M01.
+This Metrics-table note predates the Overview table added below. Both charts now expose expandable table alternatives; verify both chart experiences with keyboard-only and screen-reader testing before closing M01.
 ## M01 chart alternative follow-through — Overview sample table (2026-11-03)
 
 The Overview SVG chart's static coordinate fixture has been factored into a shared coordinate list in `lib/orbit/demo.ts`. The SVG polyline/polygon path and the accessible table rows are derived from the same list. Each illustrative value is explicitly documented as an estimated requests-per-minute sample derived from the displayed 0–30k axis; the table labels the unit as requests/minute and marks it illustrative. These are not production or measured telemetry.
@@ -592,3 +592,16 @@ The Overview SVG chart's static coordinate fixture has been factored into a shar
 The Overview disclosure table includes a caption stating the data is illustrative, localized time/value columns, and timestamps positioned across the currently selected one-hour, six-hour, or 24-hour window. Its x-axis labels use the same range-aware formatter, fixing the previous mismatch where the graph always displayed 09:00–10:00 regardless of selected range.
 
 The source-level accessibility contract checks the table, caption, selected-window time formatting, shared sample fixture, and Persian/English labels. Both Overview and live Metrics charts now have an expandable table alternative. Manual browser/keyboard/screen-reader checks remain mandatory.
+
+## M01 verification snapshot — latest PR head (2026-11-03)
+
+Latest reviewed branch head: `5682510d5161ca5a234e362510c00b586b9b02ec` on `feat/m01-accessibility-review` (PR #109).
+
+- CI run [41566740636](https://github.com/pooya16pg-spec/orbit/actions/runs/41566740636) passed all four jobs: web verification, workflow action-pin policy, Go API tests/vet/build plus PostgreSQL backup/restore, and the full local telemetry end-to-end smoke test.
+- The web job passed the source accessibility contract, theme contrast regression check, TypeScript typecheck, production build, and generated-HTML structural audit.
+- The telemetry end-to-end job passed Compose/network/retention validation, stack startup and readiness, OTLP signal/API queries, Prometheus scrape, and authenticated workspace write-to-query isolation.
+- Security run [41566740674](https://github.com/pooya16pg-spec/orbit/actions/runs/41566740674) passed all 13 jobs, including full-history secret scanning, dependency vulnerability checks, and container-image scans. All 11 expected CycloneDX SBOM artifacts were uploaded and were unexpired at verification time.
+- The currently published dashboard was deployed successfully from `fc798de541300eb1adef8a04c852179d945301b3` by run [41565547071](https://github.com/pooya16pg-spec/orbit/actions/runs/41565547071). The later `a5c01a0` and `5682510` commits only corrected static CI assertions, so they do not change the published UI.
+- No PR review comments or inline review threads were returned by the GitHub review/comment query at this check. PR #109 remains open and unmerged; its branch is 78 commits ahead of `main`, 0 behind.
+
+These passing automated checks do not replace M01's manual acceptance. Keyboard-only operation, NVDA/VoiceOver/TalkBack behavior, rendered-state contrast, responsive reflow, reduced-motion behavior, and the chart/table reading experience still need human verification. Do not mark M01 complete or merge PR #109 solely from these CI results.
