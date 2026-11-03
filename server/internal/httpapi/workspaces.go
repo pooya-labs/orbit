@@ -1277,6 +1277,18 @@ func registerWorkspaceRoutes(mux *http.ServeMux, repository store.Repository, te
 			if err != nil { writeTelemetryError(w,r,logger,"Workspace Tempo",err); return }
 			writeJSON(w,http.StatusOK,result)
 		})
+		registerScopedRead("GET /api/v1/workspaces/{workspaceID}/telemetry/traces/{traceID}", func(w http.ResponseWriter, r *http.Request, ctx context.Context, workspaceID string) {
+			if telemetryClient == nil {
+				writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", "Workspace telemetry backends are not configured")
+				return
+			}
+			result, err := telemetryClient.WorkspaceTrace(ctx, workspaceID, r.PathValue("traceID"))
+			if err != nil {
+				writeTelemetryError(w, r, logger, "Workspace Tempo", err)
+				return
+			}
+			writeJSON(w, http.StatusOK, result)
+		})
 
 }
 
