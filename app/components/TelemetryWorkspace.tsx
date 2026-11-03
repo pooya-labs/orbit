@@ -672,12 +672,20 @@ export default function TelemetryWorkspace({
       (batch.scopeSpans ?? []).flatMap((scope) => scope.spans ?? []),
     ) ?? [];
     const byId = new Map(spans.map((span) => [span.spanId, span]));
+    const parseNanos = (value: string): bigint | null => {
+      if (!/^\\d+$/.test(value)) return null;
+      try {
+        return BigInt(value);
+      } catch {
+        return null;
+      }
+    };
     const ordered = [...spans].sort((left, right) => {
-      const leftStart = Number(left.startTimeUnixNano);
-      const rightStart = Number(right.startTimeUnixNano);
-      if (!Number.isFinite(leftStart)) return 1;
-      if (!Number.isFinite(rightStart)) return -1;
-      return leftStart - rightStart;
+      const leftStart = parseNanos(left.startTimeUnixNano);
+      const rightStart = parseNanos(right.startTimeUnixNano);
+      if (leftStart === null) return 1;
+      if (rightStart === null) return -1;
+      return leftStart < rightStart ? -1 : leftStart > rightStart ? 1 : 0;
     });
 
     return ordered.map((span) => {
@@ -689,10 +697,10 @@ export default function TelemetryWorkspace({
         depth += 1;
         parentSpanId = byId.get(parentSpanId)?.parentSpanId;
       }
-      const start = Number(span.startTimeUnixNano);
-      const end = Number(span.endTimeUnixNano);
-      const durationMs = Number.isFinite(start) && Number.isFinite(end) && end >= start
-        ? (end - start) / 1_000_000
+      const start = parseNanos(span.startTimeUnixNano);
+      const end = parseNanos(span.endTimeUnixNano);
+      const durationMs = start !== null && end !== null && end >= start
+        ? Number(end - start) / 1_000_000
         : Number.NaN;
       return { span, depth, durationMs };
     });
