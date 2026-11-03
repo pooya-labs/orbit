@@ -10,7 +10,7 @@ export ORBIT_POSTGRES_RESTART_CONTROL_DIR="$control_dir"
 
 container_name="orbit-postgres-restart-smoke-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
 mkdir -p "$control_dir"
-rm -f "$control_dir"/ready "$control_dir"/postgres-stopped "$control_dir"/outage-detected "$control_dir"/postgres-restarted "$control_dir"/recovered
+rm -f "$control_dir"/ready-* "$control_dir"/postgres-stopped-* "$control_dir"/outage-detected-* "$control_dir"/postgres-restarted-* "$control_dir"/recovered-*
 
 cleanup() {
   local status=$?
@@ -65,15 +65,28 @@ wait_for_marker() {
   return 1
 }
 
-wait_for_marker ready 120
+# Phase 1: clean stop/start. This verifies ordinary container lifecycle recovery.
+wait_for_marker ready-clean 120
 docker compose --profile observability stop postgres
-touch "$control_dir/postgres-stopped"
+touch "$control_dir/postgres-stopped-clean"
 
-wait_for_marker outage-detected 120
+wait_for_marker outage-detected-clean 120
 docker compose --profile observability start postgres
-touch "$control_dir/postgres-restarted"
+touch "$control_dir/postgres-restarted-clean"
 
-wait_for_marker recovered 180
+wait_for_marker recovered-clean 180
+
+# Phase 2: kill PostgreSQL with SIGKILL while it is running. The same data
+# volume is retained, so startup must perform PostgreSQL crash/WAL recovery.
+wait_for_marker ready-crash 120
+docker compose --profile observability kill --signal SIGKILL postgres
+touch "$control_dir/postgres-stopped-crash"
+
+wait_for_marker outage-detected-crash 120
+docker compose --profile observability start postgres
+touch "$control_dir/postgres-restarted-crash"
+
+wait_for_marker recovered-crash 180
 exit_code="$(docker wait "$container_name")"
 docker logs "$container_name"
 if [[ "$exit_code" != "0" ]]; then

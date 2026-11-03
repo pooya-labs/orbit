@@ -89,3 +89,15 @@ PR #111 was squash-merged as `5b3c0fc344f043640b01c670a84deb6c78d09a5c`. Exact P
 The CI runner stopped the actual Compose PostgreSQL container and started it again. The test confirmed the original Repository/pgxpool saw the outage and recovered without being replaced. PostgreSQL `pg_postmaster_start_time()` advanced from `2026-11-03T05:07:11.802744Z` to `2026-11-03T05:10:29.836093Z`; the test passed in 1.094 seconds.
 
 This is a clean single-node container restart test, not crash or disk recovery, HA failover, replication, PITR, or production RPO/RTO evidence.
+
+
+## PostgreSQL crash recovery — PR #112 in progress
+
+The existing restart smoke now runs two sequential failure phases through the same Repository/pgxpool instance:
+
+1. A normal Compose `stop` followed by `start`, preserving the already-verified clean shutdown recovery case.
+2. An ungraceful `SIGKILL` of the actual PostgreSQL container followed by `start` of the same container with the same persistent data volume. The test requires the original pool to observe the outage, reconnect, and query PostgreSQL after crash/WAL recovery.
+
+Each phase checks that `pg_postmaster_start_time()` advances, so a pre-existing healthy connection cannot make the assertion pass. The runner cleanup still attempts to start PostgreSQL even when the integration test fails.
+
+A process SIGKILL with a persistent Docker volume is a useful crash-recovery regression, but it is not equivalent to host power loss, torn/corrupt storage, disk failure, replication failover, network partition, or a measured production RPO/RTO.
