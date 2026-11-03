@@ -55,3 +55,12 @@ Before enabling tenant-facing production ingestion, run a separate environment-l
 - behavior below, at, and above the configured admission and per-workload rate limits, including more than one gateway replica.
 
 Do not turn noisy absolute benchmark numbers into a CI threshold until the target hardware and service-level objectives are explicitly defined. Production ingestion remains disabled until the deployment and operational gates in the [M06 roadmap](roadmap.md) are complete.
+
+
+## Real PostgreSQL + Collector backpressure regression
+
+The observability Compose profile also runs `TestWorkspaceOTLPSustainedBackpressureAndRecovery` against the CI PostgreSQL service and the live local OTLP Collector. A deterministic in-process HTTP gate briefly holds already-authorized exports at the Collector network boundary; it does not replace or mock the Collector. The test fills all 64 HTTP gateway admission slots, verifies eight additional requests fail fast with HTTP 503 without reaching the Collector, releases the gate, and verifies all admitted exports succeed. It then sends three further concurrent recovery waves (16 exports each) through the same PostgreSQL-backed authorization/rate-limit repository and the same real Collector forwarder.
+
+This is an integration regression for bounded admission and recovery after transient downstream backpressure. It is not a production capacity result: the test uses one gateway process, CI-sized PostgreSQL and Collector services, a controlled local delay proxy, and a short workload. It does not measure target-environment p95/p99 latency, sustained production throughput, or multi-replica behavior.
+
+The steady phase deliberately stays well below the configured shared 10,000-requests/minute test limit. Each producer has its own service series and emits fresh monotonically increasing points, avoiding out-of-order samples across concurrent workers.
