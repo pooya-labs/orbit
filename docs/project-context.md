@@ -809,3 +809,19 @@ PR #126 adds a repository-owned guard for the two intentionally independent OTLP
 Do not interpret this as a relaxation of tenant security. Canonical workspace identity still comes only from the verified server-side grant. The PR changes policy checks and documentation only; it does not change API behavior, stored data, migrations, authentication, telemetry routing, or production-ingress settings.
 
 The PR must pass CI, Security, and (where triggered) Pages/Release checks before merge. Do not repeat the already completed NVDA all-view work in PR #125 or M06 recovery suites #110/#111/#112/#115.
+
+
+## Current handoff — v1.0 readiness audit (2026-11-03)
+
+Repository: \`pooya-labs/orbit\`; default branch \`main\`. Audit base commit: \`3698959f060342ed1dd5993151175f5a33272ded\` (PR #126). The audit branch \`audit/v1-readiness-and-release-record\` records the reconciliation; do not merge it until CI and Security pass on its exact head.
+
+The roadmap now has a single v1.0.0 readiness section, groups already-implemented capabilities by milestone, consolidates duplicate production OIDC/ingress/load gates, distinguishes product work from deployment acceptance, and explicitly marks Redis/NATS integration and resource-attribute allowlist expansion as deferred unless measured need appears.
+
+Newly identified product gaps are:
+- Metrics is still limited to the demo \`request_rate\` counter; safe general metric catalog/selection with cardinality and query-cost budgets is not implemented.
+- Traces currently render Tempo search summaries only; there is no user-facing span-detail/timeline workflow or explicit log-to-trace correlation.
+- The production Go API/background workers are not self-instrumented; only the example workload emits OTLP signals.
+
+The audit also corrects canonical repository/Pages links, the browser OIDC callback and API CORS examples, the local Go version, outdated migration-count instructions, and stale v0.10 preview release notes. Keep personal maintainer attribution separate from the canonical repository owner. The historical Go module import path has not been mechanically renamed; assess that separately before publishing reusable modules.
+
+Do not repeat the completed PR #110–#126 test work unless a new regression is found. M01 manual device acceptance and M06 target-environment deployment evidence remain genuinely open. See \`docs/roadmap.md\` → “v1.0.0 release readiness” for the authoritative release gates.
