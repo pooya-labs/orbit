@@ -320,7 +320,7 @@ test("invalid API base paths are announced as an accessible error", async ({ pag
   await apiUrl.fill("https://example.com/orbit/api");
   await page.getByRole("button", { name: "Test and connect" }).click();
 
-  const alert = page.getByRole("alert");
+  const alert = page.locator(".source-error[role=\"alert\"]");
   await expect(alert).toBeVisible();
   await expect(alert).toContainText("Enter an API base URL");
   await expect(apiUrl).toHaveValue("https://example.com/orbit/api");
@@ -337,13 +337,35 @@ test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal
   await page.setViewportSize({ width: 320, height: 900 });
   await page.reload();
 
-  const dimensions = await page.evaluate(() => ({
-    viewport: document.documentElement.clientWidth,
-    document: document.documentElement.scrollWidth,
-    body: document.body.scrollWidth,
-  }));
-  expect(dimensions.document, JSON.stringify(dimensions)).toBeLessThanOrEqual(dimensions.viewport + 1);
-  expect(dimensions.body, JSON.stringify(dimensions)).toBeLessThanOrEqual(dimensions.viewport + 1);
+  const dimensions = await page.evaluate(() => {
+    const viewport = document.documentElement.clientWidth;
+    const overflow = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          tag: element.tagName.toLowerCase(),
+          id: element.id,
+          className: typeof element.className === "string" ? element.className : "",
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          position: style.position,
+          display: style.display,
+        };
+      })
+      .filter((item) => item.display !== "none" && item.width > 0 && item.right > viewport + 1)
+      .sort((a, b) => b.right - a.right)
+      .slice(0, 20);
+    return {
+      viewport,
+      document: document.documentElement.scrollWidth,
+      body: document.body.scrollWidth,
+      overflow,
+    };
+  });
+  expect(dimensions.document, JSON.stringify(dimensions, null, 2)).toBeLessThanOrEqual(dimensions.viewport + 1);
+  expect(dimensions.body, JSON.stringify(dimensions, null, 2)).toBeLessThanOrEqual(dimensions.viewport + 1);
 
   const menu = page.getByRole("button", { name: "Open navigation" });
   await expect(menu).toBeVisible();
