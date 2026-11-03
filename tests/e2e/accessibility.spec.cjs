@@ -339,6 +339,27 @@ test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal
 
   const dimensions = await page.evaluate(() => {
     const viewport = document.documentElement.clientWidth;
+    const table = document.querySelector(".overview-chart-data-table table");
+    const tableChain = [];
+    for (let element = table; element && element !== document.documentElement; element = element.parentElement) {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      tableChain.push({
+        tag: element.tagName.toLowerCase(),
+        className: typeof element.className === "string" ? element.className : "",
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        width: Math.round(rect.width),
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        minWidth: style.minWidth,
+        maxWidth: style.maxWidth,
+        widthStyle: style.width,
+        overflowX: style.overflowX,
+        display: style.display,
+        boxSizing: style.boxSizing,
+      });
+    }
     const overflow = Array.from(document.querySelectorAll("body *"))
       .map((element) => {
         const rect = element.getBoundingClientRect();
@@ -361,6 +382,7 @@ test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal
       viewport,
       document: document.documentElement.scrollWidth,
       body: document.body.scrollWidth,
+      tableChain,
       overflow,
     };
   });
