@@ -443,8 +443,8 @@ export default function Home() {
           <button ref={sidebarCloseButtonRef} type="button" className="icon-button sidebar-close" aria-label={tr("closeNavigation")} onClick={() => setMobileNavOpen(false)}><X size={18} /></button>
         </div>
 
-        <button type="button" className="workspace-switcher preview-unavailable" disabled aria-label={`ORBIT, ${language === "fa" ? "فضای کاری شخصی" : "Personal workspace"} — ${tr("notAvailableInPreview")}`} title={tr("notAvailableInPreview")}>
-          <div className="workspace-avatar">O</div>
+        <button type="button" className="workspace-switcher preview-unavailable" disabled title={tr("notAvailableInPreview")}>
+          <div className="workspace-avatar" aria-hidden="true">O</div>
           <div className="workspace-copy"><strong>ORBIT</strong><span>{language === "fa" ? "فضای کاری شخصی" : "Personal workspace"}</span></div>
           <ChevronDown size={15} className="muted-icon" />
         </button>
