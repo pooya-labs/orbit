@@ -63,7 +63,7 @@ Coverage:
 
 The same CI run's Go API tests/build and workflow action-pin policy jobs passed. The full local telemetry pipeline end-to-end job was still running at the latest status check; do not describe the entire CI workflow as green until it completes successfully.
 
-The latest [Security run 41578302399](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302399) had completed **11 of 13 jobs successfully**; only the ORBIT API image and patched Tempo image jobs remained in progress. Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) passed. The latest branch Pages deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) succeeded; the public preview is https://pooya16pg-spec.github.io/orbit/.
+The latest [Security run 41578302399](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302399) completed all **13 jobs successfully**, including the full-history secret scan, dependency review, API/Collector/Caddy/Tempo image scans, and all Compose image scans with SBOM generation. Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) passed. The latest branch Pages deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) succeeded; the public preview is https://pooya16pg-spec.github.io/orbit/.
 
 PR #109 remains open and unmerged. `main` is unchanged. GitHub Pages is a single public site, so the branch deployment replaces the canonical site until a subsequent `main` deployment succeeds.
 
