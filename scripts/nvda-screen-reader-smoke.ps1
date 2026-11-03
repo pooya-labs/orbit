@@ -285,20 +285,17 @@ public static class OrbitWin32Cursor {
     throw ("NVDA did not announce the current page title as a level-one heading: " + $pageTitleSpeech)
   }
 
-  # Return to the document start and follow the same native Tab sequence as a
-  # keyboard user. The skip link is first, Overview is the first navigation
-  # button, and the remaining 12 view buttons follow in DOM order.
+  # Ctrl+Home moves NVDA's browse caret to the first document target, the
+  # skip link. The next native Tab reaches Overview, then the remaining 12
+  # primary-view buttons in DOM order.
   Write-Host "=== Verify NVDA keyboard navigation and live page announcements across all views ==="
-  Invoke-WinApp -Arguments @("ui", "send-keys", "ctrl+home", "-a", "msedge", "--via", "send-input") | Write-Host
-  Start-Sleep -Milliseconds 500
-
   $beforeSkipLink = Get-SpeechText
-  Invoke-WinApp -Arguments @("ui", "send-keys", "tab", "-a", "msedge", "--via", "send-input") | Write-Host
+  Invoke-WinApp -Arguments @("ui", "send-keys", "ctrl+home", "-a", "msedge", "--via", "send-input") | Write-Host
   $skipLinkSpeech = Wait-SpeechDelta -Before $beforeSkipLink -ExpectedPattern "(?i)Skip to main content" -TimeoutSeconds 8
   if ($skipLinkSpeech -notmatch "(?i)Skip to main content") {
-    throw ("NVDA did not announce the first keyboard target (skip link): " + $skipLinkSpeech)
+    throw ("NVDA Ctrl+Home did not announce the document's first target (skip link): " + $skipLinkSpeech)
   }
-  Write-Host ("NVDA Tab -> skip link: " + $skipLinkSpeech)
+  Write-Host ("NVDA Ctrl+Home -> skip link: " + $skipLinkSpeech)
 
   $beforeOverview = Get-SpeechText
   Invoke-WinApp -Arguments @("ui", "send-keys", "tab", "-a", "msedge", "--via", "send-input") | Write-Host
@@ -343,7 +340,6 @@ public static class OrbitWin32Cursor {
   Write-Host "=== NVDA screen-reader smoke test passed ==="
   Write-Host "NVDA Browse Mode H navigation announced all three sidebar group headings and the Overview H1."
   Write-Host "NVDA sequential Tab/Enter navigation announced all 13 primary views, including the skip link."
-  Write-Host ("Full NVDA log: " + $nvdaLog)
   Write-Host ("Full NVDA log: " + $nvdaLog)
 }
 catch {
