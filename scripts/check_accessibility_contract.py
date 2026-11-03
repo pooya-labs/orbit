@@ -17,6 +17,7 @@ def require(source: str, fragment: str, description: str) -> None:
 page = (ROOT / "app/page.tsx").read_text(encoding="utf-8")
 styles = (ROOT / "app/globals.css").read_text(encoding="utf-8")
 i18n = (ROOT / "lib/orbit/i18n.ts").read_text(encoding="utf-8")
+telemetry = (ROOT / "app/components/TelemetryWorkspace.tsx").read_text(encoding="utf-8")
 
 checks = [
     (page, '<a className="skip-link" href="#main-content">', "a first-in-order skip link targets the main landmark"),
@@ -28,6 +29,15 @@ checks = [
     (page, "aria-pressed={range === item}", "the selected time-range option is announced to assistive technology"),
     (i18n, 'timeRange: "Time range"', "the time-range group label is localized in English"),
     (i18n, 'timeRange: "بازهٔ زمانی"', "the time-range group label is localized in Persian"),
+    (telemetry, '<details className="telemetry-data-table">', "the live Metrics chart provides an expandable tabular data alternative"),
+    (telemetry, '<caption>{tr("chartDataCaption")}', "the metric data table has a contextual caption"),
+    (telemetry, '<th scope="col">{tr("chartTime")}', "the metric data table exposes semantic column headers"),
+    (telemetry, 'formatClock(row.timestamp * 1000, language)', "metric sample timestamps are presented in the selected locale"),
+    (telemetry, "formatRate(row.value, language)", "metric sample values are formatted for the selected locale"),
+    (i18n, 'showChartData: "View chart data"', "the metric data-table affordance is localized in English"),
+    (i18n, 'showChartData: "نمایش داده‌های نمودار"', "the metric data-table affordance is localized in Persian"),
+    (i18n, 'chartDataCaption: "Request-rate samples for {service} across {window}"', "the metric data caption is localized in English"),
+    (i18n, 'chartDataCaption: "نمونه‌های نرخ درخواست برای {service} در بازهٔ {window}"', "the metric data caption is localized in Persian"),
     (page, "aria-pressed={range === item}", "the selected overview time range is announced"),
     (ROOT.joinpath("app/components/IncidentWorkspace.tsx").read_text(encoding="utf-8"), 'aria-pressed={filter === "active"}', "incident filters expose their selected state"),
     (ROOT.joinpath("app/components/IncidentWorkspace.tsx").read_text(encoding="utf-8"), "aria-pressed={selectedIncidentId === incident.id}", "the selected incident is announced"),
@@ -45,6 +55,8 @@ checks = [
     (styles, ".skip-link:focus", "the skip link becomes visible when focused"),
     (styles, "visibility: hidden", "the closed mobile drawer is removed from keyboard navigation"),
     (styles, "@media (prefers-reduced-motion: reduce)", "reduced-motion preferences are respected"),
+    (styles, ".telemetry-data-table-scroll", "the metric data alternative has a horizontally scrollable narrow-screen container"),
+    (styles, ".telemetry-data-table caption", "the metric data alternative styles a native table caption"),
     (i18n, 'primaryNavigation: "Primary navigation"', "the primary navigation label is localized in English"),
     (i18n, 'primaryNavigation: "پیمایش اصلی"', "the primary navigation label is localized in Persian"),
     (i18n, 'skipToMainContent: "Skip to main content"', "the skip link is localized in English"),
