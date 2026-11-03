@@ -271,3 +271,103 @@ test("axe finds no WCAG 2.1 A/AA or WCAG 2.2 AA violations in the light theme", 
 
   expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
 });
+
+test("all primary dashboard views expose an announced heading and pass axe", async ({ page }) => {
+  test.setTimeout(90_000);
+  const labels = [
+    "Service map",
+    "Services",
+    "Infrastructure",
+    "Metrics",
+    "Traces",
+    "Logs",
+    "Incidents",
+    "Deployments",
+    "Alert rules",
+    "Notifications",
+    "SLOs",
+    "Audit log",
+  ];
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+
+  for (const label of labels) {
+    const item = navigation.getByRole("button", { name: label, exact: true });
+    await item.click();
+    await expect(item).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+      .analyze();
+
+    const violations = results.violations.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      help: violation.help,
+      nodes: violation.nodes.map((node) => ({
+        target: node.target,
+        summary: node.failureSummary,
+      })),
+    }));
+
+    expect(violations, `Accessibility violations on ${label}: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
+  }
+});
+
+test("invalid API base paths are announced as an accessible error", async ({ page }) => {
+  await page.getByRole("button", { name: "Connect a source" }).click();
+  const apiUrl = page.getByRole("textbox", { name: "API base URL" });
+  await apiUrl.fill("https://example.com/orbit/api");
+  await page.getByRole("button", { name: "Test and connect" }).click();
+
+  const alert = page.getByRole("alert");
+  await expect(alert).toBeVisible();
+  await expect(alert).toContainText("Enter an API base URL");
+  await expect(apiUrl).toHaveValue("https://example.com/orbit/api");
+
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(
+    results.violations.map((violation) => ({ id: violation.id, targets: violation.nodes.map((node) => node.target) })),
+  ).toEqual([]);
+});
+
+test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.reload();
+
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth,
+    body: document.body.scrollWidth,
+  }));
+  expect(dimensions.document, JSON.stringify(dimensions)).toBeLessThanOrEqual(dimensions.viewport + 1);
+  expect(dimensions.body, JSON.stringify(dimensions)).toBeLessThanOrEqual(dimensions.viewport + 1);
+
+  const menu = page.getByRole("button", { name: "Open navigation" });
+  await expect(menu).toBeVisible();
+  await menu.click();
+  await expect(page.getByRole("button", { name: "Close navigation" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeFocused();
+
+  const disclosure = page.locator("details.overview-chart-data-table");
+  await disclosure.locator("summary").click();
+  const table = disclosure.getByRole("table");
+  await expect(table).toBeVisible();
+  const tableDimensions = await disclosure.locator(".telemetry-data-table-scroll").evaluate((element) => ({
+    viewport: element.clientWidth,
+    content: element.scrollWidth,
+  }));
+  expect(tableDimensions.viewport).toBeLessThanOrEqual(dimensions.viewport);
+  expect(tableDimensions.content).toBeGreaterThanOrEqual(tableDimensions.viewport);
+
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(
+    results.violations.map((violation) => ({ id: violation.id, targets: violation.nodes.map((node) => node.target) })),
+  ).toEqual([]);
+});
+
