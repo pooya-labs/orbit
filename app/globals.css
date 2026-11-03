@@ -418,7 +418,14 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 .telemetry-log-row:last-child, .telemetry-trace-row:last-child { border-bottom: 0; }
 .telemetry-log-row time { color: #778791; font: 9px "DM Mono", monospace; }
 .telemetry-log-level { width: fit-content; padding: 2px 5px; border-radius: 3px; color: #91cdb9; background: rgba(93,183,151,.1); font: 8px "DM Mono", monospace; }
-.telemetry-log-row code { overflow: hidden; color: #c5d1d6; font: 9px/1.5 "DM Mono", monospace; text-overflow: ellipsis; overflow-wrap: anywhere; }
+.telemetry-log-message { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.telemetry-log-row code { min-width: 0; flex: 1; overflow: hidden; color: #c5d1d6; font: 9px/1.5 "DM Mono", monospace; text-overflow: ellipsis; overflow-wrap: anywhere; }
+.telemetry-log-trace-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex: 0 0 auto;
+  min-height: 24px; padding: 3px 7px; border: 1px solid #2b3e47; border-radius: 5px;
+  color: #9ecdbf; background: #111d23; font: 8px "DM Mono", monospace; cursor: pointer;
+}
+.telemetry-log-trace-action:hover { border-color: #4d8e7f; color: #d4f5e9; background: #15272a; }
 .telemetry-log-row small { overflow: hidden; color: #71818b; font: 8px "DM Mono", monospace; text-overflow: ellipsis; text-align: right; }
 .telemetry-trace-row { display: flex; align-items: center; gap: 12px; padding: 14px 1px; border-bottom: 1px solid #1d2931; }
 .telemetry-trace-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; color: #b6a6eb; border: 1px solid rgba(161,137,221,.16); border-radius: 7px; background: rgba(161,137,221,.09); }
@@ -1505,4 +1512,13 @@ html[data-theme="light"] .audit-filter.active { background: rgba(42,159,140,.1);
 .telemetry-data-table th:last-child,
 .telemetry-data-table td:last-child {
   text-align: end;
+}
+
+@media (max-width: 760px) {
+  .telemetry-log-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .telemetry-log-row time { grid-column: 1; }
+  .telemetry-log-row .telemetry-log-level { grid-column: 2; justify-self: end; }
+  .telemetry-log-message { grid-column: 1 / -1; }
+  .telemetry-log-row small { grid-column: 1 / -1; text-align: start; }
+  .telemetry-log-trace-action { min-height: 26px; }
 }
