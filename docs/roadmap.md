@@ -63,7 +63,8 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 - [x] Persist observed service names and backend provenance in a normalized PostgreSQL catalog.
 - [x] Expose persisted first-seen, last-seen, and last-discovered metadata through the service discovery API.
 - [x] Capture curated OpenTelemetry resource attributes directly from authenticated OTLP workloads over HTTP and gRPC, persist them per workspace with otlp provenance, and verify attribute isolation in the real PostgreSQL/Collector/backend E2E pipeline (PR #104; only a reviewed low-risk allowlist is accepted).
-- [ ] Expand the workload resource semantic-convention allowlist after privacy, cardinality, and operational review; arbitrary producer attributes remain intentionally unsupported.
+- [x] Review the current projection against OpenTelemetry Resource Semantic Conventions 1.44.0, document explicitly deferred identity/sensitive attributes, and add CI checks for ingress/persistence allowlist parity and matching bounds (PR #126 / ADR 0005). No new attributes were added without a concrete use case.
+- [ ] Expand the workload resource semantic-convention allowlist only when a concrete consumer, privacy/cardinality review, and operational budget justify it; arbitrary producer attributes remain intentionally unsupported.
 - [x] Persist bounded service resource attributes and per-attribute backend provenance in PostgreSQL.
 - [x] Add validated cursor-based pagination to the service catalog API and dashboard selector.
 - [x] Add allow-listed multi-series grouping and separate line rendering for the request-rate metric; arbitrary metric-name selection remains future work.

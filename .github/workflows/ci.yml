@@ -127,6 +127,8 @@ jobs:
 
       - name: Verify telemetry retention and cardinality guardrails
         run: python3 scripts/check_observability_limits.py
+      - name: Verify authenticated OTLP resource-attribute allowlist contract
+        run: python3 scripts/check_resource_attribute_allowlist.py
 
       - name: Start telemetry stack and instrumented demo
         run: docker compose --profile observability up -d prometheus loki tempo otel-collector telemetry-demo api

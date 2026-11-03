@@ -180,3 +180,10 @@ CI run `41383068747` passed all three jobs, including `Verify authenticated work
 The authenticated gateway may derive a bounded service catalog from each accepted OTLP export after the request passes workload identity verification and workspace/signal grant authorization. It must first reject any producer-supplied reserved tenant field and inject the canonical workspace ID from the authorization decision. The resource metadata projection is limited to a curated low-risk allowlist and bounded values; it must never persist credentials, command lines, user identifiers, pod UIDs, or arbitrary producer attributes.
 
 The workspace ID is the partition key for the catalog, and service-name uniqueness is scoped to that workspace. `otlp` provenance is recorded separately from backend discovery provenance. Resource metadata persistence occurs after a successful Collector export and is best-effort so a metadata-store outage does not turn an already accepted telemetry export into a client-visible failure. Workspace query/read APIs must always filter by workspace and verify membership. Legacy unscoped catalog reads are restricted to the `legacy-default` workspace.
+
+
+## PR #126 — semantic-convention allowlist review and drift guard
+
+PR #126 records ADR 0005 after reviewing the bounded workload resource projection against OpenTelemetry Resource Semantic Conventions 1.44.0. No attribute was added: the currently accepted set covers the demonstrated service-catalog requirements, while unique instance and infrastructure identifiers, account/resource IDs, network addresses, process command details, and user identifiers remain deferred.
+
+The PR adds a standard-library Python CI check that compares the independent extractor and PostgreSQL persistence allowlists, enforces a reviewed denylist, and verifies parity of their service/attribute/value/string bounds. The independent lists are deliberately retained so storage remains a second validation boundary. The check does not make arbitrary producer attributes acceptable and does not replace field-specific review for future proposals.

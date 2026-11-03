@@ -796,3 +796,16 @@ This is test-only work; no dashboard runtime, API, database, authentication, tel
 M01 is still open for human keyboard-only and rendered-state review, an actual human NVDA session with audible output, and real Android TalkBack and Apple VoiceOver sessions. Do not claim WCAG conformance. Do not repeat the already merged M06 repository regression suites (#110, #111, #112, #115), nor the completed M01 browser/navigation regressions (#113, #114, #116, #119) or the NVDA smoke setup (#124/#125).
 
 The external M06 gates remain unchanged: target host/cloud, OIDC provider, DNS/ACME/firewall/trusted-proxy topology, managed/HA PostgreSQL and off-host backups/PITR with measured RPO/RTO, multi-replica target-environment capacity/recovery evidence, and approved durable-history retention policy are still required before production tenant ingestion or rollout. Redis/NATS remain deferred under ADR 0004 until measured demand justifies them.
+
+
+## Current handoff — M04 resource-attribute review and CI contract (2026-11-03)
+
+PR #126 adds a repository-owned guard for the two intentionally independent OTLP resource allowlists:
+- `scripts/check_resource_attribute_allowlist.py` compares the extractor and PostgreSQL persistence keys, checks the sensitive/high-cardinality denylist, and verifies that both sides enforce matching service, attribute, value-count, and string-length limits.
+- The guard runs in the Local telemetry pipeline CI job before any containers are started.
+- ADR 0005 records the review against OpenTelemetry Resource Semantic Conventions 1.44.0. No new attributes were added: the current set already covers the demonstrated service catalog needs, while unique instance/host/container/pod identifiers, account/resource IDs, network addresses, process command details, and user identifiers remain excluded.
+- M04's allowlist *review and drift guard* can be considered complete only after PR #126 merges; the separate expansion item remains open until a concrete product use case and explicit privacy/cardinality budget justify a candidate.
+
+Do not interpret this as a relaxation of tenant security. Canonical workspace identity still comes only from the verified server-side grant. The PR changes policy checks and documentation only; it does not change API behavior, stored data, migrations, authentication, telemetry routing, or production-ingress settings.
+
+The PR must pass CI, Security, and (where triggered) Pages/Release checks before merge. Do not repeat the already completed NVDA all-view work in PR #125 or M06 recovery suites #110/#111/#112/#115.
