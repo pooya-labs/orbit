@@ -84,7 +84,7 @@ checks = [
     (page, """className="nav-item preview-unavailable" disabled aria-label={`${tr("helpSupport")} —""", "the unavailable help control is explicitly disabled and named"),
     (page, 'className="icon-button subtle-more preview-unavailable" disabled', "the unavailable incident-options control is explicitly disabled"),
     (page, 'onClick={() => chooseNav("Notifications")}', "the notification button opens the implemented Notifications view"),
-    (page, '<a className="help-button" href="https://github.com/pooya16pg-spec/orbit/tree/main/docs"', "the documentation affordance has a real destination"),
+    (page, '<a className="help-button" href="https://github.com/pooya-labs/orbit/tree/main/docs"', "the documentation affordance has a real destination"),
     (styles, ".preview-unavailable:disabled", "unavailable preview controls have a visible disabled treatment"),
     (i18n, 'notAvailableInPreview: "Not available in this preview"', "unavailable controls are described in English"),
     (i18n, 'notAvailableInPreview: "در این نسخهٔ پیش‌نمایش در دسترس نیست"', "unavailable controls are described in Persian"),
