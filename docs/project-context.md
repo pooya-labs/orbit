@@ -825,3 +825,9 @@ Newly identified product gaps are:
 The audit also corrects canonical repository/Pages links, the browser OIDC callback and API CORS examples, the local Go version, outdated migration-count instructions, and stale v0.10 preview release notes. Keep personal maintainer attribution separate from the canonical repository owner. The historical Go module import path has not been mechanically renamed; assess that separately before publishing reusable modules.
 
 Do not repeat the completed PR #110–#126 test work unless a new regression is found. M01 manual device acceptance and M06 target-environment deployment evidence remain genuinely open. See \`docs/roadmap.md\` → “v1.0.0 release readiness” for the authoritative release gates.
+
+
+## Current handoff — frontend/API scope finding (2026-11-03)
+
+The M04 workspace telemetry catalog and authenticated workspace Metrics/Logs/Traces backend routes exist, but \`TelemetryWorkspace\` still calls the legacy unscoped \`/api/v1/telemetry/*\` client methods. \`withLegacyGlobalReadGate\` intentionally returns 404 for those unscoped paths in staging and production. Therefore API-mode telemetry on the dashboard is not production-ready. Next implementation step: reuse the authenticated workspace selection/membership pattern from the M05 workspaces, wire the telemetry catalog and all three query paths to workspace routes, then add trace detail and correlation on that tenant-safe foundation.
+
