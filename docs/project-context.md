@@ -57,7 +57,7 @@ M04's current bounded telemetry read path and authenticated workspace-scoped res
 Remaining M04 follow-ups are deliberately narrow:
 - expand the workload resource semantic-convention allowlist only after privacy, cardinality, and operational review; arbitrary producer attributes remain unsupported;
 - add arbitrary metric-name discovery/selection only after a safe metrics model and cardinality budget are defined;
-- improve user-facing access to individual trace/log context in a later UX iteration.
+- [x] Complete workspace-authorized span detail and Logs-to-Trace correlation (PRs #130–#131); each log action calls the same membership-checked trace-detail route, and Trace IDs stay in log content rather than indexed Loki labels.
 
 Do not widen query access to arbitrary PromQL merely to complete metric selection. See `docs/roadmap.md` and the PR #104 handoff below for the verified implementation boundary.
 
@@ -819,7 +819,7 @@ The roadmap now has a single v1.0.0 readiness section, groups already-implemente
 
 Newly identified product gaps are:
 - Metrics is still limited to the demo \`request_rate\` counter; safe general metric catalog/selection with cardinality and query-cost budgets is not implemented.
-- Traces currently render Tempo search summaries only; there is no user-facing span-detail/timeline workflow or explicit log-to-trace correlation.
+- PR #130 adds the authenticated workspace-scoped trace detail and span timeline; PR #131 adds log-to-trace correlation using validated IDs from log content or existing stream fields. Both detail entry points reuse the membership-checked workspace trace-detail route.
 - The production Go API/background workers are not self-instrumented; only the example workload emits OTLP signals.
 
 The audit also corrects canonical repository/Pages links, the browser OIDC callback and API CORS examples, the local Go version, outdated migration-count instructions, and stale v0.10 preview release notes. Keep personal maintainer attribution separate from the canonical repository owner. The historical Go module import path has not been mechanically renamed; assess that separately before publishing reusable modules.
@@ -840,8 +840,16 @@ Repository: `pooya-labs/orbit`; default branch: `main`.
 ### Next implementation — do not repeat completed work
 
 1. Implement a safe, workspace-scoped metric catalog/selection model beyond the demo-only `request_rate` series. Keep metric names and label dimensions allow-listed, enforce cardinality/query-cost bounds, validate selector inputs, and do not expose arbitrary PromQL.
-2. Add trace detail (trace lookup, span hierarchy/timing/status) and explicit log-to-trace correlation. Every detail/correlation request must retain workspace membership checks and tenant filters.
+2. [x] Complete interactive trace detail and Logs-to-Trace correlation (PRs #130–#131), with workspace membership checks and tenant verification on every detail request.
 3. Instrument the production Go API and background workers with bounded, useful OTLP metrics/traces/logs. Do not claim this is complete based only on the example workload.
 4. Keep the M01 human accessibility acceptance and all M06 target-environment deployment, identity, network, retention, recovery, and capacity gates open until real evidence exists. Keep tenant-facing production ingestion disabled.
 
 Do not repeat the already merged M06 recovery/security tests (#110–#126), the M01 browser/NVDA suites (#109, #113–#125), or the workspace UI migration in PR #128 unless a concrete regression is found. Redis/NATS application integration and resource-attribute allowlist expansion remain deferred under their existing ADR/policy gates.
+
+
+## 13. Latest implementation handoff — Logs-to-Trace correlation
+
+- PR #130 is merged into `main` as `ef4cd6d381fc8ee5e62f63b6fea24d0129de6db2`; it adds the membership-checked workspace trace-detail route and validates every Tempo resource batch before returning safe span fields.
+- PR #131 implements Logs-to-Trace correlation. Trace IDs are extracted only when they are non-zero 32-character hexadecimal values from log content or existing stream fields. The browser action is visible only for an authenticated member of the currently selected workspace and calls the same workspace-scoped trace-detail API; switching to another workspace clears the selection.
+- The instrumented demo puts `trace_id` in the log body, not an indexed Loki label. The local end-to-end smoke test requires the same ID to appear in both Loki log results and Tempo trace search.
+- M04's safe metric catalog and metric selection remain open; arbitrary PromQL remains unsupported. Production Go API/worker instrumentation, human device accessibility acceptance, hosted API/persistence, and target-environment M06 identity/network/capacity/recovery/release gates also remain open. Production tenant ingestion remains disabled.
