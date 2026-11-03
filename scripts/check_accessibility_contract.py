@@ -16,6 +16,7 @@ def require(source: str, fragment: str, description: str) -> None:
 
 page = (ROOT / "app/page.tsx").read_text(encoding="utf-8")
 styles = (ROOT / "app/globals.css").read_text(encoding="utf-8")
+demo = (ROOT / "lib/orbit/demo.ts").read_text(encoding="utf-8")
 i18n = (ROOT / "lib/orbit/i18n.ts").read_text(encoding="utf-8")
 telemetry = (ROOT / "app/components/TelemetryWorkspace.tsx").read_text(encoding="utf-8")
 
@@ -38,6 +39,16 @@ checks = [
     (i18n, 'showChartData: "نمایش داده‌های نمودار"', "the metric data-table affordance is localized in Persian"),
     (i18n, 'chartDataCaption: "Request-rate samples for {service} across {window}"', "the metric data caption is localized in English"),
     (i18n, 'chartDataCaption: "نمونه‌های نرخ درخواست برای {service} در بازهٔ {window}"', "the metric data caption is localized in Persian"),
+    (page, '<details className="telemetry-data-table overview-chart-data-table">', "the Overview demo chart exposes an expandable illustrative data alternative"),
+    (page, '<caption>{tr("overviewChartDataCaption")}', "the Overview chart data table explains that values are illustrative"),
+    (page, 'demoChartTickLabels.map((label, index)', "the Overview chart time axis follows the selected time window"),
+    (page, 'demoChartTimeAt(sample.elapsedFraction)', "Overview chart table timestamps follow the selected time window and locale"),
+    (page, "sample.requestsPerMinute", "Overview chart data table reads values from the chart's sample fixture"),
+    (demo, "export const chartSamples =", "the Overview chart and table share one illustrative sample fixture"),
+    (i18n, 'showOverviewChartData: "View illustrative chart data"', "the Overview chart data disclosure is localized in English"),
+    (i18n, 'showOverviewChartData: "نمایش داده‌های نمایشی نمودار"', "the Overview chart data disclosure is localized in Persian"),
+    (i18n, 'overviewChartDataCaption: "Illustrative request-rate samples across the selected {range} window.', "the Overview chart data caption identifies illustrative values in English"),
+    (i18n, 'overviewChartDataCaption: "نمونه‌های نمایشی نرخ درخواست در بازهٔ انتخاب‌شدهٔ {range}.', "the Overview chart data caption identifies illustrative values in Persian"),
     (page, "aria-pressed={range === item}", "the selected overview time range is announced"),
     (ROOT.joinpath("app/components/IncidentWorkspace.tsx").read_text(encoding="utf-8"), 'aria-pressed={filter === "active"}', "incident filters expose their selected state"),
     (ROOT.joinpath("app/components/IncidentWorkspace.tsx").read_text(encoding="utf-8"), "aria-pressed={selectedIncidentId === incident.id}", "the selected incident is announced"),
