@@ -827,7 +827,21 @@ The audit also corrects canonical repository/Pages links, the browser OIDC callb
 Do not repeat the completed PR #110–#126 test work unless a new regression is found. M01 manual device acceptance and M06 target-environment deployment evidence remain genuinely open. See \`docs/roadmap.md\` → “v1.0.0 release readiness” for the authoritative release gates.
 
 
-## Current handoff — frontend/API scope finding (2026-11-03)
+## Current handoff — PR #128 workspace-scoped telemetry UI merged (2026-11-03)
 
-The M04 workspace telemetry catalog and authenticated workspace Metrics/Logs/Traces backend routes exist, but \`TelemetryWorkspace\` still calls the legacy unscoped \`/api/v1/telemetry/*\` client methods. \`withLegacyGlobalReadGate\` intentionally returns 404 for those unscoped paths in staging and production. Therefore API-mode telemetry on the dashboard is not production-ready. Next implementation step: reuse the authenticated workspace selection/membership pattern from the M05 workspaces, wire the telemetry catalog and all three query paths to workspace routes, then add trace detail and correlation on that tenant-safe foundation.
+Repository: `pooya-labs/orbit`; default branch: `main`.
+- PR #128 (`feat(m04): scope telemetry dashboard reads to authenticated workspaces`) was squash-merged as `d495dbdf862855f542cb0ac018a0f093f22dd48c`.
+- Exact reviewed head: `affc4cd8a018ecfc8e42b0889d08292f427da7db`.
+- Before merge, CI run [41649607558](https://github.com/pooya-labs/orbit/actions/runs/41649607558), Security run [41649607623](https://github.com/pooya-labs/orbit/actions/runs/41649607623), and Windows NVDA smoke [41649607473](https://github.com/pooya-labs/orbit/actions/runs/41649607473) passed.
+- The browser now discovers the signed-in user's workspaces, verifies membership for the selected workspace, loads the workspace catalog/resource attributes, and uses workspace-scoped Metrics/Logs/Traces APIs. The public metadata handshake is deliberately unauthenticated; all subsequent workspace data reads still require the bearer token and backend membership check.
+- Legacy global telemetry requests remain available only for explicitly identified local `development` when browser OIDC is not configured. Unknown, staging, and production environments fail closed. A staging browser regression proves no legacy global read and no workspace query before sign-in.
+- Post-merge CI, Security, and Pages publication were triggered on `main` commit `d495dbdf862855f542cb0ac018a0f093f22dd48c`; record their final status before claiming release verification complete.
 
+### Next implementation — do not repeat completed work
+
+1. Implement a safe, workspace-scoped metric catalog/selection model beyond the demo-only `request_rate` series. Keep metric names and label dimensions allow-listed, enforce cardinality/query-cost bounds, validate selector inputs, and do not expose arbitrary PromQL.
+2. Add trace detail (trace lookup, span hierarchy/timing/status) and explicit log-to-trace correlation. Every detail/correlation request must retain workspace membership checks and tenant filters.
+3. Instrument the production Go API and background workers with bounded, useful OTLP metrics/traces/logs. Do not claim this is complete based only on the example workload.
+4. Keep the M01 human accessibility acceptance and all M06 target-environment deployment, identity, network, retention, recovery, and capacity gates open until real evidence exists. Keep tenant-facing production ingestion disabled.
+
+Do not repeat the already merged M06 recovery/security tests (#110–#126), the M01 browser/NVDA suites (#109, #113–#125), or the workspace UI migration in PR #128 unless a concrete regression is found. Redis/NATS application integration and resource-attribute allowlist expansion remain deferred under their existing ADR/policy gates.
