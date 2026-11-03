@@ -126,3 +126,13 @@ New browser coverage:
 The exact PR head `0f8d87245840d638d2a6ca886180683848282ca2` passed CI [41603839829](https://github.com/pooya16pg-spec/orbit/actions/runs/41603839829): all 4 jobs and **16/16 Playwright tests** (42.2 seconds), including the prior 12-view dark/light axe matrix, focus/hover states, loading/error states, Go tests/race/vet/build, PostgreSQL backup/restore, and the full Docker observability E2E. Security [41603839542](https://github.com/pooya16pg-spec/orbit/actions/runs/41603839542) passed all **13/13 jobs** including secret/dependency scans, image scans, and SBOMs.
 
 This closes the added automated interaction-state coverage. It does not replace manual keyboard-only acceptance or real NVDA/VoiceOver/TalkBack sessions. M01 remains open for human review and no WCAG conformance or screen-reader certification is claimed.
+
+## M01 all-view keyboard tab-order regression — merged PR #119 (2026-11-03)
+
+PR #119 was squash-merged into `main` as `3c51233db44804e8040bd76d01590dc0a682845e`.
+
+The Playwright suite now includes one complete keyboard-only path through all 13 primary navigation views. Starting from the document, the first Tab focuses the skip link; sequential native Tab presses then focus each navigation button in its real DOM order. Every button must expose `:focus-visible`; Enter activates it; the test asserts `aria-current="page"` and the matching announced page heading. The Overview assertion uses its actual English heading, “Good morning, team.”
+
+Exact PR head `3e08a689a31469c35efde72f99cc0bbdf11c2e4b` passed [CI run 41609723731](https://github.com/pooya16pg-spec/orbit/actions/runs/41609723731): all four jobs, including **17/17 Playwright tests**, Go race tests/vet/build, the complete telemetry E2E path, workspace A/B isolation, and PostgreSQL connection-pool recovery. [Security run 41609723791](https://github.com/pooya16pg-spec/orbit/actions/runs/41609723791) passed all **13/13 jobs**.
+
+This improves automated keyboard-navigation regression coverage. It does not replace human keyboard-only review, rendered-state visual review, or real NVDA/VoiceOver/TalkBack sessions. The manual M01 acceptance gate remains open; no WCAG conformance or screen-reader certification is claimed.
