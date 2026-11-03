@@ -42,6 +42,7 @@ export type TelemetryView = "Metrics" | "Logs" | "Traces";
 
 type TelemetryServiceOption = {
   id?: string;
+  last_discovered_at?: string;
   name: string;
   sources: string[];
   resource_attributes?: Record<string, unknown>;
