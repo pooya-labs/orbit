@@ -172,3 +172,5 @@ jobs:
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: 1
+      - name: Audit generated HTML accessibility structure
+        run: python3 scripts/check_accessibility_html.py
