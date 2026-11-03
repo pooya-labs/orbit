@@ -184,7 +184,7 @@ def main() -> int:
             and 'html[data-theme="light"]' not in rule_selector
         ]
         if not rules or not any(
-            re.search(r"color\\s*:\\s*var\\(--subtle\\)", body)
+            re.search(r"color\s*:\s*var\(--subtle\)", body)
             for body in rules
         ):
             fail(f"dark secondary text selector {selector} must use --subtle")
