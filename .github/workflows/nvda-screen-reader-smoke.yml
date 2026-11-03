@@ -19,10 +19,8 @@ jobs:
     name: Real NVDA Browse Mode heading navigation
     runs-on: windows-latest
     timeout-minutes: 20
-    # Experimental until the first hosted Windows run confirms reliable
-    # desktop and Speech Viewer automation. Keep failures visible without
-    # blocking the normal CI and Security checks while the harness matures.
-    continue-on-error: true
+    # The hosted Windows smoke test now exercises real NVDA speech and H-key
+    # navigation; failures are required PR checks rather than advisory results.
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
