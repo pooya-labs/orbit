@@ -1,8 +1,13 @@
 const { test, expect } = require("@playwright/test");
 const { AxeBuilder } = require("@axe-core/playwright");
+const packageVersion = require("../../package.json").version;
 
 test.beforeEach(async ({ page }) => {
   await page.goto("./");
+});
+
+test("footer version stays in sync with the application package version", async ({ page }) => {
+  await expect(page.locator(".footer-version")).toHaveText(`v${packageVersion}`);
 });
 
 // The sidebar animates color/background on theme and route changes. Axe must
