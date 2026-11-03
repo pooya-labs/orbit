@@ -143,6 +143,11 @@ jobs:
       - name: Verify authenticated workspace telemetry write-to-query isolation
         run: docker compose --profile observability run --rm workspace-tenant-isolation-smoke
 
+      - name: Verify PostgreSQL container restart and connection-pool recovery
+        env:
+          ORBIT_POSTGRES_RESTART_CONTROL_DIR: ${{ runner.temp }}/orbit-postgres-restart
+        run: bash scripts/postgres-restart-smoke.sh
+
       - name: Stop telemetry stack and demo
         if: always()
         run: docker compose --profile observability down -v --remove-orphans

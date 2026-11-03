@@ -73,3 +73,10 @@ PR #110 was squash-merged into `main` as `b42b4b56a82a2f977b373731ae6e85a1ceb076
 The new test logged **639 successful exports over its 20-second sustained phase** (about 32 successful exports/second in this CI topology). The complete real-dependency workspace smoke command, including the pre-existing workspace A/B write-to-query test, passed in 66.18 seconds. The 64-slot admission saturation, eight HTTP 503 overflows, 64 admitted forwards, and three 16-export recovery waves all passed before the steady phase.
 
 These are observed results from a single gateway process and CI-sized PostgreSQL/Collector services. The ~32 exports/second figure is not a target capacity or SLO claim. Do not infer p50/p95/p99, production throughput, multi-replica behavior, or host/network recovery from this CI run. Keep the target-environment load and production rollout gates open until evidence is collected on the intended deployment topology.
+
+
+## Real PostgreSQL container restart and same-pool recovery
+
+The CI observability stack now includes a coordinated restart regression. A Go integration test opens the repository against the actual Compose PostgreSQL service, warms and releases a pooled connection, and signals the runner through a shared temporary control directory. The runner stops the PostgreSQL container and signals completion. The same test must observe a failed pool ping; only then does the runner start the same Compose service again. The test waits for a successful query on the original repository/pool and verifies `pg_postmaster_start_time()` advanced across the restart.
+
+This verifies a real PostgreSQL process/container stop and start, not only a TCP proxy disconnect. It is still a single-node, clean-stop/restart CI test: it does not establish crash recovery after SIGKILL/power loss, disk failure, failover/replication, multi-zone network partition, or a production RPO/RTO.
