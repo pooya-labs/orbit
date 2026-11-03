@@ -308,3 +308,10 @@ The nav label color now changes instantly while only its background may animate.
 - Active nav `#127868`: 5.37:1 on white and 4.74:1 on its pale background.
 
 Exact PR head `8af075d01fd3178857e6aafe867d5f091a3525e6` passed [CI run 41599111532](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111532) (**4/4 jobs, 14/14 Playwright tests**) and [Security run 41599111683](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111683) (**13/13 jobs**). The same CI verified the full Docker telemetry pipeline, workspace isolation, and PostgreSQL restart regression. Manual screen-reader and rendered-state review remains open.
+
+
+### PR #120 — release-version display consistency (2026-11-03)
+
+PR #120 was squash-merged into main as 0348f8831d8f008970ad6c42532620a12ff5a0e0. The dashboard footer now displays the existing application release version v0.10.0; a browser regression reads the version from package.json and asserts the footer matches it. Exact PR head 23625b2916457947b44611872508d469ca064130 passed all four CI jobs, including 18/18 Playwright tests and the full Docker telemetry/workspace-isolation/PostgreSQL-recovery job, plus all 13/13 Security jobs. After merge, Pages deployment [41612768102](https://github.com/pooya16pg-spec/orbit/actions/runs/41612768102), release workflow [41612863226](https://github.com/pooya16pg-spec/orbit/actions/runs/41612863226), and post-merge Security [41612767938](https://github.com/pooya16pg-spec/orbit/actions/runs/41612767938) succeeded. See project-context.md for the exact remaining gates and final post-merge CI status.
+
+The human M01 acceptance gate remains open. Use the step-by-step manual accessibility guide (manual-acceptance-guide.md); automated browser/axe success is not a substitute for actual NVDA, TalkBack, VoiceOver, keyboard-only, and visual review.
