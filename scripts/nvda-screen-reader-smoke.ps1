@@ -230,10 +230,7 @@ enableOnPageLoad = True
   $edgeWindowHandle = $edgeHandleMatch.Groups[1].Value
   $edgeTree = Invoke-WinApp -Arguments @("ui", "inspect", "-w", $edgeWindowHandle)
   $cleanEdgeTree = [regex]::Replace($edgeTree, "\x1B\[[0-9;]*m", "")
-  $webDocumentMatch = [regex]::Match(
-    $cleanEdgeTree,
-    '(?im)^\s*(doc-[a-z0-9-]+)\s+Document\s+"ORBIT — Systems Observatory"',
-  )
+  $webDocumentMatch = [regex]::Match($cleanEdgeTree, '(?im)^\s*(doc-[a-z0-9-]+)\s+Document\s+"ORBIT — Systems Observatory"')
   if (-not $webDocumentMatch.Success) {
     throw ("Could not identify the ORBIT web-document selector." + [Environment]::NewLine + $cleanEdgeTree)
   }
