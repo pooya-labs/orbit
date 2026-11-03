@@ -25,7 +25,35 @@ const (
 )
 
 var ErrNotConfigured = errors.New("telemetry backend is not configured")
+var ErrWorkspaceTraceNotFound = errors.New("workspace trace not found")
 
+var traceIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{32}package telemetry
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"io"
+	"net/http"
+	"net/url"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+const (
+	maxResponseBytes = 2 << 20
+	maxResultLimit   = 100
+	maxServiceCount  = 250
+	metricName       = "orbit_demo_requests_total"
+)
+
+)
 var sloRoutePattern = regexp.MustCompile("^/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$")
 
 type AvailabilityEvents struct {
@@ -126,6 +154,13 @@ func ValidateServiceName(value string) error {
 		return fmt.Errorf("service must contain only letters, numbers, dots, underscores, colons, or hyphens")
 	}
 	return nil
+}
+
+type TraceDetailResult struct {
+	Source    string          `json:"source"`
+	TraceID   string          `json:"trace_id"`
+	QueriedAt time.Time       `json:"queried_at"`
+	Data      json.RawMessage `json:"data"`
 }
 
 type QueryResult struct {
@@ -575,6 +610,92 @@ func (c *Client) WorkspaceTraces(ctx context.Context, workspaceID string, window
 	payload,err:=c.get(ctx,c.tempoURL,"/api/search",values)
 	if err!=nil{return QueryResult{},fmt.Errorf("query workspace Tempo: %w",err)}
 	return QueryResult{Source:"tempo",Window:window.Name,QueriedAt:now,Query:traceQL,Service:service,Limit:limit,Data:nonEmptyJSON(payload.Traces)},nil
+}
+
+// WorkspaceTrace retrieves one Tempo trace only after the upstream response proves
+// that every returned resource batch belongs to the requested workspace. Tempo's
+// trace-ID lookup is not itself tenant-scoped, so this check must fail closed.
+func (c *Client) WorkspaceTrace(ctx context.Context, workspaceID, traceID string) (TraceDetailResult, error) {
+	if err := validateWorkspaceID(workspaceID); err != nil {
+		return TraceDetailResult{}, err
+	}
+	normalizedTraceID := strings.ToLower(strings.TrimSpace(traceID))
+	if !traceIDPattern.MatchString(normalizedTraceID) || normalizedTraceID == strings.Repeat("0", 32) {
+		return TraceDetailResult{}, errors.New("trace ID must be a non-zero 32-character hexadecimal value")
+	}
+	if c == nil || c.tempoURL == "" {
+		return TraceDetailResult{}, ErrNotConfigured
+	}
+
+	now := c.now().UTC()
+	body, err := c.getRaw(ctx, c.tempoURL, "/api/v2/traces/"+normalizedTraceID, nil)
+	if err != nil {
+		var statusErr *upstreamHTTPError
+		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusNotFound {
+			return TraceDetailResult{}, ErrWorkspaceTraceNotFound
+		}
+		return TraceDetailResult{}, fmt.Errorf("read workspace trace from Tempo: %w", err)
+	}
+
+	var response struct {
+		Batches []struct {
+			Resource struct {
+				Attributes []struct {
+					Key   string `json:"key"`
+					Value struct {
+						StringValue string `json:"stringValue"`
+					} `json:"value"`
+				} `json:"attributes"`
+			} `json:"resource"`
+			ScopeSpans []struct {
+				Spans []struct {
+					TraceID string `json:"traceId"`
+				} `json:"spans"`
+			} `json:"scopeSpans"`
+		} `json:"batches"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return TraceDetailResult{}, fmt.Errorf("decode Tempo trace detail: %w", err)
+	}
+	if len(response.Batches) == 0 {
+		return TraceDetailResult{}, ErrWorkspaceTraceNotFound
+	}
+
+	spanCount := 0
+	for _, batch := range response.Batches {
+		batchWorkspaceID := ""
+		for _, attribute := range batch.Resource.Attributes {
+			if attribute.Key != "orbit.workspace.id" {
+				continue
+			}
+			value := strings.TrimSpace(attribute.Value.StringValue)
+			if batchWorkspaceID != "" && !strings.EqualFold(batchWorkspaceID, value) {
+				return TraceDetailResult{}, ErrWorkspaceTraceNotFound
+			}
+			batchWorkspaceID = value
+		}
+		if batchWorkspaceID == "" || !strings.EqualFold(batchWorkspaceID, workspaceID) {
+			return TraceDetailResult{}, ErrWorkspaceTraceNotFound
+		}
+		for _, scope := range batch.ScopeSpans {
+			for _, span := range scope.Spans {
+				if !strings.EqualFold(span.TraceID, normalizedTraceID) {
+					return TraceDetailResult{}, ErrWorkspaceTraceNotFound
+				}
+				spanCount++
+			}
+		}
+	}
+	if spanCount == 0 {
+		return TraceDetailResult{}, ErrWorkspaceTraceNotFound
+	}
+
+	return TraceDetailResult{
+		Source:    "tempo",
+		TraceID:   normalizedTraceID,
+		QueriedAt: now,
+		Data:      body,
+	}, nil
 }
 
 func (c *Client) Services(ctx context.Context, window QueryWindow) (ServiceDiscoveryResult, error) {
@@ -1105,6 +1226,14 @@ func (c *Client) get(ctx context.Context, baseURL, path string, values url.Value
 	return payload, nil
 }
 
+type upstreamHTTPError struct {
+	StatusCode int
+}
+
+func (e *upstreamHTTPError) Error() string {
+	return fmt.Sprintf("upstream returned HTTP %d", e.StatusCode)
+}
+
 func (c *Client) getRaw(ctx context.Context, baseURL, path string, values url.Values) (json.RawMessage, error) {
 	target := baseURL + path + "?" + values.Encode()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
@@ -1127,7 +1256,7 @@ func (c *Client) getRaw(ctx context.Context, baseURL, path string, values url.Va
 		return nil, fmt.Errorf("upstream response exceeded %d bytes", maxResponseBytes)
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("upstream returned HTTP %d", response.StatusCode)
+		return nil, &upstreamHTTPError{StatusCode: response.StatusCode}
 	}
 	if !json.Valid(body) {
 		return nil, errors.New("upstream returned invalid JSON")
