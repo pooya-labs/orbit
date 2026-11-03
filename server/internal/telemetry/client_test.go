@@ -34,12 +34,17 @@ func TestParseMetricGroupByUsesSafeAllowList(t *testing.T) {
 		},
 		{
 			name:  "trims sorts and removes duplicates",
-			input: " service_version,cloud_region,cloud_region ",
-			want:  []string{"cloud_region", "service_version"},
+			input: " service_version,deployment_environment,deployment_environment ",
+			want:  []string{"deployment_environment", "service_version"},
 		},
 		{
-			name:    "rejects arbitrary Prometheus labels",
-			input:   "__name__",
+			name:    "rejects high-cardinality labels",
+			input:   "cloud_region",
+			wantErr: true,
+		},
+		{
+			name:    "rejects more than three dimensions",
+			input:   "instance,service_version,deployment_environment,instance",
 			wantErr: true,
 		},
 	}
@@ -138,7 +143,7 @@ func TestMetricsQueriesOnlyFixedPromQLAndReturnsFreshness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo", nil)
+	result, err := client.Metrics(context.Background(), QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}, "orbit-telemetry-demo", MetricRequestRate, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +387,7 @@ func TestWorkspaceQueriesAlwaysConstrainBackendTenant(t *testing.T) {
 			w.Header().Set("Content-Type","application/json"); _,_=w.Write([]byte(`{"status":"success","data":{"result":[]}}`))
 		})); defer server.Close()
 		client,_:=NewClient(server.URL,"","")
-		if _,err:=client.WorkspaceMetrics(context.Background(),workspaceID,QueryWindow{Name:"1h",Duration:time.Hour,Step:"1m"},"api-gateway",nil);err!=nil{t.Fatal(err)}
+		if _,err:=client.WorkspaceMetrics(context.Background(),workspaceID,QueryWindow{Name:"1h",Duration:time.Hour,Step:"1m"},"api-gateway",MetricRequestRate,nil);err!=nil{t.Fatal(err)}
 	})
 	t.Run("loki",func(t *testing.T){
 		server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
@@ -407,7 +412,7 @@ func TestWorkspaceQueriesAlwaysConstrainBackendTenant(t *testing.T) {
 func TestWorkspaceQueriesRejectMalformedWorkspaceIDBeforeBackendCall(t *testing.T) {
 	client,_:=NewClient("http://127.0.0.1:1","http://127.0.0.1:1","http://127.0.0.1:1")
 	window:=QueryWindow{Name:"1h",Duration:time.Hour,Step:"1m"}
-	if _,err:=client.WorkspaceMetrics(context.Background(),"not-a-uuid",window,"api-gateway",nil);err==nil{t.Fatal("expected invalid workspace ID")}
+	if _,err:=client.WorkspaceMetrics(context.Background(),"not-a-uuid",window,"api-gateway",MetricRequestRate,nil);err==nil{t.Fatal("expected invalid workspace ID")}
 	if _,err:=client.WorkspaceLogs(context.Background(),"not-a-uuid",window,"api-gateway",10);err==nil{t.Fatal("expected invalid workspace ID")}
 	if _,err:=client.WorkspaceTraces(context.Background(),"not-a-uuid",window,"api-gateway",10);err==nil{t.Fatal("expected invalid workspace ID")}
 }
@@ -470,7 +475,7 @@ func TestWorkspaceBackendQueriesRemainIsolatedAcrossSequentialWorkspaceReads(t *
 	window := QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"}
 	for _, workspaceID := range []string{workspaceA, workspaceB} {
 		expectedWorkspace = workspaceID
-		if _, err := client.WorkspaceMetrics(context.Background(), workspaceID, window, "api-gateway", nil); err != nil {
+		if _, err := client.WorkspaceMetrics(context.Background(), workspaceID, window, "api-gateway", MetricRequestRate, nil); err != nil {
 			t.Fatalf("workspace %s metrics query: %v", workspaceID, err)
 		}
 		if _, err := client.WorkspaceLogs(context.Background(), workspaceID, window, "api-gateway", 10); err != nil {
