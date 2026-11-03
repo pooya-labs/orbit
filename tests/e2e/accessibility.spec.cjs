@@ -152,7 +152,7 @@ test("Metrics chart table renders Prometheus samples and updates with the API ti
     });
 
     if (url.pathname === "/api/v1/meta") {
-      return json({ name: "orbit-api", version: "0.10.0", environment: "playwright" });
+      return json({ name: "orbit-api", version: "0.10.0", environment: "development" });
     }
     if (url.pathname === "/api/v1/workspaces") {
       return json({ data: [] });
@@ -247,6 +247,46 @@ test("Metrics chart table renders Prometheus samples and updates with the API ti
     })),
   }));
   expect(metricsViolations, JSON.stringify(metricsViolations, null, 2)).toEqual([]);
+});
+
+test("staging telemetry requires workspace authentication and never calls legacy global endpoints", async ({ page }) => {
+  const legacyRequests = [];
+  const workspaceRequests = [];
+  await page.route("**/api/v1/**", async (route) => {
+    const url = new URL(route.request().url());
+    const json = (body, status = 200) => route.fulfill({
+      status,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+
+    if (url.pathname === "/api/v1/meta") {
+      return json({ name: "orbit-api", version: "0.10.0", environment: "staging" });
+    }
+    if (url.pathname === "/api/v1/workspaces") {
+      workspaceRequests.push(url.pathname);
+      return json({ data: [] });
+    }
+    if (url.pathname.startsWith("/api/v1/telemetry/")) {
+      legacyRequests.push(url.pathname);
+      return json({ error: { code: "legacy_route_disabled", message: "Unscoped telemetry reads are disabled." } }, 404);
+    }
+    return json({ error: { code: "not_found", message: "Unhandled browser-test endpoint" } }, 404);
+  });
+
+  await page.getByRole("button", { name: "Connect a source" }).click();
+  await page.getByLabel("API base URL").fill("https://api.example.test");
+  await page.getByRole("button", { name: "Test and connect" }).click();
+
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  await navigation.getByRole("button", { name: "Metrics", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Metrics" })).toBeVisible();
+  await expect(page.locator(".incident-inline-notice")).toContainText(
+    "Browser sign-in is not configured for this deployment. Workspace telemetry is unavailable.",
+  );
+
+  await expect.poll(() => legacyRequests.length).toBe(0);
+  await expect.poll(() => workspaceRequests.length).toBe(0);
 });
 
 test("axe finds no WCAG 2.1 A/AA or WCAG 2.2 AA violations on Overview", async ({ page }) => {
