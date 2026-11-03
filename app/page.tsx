@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getMetadata, listWorkspaceIncidents, listWorkspaceServices, listWorkspaces } from "../lib/orbit/client";
 import type { ApiMetadata, IncidentSummary, ServiceSummary } from "../lib/orbit/contracts";
-import { chartArea, chartPoints, demoIncidents, demoServices } from "../lib/orbit/demo";
+import { chartArea, chartPoints, chartSamples, demoIncidents, demoServices } from "../lib/orbit/demo";
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../lib/orbit/i18n";
 import type { ReactNode } from "react";
 import TelemetryWorkspace, { type TelemetryView } from "./components/TelemetryWorkspace";
@@ -236,6 +236,14 @@ export default function Home() {
   const [themeReady, setThemeReady] = useState(false);
   const tr = (key: TranslationKey) => t(language, key);
   const [range, setRange] = useState("1 hour");
+  const demoChartWindowMinutes = range === "6 hours" ? 360 : range === "24 hours" ? 1440 : 60;
+  const demoChartTimeAt = (elapsedFraction: number) =>
+    new Intl.DateTimeFormat(formatLocale(language), { hour: "2-digit", minute: "2-digit" })
+      .format(Date.now() - ((1 - elapsedFraction) * demoChartWindowMinutes * 60_000));
+  const demoChartTickLabels = Array.from({ length: 7 }, (_, index) => demoChartTimeAt(index / 6));
+  const demoChartRangeLabel = language === "fa"
+    ? range === "1 hour" ? "۱ ساعت" : range === "6 hours" ? "۶ ساعت" : "۲۴ ساعت"
+    : range;
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -616,10 +624,32 @@ export default function Home() {
                   <polyline points={chartPoints} fill="none" stroke="#65d9c1" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
                   <circle cx="494" cy="20" r="4" fill="#65d9c1" stroke="#101820" strokeWidth="2" vectorEffect="non-scaling-stroke" />
                 </svg>
-                <div className="chart-x-labels"><span>09:00</span><span>09:10</span><span>09:20</span><span>09:30</span><span>09:40</span><span>09:50</span><span>10:00</span></div>
+                <div className="chart-x-labels">{demoChartTickLabels.map((label, index) => <span key={index}>{label}</span>)}</div>
               </div>
             </div>
-            <div className="chart-legend"><span><i className="legend-line" /> {tr("requestsPerMin")}</span><span><i className="legend-dash" /> {tr("previousPeriod")}</span><span className="chart-footnote">{tr("illustrativeTelemetry")} · {range}</span></div>
+            <div className="chart-legend"><span><i className="legend-line" /> {tr("requestsPerMin")}</span><span><i className="legend-dash" /> {tr("previousPeriod")}</span><span className="chart-footnote">{tr("illustrativeTelemetry")} · {demoChartRangeLabel}</span></div>
+            <details className="telemetry-data-table overview-chart-data-table">
+              <summary>{tr("showOverviewChartData")}</summary>
+              <div className="telemetry-data-table-scroll">
+                <table>
+                  <caption>{tr("overviewChartDataCaption").replace("{range}", demoChartRangeLabel)}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{tr("chartTime")}</th>
+                      <th scope="col">{tr("chartValue")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chartSamples.map((sample) => (
+                      <tr key={sample.id}>
+                        <td>{demoChartTimeAt(sample.elapsedFraction)}</td>
+                        <td>{new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 0 }).format(sample.requestsPerMinute)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
           </section>
           ) : null}
 
