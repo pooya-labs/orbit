@@ -673,7 +673,7 @@ export default function TelemetryWorkspace({
     ) ?? [];
     const byId = new Map(spans.map((span) => [span.spanId, span]));
     const parseNanos = (value: string): bigint | null => {
-      if (!/^\\d+$/.test(value)) return null;
+      if (!/^\d+$/.test(value)) return null;
       try {
         return BigInt(value);
       } catch {
