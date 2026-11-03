@@ -630,7 +630,7 @@ export default function Home() {
             <div className="chart-legend"><span><i className="legend-line" /> {tr("requestsPerMin")}</span><span><i className="legend-dash" /> {tr("previousPeriod")}</span><span className="chart-footnote">{tr("illustrativeTelemetry")} · {demoChartRangeLabel}</span></div>
             <details className="telemetry-data-table overview-chart-data-table">
               <summary>{tr("showOverviewChartData")}</summary>
-              <div className="telemetry-data-table-scroll">
+              <div className="telemetry-data-table-scroll" role="region" aria-label={tr("overviewChartDataCaption").replace("{range}", demoChartRangeLabel)} tabIndex={0}>
                 <table>
                   <caption>{tr("overviewChartDataCaption").replace("{range}", demoChartRangeLabel)}</caption>
                   <thead>
