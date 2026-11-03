@@ -553,7 +553,7 @@ PR #109 continues on `feat/m01-accessibility-review`. In addition to the keyboar
 
 Audit-log filters and telemetry metric-group controls already exposed selected state and were preserved. The static accessibility contract now checks these additions; `docs/accessibility-review.md` carries the user-facing implementation and manual-acceptance checklist.
 
-The code head `086137db0a05fbdf8ca050a6f8ce4730a31bb0ba` passed CI run `41473967465` (all four jobs) and Security run `41473967524` (all 13 jobs). The web job explicitly passed the accessibility contract, TypeScript typecheck, and production build. All 11 expected CycloneDX SBOM artifacts were uploaded and unexpired. These automated results do not close manual acceptance: keyboard-only browser testing, NVDA/VoiceOver/TalkBack, contrast in both themes, chart/data alternatives, and final control review remain open. Do not merge PR #109 or mark M01 accessibility complete solely from these CI results.
+The code head `086137db0a05fbdf8ca050a6f8ce4730a31bb0ba` passed CI run `41473967465` (all four jobs) and Security run `41473967524` (all 13 jobs). The web job explicitly passed the accessibility contract, TypeScript typecheck, and production build. All 11 expected CycloneDX SBOM artifacts were uploaded and unexpired. These automated results do not close manual acceptance: keyboard-only browser testing, NVDA/VoiceOver/TalkBack, contrast in both themes, chart/data alternatives, and final control review remain open. Do not mark M01 accessibility complete solely from automated CI results; PR #109 has since merged the tested baseline while the human acceptance gate remains open.
 
 Production tenant ingestion remains disabled until the environment-specific M06 gates elsewhere in this document and `docs/roadmap.md` have recorded evidence.
 
@@ -605,3 +605,21 @@ Current code/test head: `5e1e37cf789bfed9baf971f914a9df895e328ea3` on `feat/m01-
 - PR #109 remains open and unmerged. `main` is unchanged.
 
 Automated Chromium/axe checks do not replace M01's manual acceptance: keyboard-only operation across all views/forms, NVDA/VoiceOver/TalkBack behavior, responsive zoom/reflow and RTL, reduced-motion behavior, rendered contrast in all interactive states, and a human review of chart/table reading experience and visible controls remain outstanding. Do not mark M01 complete or merge PR #109 solely from these CI results.
+
+
+## M01 accessibility baseline merge and current handoff — 2026-11-03
+
+PR #109 was squash-merged into `main` as `e9e7d74387dddcf76226cfab32dd979f56af4dc9`.
+
+The merged application/test head was `5e1e37cf789bfed9baf971f914a9df895e328ea3`; the two subsequent commits before merge changed only the accessibility review, roadmap, and handoff documentation. Final verification:
+- 14/14 Playwright browser tests passed, including 24 axe scans (12 primary dashboard views in both dark and light themes), keyboard navigation and mobile drawer focus handling, reduced motion, responsive reflow, and keyboard chart-table scrolling.
+- 68 accessibility source-contract checks, theme contrast regression checks, TypeScript typecheck, production build, and generated HTML audit (5 pages / 791 elements) passed.
+- Go race tests, vet, build, module-lock verification, and PostgreSQL backup/restore CI round-trip passed.
+- Full local telemetry E2E passed: all three OTLP signals reached and were queryable from the configured local backends through ORBIT API; Prometheus scraped the Collector; authenticated workspace A/B write-to-query isolation passed.
+- Latest Security run `41578754427` passed all 13 jobs, including dependency/secret checks, image scans, and CycloneDX SBOM generation.
+
+The temporary feature-branch GitHub Pages publishing trigger and alternate preview environment routing are removed by the post-merge cleanup commit. The canonical Pages deployment remains on the protected `github-pages` environment and is published from `main` only.
+
+**M01 is not fully closed:** the human keyboard-only and rendered-state review, and real NVDA/VoiceOver/TalkBack sessions, remain open in `docs/roadmap.md` and `docs/accessibility-review.md`. Remote automation did not run those assistive technologies and does not establish WCAG conformance. Keep this explicitly open until actual OS/browser/AT versions and findings are recorded.
+
+Next repository-owned hardening candidate: add deterministic sustained-load/backpressure/recovery coverage at the real PostgreSQL + Collector dependency boundary. Existing in-process 512-export concurrency tests and 64-slot burst tests are not production load certification; target-environment throughput, percentile latency, saturation, and recovery evidence remain separate M06 gates.

@@ -2,7 +2,7 @@
 
 ## Status
 
-The keyboard and landmark baseline is implemented on `feat/m01-accessibility-review`. The complete M01 accessibility acceptance item remains open because actual assistive-technology and visual contrast checks require manual testing.
+The keyboard and landmark baseline was merged into `main` via PR #109 (squash commit `e9e7d74387dddcf76226cfab32dd979f56af4dc9`). The remaining M01 accessibility acceptance item stays open for actual human keyboard, assistive-technology, and rendered-state visual review.
 
 ## Implemented baseline
 
@@ -61,7 +61,7 @@ Coverage:
 13. Reduced-motion preference disables smooth scrolling and long transitions.
 14. Overview reflows at a 320 CSS-pixel viewport without page-level horizontal overflow; its named chart-table scroll region accepts keyboard focus and scrolls horizontally with ArrowRight.
 
-The same CI run's Go API tests/build and workflow action-pin policy jobs passed. The full local telemetry pipeline end-to-end job was still running at the latest status check; do not describe the entire CI workflow as green until it completes successfully.
+The same CI run's Go API tests/build and workflow action-pin policy jobs passed. The full local telemetry pipeline end-to-end job subsequently completed successfully in CI run 41578302352 on this exact application/test head, verifying OTLP metrics/logs/traces through ORBIT API, Prometheus Collector scrape, workspace A/B isolation, and cleanup.
 
 The latest [Security run 41578302399](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302399) completed all **13 jobs successfully**, including the full-history secret scan, dependency review, API/Collector/Caddy/Tempo image scans, and all Compose image scans with SBOM generation. Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) passed. The latest branch Pages deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) succeeded; the public preview is https://pooya16pg-spec.github.io/orbit/.
 
@@ -83,3 +83,18 @@ Before closing the M01 accessibility review, test the deployed and local applica
 4. Control audit: confirm each visible control has a real action or is clearly presented as unavailable; verify that the Notifications control opens the Notifications view, and review the unavailable workspace, settings, incident-options, and help affordances.
 
 Record browser/OS/assistive-technology versions, findings, and remediations here. Do not claim screen-reader support or WCAG conformance solely from passing static checks or the automated Chromium/axe suite.
+
+
+## M01 baseline merged — 2026-11-03
+
+PR #109 was squash-merged into `main` as `e9e7d74387dddcf76226cfab32dd979f56af4dc9`. The merge contains the keyboard/landmark and chart-table baseline described above.
+
+Verified evidence:
+- Web CI: 14/14 Playwright tests passed (14 tests, 35.8s), including 24 axe view/theme scans across all 12 primary views in dark and light themes, reduced-motion handling, keyboard navigation, drawer focus handling, 320 CSS-pixel reflow, and keyboard scrolling of the chart-data table.
+- Static accessibility contract: 68 checks passed; contrast regression guard passed; generated HTML audit passed (5 pages / 791 elements).
+- TypeScript typecheck and production build passed.
+- Go race tests, vet, build, module-lock check, and PostgreSQL backup/restore round-trip passed.
+- Local telemetry E2E passed: metrics, logs, and traces reached their backends and were queryable through the ORBIT API; Prometheus scraped the Collector; authenticated workspace A/B telemetry write-to-query isolation passed.
+- Security run 41578754427 passed all 13 jobs on the latest documentation/code head, including image scans and the CycloneDX SBOM set. Pages-source check and the temporary branch deployment also succeeded before cleanup.
+
+The automated baseline is merged, but the manual M01 acceptance checkbox remains open. No NVDA, VoiceOver, or TalkBack session was run in the remote CI environment; no WCAG conformance or screen-reader certification is claimed. Rendered visual-state contrast and human keyboard/chart-table review remain open.

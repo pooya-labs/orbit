@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-      # Temporary live preview: this branch publishes over the single Pages site.
-      - feat/m01-accessibility-review
   workflow_dispatch:
 
 permissions:
@@ -78,8 +76,7 @@ jobs:
   deploy:
     name: Publish website
     environment:
-      # Keep main on its protected environment; use a separate environment for the temporary branch preview.
-      name: ${{ github.ref == 'refs/heads/main' && 'github-pages' || 'github-pages-preview' }}
+      name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
