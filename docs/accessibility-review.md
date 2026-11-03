@@ -138,3 +138,20 @@ The Playwright suite now includes one complete keyboard-only path through all 13
 Exact PR head `3e08a689a31469c35efde72f99cc0bbdf11c2e4b` passed [CI run 41609723731](https://github.com/pooya16pg-spec/orbit/actions/runs/41609723731): all four jobs, including **17/17 Playwright tests**, Go race tests/vet/build, the complete telemetry E2E path, workspace A/B isolation, and PostgreSQL connection-pool recovery. [Security run 41609723791](https://github.com/pooya16pg-spec/orbit/actions/runs/41609723791) passed all **13/13 jobs**.
 
 This improves automated keyboard-navigation regression coverage. It does not replace human keyboard-only review, rendered-state visual review, or real NVDA/VoiceOver/TalkBack sessions. The manual M01 acceptance gate remains open; no WCAG conformance or screen-reader certification is claimed.
+
+
+## M01 Windows NVDA automation — PR #124 and PR #125 (2026-11-03)
+
+PR #124 added a hosted Windows smoke test that installs NVDA and the Microsoft WinApp CLI, builds the exact pull-request static export, opens it in Edge, and reads the real NVDA Speech Viewer text through Windows UI Automation. The test ran NVDA 2026.2 and verified Browse Mode H navigation:
+- `OBSERVE`, `INVESTIGATE`, and `DELIVER` were announced as level-two headings.
+- The Overview page title, “Good morning, team.”, was announced as a level-one heading.
+- Exact PR-head run [41633391216](https://github.com/pooya-labs/orbit/actions/runs/41633391216) passed.
+
+PR #125 extends the same real NVDA runner through the entire primary navigation. After Ctrl+Home announces the skip link, native Tab reaches the Overview navigation button; sequential Tab and Enter then traverse and activate every remaining view. The Speech Viewer captured each updated page title:
+`Service map`, `Services`, `Infrastructure`, `Metrics`, `Traces`, `Logs`, `Incidents`, `Deployments`, `Alert rules`, `Notifications`, `SLOs`, and `Audit log`.
+
+The exact tested script head was `e359be15216cccc9aaf48e11dd89b7475f9a9eff`; the real Windows NVDA workflow [41637653806](https://github.com/pooya-labs/orbit/actions/runs/41637653806) passed. This validates the generated NVDA speech sequence on the hosted Windows/Edge environment. The runner reported no physical/default audio device, so this is not evidence of audible playback through speakers or headphones.
+
+### Acceptance boundary
+
+The automation covers Browse Mode heading navigation and route-change announcements for all 13 primary views. It does not replace a human keyboard-only review, a human NVDA session with audible output, Android TalkBack, Apple VoiceOver, or rendered-state visual review. M01 remains open for those checks; no WCAG conformance or screen-reader certification is claimed.

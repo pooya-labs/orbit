@@ -779,3 +779,20 @@ Current main: 0348f8831d8f008970ad6c42532620a12ff5a0e0. PR #120 is squash-merged
 - Durable history: policy owner must approve retention/archive/legal requirements before a TTL or archive implementation is built.
 
 No production tenant ingestion is enabled. Unknown infrastructure or policy choices must remain open; do not fabricate environment evidence.
+
+
+## Current handoff — ORBIT PR #125 NVDA all-view coverage (2026-11-03)
+
+Base `main` before this follow-up: `832ed622ce855a9263703a493f7a28d96c913d08` (PR #124 is merged; its post-merge CI, Security, Pages deployment, and release workflow all passed).
+
+PR #125 (`test(a11y): verify NVDA announcements across all dashboard views`) extends the existing Windows-hosted NVDA Speech Viewer test. The tested script head is `e359be15216cccc9aaf48e11dd89b7475f9a9eff`; workflow run [41637653806](https://github.com/pooya-labs/orbit/actions/runs/41637653806) passed. Actual NVDA 2026.2 Speech Viewer output confirmed:
+- Ctrl+Home announces the skip link.
+- Tab announces the Overview navigation button.
+- Sequential Tab/Enter activates the remaining 12 navigation views and NVDA announces each updated page heading.
+- The existing H-key check still announces OBSERVE, INVESTIGATE, and DELIVER as level-two headings and the Overview title as level one.
+
+This is test-only work; no dashboard runtime, API, database, authentication, telemetry, or production-ingress behavior changes. The Windows runner has no physical/default audio device: its Speech Viewer transcript validates NVDA's generated announcement sequence, not audible playback through hardware.
+
+M01 is still open for human keyboard-only and rendered-state review, an actual human NVDA session with audible output, and real Android TalkBack and Apple VoiceOver sessions. Do not claim WCAG conformance. Do not repeat the already merged M06 repository regression suites (#110, #111, #112, #115), nor the completed M01 browser/navigation regressions (#113, #114, #116, #119) or the NVDA smoke setup (#124/#125).
+
+The external M06 gates remain unchanged: target host/cloud, OIDC provider, DNS/ACME/firewall/trusted-proxy topology, managed/HA PostgreSQL and off-host backups/PITR with measured RPO/RTO, multi-replica target-environment capacity/recovery evidence, and approved durable-history retention policy are still required before production tenant ingestion or rollout. Redis/NATS remain deferred under ADR 0004 until measured demand justifies them.

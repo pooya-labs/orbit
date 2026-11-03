@@ -285,8 +285,61 @@ public static class OrbitWin32Cursor {
     throw ("NVDA did not announce the current page title as a level-one heading: " + $pageTitleSpeech)
   }
 
+  # Ctrl+Home moves NVDA's browse caret to the first document target, the
+  # skip link. The next native Tab reaches Overview, then the remaining 12
+  # primary-view buttons in DOM order.
+  Write-Host "=== Verify NVDA keyboard navigation and live page announcements across all views ==="
+  $beforeSkipLink = Get-SpeechText
+  Invoke-WinApp -Arguments @("ui", "send-keys", "ctrl+home", "-a", "msedge", "--via", "send-input") | Write-Host
+  $skipLinkSpeech = Wait-SpeechDelta -Before $beforeSkipLink -ExpectedPattern "(?i)Skip to main content" -TimeoutSeconds 8
+  if ($skipLinkSpeech -notmatch "(?i)Skip to main content") {
+    throw ("NVDA Ctrl+Home did not announce the document's first target (skip link): " + $skipLinkSpeech)
+  }
+  Write-Host ("NVDA Ctrl+Home -> skip link: " + $skipLinkSpeech)
+
+  $beforeOverview = Get-SpeechText
+  Invoke-WinApp -Arguments @("ui", "send-keys", "tab", "-a", "msedge", "--via", "send-input") | Write-Host
+  $overviewFocusSpeech = Wait-SpeechDelta -Before $beforeOverview -ExpectedPattern "Overview" -TimeoutSeconds 8
+  if ($overviewFocusSpeech -notmatch "Overview") {
+    throw ("NVDA did not announce the Overview navigation button after the skip link: " + $overviewFocusSpeech)
+  }
+  Write-Host ("NVDA Tab -> Overview button: " + $overviewFocusSpeech)
+
+  $navigationTargets = @(
+    "Service map",
+    "Services",
+    "Infrastructure",
+    "Metrics",
+    "Traces",
+    "Logs",
+    "Incidents",
+    "Deployments",
+    "Alert rules",
+    "Notifications",
+    "SLOs",
+    "Audit log"
+  )
+
+  foreach ($view in $navigationTargets) {
+    $beforeFocus = Get-SpeechText
+    Invoke-WinApp -Arguments @("ui", "send-keys", "tab", "-a", "msedge", "--via", "send-input") | Write-Host
+    $focusSpeech = Wait-SpeechDelta -Before $beforeFocus -ExpectedPattern ([regex]::Escape($view)) -TimeoutSeconds 8
+    if ($focusSpeech -notmatch [regex]::Escape($view)) {
+      throw ("NVDA did not announce the '" + $view + "' navigation button in native Tab order: " + $focusSpeech)
+    }
+
+    $beforeActivation = Get-SpeechText
+    Invoke-WinApp -Arguments @("ui", "send-keys", "enter", "-a", "msedge", "--via", "send-input") | Write-Host
+    $pageHeadingSpeech = Wait-SpeechDelta -Before $beforeActivation -ExpectedPattern ([regex]::Escape($view)) -TimeoutSeconds 10
+    if ($pageHeadingSpeech -notmatch [regex]::Escape($view)) {
+      throw ("NVDA did not announce the '" + $view + "' page heading after Enter activation: " + $pageHeadingSpeech)
+    }
+    Write-Host ("NVDA Tab/Enter -> " + $view + " : " + $pageHeadingSpeech)
+  }
+
   Write-Host "=== NVDA screen-reader smoke test passed ==="
-  Write-Host "NVDA Browse Mode single-letter H navigation announced OBSERVE, INVESTIGATE, and DELIVER as headings."
+  Write-Host "NVDA Browse Mode H navigation announced all three sidebar group headings and the Overview H1."
+  Write-Host "NVDA sequential Tab/Enter navigation announced all 13 primary views, including the skip link."
   Write-Host ("Full NVDA log: " + $nvdaLog)
 }
 catch {
