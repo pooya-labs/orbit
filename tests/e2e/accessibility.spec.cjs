@@ -48,9 +48,13 @@ test("Overview chart table follows the selected time range", async ({ page }) =>
 
 test("mobile navigation hides closed controls and traps/restores keyboard focus", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  // Load at the mobile breakpoint instead of testing while the desktop
+  // sidebar is still completing its responsive exit transition.
+  await page.reload();
 
   const skipLink = page.getByRole("link", { name: "Skip to main content" });
   const menu = page.getByRole("button", { name: "Open navigation" });
+  await expect(menu).toBeVisible();
 
   await page.keyboard.press("Tab");
   await expect(skipLink).toBeFocused();
