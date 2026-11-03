@@ -169,7 +169,7 @@ func (t *telemetry) emitHandler(w http.ResponseWriter, r *http.Request) {
 	record.SetObservedTimestamp(now)
 	record.SetSeverity(otellog.SeverityInfo)
 	record.SetSeverityText("INFO")
-	record.SetBody(attribute.StringValue("orbit-telemetry-smoke"))
+	record.SetBody(attribute.StringValue(fmt.Sprintf("trace_id=%s event=orbit-telemetry-smoke", traceID)))
 	record.AddAttributes(
 		attribute.String("http.route", "/emit"),
 		attribute.String("trace_id", traceID),
