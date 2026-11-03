@@ -637,7 +637,7 @@ export default function TelemetryWorkspace({
         .filter((point) => Number.isFinite(point.value))
         .sort((a, b) => a.timestamp - b.timestamp);
       const dimensions = Object.entries(series.metric)
-        .filter(([key, value]) => key !== "service_name" && value !== "")
+        .filter(([key, value]) => key !== "service_name" && key !== "orbit_workspace_id" && value !== "")
         .sort(([a], [b]) => a.localeCompare(b));
       const label = dimensions.length > 0
         ? dimensions.map(([key, value]) => `${key}=${value}`).join(" · ")
@@ -1040,7 +1040,7 @@ export default function TelemetryWorkspace({
           ) : (
             <>
               <div className="telemetry-stat-row">
-                <div><span className="telemetry-kicker">{selectedMetricLabel}</span><strong>{formatRate(latestMetricRate, language)}<small> req/s</small></strong><p>{tr("latestPrometheus")}</p></div>
+                <div><span className="telemetry-kicker">{selectedMetricLabel}</span><strong>{formatRate(latestMetricRate, language)}<small>{tr("requestRateUnit")}</small></strong><p>{tr("latestPrometheus")}</p></div>
                 <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("samples")}</span><strong>{metricSamples.length}</strong><p>{chartSeries.length} {tr("series")} · {tr("acrossWindow")} {windowRange}</p></div>
                 <div className="telemetry-stat-secondary"><span className="telemetry-kicker">{tr("queryStep")}</span><strong>{metrics?.step ?? "—"}</strong><p>{tr("prometheusResolution")}</p></div>
               </div>
