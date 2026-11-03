@@ -176,3 +176,18 @@ jobs:
           NEXT_TELEMETRY_DISABLED: 1
       - name: Audit generated HTML accessibility structure
         run: python3 scripts/check_accessibility_html.py
+
+      # Install exact test-only versions without changing the application's lockfile.
+      - name: Install browser accessibility test dependencies
+        run: npm install --no-save --package-lock=false @playwright/test@1.64.1 @axe-core/playwright@4.14.0
+
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Prepare the GitHub Pages base path for browser tests
+        run: |
+          mkdir -p .playwright-site/orbit
+          cp -a out/. .playwright-site/orbit/
+
+      - name: Run browser interaction and axe accessibility tests
+        run: npx playwright test --config=playwright.config.cjs
