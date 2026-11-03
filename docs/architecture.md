@@ -74,7 +74,7 @@ OpenTelemetry Collector
 - The Collector receives OTLP over gRPC (`4317`) and HTTP (`4318`), then routes metrics to Prometheus, traces to Tempo, and logs to Loki.
 - The opt-in `telemetry-demo` container is instrumented with the OpenTelemetry Go SDK and exports a request counter, a trace, and a structured log through OTLP/HTTP. Its `GET /emit` endpoint is a deterministic smoke-test trigger.
 - Prometheus scrapes the Collector's Prometheus exporter on `9464`; the Prometheus, Loki, and Tempo query interfaces use ports `9090`, `3100`, and `3200`.
-- Redis and NATS are provisioned but not yet wired into application code.
+- Redis and NATS are provisioned for local experimentation but intentionally not wired into the API; see ADR 0004. PostgreSQL remains the source of truth and durable work queue until measured cache or multi-consumer event-stream requirements justify another operational dependency.
 - All local development ports are bound to `127.0.0.1`; the local telemetry backends have no authentication and must not be exposed to the internet.
 
 ## Data model
@@ -128,7 +128,7 @@ OpenTelemetry Collector
 - The dashboard has separate Metrics, Logs, and Traces views that call the typed query methods, display backend provenance and query timestamps, and support 15m/1h/6h/24h windows with 30-second refresh.
 - A shared service selector reads the active persisted service catalog using cursor pagination; each option shows which telemetry stores reported that service, and a bounded resource-attribute panel displays attribute provenance.
 - The UI distinguishes loading, empty, error, and partial results. Metrics series are rendered independently, and Prometheus sample freshness/gaps are flagged using query-step and sample timestamps; those scrape-interval checks are not applied to event-driven logs or traces.
-- Redis and NATS are available in Compose but are not yet used by the Go API.
+- Redis and NATS are available in Compose but are intentionally not used by the Go API under ADR 0004. The current read paths have no measured cache bottleneck, and PostgreSQL provides the authoritative transactional state and notification outbox.
 - The Pages deployment is frontend-only. The Go API is local-only, not publicly hosted.
 - The Overview dashboard consumes the service and incident API in API mode; the Metrics/Logs/Traces views consume the bounded telemetry query API and persisted observed service catalog. Full resource-attribute extraction from all telemetry backends remains future work.
 
@@ -145,7 +145,7 @@ The workspace API exposes separate metrics, logs, and traces query routes under 
 
 ### Workspace operations: incidents and alert-rule definitions
 
-The API now provides workspace-scoped incident lifecycle mutations with an append-only incident timeline and transactional workspace audit. Alert-rule definitions are stored per workspace in PostgreSQL and can be listed, created, updated, enabled/disabled, or deleted through authenticated workspace routes. Mutation roles are owner, administrator, and operator; workspace members can read definitions. A background evaluator processes only the workspace-attributed demo `request_rate` counter through a fixed Prometheus query. Pending/firing/resolved/cancelled instances and append-only lifecycle events are persisted transactionally; a PostgreSQL advisory lock coordinates the evaluator across API replicas, and telemetry gaps do not count toward a pending duration or automatically resolve a firing alert. Notification delivery/retry adapters remain unimplemented. Latency and error-rate alerting are not supported until those metrics exist and are sourced safely.
+The API now provides workspace-scoped incident lifecycle mutations with an append-only incident timeline and transactional workspace audit. Alert-rule definitions are stored per workspace in PostgreSQL and can be listed, created, updated, enabled/disabled, or deleted through authenticated workspace routes. Mutation roles are owner, administrator, and operator; workspace members can read definitions. A background evaluator processes only the workspace-attributed demo `request_rate` counter through a fixed Prometheus query. Pending/firing/resolved/cancelled instances and append-only lifecycle events are persisted transactionally; a PostgreSQL advisory lock coordinates the evaluator across API replicas, and telemetry gaps do not count toward a pending duration or automatically resolve a firing alert. Alert notification delivery is implemented as a PostgreSQL-backed outbox and leased worker. The worker polls every five seconds, claims rows with `FOR UPDATE SKIP LOCKED`, records append-only attempts, retries transient HTTPS webhook failures with bounded exponential backoff, and uses the delivery ID as the receiver idempotency key. The sender requires HTTPS, an explicit hostname allowlist, public-unicast DNS resolution, port 443, rejects redirects/private addresses, and bounds request/response timeouts. Latency and error-rate alerting are not supported until those metrics exist and are sourced safely.
 
 
 ### Workspace deployment annotations

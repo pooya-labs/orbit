@@ -47,7 +47,7 @@ The optional `observability` profile accepts OTLP over gRPC/HTTP and routes metr
 - [x] Add an optional OpenTelemetry Collector and Prometheus profile with a local smoke test.
 - [x] Add Loki and Tempo local backends with OTLP export pipelines.
 - [x] Add an instrumented Go service example with OTLP export for metrics, traces, and logs, plus an end-to-end backend smoke test.
-- [ ] Wire Redis cache and NATS event publishing into the API where justified.
+- [ ] Wire Redis cache and NATS event publishing into the API only if measured demand justifies them (deferred by [ADR 0004](decisions/0004-redis-nats-deferred.md): no current cache bottleneck or second durable event consumer; PostgreSQL remains the source of truth and notification outbox).
 
 ## M04 — Real telemetry
 
@@ -306,3 +306,10 @@ The nav label color now changes instantly while only its background may animate.
 - Active nav `#127868`: 5.37:1 on white and 4.74:1 on its pale background.
 
 Exact PR head `8af075d01fd3178857e6aafe867d5f091a3525e6` passed [CI run 41599111532](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111532) (**4/4 jobs, 14/14 Playwright tests**) and [Security run 41599111683](https://github.com/pooya16pg-spec/orbit/actions/runs/41599111683) (**13/13 jobs**). The same CI verified the full Docker telemetry pipeline, workspace isolation, and PostgreSQL restart regression. Manual screen-reader and rendered-state review remains open.
+
+
+## M05 notification outbox multi-replica verification — PR #115
+
+The PostgreSQL-backed alert notification worker is designed to run on multiple API replicas. Its claim operation uses `FOR UPDATE SKIP LOCKED`, bounded leases, and at-least-once retry with a stable delivery ID. PR #115 adds a CI integration test with **four independent Repository/pgxpool instances** racing to claim **24** outbox rows. Each replica must claim exactly six unique deliveries, all 24 must be assigned once, and a subsequent claim must return zero.
+
+This regression supplements the existing real-PostgreSQL retry, lease-expiry, channel-disable, maximum-attempt, and append-only notification attempt-history tests. See [ADR 0004](decisions/0004-redis-nats-deferred.md) for why Redis caching and NATS publishing remain deferred rather than added as unused operational dependencies.
