@@ -698,15 +698,17 @@ func (c *Client) WorkspaceTrace(ctx context.Context, workspaceID, traceID string
 	spanCount := 0
 	for _, batch := range batches {
 		batchWorkspaceID := ""
+		workspaceAttributeSeen := false
 		for _, attribute := range batch.Resource.Attributes {
 			if attribute.Key != "orbit.workspace.id" {
 				continue
 			}
 			value := strings.TrimSpace(attribute.Value.StringValue)
-			if batchWorkspaceID != "" && !strings.EqualFold(batchWorkspaceID, value) {
+			if workspaceAttributeSeen && !strings.EqualFold(batchWorkspaceID, value) {
 				return TraceDetailResult{}, ErrWorkspaceTraceNotFound
 			}
 			batchWorkspaceID = value
+			workspaceAttributeSeen = true
 		}
 		if batchWorkspaceID == "" || !strings.EqualFold(batchWorkspaceID, workspaceID) {
 			return TraceDetailResult{}, ErrWorkspaceTraceNotFound
