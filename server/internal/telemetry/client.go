@@ -2,6 +2,8 @@ package telemetry
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -137,6 +139,70 @@ type TraceDetailResult struct {
 	TraceID   string          `json:"trace_id"`
 	QueriedAt time.Time       `json:"queried_at"`
 	Data      json.RawMessage `json:"data"`
+}
+
+type tempoTraceBatch struct {
+	Resource struct {
+		Attributes []struct {
+			Key   string `json:"key"`
+			Value struct {
+				StringValue string `json:"stringValue"`
+			} `json:"value"`
+		} `json:"attributes"`
+	} `json:"resource"`
+	ScopeSpans []tempoTraceScopeSpans `json:"scopeSpans"`
+}
+
+type tempoTraceScopeSpans struct {
+	Scope json.RawMessage `json:"scope"`
+	Spans []tempoTraceSpan `json:"spans"`
+}
+
+type tempoTraceSpan struct {
+	TraceID           string          `json:"traceId"`
+	SpanID            string          `json:"spanId"`
+	ParentSpanID      string          `json:"parentSpanId"`
+	Name              string          `json:"name"`
+	Kind              json.RawMessage `json:"kind"`
+	StartTimeUnixNano string          `json:"startTimeUnixNano"`
+	EndTimeUnixNano   string          `json:"endTimeUnixNano"`
+	Status            struct {
+		Code json.RawMessage `json:"code"`
+	} `json:"status"`
+}
+
+type tempoTraceEnvelope struct {
+	Batches []tempoTraceBatch `json:"batches"`
+	Trace   struct {
+		ResourceSpans []tempoTraceBatch `json:"resourceSpans"`
+		Batches       []tempoTraceBatch `json:"batches"`
+	} `json:"trace"`
+}
+
+type workspaceTraceDetailData struct {
+	Batches []workspaceTraceDetailBatch `json:"batches"`
+}
+
+type workspaceTraceDetailBatch struct {
+	ScopeSpans []workspaceTraceDetailScopeSpans `json:"scopeSpans"`
+}
+
+type workspaceTraceDetailScopeSpans struct {
+	Scope json.RawMessage                `json:"scope,omitempty"`
+	Spans []workspaceTraceDetailSpan     `json:"spans"`
+}
+
+type workspaceTraceDetailSpan struct {
+	TraceID           string          `json:"traceId"`
+	SpanID            string          `json:"spanId"`
+	ParentSpanID      string          `json:"parentSpanId,omitempty"`
+	Name              string          `json:"name"`
+	Kind              json.RawMessage `json:"kind,omitempty"`
+	StartTimeUnixNano string          `json:"startTimeUnixNano"`
+	EndTimeUnixNano   string          `json:"endTimeUnixNano"`
+	Status            struct {
+		Code int `json:"code"`
+	} `json:"status"`
 }
 
 type QueryResult struct {
@@ -613,32 +679,24 @@ func (c *Client) WorkspaceTrace(ctx context.Context, workspaceID, traceID string
 		return TraceDetailResult{}, fmt.Errorf("read workspace trace from Tempo: %w", err)
 	}
 
-	var response struct {
-		Batches []struct {
-			Resource struct {
-				Attributes []struct {
-					Key   string `json:"key"`
-					Value struct {
-						StringValue string `json:"stringValue"`
-					} `json:"value"`
-				} `json:"attributes"`
-			} `json:"resource"`
-			ScopeSpans []struct {
-				Spans []struct {
-					TraceID string `json:"traceId"`
-				} `json:"spans"`
-			} `json:"scopeSpans"`
-		} `json:"batches"`
-	}
+	var response tempoTraceEnvelope
 	if err := json.Unmarshal(body, &response); err != nil {
 		return TraceDetailResult{}, fmt.Errorf("decode Tempo trace detail: %w", err)
 	}
-	if len(response.Batches) == 0 {
+	batches := response.Trace.ResourceSpans
+	if len(batches) == 0 {
+		batches = response.Trace.Batches
+	}
+	if len(batches) == 0 {
+		batches = response.Batches
+	}
+	if len(batches) == 0 {
 		return TraceDetailResult{}, ErrWorkspaceTraceNotFound
 	}
 
+	normalized := workspaceTraceDetailData{Batches: make([]workspaceTraceDetailBatch, 0, len(batches))}
 	spanCount := 0
-	for _, batch := range response.Batches {
+	for _, batch := range batches {
 		batchWorkspaceID := ""
 		for _, attribute := range batch.Resource.Attributes {
 			if attribute.Key != "orbit.workspace.id" {
@@ -653,25 +711,114 @@ func (c *Client) WorkspaceTrace(ctx context.Context, workspaceID, traceID string
 		if batchWorkspaceID == "" || !strings.EqualFold(batchWorkspaceID, workspaceID) {
 			return TraceDetailResult{}, ErrWorkspaceTraceNotFound
 		}
+
+		normalizedBatch := workspaceTraceDetailBatch{
+			ScopeSpans: make([]workspaceTraceDetailScopeSpans, 0, len(batch.ScopeSpans)),
+		}
 		for _, scope := range batch.ScopeSpans {
+			normalizedScope := workspaceTraceDetailScopeSpans{
+				Scope: scope.Scope,
+				Spans: make([]workspaceTraceDetailSpan, 0, len(scope.Spans)),
+			}
 			for _, span := range scope.Spans {
-				if !strings.EqualFold(span.TraceID, normalizedTraceID) {
+				spanTraceID, ok := normalizeTempoIdentifier(span.TraceID, 16)
+				if !ok || spanTraceID != normalizedTraceID {
 					return TraceDetailResult{}, ErrWorkspaceTraceNotFound
 				}
+				spanID, ok := normalizeTempoIdentifier(span.SpanID, 8)
+				if !ok {
+					return TraceDetailResult{}, ErrWorkspaceTraceNotFound
+				}
+				parentSpanID := ""
+				if strings.TrimSpace(span.ParentSpanID) != "" {
+					parentSpanID, ok = normalizeTempoIdentifier(span.ParentSpanID, 8)
+					if !ok {
+						return TraceDetailResult{}, ErrWorkspaceTraceNotFound
+					}
+				}
+
+				normalizedSpan := workspaceTraceDetailSpan{
+					TraceID:           spanTraceID,
+					SpanID:            spanID,
+					ParentSpanID:      parentSpanID,
+					Name:              span.Name,
+					Kind:              span.Kind,
+					StartTimeUnixNano: span.StartTimeUnixNano,
+					EndTimeUnixNano:   span.EndTimeUnixNano,
+				}
+				normalizedSpan.Status.Code = normalizeTempoStatusCode(span.Status.Code)
+				normalizedScope.Spans = append(normalizedScope.Spans, normalizedSpan)
 				spanCount++
 			}
+			normalizedBatch.ScopeSpans = append(normalizedBatch.ScopeSpans, normalizedScope)
 		}
+		normalized.Batches = append(normalized.Batches, normalizedBatch)
 	}
 	if spanCount == 0 {
 		return TraceDetailResult{}, ErrWorkspaceTraceNotFound
 	}
 
+	normalizedBody, err := json.Marshal(normalized)
+	if err != nil {
+		return TraceDetailResult{}, fmt.Errorf("encode workspace trace detail: %w", err)
+	}
 	return TraceDetailResult{
 		Source:    "tempo",
 		TraceID:   normalizedTraceID,
 		QueriedAt: now,
-		Data:      body,
+		Data:      normalizedBody,
 	}, nil
+}
+
+func normalizeTempoIdentifier(value string, expectedBytes int) (string, bool) {
+	value = strings.TrimSpace(value)
+	if expectedBytes <= 0 || value == "" {
+		return "", false
+	}
+	if len(value) == expectedBytes*2 && regexp.MustCompile("^[0-9a-fA-F]+$").MatchString(value) {
+		decoded, err := hex.DecodeString(value)
+		if err == nil && len(decoded) == expectedBytes {
+			return hex.EncodeToString(decoded), true
+		}
+	}
+	encodings := []*base64.Encoding{
+		base64.StdEncoding,
+		base64.RawStdEncoding,
+		base64.URLEncoding,
+		base64.RawURLEncoding,
+	}
+	for _, encoding := range encodings {
+		decoded, err := encoding.DecodeString(value)
+		if err == nil && len(decoded) == expectedBytes {
+			return hex.EncodeToString(decoded), true
+		}
+	}
+	return "", false
+}
+
+func normalizeTempoStatusCode(value json.RawMessage) int {
+	if len(value) == 0 {
+		return 0
+	}
+	var numeric int
+	if err := json.Unmarshal(value, &numeric); err == nil {
+		if numeric >= 0 && numeric <= 2 {
+			return numeric
+		}
+		return 0
+	}
+	var name string
+	if err := json.Unmarshal(value, &name); err != nil {
+		return 0
+	}
+	switch strings.ToUpper(name) {
+	case "STATUS_CODE_OK", "OK":
+		return 1
+	case "STATUS_CODE_ERROR", "ERROR":
+		return 2
+	default:
+		return 0
+	}
 }
 
 func (c *Client) Services(ctx context.Context, window QueryWindow) (ServiceDiscoveryResult, error) {
