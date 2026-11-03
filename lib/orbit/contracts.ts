@@ -286,7 +286,7 @@ export interface TempoTraceSpan {
   spanId: string;
   parentSpanId?: string;
   name: string;
-  kind?: number;
+  kind?: number | string;
   startTimeUnixNano: string;
   endTimeUnixNano: string;
   status?: {
