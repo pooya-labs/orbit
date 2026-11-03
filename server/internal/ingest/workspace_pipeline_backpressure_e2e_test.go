@@ -151,12 +151,12 @@ func TestWorkspaceOTLPSustainedBackpressureAndRecovery(t *testing.T) {
 		payloads[index] = payload
 	}
 
-	send := func(payload []byte) int {
+	send := func(requestContext context.Context, payload []byte) int {
 		request := httptest.NewRequest(
 			http.MethodPost,
 			"/v1/workspaces/"+workspaceA.ID+"/v1/metrics",
 			bytes.NewReader(payload),
-		).WithContext(ctx)
+		).WithContext(requestContext)
 		request.Header.Set("Authorization", "Bearer "+workspacePipelineToken)
 		request.Header.Set("Content-Type", "application/x-protobuf")
 		response := httptest.NewRecorder()
@@ -174,7 +174,7 @@ func TestWorkspaceOTLPSustainedBackpressureAndRecovery(t *testing.T) {
 		go func(payload []byte) {
 			defer workers.Done()
 			<-start
-			results <- send(payload)
+			results <- send(ctx, payload)
 		}(payloads[index])
 	}
 	defer func() {
@@ -196,7 +196,7 @@ func TestWorkspaceOTLPSustainedBackpressureAndRecovery(t *testing.T) {
 	}
 
 	for index := 0; index < overflow; index++ {
-		if got := send(payloads[admitted+index]); got != http.StatusServiceUnavailable {
+		if got := send(ctx, payloads[admitted+index]); got != http.StatusServiceUnavailable {
 			t.Fatalf("over-capacity request %d returned HTTP %d, want 503", index, got)
 		}
 	}
@@ -236,7 +236,7 @@ func TestWorkspaceOTLPSustainedBackpressureAndRecovery(t *testing.T) {
 			go func(payload []byte) {
 				defer recovery.Done()
 				<-startRecovery
-				recoveryResults <- send(payload)
+				recoveryResults <- send(ctx, payload)
 			}(payload)
 		}
 		close(startRecovery)
@@ -249,7 +249,63 @@ func TestWorkspaceOTLPSustainedBackpressureAndRecovery(t *testing.T) {
 		}
 	}
 
-	const expectedForwarded = admitted + 3*16
+	// Follow the burst with a 20-second steady stream. Eight independent
+	// producer streams each send at most four exports per second, keeping the
+	// shared 10,000/minute database-backed rate limit well above the test rate.
+	const sustainedWorkers = 8
+	sustainedStop := make(chan struct{})
+	stopSustained := time.AfterFunc(20*time.Second, func() { close(sustainedStop) })
+	defer stopSustained.Stop()
+	var sustainedSuccesses atomic.Int64
+	sustainedFailures := make(chan error, sustainedWorkers)
+	var sustained sync.WaitGroup
+	for worker := 0; worker < sustainedWorkers; worker++ {
+		worker := worker
+		sustained.Add(1)
+		go func() {
+			defer sustained.Done()
+			ticker := time.NewTicker(250 * time.Millisecond)
+			defer ticker.Stop()
+			var sample int64
+			for {
+				select {
+				case <-sustainedStop:
+					return
+				case <-ctx.Done():
+					sustainedFailures <- fmt.Errorf("sustained load context ended: %w", ctx.Err())
+					return
+				case <-ticker.C:
+					sample++
+					request := workspacePipelineMetricsRequest(sample)
+					request.ResourceMetrics[0].Resource.Attributes[0] = workspacePipelineStringAttribute(
+						"service.name",
+						fmt.Sprintf("orbit-backpressure-steady-%02d", worker),
+					)
+					payload, marshalErr := proto.Marshal(request)
+					if marshalErr != nil {
+						sustainedFailures <- fmt.Errorf("marshal sustained metrics sample: %w", marshalErr)
+						return
+					}
+					if statusCode := send(ctx, payload); statusCode != http.StatusOK {
+						sustainedFailures <- fmt.Errorf("sustained worker %d returned HTTP %d", worker, statusCode)
+						return
+					}
+					sustainedSuccesses.Add(1)
+				}
+			}
+		}()
+	}
+	sustained.Wait()
+	close(sustainedFailures)
+	for err := range sustainedFailures {
+		t.Error(err)
+	}
+	if got := sustainedSuccesses.Load(); got < 100 {
+		t.Fatalf("sustained real-dependency exports = %d, want at least 100 over 20 seconds", got)
+	}
+	t.Logf("sustained PostgreSQL + Collector exports: %d successful over 20 seconds", sustainedSuccesses.Load())
+
+	expectedForwarded := int64(admitted + 3*16) + sustainedSuccesses.Load()
 	if got := gate.forwarded.Load(); got != expectedForwarded {
 		t.Fatalf("total requests forwarded to real Collector = %d, want %d", got, expectedForwarded)
 	}
