@@ -56,6 +56,7 @@ jobs:
 
             ### Known limitations and v1 readiness
             - GitHub Pages hosts the static frontend only. It does not host the ORBIT API, PostgreSQL, or telemetry data plane; the hosted dashboard is a demo preview until a separately deployed HTTPS API and managed services are configured.
+            - The Metrics/Logs/Traces UI still calls legacy unscoped read endpoints, which the API deliberately disables in staging/production. Authenticated workspace-scoped query routes and catalog persistence exist, but frontend workspace selection and route integration remain a v1 blocker.
             - Browser PKCE and server-side OIDC verification are implemented as provider-neutral foundations, but no real identity provider/client is configured or verified end-to-end.
             - Production tenant ingestion remains disabled pending real DNS/TLS, firewall/trusted-proxy and private-network controls, deployment-specific quotas, target-environment capacity/recovery evidence, encrypted off-host backups/PITR, measured RPO/RTO, and an approved durable-history retention/archive policy.
             - Metrics grouping is limited to the allow-listed demo \`request_rate\` metric. A safe general metric catalog/selection model is not yet implemented.
