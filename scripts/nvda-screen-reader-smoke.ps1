@@ -227,6 +227,25 @@ enableOnPageLoad = True
     throw ("ORBIT is not the foreground Edge window; refusing to inject keyboard input." + [Environment]::NewLine + $cleanEdgeWindows)
   }
   Write-Host "ORBIT is already the foreground Edge window; sending NVDA test keys to msedge."
+
+  # NVDA Speech Viewer intentionally stops updating while the pointer hovers
+  # over its text control. Hosted Windows runners can leave the pointer at
+  # (0,0), overlapping the viewer's default window. Move it into the visible
+  # ORBIT page content before capturing speech, without clicking anything.
+  if (-not ("OrbitWin32Cursor" -as [type])) {
+    Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+public static class OrbitWin32Cursor {
+  [DllImport("user32.dll", SetLastError = true)]
+  public static extern bool SetCursorPos(int x, int y);
+}
+"@
+  }
+  $cursorMoved = [OrbitWin32Cursor]::SetCursorPos(900, 650)
+  if (-not $cursorMoved) {
+    throw ("Could not move the mouse pointer away from the NVDA Speech Viewer. Win32 error: " + [Runtime.InteropServices.Marshal]::GetLastWin32Error())
+  }
+  Write-Host "Moved pointer to (900,650) inside ORBIT content and outside the Speech Viewer text area."
   Start-Sleep -Seconds 1
 
   Write-Host "=== Move focus into the web document ==="
