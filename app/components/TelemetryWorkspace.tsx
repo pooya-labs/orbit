@@ -142,6 +142,7 @@ export default function TelemetryWorkspace({
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [membership, setMembership] = useState<WorkspaceMembershipSummary | null>(null);
+  const [membershipWorkspaceId, setMembershipWorkspaceId] = useState("");
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState("");
   const useLegacyDevelopmentReads = apiEnvironment.toLowerCase() === "development" && !isOidcConfigured();
@@ -175,6 +176,7 @@ export default function TelemetryWorkspace({
     setWorkspaces([]);
     setWorkspaceId("");
     setMembership(null);
+    setMembershipWorkspaceId("");
     setDiscoveredServices([]);
     setResourceAttributes(null);
   }), []);
@@ -185,6 +187,7 @@ export default function TelemetryWorkspace({
         setWorkspaces([]);
         setWorkspaceId("");
         setMembership(null);
+        setMembershipWorkspaceId("");
         setServiceLoading(false);
         setResourceLoading(false);
       }
@@ -239,6 +242,7 @@ export default function TelemetryWorkspace({
     setWorkspaceError("");
     setDiscoveredServices([]);
     setMembership(null);
+    setMembershipWorkspaceId("");
     setResourceAttributes(null);
     Promise.all([
       getWorkspaceMembership(workspaceId, controller.signal, apiBaseUrl),
@@ -260,6 +264,7 @@ export default function TelemetryWorkspace({
           resource_attribute_sources: service.resource_attribute_sources,
         }));
         setMembership(role);
+        setMembershipWorkspaceId(workspaceId);
         setDiscoveredServices(options);
         setServiceWarnings([]);
         setServiceCursor(null);
@@ -275,6 +280,7 @@ export default function TelemetryWorkspace({
       .catch((cause) => {
         if (current && !controller.signal.aborted) {
           setMembership(null);
+          setMembershipWorkspaceId("");
           setDiscoveredServices([]);
           setServiceError(cause instanceof Error ? cause.message : tr("incidentWorkspaceLoadFailed"));
         }
@@ -438,7 +444,7 @@ export default function TelemetryWorkspace({
     const controller = new AbortController();
     let mounted = true;
 
-    if (!useLegacyDevelopmentReads && (!user || !workspaceId || !membership || !selectedService)) {
+    if (!useLegacyDevelopmentReads && (!user || !workspaceId || !membership || membershipWorkspaceId !== workspaceId || !selectedService)) {
       setLoading(false);
       setRefreshing(false);
       setMetrics(null);
@@ -499,7 +505,7 @@ export default function TelemetryWorkspace({
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy, useLegacyDevelopmentReads, user?.sub, workspaceId, membership]);
+  }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy, useLegacyDevelopmentReads, user?.sub, workspaceId, membership, membershipWorkspaceId]);
 
   const metricSeries = useMemo(() => {
     if (!metrics) return [];
@@ -622,7 +628,11 @@ export default function TelemetryWorkspace({
             <span>{tr("incidentSelectWorkspace")}</span>
             <select
               value={workspaceId}
-              onChange={(event) => setWorkspaceId(event.target.value)}
+              onChange={(event) => {
+                setMembership(null);
+                setMembershipWorkspaceId("");
+                setWorkspaceId(event.target.value);
+              }}
               disabled={workspaceLoading || workspaces.length === 0}
               aria-label={tr("incidentSelectWorkspace")}
             >
@@ -737,7 +747,7 @@ export default function TelemetryWorkspace({
       {!useLegacyDevelopmentReads && !user && (
         <div className="incident-inline-notice" role="status">
           <AlertCircle size={15} />
-          {isOidcConfigured() ? tr("incidentSignInRequired") : tr("incidentAuthNotConfigured")}
+          {isOidcConfigured() ? tr("telemetrySignInRequired") : tr("telemetryAuthNotConfigured")}
         </div>
       )}
       {!useLegacyDevelopmentReads && user && !workspaceLoading && workspaces.length === 0 && !workspaceError && (
