@@ -1038,8 +1038,7 @@ export default function TelemetryWorkspace({
                   );
                 })}
               </div>
-              {selectedTraceId && (
-                <section id="telemetry-trace-detail" className="telemetry-trace-detail" aria-labelledby="telemetry-trace-detail-title" aria-live="polite">
+              <section id="telemetry-trace-detail" className="telemetry-trace-detail" hidden={!selectedTraceId} aria-labelledby="telemetry-trace-detail-title" aria-live="polite">
                   <header className="telemetry-trace-detail-header">
                     <div>
                       <h3 id="telemetry-trace-detail-title">{tr("traceDetails")}</h3>
@@ -1075,8 +1074,7 @@ export default function TelemetryWorkspace({
                       ))}
                     </ol>
                   )}
-                </section>
-              )}
+              </section>
             </>
           )}
         </div>
