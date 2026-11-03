@@ -51,6 +51,24 @@ export const demoIncidents: DemoIncident[] = [
   },
 ];
 
-export const chartPoints =
-  "0,118 26,110 52,114 78,92 104,99 130,77 156,84 182,72 208,88 234,62 260,70 286,55 312,68 338,45 364,51 390,37 416,48 442,31 468,39 494,20 520,34 546,23 572,29 598,12";
+// The SVG coordinates are illustrative fixtures, not collected telemetry.
+// Derive the accessible table from the same points so chart and table cannot drift.
+const chartCoordinates: ReadonlyArray<readonly [number, number]> = [
+  [0, 118], [26, 110], [52, 114], [78, 92], [104, 99],
+  [130, 77], [156, 84], [182, 72], [208, 88], [234, 62],
+  [260, 70], [286, 55], [312, 68], [338, 45], [364, 51],
+  [390, 37], [416, 48], [442, 31], [468, 39], [494, 20],
+  [520, 34], [546, 23], [572, 29], [598, 12],
+];
+
+export const chartPoints = chartCoordinates
+  .map(([x, y]) => `${x},${y}`)
+  .join(" ");
+
+export const chartSamples = chartCoordinates.map(([x, y], index) => ({
+  id: `overview-sample-${index + 1}`,
+  elapsedFraction: x / 598,
+  requestsPerMinute: Math.round(((136 - y) / 136) * 30_000),
+}));
+
 export const chartArea = `0,136 ${chartPoints} 598,136`;
