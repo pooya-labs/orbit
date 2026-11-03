@@ -132,6 +132,34 @@ func TestWorkspaceMetricsBuildOnlyCuratedTenantScopedPromQL(t *testing.T) {
 	}
 }
 
+func TestWorkspaceMetricsRejectsOverBudgetGroupingBeforeBackendCall(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		http.Error(w, "unexpected Prometheus request", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.WorkspaceMetrics(
+		context.Background(),
+		"00000000-0000-4000-8000-000000000001",
+		QueryWindow{Name: "1h", Duration: time.Hour, Step: "1m"},
+		"api-gateway",
+		MetricRequestRate,
+		[]string{"instance", "service_version", "deployment_environment", "instance"},
+	)
+	if err == nil {
+		t.Fatal("expected an over-budget grouping list to be rejected")
+	}
+	if calls != 0 {
+		t.Fatalf("over-budget grouping reached Prometheus %d times", calls)
+	}
+}
+
 func TestWorkspaceMetricsRejectsUnknownMetricBeforeBackendCall(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
