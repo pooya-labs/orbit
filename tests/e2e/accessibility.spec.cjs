@@ -504,9 +504,15 @@ test("axe covers keyboard-focus and hover navigation states in both themes", asy
       await waitForNavigationTransitions(navigation);
     }
 
-    // Re-enter keyboard modality from the first tabbable control so the next
-    // item is checked with its actual :focus-visible indicator.
-    await skipLink.evaluate((element) => element.focus());
+    // Start from the document rather than programmatically focusing the
+    // skip link: sequential Tab navigation must traverse the real tab order.
+    // The first Tab reveals/focuses the skip link; the second reaches Overview.
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) active.blur();
+    });
+    await page.keyboard.press("Tab");
+    await expect(skipLink).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(overview).toBeFocused();
     expect(await overview.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
