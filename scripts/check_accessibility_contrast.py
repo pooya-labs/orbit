@@ -174,6 +174,9 @@ def main() -> int:
         (".panel-footer", "#10161d"),
         (".incident-meta", "#10161d"),
         (".page-footer", "#090d12"),
+        (".telemetry-stat-row p", "#10161d"),
+        (".telemetry-source-note", "#090d12"),
+        (".telemetry-service-select small", "#10161d"),
     )
     dark_rules = RULE_PATTERN.findall(css)
     for selector, surface in dark_secondary_text:
@@ -197,6 +200,55 @@ def main() -> int:
         print(
             f"PASS: dark secondary text {selector} contrast >= 4.5:1 "
             f"(minimum {ratio:.2f}:1)"
+        )
+
+    # Keep the light-theme text colors found in the first rendered axe scan
+    # explicit and above 4.5:1 on their actual component surfaces.
+    light_rendered_text = (
+        (".demo-tag", "#78501f", "#fff5e7"),
+        (".live-indicator", "#52646e", "#f5f8f9"),
+        (".chart-summary-change", "#237a55", "#ffffff"),
+        (".subtle-count", "#52646e", "#ffffff"),
+        (".service-avatar.blue", "#315a76", "#ecf3f9"),
+        (".service-avatar.violet", "#654f98", "#f4f1fb"),
+        (".service-avatar.amber", "#80531b", "#faf3eb"),
+        (".service-avatar.teal", "#176f62", "#ebf7f5"),
+        (".service-avatar.rose", "#9b4545", "#faefef"),
+        (".demo-footnote", "#78501f", "#ffffff"),
+        (".incident-open", "#80531b", "#ffffff"),
+        (".footer-version", "#52646e", "#f4f7f9"),
+    )
+    for selector, expected_foreground, surface in light_rendered_text:
+        rules = [
+            body
+            for rule_selector, body in RULE_PATTERN.findall(css)
+            if 'html[data-theme="light"]' in rule_selector
+            and selector in rule_selector
+        ]
+        if not rules:
+            fail(f"light-theme rendered text selector {selector} has no explicit override")
+        colors = [
+            normalize_hex(match.group(1))
+            for body in rules
+            for match in re.finditer(
+                r"(?<![-\\w])color\\s*:\\s*(#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?)\\b",
+                body,
+            )
+        ]
+        if expected_foreground not in colors:
+            fail(
+                f"light-theme {selector} must use {expected_foreground}; "
+                f"found {', '.join(colors) or 'no literal text color'}"
+            )
+        ratio = contrast_ratio(expected_foreground, surface)
+        if ratio < 4.5:
+            fail(
+                f"light-theme {selector} contrast is {ratio:.2f}:1 "
+                f"on {surface} (needs 4.5:1)"
+            )
+        print(
+            f"PASS: light-theme rendered text {selector} contrast >= 4.5:1 "
+            f"(ratio {ratio:.2f}:1)"
         )
 
     print("This palette check does not replace rendered-state contrast sampling or assistive-technology testing.")
