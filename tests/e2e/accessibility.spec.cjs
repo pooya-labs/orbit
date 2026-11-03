@@ -492,21 +492,24 @@ test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal
 
 
 test("axe covers keyboard-focus and hover navigation states in both themes", async ({ page }) => {
-  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
-  const skipLink = page.getByRole("link", { name: "Skip to main content" });
-  const overview = navigation.getByRole("button", { name: "Overview", exact: true });
-  const services = navigation.getByRole("button", { name: "Services", exact: true });
-
   for (const theme of ["dark", "light"]) {
-    if (theme === "light") {
-      await page.getByRole("button", { name: "Switch to light theme" }).click();
-      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-      await waitForNavigationTransitions(navigation);
-    }
+    // Set the saved preference before a fresh document load. This ensures
+    // each theme starts with the browser's natural body focus, not the
+    // previously clicked theme toggle or a programmatically focused link.
+    await page.evaluate((value) => window.localStorage.setItem("orbit.theme", value), theme);
+    await page.reload();
+    await expect(page.locator(".app-shell")).toHaveAttribute("data-theme", theme);
 
-    // Re-enter keyboard modality from the first tabbable control so the next
-    // item is checked with its actual :focus-visible indicator.
-    await skipLink.evaluate((element) => element.focus());
+    const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+    const skipLink = page.getByRole("link", { name: "Skip to main content" });
+    const overview = navigation.getByRole("button", { name: "Overview", exact: true });
+    const services = navigation.getByRole("button", { name: "Services", exact: true });
+
+    // Use real sequential Tab presses from the fresh document: the first
+    // tabbable element is the skip link, followed by the active Overview
+    // navigation item. This tests actual keyboard modality and focus order.
+    await page.keyboard.press("Tab");
+    await expect(skipLink).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(overview).toBeFocused();
     expect(await overview.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
