@@ -148,6 +148,8 @@ autoPositionWindow = True
 [update]
 autoCheck = False
 startupNotification = False
+allowUsageStats = False
+askedAllowUsageStats = True
 
 [virtualBuffers]
 passThroughAudioIndication = False
@@ -174,13 +176,16 @@ enableOnPageLoad = True
     $speechViewerOutput = Invoke-WinApp -Arguments @(
       "ui", "list-windows", "-a", "$($nvdaProcess.Id)"
     )
-    $speechViewerLine = ($speechViewerOutput -split "\r?\n" | Where-Object { $_ -match "NVDA Speech Viewer" } | Select-Object -First 1)
-    if ($speechViewerLine) {
-      $handleMatch = [regex]::Match($speechViewerLine, "(?i)HWND\s+(\d+)")
-      if ($handleMatch.Success) {
-        $speechWindowHandle = $handleMatch.Groups[1].Value
-        break
-      }
+    # Strip ANSI color sequences before parsing the human-readable window list.
+    # WinApp CLI colors HWND numbers, which otherwise breaks a simple digit regex.
+    $cleanWindowList = [regex]::Replace($speechViewerOutput, "\x1B\[[0-9;]*m", "")
+    $handleMatch = [regex]::Match(
+      $cleanWindowList,
+      '(?im)HWND\s+(\d+):\s+"NVDA Speech Viewer"',
+    )
+    if ($handleMatch.Success) {
+      $speechWindowHandle = $handleMatch.Groups[1].Value
+      break
     }
     Start-Sleep -Seconds 1
   } while ((Get-Date) -lt $windowDeadline)
