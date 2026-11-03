@@ -139,10 +139,15 @@ try {
   $nvdaConfig = @"
 [general]
 language = en
+showWelcomeDialogAtStartup = False
 
 [speechViewer]
 showSpeechViewerAtStartup = True
 autoPositionWindow = True
+
+[update]
+autoCheck = False
+startupNotification = False
 
 [virtualBuffers]
 passThroughAudioIndication = False
