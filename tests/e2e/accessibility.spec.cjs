@@ -272,8 +272,8 @@ test("axe finds no WCAG 2.1 A/AA or WCAG 2.2 AA violations in the light theme", 
   expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
 });
 
-test("all primary dashboard views expose an announced heading and pass axe", async ({ page }) => {
-  test.setTimeout(90_000);
+test("all primary dashboard views expose an announced heading and pass axe in dark and light themes", async ({ page }) => {
+  test.setTimeout(120_000);
   const labels = [
     "Service map",
     "Services",
@@ -290,27 +290,37 @@ test("all primary dashboard views expose an announced heading and pass axe", asy
   ];
   const navigation = page.getByRole("navigation", { name: "Primary navigation" });
 
-  for (const label of labels) {
-    const item = navigation.getByRole("button", { name: label, exact: true });
-    await item.click();
-    await expect(item).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
+  for (const theme of ["dark", "light"]) {
+    if (theme === "light") {
+      await page.getByRole("button", { name: "Switch to light theme" }).click();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    }
 
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .analyze();
+    for (const label of labels) {
+      const item = navigation.getByRole("button", { name: label, exact: true });
+      await item.click();
+      await expect(item).toHaveAttribute("aria-current", "page");
+      await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
 
-    const violations = results.violations.map((violation) => ({
-      id: violation.id,
-      impact: violation.impact,
-      help: violation.help,
-      nodes: violation.nodes.map((node) => ({
-        target: node.target,
-        summary: node.failureSummary,
-      })),
-    }));
+      const results = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
 
-    expect(violations, `Accessibility violations on ${label}: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
+      const violations = results.violations.map((violation) => ({
+        id: violation.id,
+        impact: violation.impact,
+        help: violation.help,
+        nodes: violation.nodes.map((node) => ({
+          target: node.target,
+          summary: node.failureSummary,
+        })),
+      }));
+
+      expect(
+        violations,
+        `Accessibility violations on ${label} in ${theme} theme: ${JSON.stringify(violations, null, 2)}`,
+      ).toEqual([]);
+    }
   }
 });
 
@@ -331,6 +341,22 @@ test("invalid API base paths are announced as an accessible error", async ({ pag
   expect(
     results.violations.map((violation) => ({ id: violation.id, targets: violation.nodes.map((node) => node.target) })),
   ).toEqual([]);
+});
+
+test("reduced-motion preference disables smooth scrolling and long transitions", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+
+  const motion = await page.evaluate(() => ({
+    preference: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior,
+    transitionDuration: getComputedStyle(document.querySelector(".theme-toggle")).transitionDuration,
+    animationDuration: getComputedStyle(document.querySelector(".nav-item")).animationDuration,
+  }));
+
+  expect(motion.preference).toBe(true);
+  expect(motion.scrollBehavior).toBe("auto");
+  expect(parseFloat(motion.transitionDuration)).toBeLessThanOrEqual(0.00002);
+  expect(parseFloat(motion.animationDuration)).toBeLessThanOrEqual(0.00002);
 });
 
 test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal overflow", async ({ page }) => {
