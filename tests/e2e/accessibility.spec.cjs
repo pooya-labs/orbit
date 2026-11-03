@@ -164,9 +164,9 @@ test("Metrics chart table renders Prometheus samples and updates with the API ti
     return json({ error: { code: "not_found", message: "Unhandled browser-test endpoint", request_id: "playwright" } });
   });
 
-  await page.getByRole("button", { name: "Connect source" }).click();
+  await page.getByRole("button", { name: "Connect a source" }).click();
   await page.getByLabel("API base URL").fill("http://127.0.0.1:4173");
-  await page.getByRole("button", { name: "Check & connect" }).click();
+  await page.getByRole("button", { name: "Test and connect" }).click();
 
   const navigation = page.getByRole("navigation", { name: "Primary navigation" });
   await navigation.getByRole("button", { name: "Metrics", exact: true }).click();
