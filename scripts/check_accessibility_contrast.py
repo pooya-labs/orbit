@@ -157,6 +157,48 @@ def main() -> int:
     if checked_light_colors == 0:
         fail("no explicit light-theme text colors were checked")
     print(f"PASS: {checked_light_colors} explicit light-theme text colors meet 4.5:1 across pale surfaces.")
+
+    # axe-core's first rendered Chromium scan found secondary dark-theme copy
+    # below 4.5:1 even though the base tokens passed. Keep each affected
+    # selector tied to the tested --subtle token and its actual surface.
+    dark_secondary_text = (
+        (".nav-group-label", "#0d1319"),
+        (".global-search input::placeholder", "#10161d"),
+        (".metric-detail", "#10161d"),
+        (".chart-summary-change span", "#10161d"),
+        (".chart-y-labels", "#10161d"),
+        (".chart-x-labels", "#10161d"),
+        (".chart-footnote", "#10161d"),
+        (".service-table-head", "#10161d"),
+        (".service-name-cell span", "#10161d"),
+        (".panel-footer", "#10161d"),
+        (".incident-meta", "#10161d"),
+        (".page-footer", "#090d12"),
+    )
+    dark_rules = RULE_PATTERN.findall(css)
+    for selector, surface in dark_secondary_text:
+        rules = [
+            body
+            for rule_selector, body in dark_rules
+            if selector in rule_selector
+            and 'html[data-theme="light"]' not in rule_selector
+        ]
+        if not rules or not any(
+            re.search(r"color\\s*:\\s*var\\(--subtle\\)", body)
+            for body in rules
+        ):
+            fail(f"dark secondary text selector {selector} must use --subtle")
+        ratio = contrast_ratio(root["--subtle"], surface)
+        if ratio < 4.5:
+            fail(
+                f"dark secondary text {selector} contrast is {ratio:.2f}:1 "
+                f"on {surface} (needs 4.5:1)"
+            )
+        print(
+            f"PASS: dark secondary text {selector} contrast >= 4.5:1 "
+            f"(minimum {ratio:.2f}:1)"
+        )
+
     print("This palette check does not replace rendered-state contrast sampling or assistive-technology testing.")
     return 0
 
