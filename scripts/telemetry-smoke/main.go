@@ -64,6 +64,27 @@ func stringValue(value any) string {
 	result, _ := value.(string)
 	return result
 }
+
+func traceIDsFromLogs(body payload) map[string]struct{} {
+	ids := make(map[string]struct{})
+	for _, rawStream := range array(body["data"]) {
+		for _, rawPair := range array(object(rawStream)["values"]) {
+			pair := array(rawPair)
+			if len(pair) < 2 { continue }
+			for _, field := range strings.Fields(stringValue(pair[1])) {
+				key, candidate, ok := strings.Cut(strings.Trim(field, ",;"), "=")
+				if !ok || strings.ToLower(strings.TrimSpace(key)) != "trace_id" { continue }
+				id := strings.ToLower(strings.Trim(candidate, ",;"))
+				decoded, err := hex.DecodeString(id)
+				if err == nil && len(decoded) == 16 && strings.Trim(id, "0") != "" {
+					ids[id] = struct{}{}
+				}
+			}
+		}
+	}
+	return ids
+}
+
 func hasData(body payload) bool {
 	return len(array(object(body["data"])["result"])) > 0
 }
@@ -196,19 +217,24 @@ func smoke() error {
 		return false, nil
 	}); err != nil { return err }
 
-	if err := waitFor("ORBIT API returns Loki logs", 120*time.Second, func() (bool, error) {
+	var correlatedTraceIDs map[string]struct{}
+	if err := waitFor("ORBIT API returns Loki logs with a valid trace_id", 120*time.Second, func() (bool, error) {
 		body, err := getJSON(orbitAPIURL + "/api/v1/telemetry/logs?service=orbit-telemetry-demo&window=1h&limit=50")
 		if err != nil { return false, err }
-		return stringValue(body["source"]) == "loki" && stringValue(body["service"]) == "orbit-telemetry-demo" && len(array(body["data"])) > 0, nil
+		if stringValue(body["source"]) != "loki" || stringValue(body["service"]) != "orbit-telemetry-demo" { return false, nil }
+		correlatedTraceIDs = traceIDsFromLogs(body)
+		return len(array(body["data"])) > 0 && len(correlatedTraceIDs) > 0, nil
 	}); err != nil { return err }
 
-	if err := waitFor("ORBIT API returns Tempo traces for the demo service", 120*time.Second, func() (bool, error) {
+	if err := waitFor("Tempo exposes a trace ID also present in the Loki logs", 120*time.Second, func() (bool, error) {
 		body, err := getJSON(orbitAPIURL + "/api/v1/telemetry/traces?service=orbit-telemetry-demo&window=1h&limit=20")
 		if err != nil { return false, err }
 		if stringValue(body["source"]) != "tempo" || stringValue(body["service"]) != "orbit-telemetry-demo" { return false, nil }
 		for _, raw := range array(body["data"]) {
 			id := strings.ToLower(stringValue(object(raw)["traceID"]))
-			if len(id) == 32 { if _, err := hex.DecodeString(id); err == nil { return true, nil } }
+			if len(id) != 32 || strings.Trim(id, "0") == "" { continue }
+			if _, err := hex.DecodeString(id); err != nil { continue }
+			if _, found := correlatedTraceIDs[id]; found { return true, nil }
 		}
 		return false, nil
 	}); err != nil { return err }
