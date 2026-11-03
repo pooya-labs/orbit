@@ -839,7 +839,7 @@ Repository: `pooya-labs/orbit`; default branch: `main`.
 
 ### Next implementation — do not repeat completed work
 
-1. Implement a safe, workspace-scoped metric catalog/selection model beyond the demo-only `request_rate` series. Keep metric names and label dimensions allow-listed, enforce cardinality/query-cost bounds, validate selector inputs, and do not expose arbitrary PromQL.
+1. [x] Implement the safe, workspace-scoped metric catalog/selection model (PR #132): fixed total/success/failure request-rate IDs, exact workspace/service matchers, three approved grouping labels, ten-series cap, 24-hour maximum window, five-second upstream timeout, and no arbitrary PromQL.
 2. [x] Complete interactive trace detail and Logs-to-Trace correlation (PRs #130–#131), with workspace membership checks and tenant verification on every detail request.
 3. Instrument the production Go API and background workers with bounded, useful OTLP metrics/traces/logs. Do not claim this is complete based only on the example workload.
 4. Keep the M01 human accessibility acceptance and all M06 target-environment deployment, identity, network, retention, recovery, and capacity gates open until real evidence exists. Keep tenant-facing production ingestion disabled.
@@ -853,3 +853,12 @@ Do not repeat the already merged M06 recovery/security tests (#110–#126), the 
 - PR #131 implements Logs-to-Trace correlation. Trace IDs are extracted only when they are non-zero 32-character hexadecimal values from log content or existing stream fields. The browser action is visible only for an authenticated member of the currently selected workspace and calls the same workspace-scoped trace-detail API; switching to another workspace clears the selection.
 - The instrumented demo puts `trace_id` in the log body, not an indexed Loki label. The local end-to-end smoke test requires the same ID to appear in both Loki log results and Tempo trace search.
 - M04's safe metric catalog and metric selection remain open; arbitrary PromQL remains unsupported. Production Go API/worker instrumentation, human device accessibility acceptance, hosted API/persistence, and target-environment M06 identity/network/capacity/recovery/release gates also remain open. Production tenant ingestion remains disabled.
+
+
+## 14. Latest implementation handoff — safe workspace metric catalog
+
+- PR #132 introduces an authenticated, server-owned metric catalog with exactly three stable IDs: `request_rate`, `successful_request_rate`, and `failed_request_rate`. Every ID is a fixed PromQL template over `orbit_demo_requests_total`; the browser never submits metric names, selectors, label matchers, or query expressions.
+- Workspace queries always include the validated workspace UUID and service name. Grouping is limited to `instance`, `service_version`, and `deployment_environment` (maximum three); Prometheus returns at most ten series, uses fixed query steps for the supported 15m/1h/6h/24h windows, and is called with a five-second timeout.
+- The catalog endpoint is exposed under the authenticated workspace route and is returned only after membership verification. The old global metrics route remains a local-development-only compatibility path and uses the same metric allow-list.
+- Successful/failed request rates use the already-instrumented `slo_outcome=good|bad` label. Producers without that outcome do not contribute to these two views; no values are inferred from missing data. The total request rate remains available wherever the base counter exists.
+- The next implementation item is bounded OTLP instrumentation for the production Go API and background workers. Keep arbitrary PromQL, arbitrary metric discovery, resource-attribute expansion, production tenant ingestion, human device accessibility acceptance, and target-environment M06 deployment/recovery/capacity/release gates open.
