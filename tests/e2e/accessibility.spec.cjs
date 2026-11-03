@@ -23,6 +23,22 @@ async function waitForNavigationTransitions(navigation) {
   });
 }
 
+async function expectNoAxeViolations(page, label) {
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  const violations = results.violations.map((violation) => ({
+    id: violation.id,
+    impact: violation.impact,
+    help: violation.help,
+    nodes: violation.nodes.map((node) => ({
+      target: node.target,
+      summary: node.failureSummary,
+    })),
+  }));
+  expect(violations, `${label}: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
+}
+
 test("keyboard users can reveal the skip link and reach the main landmark", async ({ page }) => {
   const skipLink = page.getByRole("link", { name: "Skip to main content" });
   const before = await skipLink.evaluate((element) => element.getBoundingClientRect().top);
@@ -473,3 +489,86 @@ test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal
   ).toEqual([]);
 });
 
+
+
+test("axe covers keyboard-focus and hover navigation states in both themes", async ({ page }) => {
+  const navigation = page.getByRole("navigation", { name: "Primary navigation" });
+  const skipLink = page.getByRole("link", { name: "Skip to main content" });
+  const overview = navigation.getByRole("button", { name: "Overview", exact: true });
+  const services = navigation.getByRole("button", { name: "Services", exact: true });
+
+  for (const theme of ["dark", "light"]) {
+    if (theme === "light") {
+      await page.getByRole("button", { name: "Switch to light theme" }).click();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+      await waitForNavigationTransitions(navigation);
+    }
+
+    // Re-enter keyboard modality from the first tabbable control so the next
+    // item is checked with its actual :focus-visible indicator.
+    await skipLink.evaluate((element) => element.focus());
+    await page.keyboard.press("Tab");
+    await expect(overview).toBeFocused();
+    expect(await overview.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
+
+    await services.hover();
+    await waitForNavigationTransitions(navigation);
+    await expectNoAxeViolations(page, `Primary navigation focus + hover in ${theme} theme`);
+  }
+});
+
+test("axe covers the API source connecting, disabled-submit, and request-error states", async ({ page }) => {
+  let releaseMetadata;
+  const metadataGate = new Promise((resolve) => {
+    releaseMetadata = resolve;
+  });
+
+  await page.route("**/api/v1/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === "/api/v1/meta") {
+      await metadataGate;
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: {
+            code: "temporarily_unavailable",
+            message: "The API is temporarily unavailable.",
+            request_id: "playwright-a11y-loading",
+          },
+        }),
+      });
+    }
+    if (pathname === "/api/v1/workspaces") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: [] }),
+      });
+    }
+    return route.continue();
+  });
+
+  await page.getByRole("button", { name: "Connect a source" }).click();
+  await page.getByLabel("API base URL").fill("http://127.0.0.1:4173");
+
+  const metadataRequest = page.waitForRequest((request) => (
+    new URL(request.url()).pathname === "/api/v1/meta"
+  ));
+  const submit = page.locator(".source-setup-actions button[type=\"submit\"]");
+  await submit.click();
+  await metadataRequest;
+
+  await expect(submit).toBeDisabled();
+  await expect(submit).toContainText("Connecting");
+  await expect(page.getByRole("heading", { name: "Connect API" })).toBeVisible();
+  await expectNoAxeViolations(page, "API source connecting with submit disabled");
+
+  // Release the held request only after the in-flight UI has been inspected.
+  releaseMetadata();
+  const error = page.locator(".source-error[role=\"alert\"]");
+  await expect(error).toBeVisible();
+  await expect(error).toContainText("temporarily unavailable");
+  await expect(submit).toBeEnabled();
+  await expectNoAxeViolations(page, "API source request-error state");
+});
