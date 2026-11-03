@@ -22,14 +22,15 @@ The web CI job runs:
 
 ```sh
 python3 scripts/check_accessibility_contract.py
+python3 scripts/check_accessibility_contrast.py
 npm run typecheck
 npm run build
 python3 scripts/check_accessibility_html.py
 ```
 
-The source-level Python check is a static regression guard for the landmarks, labels, focus handling, and CSS hooks. After the production build, the generated-HTML audit inspects the exported pages for document language/title, main and named navigation landmarks, a working skip-link target, heading presence, duplicate IDs, missing accessible names on interactive controls, unlabeled form fields, missing image alternatives, and broken ARIA ID references. Both checks use only Python's standard library.
+The source-level Python contract is a static regression guard for landmarks, labels, focus handling, and CSS hooks. The contrast check verifies the dark/light base text palette, the explicit light-theme text colors against the project's pale surfaces, and visible keyboard focus indicators. The generated-HTML audit inspects the exported pages for document language/title, main and named navigation landmarks, a working skip-link target, heading presence, duplicate IDs, missing accessible names on interactive controls, unlabeled form fields, missing image alternatives, and broken ARIA ID references. All three checks use only Python's standard library.
 
-These checks are structural regression guards. They are not an axe scan, a browser accessibility-tree inspection, a WCAG conformance report, a contrast measurement, or a screen-reader test.
+These checks are targeted regression guards. The palette script does not sample every computed color/background combination at runtime, and none of the scripts is an axe scan, browser accessibility-tree inspection, a full contrast audit, WCAG conformance report, or screen-reader test.
 
 ## Manual acceptance still required
 
