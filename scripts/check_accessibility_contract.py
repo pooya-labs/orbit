@@ -40,7 +40,7 @@ checks = [
     (i18n, 'chartDataCaption: "Request-rate samples for {service} across {window}"', "the metric data caption is localized in English"),
     (i18n, 'chartDataCaption: "نمونه‌های نرخ درخواست برای {service} در بازهٔ {window}"', "the metric data caption is localized in Persian"),
     (page, '<details className="telemetry-data-table overview-chart-data-table">', "the Overview demo chart exposes an expandable illustrative data alternative"),
-    (page, '<caption>{tr("overviewChartDataCaption")}', "the Overview chart data table explains that values are illustrative"),
+    (page, '<caption>{tr("overviewChartDataCaption").replace("{range}", demoChartRangeLabel)}</caption>', "the Overview chart data table explains that values are illustrative and identifies the selected range"),
     (page, 'demoChartTickLabels.map((label, index)', "the Overview chart time axis follows the selected time window"),
     (page, 'demoChartTimeAt(sample.elapsedFraction)', "Overview chart table timestamps follow the selected time window and locale"),
     (page, "sample.requestsPerMinute", "Overview chart data table reads values from the chart's sample fixture"),
