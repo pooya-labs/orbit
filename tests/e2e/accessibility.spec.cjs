@@ -618,3 +618,42 @@ test("keyboard users can reach and activate every primary view in natural tab or
     await expect(page.getByRole("heading", { level: 1, name: headingLabel, exact: true })).toBeVisible();
   }
 });
+
+
+test("Chromium accessibility tree exposes NVDA-style heading and landmark navigation", async ({ page }) => {
+  // NVDA's H/D navigation is driven by the browser's accessibility tree.
+  // This diagnostic inspects the same Chromium AX tree directly, rather
+  // than inferring screen-reader support from source markup or axe alone.
+  await page.waitForLoadState("domcontentloaded");
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Accessibility.enable");
+  const { nodes } = await cdp.send("Accessibility.getFullAXTree");
+
+  const propertyValue = (node, propertyName) => (
+    node.properties?.find((property) => property.name === propertyName)?.value?.value
+  );
+  const exposed = nodes
+    .filter((node) => !node.ignored)
+    .filter((node) => ["heading", "navigation", "main"].includes(node.role?.value))
+    .map((node) => ({
+      role: node.role.value,
+      name: node.name?.value ?? "",
+      level: propertyValue(node, "level") ?? null,
+    }));
+
+  console.log("ORBIT Chromium accessibility-tree diagnostic:", JSON.stringify(exposed, null, 2));
+
+  const headings = exposed.filter((node) => node.role === "heading");
+  const navigation = exposed.find((node) => node.role === "navigation" && node.name === "Primary navigation");
+  const main = exposed.find((node) => node.role === "main");
+  const pageTitle = headings.find((node) => node.level === 1 && node.name === "Good morning, team.");
+  const sidebarGroups = headings.filter((node) => node.level === 2).map((node) => node.name);
+
+  expect(navigation, "Named primary navigation must exist in Chromium's accessibility tree").toBeTruthy();
+  expect(main, "Main content landmark must exist in Chromium's accessibility tree").toBeTruthy();
+  expect(pageTitle, "The visible page H1 must be exposed as a level-one heading").toBeTruthy();
+  expect(sidebarGroups).toEqual(expect.arrayContaining(["Observe", "Investigate", "Deliver"]));
+
+  // Report the exact keyboard-reader targets discovered by Chromium.
+  console.log("ORBIT heading navigation targets:", JSON.stringify(headings, null, 2));
+});
