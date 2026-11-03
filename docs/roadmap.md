@@ -65,6 +65,9 @@ The v0.6.0 API queries the local Prometheus, Loki, and Tempo stores through boun
 - [x] Capture curated OpenTelemetry resource attributes directly from authenticated OTLP workloads over HTTP and gRPC, persist them per workspace with otlp provenance, and verify attribute isolation in the real PostgreSQL/Collector/backend E2E pipeline (PR #104; only a reviewed low-risk allowlist is accepted).
 - [x] Review the current projection against OpenTelemetry Resource Semantic Conventions 1.44.0, document explicitly deferred identity/sensitive attributes, and add CI checks for ingress/persistence allowlist parity and matching bounds (PR #126 / ADR 0005). No new attributes were added without a concrete use case.
 - [ ] Expand the workload resource semantic-convention allowlist only when a concrete consumer, privacy/cardinality review, and operational budget justify it; arbitrary producer attributes remain intentionally unsupported.
+- [ ] Wire the Metrics/Logs/Traces dashboard to authenticated workspace-scoped catalog and query APIs; select an authorized workspace and remove legacy unscoped telemetry calls from API mode (those endpoints are intentionally disabled in staging/production).
+- [ ] Add a safe, tenant-scoped metric catalog and metric selection model beyond the demo-only `request_rate` series; enforce metric/label allowlists, cardinality budgets, bounded query cost, and query validation rather than exposing arbitrary PromQL.
+- [ ] Add interactive trace detail (trace lookup plus span hierarchy/timing/status) and explicit log-to-trace correlation, while preserving workspace membership checks and trace tenant filtering on every detail request.
 - [x] Persist bounded service resource attributes and per-attribute backend provenance in PostgreSQL.
 - [x] Add validated cursor-based pagination to the service catalog API and dashboard selector.
 - [x] Add allow-listed multi-series grouping and separate line rendering for the request-rate metric; arbitrary metric-name selection remains future work.
@@ -116,12 +119,13 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - [x] Verify atomic shared workload rate limits across independent gateway instances and concurrent replicas, plus cross-replica grant/identity revocation (PRs #43, #46, #48; CI-verified).
 - [x] Verify deterministic gateway saturation behavior and enforce the configured 64-slot default admission bound for HTTP and gRPC (PRs #51 and #60; CI-verified).
 - [x] Verify fail-closed gRPC dependency errors, HTTP Collector timeout mapping, and recovery after transient authorization, rate-limit, and Collector faults (PRs #53, #54, #58; CI-verified).
-- [ ] Complete production rollout of the implemented ingestion security boundary: verify real DNS/ACME issuance, host firewall and trusted-proxy policy, deployment-specific network controls, real-provider browser PKCE, sustained multi-replica load/recovery, and operational runbooks. PR #56 supplies an optional Caddy TLS edge-ingress scaffold, not a live deployment. Production tenant ingestion remains disabled until these environment-level gates pass. Reserved producer tenant attributes are rejected, never trusted.
+Production rollout is tracked by the individual environment gates below and in the v1.0 readiness section. PR #56 supplies an optional Caddy TLS edge-ingress scaffold, not a live deployment. Production tenant ingestion remains disabled until the required gates pass. Reserved producer tenant attributes are rejected, never trusted.
 - [x] Merge and CI-verify the shared PostgreSQL rate limiter for horizontally scaled API instances (`db45843`); staging/production require PostgreSQL and the limiter stores only hashed short-lived keys.
 - [x] Add CI-verified 7-day retention and explicit ingestion/cardinality/size guardrails for the single-tenant local Prometheus, Loki, and Tempo stack; document the limits and their production boundary (`docs/observability-retention.md`).
 - [x] Preserve the existing ephemeral API rate-limit retention: two-minute expiry with request-driven pruning and an indexed expiry column.
 - [ ] Define and implement a compliant retention/archive policy for durable API history (workspace audit, incident timelines, alert lifecycle, notification attempts, and deployment annotations); do not TTL-prune immutable history until its policy is approved.
 - [x] Add a documented full-database PostgreSQL logical backup/restore runbook and CI-verified pg_dump/pg_restore round-trip covering the schema migration ledger, workspace audit data, actor context, and post-restore append-only guards (PR #83; `docs/postgres-backup-restore.md`).
+- [ ] Instrument the production Go API and its background workers with bounded OpenTelemetry metrics, traces, and structured logs; prove the signals traverse the authenticated pipeline without leaking tokens, tenant identifiers, or request payloads.
 - [ ] Configure encrypted off-host production backups, retention/PITR, backup alerting, and a target-environment restore rehearsal with measured RPO/RTO; the CI round-trip does not satisfy this deployment gate.
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
 - [ ] Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
@@ -141,6 +145,51 @@ The initial server-side OIDC resource-server and route-role gate and shared Post
 - No secrets or real customer telemetry are committed.
 - Mobile and desktop layouts remain usable.
 - Documentation describes what is implemented, not only what is intended.
+
+
+## v1.0.0 release readiness — audited 2026-11-03
+
+### Current release baseline
+
+- Latest published tag: \`v0.10.0\`, published as a GitHub prerelease / Public Preview. No \`v1.0.0\` release exists yet.
+- Source baseline at the start of this audit: \`main\` commit \`3698959f060342ed1dd5993151175f5a33272ded\` (PR #126 merged). Pages deployment, Security, and the v0.10.0 release workflow succeeded on that revision. The post-merge CI run was still completing its final real-backend workspace-isolation and PostgreSQL-restart steps at audit time; do not record that run as fully green until those steps finish.
+- Audit reconciliation: 95 of 107 previously recorded checkboxes were complete. Several open boxes duplicated the same production OIDC, ingress, and target-load gates; the historical duplicate boxes are consolidated below. The count is not a measure of v1 completeness because some deferred items are deliberately non-blocking.
+
+### Verified and completed — do not repeat
+
+- **M01 UI/accessibility automation:** responsive dashboard, bilingual English/Persian RTL, light/dark themes, keyboard/landmark contracts, chart table alternatives, generated-HTML checks, 17 Playwright/axe tests across the primary views, and Windows NVDA 2026.2 Speech Viewer coverage through all 13 views are implemented and CI-verified (PRs #109, #114, #116, #119, #124, #125). Human device acceptance remains open below.
+- **M02 API/data foundation:** Go API, PostgreSQL migrations 001–016, typed client, OpenAPI 3.1, inventory and operational APIs, audit/history persistence and repository integration tests are implemented.
+- **M03 local platform:** Compose, PostgreSQL and optional Collector/Prometheus/Loki/Tempo pipeline, instrumented Go demo, and end-to-end signal checks are implemented. Redis and NATS are provisioned only; functional application integration is intentionally deferred under ADR 0004.
+- **M04 telemetry baseline:** bounded Metrics/Logs/Traces queries, cross-backend service discovery, persisted workspace catalog, source/resource provenance, cursor pagination, request-rate grouping, staleness/gap handling, authenticated OTLP capture over HTTP/gRPC, canonical workspace attribution, and resource-allowlist parity/denylist guard (PR #126 / ADR 0005) are implemented. Broader metric discovery and detailed trace exploration are still open below.
+- **M05 operations:** workspace-scoped incident timeline, alert rules/evaluation, webhook outbox and retry history, deployment annotations, SLO/error budget, and searchable immutable audit history are implemented and covered by CI (PRs #66–#82).
+- **M06 code-level security/recovery:** human OIDC verifier/role gate, provider-neutral browser PKCE, workspace membership, workload identities/grants, authenticated OTLP gateways, rate limits/admission/revocation/fail-closed behavior, A/B tenant integration tests, local retention/cardinality guardrails, backup/restore CI, security scans, pinned Actions, SBOM artifacts, fault/recovery tests and runbook templates are present. They do not establish a production deployment.
+- **Recent no-duplicate guard:** do not recreate the completed suites in PRs #110, #111, #112, #113, #114, #115, #116, #119, #124, #125, or the allowlist contract in PR #126 unless a new regression is identified.
+
+### Unique v1 blockers (linked to their detailed milestone checkboxes)
+
+The telemetry frontend currently calls legacy unscoped `/api/v1/telemetry/*` routes. The backend's `withLegacyGlobalReadGate` intentionally returns 404 for those paths in staging/production; workspace-scoped query routes and a workspace catalog exist, but the dashboard has not yet been switched to them. This is a release blocker, not an acceptable production configuration.
+
+1. **Workspace-safe telemetry UI:** connect the three telemetry views to the authenticated workspace catalog and Metrics/Logs/Traces query routes. Until this is done, their legacy unscoped calls cannot work in staging/production.
+2. **Product capability:** finish the bounded general metric catalog/selection, trace/span detail view with secure log-to-trace correlation, and instrumentation of the Go API/background workers. These are the new M04/M06 checkboxes above.
+3. **Accessibility acceptance:** complete the existing M01 human keyboard-only, visual-state and chart/table review; record actual Windows NVDA audible-output, Android TalkBack, and Apple VoiceOver sessions. Do not claim WCAG conformance from automated scans or hosted NVDA transcript alone.
+4. **Hosted service:** deploy HTTPS ORBIT API, managed PostgreSQL, and telemetry backends; connect the static Pages frontend and prove live authenticated workflows end to end. The current Pages deployment is frontend-only.
+5. **Identity and edge security:** configure real human/workload OIDC providers and test browser PKCE, issuer/audience, callback/state/nonce, key rotation/revocation, and exact CORS. Deploy DNS/ACME, host firewall, trusted proxy, private backend/Collector/database networks, NetworkPolicy and document the internal-hop mTLS decision.
+6. **Data governance and recovery:** approve durable-history retention/archive/legal requirements, then implement the approved policy without weakening append-only history. Configure encrypted off-host PostgreSQL backups, WAL/PITR, retention and alerting; rehearse a target-environment restore and record RPO/RTO.
+7. **Target capacity and operations:** run sustained ingestion and dashboard-query tests with production-like managed dependencies; record throughput, p50/p95/p99, saturation, rejection/backpressure, failure and recovery. Execute deployment, incident, rollback and backup runbooks; assign monitoring and secret-rotation ownership.
+8. **Stable release process:** on the final candidate, require green CI, Security, Pages-source/deploy and dependency/image/SBOM checks; publish immutable source/build provenance and signed release attestations (or an approved equivalent); align app/API/Compose/documentation/tag/release version metadata at \`1.0.0\`; publish the GitHub release as stable, not prerelease.
+
+### Explicitly deferred — not v1 blockers unless measured evidence changes the decision
+
+- Redis cache and NATS application/event integration: provisioned in Compose but deferred under [ADR 0004](decisions/0004-redis-nats-deferred.md) until profiling or a second durable consumer demonstrates need.
+- Expanding the OpenTelemetry resource attribute allowlist: current review and ingress/persistence drift guard are complete (PR #126 / ADR 0005). New attributes require an actual consumer, stability/privacy review, cardinality analysis, and an operational budget.
+- Arbitrary PromQL/LogQL access: intentionally unsupported; v1 metric selection must remain allow-listed and cost-bounded.
+
+### Audit notes and documentation consistency
+
+- Canonical repository and Pages origin are \`pooya-labs/orbit\` and \`https://pooya-labs.github.io/orbit/\`. Personal creator attribution may remain linked to the maintainer's separate GitHub profile. Runtime OIDC callback/CORS examples and operator/user links must use the canonical Pages origin.
+- PostgreSQL migration history currently runs from \`001_initial.sql\` through \`016_workspace_otlp_resource_attributes.sql\`; docs must not describe only the first three migrations as the current schema.
+- The historical Go module namespace still uses \`github.com/pooya16pg-spec/orbit\`. Do not mechanically rename imports in this audit; decide separately whether a canonical module path migration is required before publishing reusable Go modules.
+- The current license notice says no open-source license has been selected. This is not a blocker for a private/proprietary v1 deployment; choose and add a license before claiming/distributing the repository as open source.
 
 
 Workspace-scoped telemetry query routes are merged and CI-verified in PR #18. Prometheus, Loki, and Tempo requests are constrained by the verified workspace ID after membership verification. These routes require the canonical `orbit_workspace_id` resource label; ingestion must attach and authenticate that label before tenant telemetry can be enabled. ADR 0002 defines the proposed workload identity, workspace grant, canonical attribution, and private Collector boundary.
@@ -163,11 +212,11 @@ The test establishes read-after-commit revocation for requests authorized after 
 - [x] Verify the default 64-slot admission bound under a synchronized HTTP/gRPC burst, reject requests over capacity before Collector forwarding, and release admitted requests cleanly (PR #60; merged and CI-passing).
 - [x] Add deterministic sustained-concurrency tests and handler-path throughput/allocation benchmarks for OTLP HTTP and gRPC; see [M06 load-testing guide](m06-load-testing.md).
 - [x] Verify recovery after real local Collector listener stop/restart (PR #62), PostgreSQL TCP-path disconnect/restoration (PR #64), clean PostgreSQL Compose container stop/start (PR #111), and ungraceful PostgreSQL SIGKILL + WAL recovery through the same pool with a committed-data probe (PR #112; CI run `41596787239`). These are single-node process/container recovery tests, not host power-loss, storage-loss, HA failover, PITR, or production RPO/RTO certification.
-- [ ] Run sustained target-environment load tests with real PostgreSQL and Collector dependencies, then capture throughput, latency percentiles, saturation, and rejection behavior.
+Target-environment sustained load and recovery evidence is tracked once in the M06 checklist above; do not count this historical PR #50 note as a second task.
 - [x] Add explicit backpressure and recovery-under-sustained-load tests across the real dependency boundary (PR #110, squash merge `b42b4b56a82a2f977b373731ae6e85a1ceb0760e`; CI run `41580189083` passed using real CI PostgreSQL + OTLP Collector: 64 admitted, 8 over-capacity HTTP 503, three 16-export recovery waves, and 639 successful exports over 20 seconds).
 - [x] Add an optional Caddy TLS edge-ingress Compose overlay for OTLP/HTTP and OTLP/gRPC (PR #56; merged with CI passing). CI validates the Caddyfile, the rendered Compose topology, and that only the edge proxy publishes ingress ports.
-- [ ] Deploy and verify the ingress scaffold with real DNS/ACME certificates, host-firewall rules, trusted-proxy behavior, and deployment-specific NetworkPolicy/cloud controls; assess internal-hop mTLS.
-- [ ] Configure and end-to-end verify a real OIDC provider for browser PKCE, including callback, state/nonce, issuer/audience validation, and key rotation.
+DNS/ACME, firewall, trusted-proxy, private-network policy, and internal-hop mTLS assessment are tracked once in the M06 production rollout checklist above.
+Real-provider browser PKCE and token/key lifecycle verification are tracked once in the M06 production rollout checklist above.
 - [x] Complete repository dependency/secrets review, local telemetry retention/cardinality controls, CI backup/restore verification, and publish deployment/incident-response runbook templates (latest review: Security run `41406376150`; see `docs/observability-retention.md`, `docs/postgres-backup-restore.md`, and `docs/operations-runbook.md`). Production-specific execution and durable-history retention policy remain open below.
 
 The in-flight contract does not cancel or roll back data already admitted to the Collector. Production tenant ingestion remains disabled until the remaining production gates are verified.

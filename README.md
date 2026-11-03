@@ -2,20 +2,20 @@
 
 **Distributed Systems Intelligence & Observability**
 
-**Project owner & maintainer:** [@pooya16pg-spec](https://github.com/pooya16pg-spec) · [Source repository](https://github.com/pooya16pg-spec/orbit)
+**Project owner & maintainer:** [@pooya16pg-spec](https://github.com/pooya16pg-spec) · [Source repository](https://github.com/pooya-labs/orbit)
 
 ORBIT is an engineering-first observability platform for understanding the health, behavior, and reliability of distributed services.
 
 ## Live preview
 
-**[Open the ORBIT dashboard](https://pooya16pg-spec.github.io/orbit/)**
+**[Open the ORBIT dashboard](https://pooya-labs.github.io/orbit/)**
 
 The public preview is a static, responsive workspace. Demo mode uses clearly labelled illustrative data; API mode can read service and incident inventories from an explicitly configured ORBIT API. No production systems are connected by default.
 
 ## Current implementation
 
 - Responsive Next.js + TypeScript observability workspace with an explicit demo/API source switch and English / Persian language support, including RTL layout.
-- The dashboard reads service/incident inventories and telemetry queries from a configured ORBIT API. Metrics, Logs, and Traces share a cursor-paginated service selector populated from Prometheus, Loki, and Tempo; the Metrics view supports allow-listed multi-series grouping and timestamp-based stale/gap warnings.
+- The dashboard reads service/incident inventories from workspace-scoped APIs. The telemetry views are still being migrated from legacy unscoped read endpoints to authenticated workspace-scoped routes; those legacy endpoints are disabled in staging/production. Metrics, Logs, and Traces share a cursor-paginated service selector populated from Prometheus, Loki, and Tempo; the Metrics view supports allow-listed multi-series grouping and timestamp-based stale/gap warnings.
 - Go HTTP API with liveness, readiness, metadata, service/incident inventory, workspace-scoped incident lifecycle and alert-rule definition APIs, immutable incident timelines, and bounded Prometheus/Loki/Tempo query endpoints.
 - PostgreSQL repository with versioned migrations, clearly marked seed data, and a normalized telemetry service catalog.
 - Docker Compose stack for PostgreSQL, Redis, NATS, and the Go API.
@@ -54,7 +54,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 Requirements: Git, Node.js 20+, and npm.
 
 ```powershell
-git clone https://github.com/pooya16pg-spec/orbit.git
+git clone https://github.com/pooya-labs/orbit.git
 cd orbit
 npm install
 npm run dev
@@ -76,7 +76,7 @@ Install Docker Desktop, then from the repository root:
 docker compose up --build
 ```
 
-This starts PostgreSQL, Redis, NATS, and the Go API. On its first start the API applies the versioned SQL migrations (`001_initial`, `002_telemetry_service_catalog`, and `003_telemetry_resource_attribute_sources`) and inserts five sample services and two sample incidents, each marked with source `demo_seed`.
+This starts PostgreSQL, Redis, NATS, and the Go API. On its first start the API applies the versioned SQL migrations (`001_initial` through `016_workspace_otlp_resource_attributes`) and inserts five sample services and two sample incidents, each marked with source `demo_seed`.
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -149,9 +149,9 @@ The v0.10.0 preview is the current documented product baseline. M01–M04 delive
 
 **M05 — Operations workflows is implemented on `main`.** The workspace now includes authenticated incident lifecycle and immutable timelines, workspace alert rules and their evaluator, transactional webhook delivery/retry history, deployment annotations and release comparison, HTTP request-success SLOs/error budgets, and the searchable workspace audit log with pseudonymous actor references and captured roles. See [the roadmap](docs/roadmap.md) and [the OpenAPI contract](docs/openapi.yaml).
 
-**M06 — Security and production hardening is partially implemented.** The merged backend includes human OIDC verification and role enforcement, workspace membership and scoped reads, workload identities and per-signal grants, authenticated OTLP/HTTP and OTLP/gRPC gateways, canonical tenant attribution, shared PostgreSQL rate limits, bounded admission, revocation semantics, fail-closed dependency handling, and CI evidence for the full workspace-A/write-to-query boundary across metrics, logs, and traces (PR #84). CI also verifies local telemetry retention/cardinality limits and a PostgreSQL backup/restore round trip (PR #83). A production ingress scaffold and an operator runbook template exist, but neither represents a deployed production environment.
+**M06 — Security and production hardening is substantially implemented in code and CI, but not deployed as a production service.** The backend includes human OIDC verification and role enforcement, workspace membership and scoped reads, workload identities and per-signal grants, authenticated OTLP/HTTP and OTLP/gRPC gateways, canonical tenant attribution, shared PostgreSQL rate limits, bounded admission, revocation semantics, fail-closed dependency handling, and real local PostgreSQL/Collector/backend evidence for the workspace-A/write-to-query boundary across metrics, logs, and traces. M05 state-changing workflows are workspace- and role-protected and audited. CI covers local retention/cardinality limits, PostgreSQL backup/restore, image scans, dependency/security checks, immutable GitHub Actions pins, and CycloneDX SBOM artifacts. A Caddy ingress scaffold, threat model, and operator runbook templates exist; none is evidence of a deployed production environment.
 
-PR #90 adds a repository threat model, full-history secret scanning, Go/npm dependency checks, Dependabot updates, immutable GitHub Actions pins, and image scanning. The scan has been extended beyond the API to the Compose services and the production ingress. PostgreSQL's helper binary is rebuilt with a patched Go toolchain; the telemetry smoke helper is a static, standard-library-only Go binary; Tempo and the minimal ORBIT Collector are rebuilt from pinned upstream sources with updated dependencies. The custom Collector and Caddy builds and Trivy scans passed on reviewed earlier heads, as did the API/PostgreSQL scans and the Redis, NATS, Prometheus, Loki, and Go/Alpine base-image scans. The full telemetry end-to-end CI completed successfully, including authenticated workspace A/B isolation. Trivy identified two HIGH findings in the Go telemetry demo (`golang.org/x/net` and `google.golang.org/grpc`); the demo module now explicitly pins the fixed versions `v0.60.0` and `v1.83.2`, and the Security workflow refreshes/verifies the module lockfile. Tempo is built from upstream tag `v3.1.1` after asserting its pinned source commit; an exact-PURL OpenVEX statement documents the upstream fix for `CVE-2026-28377`, and the latest Trivy scan still needs to confirm it is applied. CycloneDX SBOM generation and artifact upload have been added but still need a completed latest-head run. Dependency Review succeeded on Security run `41402304452`, reporting no HIGH-or-higher or denied packages; the latest head still requires a final rerun.
+**Remaining M06 work is deployment-specific:** real human/workload OIDC providers and browser callback lifecycle; hosted API, managed PostgreSQL and telemetry backends; DNS/ACME, firewall/trusted-proxy and private-network policy; encrypted off-host backups/PITR with measured RPO/RTO; target-environment load and recovery evidence; approved durable-history retention/archive policy; production secret rotation, monitoring, and exercised runbooks. Production tenant ingestion remains disabled until the relevant gates are verified.
 
 **Production tenant ingestion remains disabled.** Real human/workload OIDC providers, DNS and ACME certificates, host firewall and trusted-proxy rules, deployment network policies, managed-backend quotas, encrypted off-host backups and restore rehearsal, approved durable-history retention policy, and target-environment load/recovery evidence must be configured and verified before production rollout. See [the operations runbook](docs/operations-runbook.md) and [the threat model](docs/security-threat-model.md).
 

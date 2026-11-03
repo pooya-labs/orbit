@@ -6,7 +6,7 @@ This guide is for a contributor who has never performed a manual accessibility r
 
 Use the public preview:
 
-- https://pooya16pg-spec.github.io/orbit/
+- https://pooya-labs.github.io/orbit/
 
 No local checkout, terminal, GitHub permissions, API credentials, or production account is needed for this review. Use the visible demo/read-only mode. Do not configure a real API, submit operational mutations, enable notification channels, change alert rules, or enter secrets. If an action would create, update, or delete a real record, cancel it.
 

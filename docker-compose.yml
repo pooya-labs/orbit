@@ -51,7 +51,7 @@ services:
       ORBIT_ENVIRONMENT: development
       ORBIT_VERSION: 0.10.0
       ORBIT_DATABASE_URL: postgres://orbit:orbit_local_only@postgres:5432/orbit?sslmode=disable
-      ORBIT_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,https://pooya16pg-spec.github.io
+      ORBIT_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,https://pooya-labs.github.io
       ORBIT_PROMETHEUS_URL: http://prometheus:9090
       ORBIT_LOKI_URL: http://loki:3100
       ORBIT_TEMPO_URL: http://tempo:3200

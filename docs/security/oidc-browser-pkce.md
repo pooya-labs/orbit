@@ -14,9 +14,9 @@ Set the following variables in the frontend build environment:
 
 For GitHub Pages, register this exact callback URL at the identity provider:
 
-https://pooya16pg-spec.github.io/orbit/auth/callback/
+https://pooya-labs.github.io/orbit/auth/callback/
 
-The identity provider must advertise authorization-code response type and PKCE S256 support. If it includes the RFC 9207 authorization-response issuer parameter, the callback verifies that value against the configured issuer. Its token endpoint must allow browser CORS requests from https://pooya16pg-spec.github.io.
+The identity provider must advertise authorization-code response type and PKCE S256 support. If it includes the RFC 9207 authorization-response issuer parameter, the callback verifies that value against the configured issuer. Its token endpoint must allow browser CORS requests from https://pooya-labs.github.io.
 
 ## Token handling
 
@@ -32,6 +32,6 @@ Configure the Go API with the same issuer and API audience:
 
 - ORBIT_OIDC_ISSUER must exactly match the provider issuer.
 - ORBIT_OIDC_AUDIENCE must match the audience requested by the browser and present in the API access token.
-- ORBIT_ALLOWED_ORIGINS must include the exact browser origin (without a path): https://pooya16pg-spec.github.io.
+- ORBIT_ALLOWED_ORIGINS must include the exact browser origin (without a path): https://pooya-labs.github.io.
 
 This is a provider-neutral foundation. It is not production-integrated until a real identity provider/client is configured and the full browser-to-API flow is tested against it.

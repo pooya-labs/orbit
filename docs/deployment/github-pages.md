@@ -7,7 +7,7 @@ build.
 
 ## One-time repository setting
 
-1. Open [ORBIT repository settings](https://github.com/pooya16pg-spec/orbit/settings/pages).
+1. Open [ORBIT repository settings](https://github.com/pooya-labs/orbit/settings/pages).
 2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
 3. Save the setting.
 4. Rerun the **Deploy ORBIT to GitHub Pages** workflow from the Actions tab, or
@@ -27,7 +27,7 @@ token.
 
 The project site is:
 
-https://pooya16pg-spec.github.io/orbit/
+https://pooya-labs.github.io/orbit/
 
 The repository root domain (without `/orbit/`) is not the URL for this
 project site.

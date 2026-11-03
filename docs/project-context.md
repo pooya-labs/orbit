@@ -599,7 +599,7 @@ Pre-merge application/test head: `5e1e37cf789bfed9baf971f914a9df895e328ea3` from
 - The source accessibility contract passed **68 checks**. The theme contrast regression guard, TypeScript typecheck, production build, and generated-HTML audit also passed; the latter checked **5 pages / 791 elements**.
 - Go API tests/race/vet/build, workflow action-pin policy, PostgreSQL backup/restore round-trip, and the full local telemetry pipeline end-to-end job all completed successfully in run [41578302352](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302352).
 - Security run [41578302399](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302399) passed all **13 jobs**, including dependency checks, full-history secret scanning, production/telemetry image scans, and SBOM generation.
-- Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) and temporary branch deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) passed before merge. After PR #109 merged, the feature-branch publishing trigger was removed; main-only Pages deployment [41579531993](https://github.com/pooya16pg-spec/orbit/actions/runs/41579531993) succeeded from the protected `github-pages` environment. Canonical site: https://pooya16pg-spec.github.io/orbit/.
+- Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) and temporary branch deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) passed before merge. After PR #109 merged, the feature-branch publishing trigger was removed; main-only Pages deployment [41579531993](https://github.com/pooya16pg-spec/orbit/actions/runs/41579531993) succeeded from the protected `github-pages` environment. Canonical site: https://pooya-labs.github.io/orbit/.
 - PR #109 was squash-merged into `main` as `e9e7d74387dddcf76226cfab32dd979f56af4dc9`.
 
 Automated Chromium/axe checks do not replace M01's manual acceptance: keyboard-only operation across all views/forms, NVDA/VoiceOver/TalkBack behavior, responsive zoom/reflow and RTL, reduced-motion behavior, rendered contrast in all interactive states, and a human review of chart/table reading experience and visible controls remain outstanding. PR #109's automated baseline is merged; do not mark M01 complete solely from CI results.
@@ -758,7 +758,7 @@ Current main: 0348f8831d8f008970ad6c42532620a12ff5a0e0. PR #120 is squash-merged
 - Security run [41611433351](https://github.com/pooya16pg-spec/orbit/actions/runs/41611433351) passed all 13/13 jobs.
 - After merge, Pages deployment [41612768102](https://github.com/pooya16pg-spec/orbit/actions/runs/41612768102) succeeded from the exact merge commit. The release workflow [41612863226](https://github.com/pooya16pg-spec/orbit/actions/runs/41612863226) succeeded and updated the existing v0.10.0 preview release target to this commit; no version bump was made.
 - Post-merge Security run [41612767938](https://github.com/pooya16pg-spec/orbit/actions/runs/41612767938) passed all 13 jobs. Post-merge CI run [41612768223](https://github.com/pooya16pg-spec/orbit/actions/runs/41612768223) subsequently completed successfully across all four jobs: 18/18 Playwright tests, Go tests/vet/build and PostgreSQL backup/restore round-trip, action-pin policy, and the full Docker telemetry E2E including metrics/logs/traces query, Prometheus scrape, authenticated workspace A/B isolation, PostgreSQL restart/connection-pool recovery, and cleanup.
-- Public preview: https://pooya16pg-spec.github.io/orbit/
+- Public preview: https://pooya-labs.github.io/orbit/
 - Release: https://github.com/pooya16pg-spec/orbit/releases/tag/v0.10.0
 
 ### Next work — do not repeat merged regressions
@@ -809,3 +809,25 @@ PR #126 adds a repository-owned guard for the two intentionally independent OTLP
 Do not interpret this as a relaxation of tenant security. Canonical workspace identity still comes only from the verified server-side grant. The PR changes policy checks and documentation only; it does not change API behavior, stored data, migrations, authentication, telemetry routing, or production-ingress settings.
 
 The PR must pass CI, Security, and (where triggered) Pages/Release checks before merge. Do not repeat the already completed NVDA all-view work in PR #125 or M06 recovery suites #110/#111/#112/#115.
+
+
+## Current handoff — v1.0 readiness audit (2026-11-03)
+
+Repository: \`pooya-labs/orbit\`; default branch \`main\`. Audit base commit: \`3698959f060342ed1dd5993151175f5a33272ded\` (PR #126). The audit branch \`audit/v1-readiness-and-release-record\` records the reconciliation; do not merge it until CI and Security pass on its exact head.
+
+The roadmap now has a single v1.0.0 readiness section, groups already-implemented capabilities by milestone, consolidates duplicate production OIDC/ingress/load gates, distinguishes product work from deployment acceptance, and explicitly marks Redis/NATS integration and resource-attribute allowlist expansion as deferred unless measured need appears.
+
+Newly identified product gaps are:
+- Metrics is still limited to the demo \`request_rate\` counter; safe general metric catalog/selection with cardinality and query-cost budgets is not implemented.
+- Traces currently render Tempo search summaries only; there is no user-facing span-detail/timeline workflow or explicit log-to-trace correlation.
+- The production Go API/background workers are not self-instrumented; only the example workload emits OTLP signals.
+
+The audit also corrects canonical repository/Pages links, the browser OIDC callback and API CORS examples, the local Go version, outdated migration-count instructions, and stale v0.10 preview release notes. Keep personal maintainer attribution separate from the canonical repository owner. The historical Go module import path has not been mechanically renamed; assess that separately before publishing reusable modules.
+
+Do not repeat the completed PR #110–#126 test work unless a new regression is found. M01 manual device acceptance and M06 target-environment deployment evidence remain genuinely open. See \`docs/roadmap.md\` → “v1.0.0 release readiness” for the authoritative release gates.
+
+
+## Current handoff — frontend/API scope finding (2026-11-03)
+
+The M04 workspace telemetry catalog and authenticated workspace Metrics/Logs/Traces backend routes exist, but \`TelemetryWorkspace\` still calls the legacy unscoped \`/api/v1/telemetry/*\` client methods. \`withLegacyGlobalReadGate\` intentionally returns 404 for those unscoped paths in staging and production. Therefore API-mode telemetry on the dashboard is not production-ready. Next implementation step: reuse the authenticated workspace selection/membership pattern from the M05 workspaces, wire the telemetry catalog and all three query paths to workspace routes, then add trace detail and correlation on that tenant-safe foundation.
+
