@@ -70,6 +70,8 @@ checks = [
     (styles, "visibility: hidden", "the closed mobile drawer is removed from keyboard navigation"),
     (styles, "@media (prefers-reduced-motion: reduce)", "reduced-motion preferences are respected"),
     (styles, ".telemetry-data-table-scroll", "the metric data alternative has a horizontally scrollable narrow-screen container"),
+    (page, '<div className="telemetry-data-table-scroll" role="region" aria-label={tr("overviewChartDataCaption").replace("{range}", demoChartRangeLabel)} tabIndex={0}>', "the Overview chart table scroll region is named and keyboard focusable"),
+    (telemetry, '<div className="telemetry-data-table-scroll" role="region" aria-label={tr("chartDataCaption").replace("{service}", selectedService).replace("{window}", windowRange)} tabIndex={0}>', "the live Metrics table scroll region is named and keyboard focusable"),
     (styles, ".telemetry-data-table caption", "the metric data alternative styles a native table caption"),
     (i18n, 'primaryNavigation: "Primary navigation"', "the primary navigation label is localized in English"),
     (i18n, 'primaryNavigation: "پیمایش اصلی"', "the primary navigation label is localized in Persian"),
