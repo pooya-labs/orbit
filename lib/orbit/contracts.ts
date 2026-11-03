@@ -281,6 +281,50 @@ export interface TempoTraceSummary {
   durationMs: number;
 }
 
+export interface TempoTraceSpan {
+  traceId: string;
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  kind?: number;
+  startTimeUnixNano: string;
+  endTimeUnixNano: string;
+  status?: {
+    code?: number;
+    message?: string;
+  };
+}
+
+export interface TempoTraceDetailBatch {
+  resource?: {
+    attributes?: {
+      key: string;
+      value?: {
+        stringValue?: string;
+        intValue?: string;
+        doubleValue?: number;
+        boolValue?: boolean;
+      };
+    }[];
+  };
+  scopeSpans?: {
+    scope?: {
+      name?: string;
+      version?: string;
+    };
+    spans?: TempoTraceSpan[];
+  }[];
+}
+
+export interface WorkspaceTraceDetailResponse {
+  source: "tempo";
+  trace_id: string;
+  queried_at: string;
+  data: {
+    batches: TempoTraceDetailBatch[];
+  };
+}
+
 export type TelemetryMetricsResponse = TelemetryQueryResponse<PrometheusRangeSeries[]>;
 export type TelemetryLogsResponse = TelemetryQueryResponse<LokiLogStream[]>;
 export type TelemetryTracesResponse = TelemetryQueryResponse<TempoTraceSummary[]>;
