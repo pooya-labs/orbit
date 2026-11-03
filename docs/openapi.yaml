@@ -1645,6 +1645,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceID}/telemetry/traces/{traceID}:
+    get:
+      tags: [Telemetry]
+      operationId: getWorkspaceTelemetryTrace
+      summary: Read trace spans within an authenticated workspace
+      description: Retrieves one Tempo trace by its trace ID after verifying workspace membership. Because Tempo's trace-ID lookup is not tenant-scoped, ORBIT validates the workspace identifier on every returned resource batch and the trace identifier on every span; a missing or mismatched workspace attribution is returned as not found.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceID"
+        - name: traceID
+          in: path
+          required: true
+          description: Non-zero 32-character hexadecimal OpenTelemetry trace identifier.
+          schema:
+            type: string
+            pattern: "^[0-9a-fA-F]{32}$"
+      responses:
+        "200":
+          description: Trace detail whose resource batches are all attributed to the requested workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceTraceDetailResponse"
+        "400":
+          description: Invalid workspace or trace identifier.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: The trace is missing or is not attributed exclusively to this workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Tempo trace storage is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/telemetry/services:
     get:
       tags: [Telemetry]
@@ -2923,6 +2965,30 @@ components:
                   items:
                     type: string
                     enum: [prometheus, loki, tempo, otlp]
+    WorkspaceTraceDetailResponse:
+      type: object
+      required: [source, trace_id, queried_at, data]
+      properties:
+        source:
+          type: string
+          const: tempo
+        trace_id:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+        queried_at:
+          type: string
+          format: date-time
+        data:
+          type: object
+          required: [batches]
+          description: Tempo v2 OTLP trace response. ORBIT checks every resource batch for the selected workspace before returning this payload.
+          properties:
+            batches:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+          additionalProperties: true
     WorkspaceAuditEventListResponse:
       type: object
       required: [data]
