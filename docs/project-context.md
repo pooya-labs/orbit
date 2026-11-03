@@ -595,13 +595,13 @@ The source-level accessibility contract checks the table, caption, selected-wind
 
 ## M01 verification snapshot — current PR head (2026-11-03)
 
-Application implementation head: `f9f170abf785a68396a5de2d8081da432b2264cf`. Follow-up test-only commit: `53d4fc7f9dc9d4347f68ec709df47a1bb17cf7c8` on `feat/m01-accessibility-review` (PR #109). The new test commit adds keyboard-focus and ArrowRight horizontal-scroll assertions for the chart-table overflow region; application runtime code is unchanged by that commit.
+Current code/test head: `5e1e37cf789bfed9baf971f914a9df895e328ea3` on `feat/m01-accessibility-review` (PR #109).
 
-- CI run [41577611706](https://github.com/pooya16pg-spec/orbit/actions/runs/41577611706): the web job passed. All **13 Playwright tests** passed, including skip-link/main focus, mobile drawer keyboard containment and focus restoration, live Metrics table behavior, axe scans, invalid API error announcements, all-view headings, 320 CSS-pixel reflow, and keyboard scrolling of the chart-table region.
-- The source accessibility contract passed **68 checks**. The theme contrast regression guard, TypeScript typecheck, production build, and generated-HTML structural audit also passed; the latter checked **5 pages / 791 elements**.
-- The workflow action-pin policy job passed. Go API tests/build and the full local telemetry pipeline end-to-end job were still running at the time of this snapshot; do not claim the whole CI workflow passed until both finish successfully.
-- The preceding Security run [41577030522](https://github.com/pooya16pg-spec/orbit/actions/runs/41577030522) passed all **13 jobs** on the preceding application/test head. Security rerun [41577611713](https://github.com/pooya16pg-spec/orbit/actions/runs/41577611713) for the follow-up test commit was still in progress.
-- Pages-source verification [41577611702](https://github.com/pooya16pg-spec/orbit/actions/runs/41577611702) passed. No newer successful Pages deployment for this PR head was verified; the canonical public site should not be assumed to show this branch.
+- CI run [41578302352](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302352): web verification passed. All **14 Playwright tests** passed, including axe scans across all 12 primary views in both dark and light themes, plus dedicated Overview/Metrics/mobile-drawer/error scans, reduced-motion behavior, keyboard navigation, and 320 CSS-pixel reflow.
+- The source accessibility contract passed **68 checks**. The theme contrast regression guard, TypeScript typecheck, production build, and generated-HTML audit also passed; the latter checked **5 pages / 791 elements**.
+- Go API tests/build and workflow action-pin policy passed. The full local telemetry pipeline end-to-end job was still running at the latest status check; the whole CI workflow is not yet recorded as green.
+- Security run [41578302399](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302399) had passed **11 of 13 jobs**; only the ORBIT API image and patched Tempo image jobs remained in progress.
+- Pages-source verification [41578302366](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302366) and branch deployment [41578298625](https://github.com/pooya16pg-spec/orbit/actions/runs/41578298625) passed. The current public preview is https://pooya16pg-spec.github.io/orbit/. Pages is a single-site target; publishing the feature branch replaces the canonical site until a later successful main deployment.
 - PR #109 remains open and unmerged. `main` is unchanged.
 
 Automated Chromium/axe checks do not replace M01's manual acceptance: keyboard-only operation across all views/forms, NVDA/VoiceOver/TalkBack behavior, responsive zoom/reflow and RTL, reduced-motion behavior, rendered contrast in all interactive states, and a human review of chart/table reading experience and visible controls remain outstanding. Do not mark M01 complete or merge PR #109 solely from these CI results.
