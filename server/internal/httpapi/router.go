@@ -344,6 +344,11 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 			writeError(w, r, http.StatusBadRequest, "invalid_service", err.Error())
 			return
 		}
+		metricID, err := telemetry.ParseMetricID(r.URL.Query().Get("metric"))
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_metric", err.Error())
+			return
+		}
 		groupBy, err := telemetry.ParseMetricGroupBy(r.URL.Query().Get("group_by"))
 		if err != nil {
 			writeError(w, r, http.StatusBadRequest, "invalid_group_by", err.Error())
@@ -355,7 +360,7 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 7*time.Second)
 		defer cancel()
-		result, err := cfg.Telemetry.Metrics(ctx, window, service, groupBy)
+		result, err := cfg.Telemetry.Metrics(ctx, window, service, metricID, groupBy)
 		if err != nil {
 			writeTelemetryError(w, r, logger, "Prometheus", err)
 			return
