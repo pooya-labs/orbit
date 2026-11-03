@@ -31,7 +31,7 @@ checks = [
     (i18n, 'timeRange: "Time range"', "the time-range group label is localized in English"),
     (i18n, 'timeRange: "بازهٔ زمانی"', "the time-range group label is localized in Persian"),
     (telemetry, '<details className="telemetry-data-table">', "the live Metrics chart provides an expandable tabular data alternative"),
-    (telemetry, '<caption>{tr("chartDataCaption")}', "the metric data table has a contextual caption"),
+    (telemetry, '<caption>{tr("chartDataCaption").replace("{service}", selectedService).replace("{window}", windowRange)}</caption>', "the metric data table has a contextual caption with the selected service and time window"),
     (telemetry, '<th scope="col">{tr("chartTime")}', "the metric data table exposes semantic column headers"),
     (telemetry, 'formatClock(row.timestamp * 1000, language)', "metric sample timestamps are presented in the selected locale"),
     (telemetry, "formatRate(row.value, language)", "metric sample values are formatted for the selected locale"),
