@@ -179,8 +179,9 @@ enableOnPageLoad = True
     $speechViewerOutput = Invoke-WinApp -Arguments @(
       "ui", "list-windows", "-a", "$($nvdaProcess.Id)"
     )
-    if ($speechViewerOutput -match "NVDA Speech Viewer") {
-      $handleMatch = [regex]::Match($speechViewerOutput, "(?i)HWND\s+(\d+)")
+    $speechViewerLine = ($speechViewerOutput -split "\r?\n" | Where-Object { $_ -match "NVDA Speech Viewer" } | Select-Object -First 1)
+    if ($speechViewerLine) {
+      $handleMatch = [regex]::Match($speechViewerLine, "(?i)HWND\s+(\d+)")
       if ($handleMatch.Success) {
         $speechWindowHandle = $handleMatch.Groups[1].Value
         break
