@@ -61,7 +61,7 @@ test("mobile navigation hides closed controls and traps/restores keyboard focus"
   await expect(menu).toHaveAttribute("aria-expanded", "true");
 
   const close = page.getByRole("button", { name: "Close navigation" });
-  const profileLink = page.getByRole("link", { name: "@pooya16pg-spec" });
+  const profileLink = page.locator("aside.sidebar").getByRole("link", { name: "@pooya16pg-spec" });
   await expect(close).toBeFocused();
 
   await page.keyboard.press("Shift+Tab");
@@ -185,6 +185,9 @@ test("Metrics chart table renders Prometheus samples and updates with the API ti
   const sixHours = page.getByRole("group", { name: "Window" }).getByRole("button", { name: "6 hours" });
   await sixHours.click();
   await expect(sixHours).toHaveAttribute("aria-pressed", "true");
+  await expect(disclosure).toBeVisible();
+  await disclosure.locator("summary").click();
+  await expect(disclosure).toHaveAttribute("open", "");
   await expect(table.locator("caption")).toContainText("6h");
   await expect(table.locator("tbody tr")).toHaveCount(6);
 });
