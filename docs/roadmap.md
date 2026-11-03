@@ -13,8 +13,10 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 - [x] Add automated Pages deployment.
 - [x] Require GitHub Actions as the Pages publishing source and verify it before deployment; document the branch/Jekyll conflict and recovery steps (PR #88; Pages-source check and full CI verified).
 - [x] Add a user-selectable, persistent light/dark dashboard theme while retaining the established dark palette (PR #35).
-- [x] Add baseline keyboard accessibility: skip-to-main link, explicit main/navigation landmarks, current-page announcement, visible focus indicators, and mobile navigation Escape/Tab/focus-return behavior with an automated CI contract check (PR under review; automated coverage only).
-- [ ] Complete manual keyboard-only and screen-reader review with NVDA, VoiceOver, and TalkBack; verify color contrast in both themes, charts/data alternatives, and all remaining controls before closing the M01 accessibility review.
+- [x] Add baseline keyboard accessibility: skip-to-main link, explicit main/navigation landmarks, current-page announcement, visible focus indicators, and mobile navigation Escape/Tab/focus-return behavior. CI now guards source semantics, theme palette contrast, and the generated static HTML export (PR #109; automated coverage only).
+- [ ] Complete manual keyboard-only and screen-reader review with NVDA, VoiceOver, and TalkBack; verify rendered-state contrast (including hover/selected/disabled/error states), charts/data alternatives, responsive reflow, and all remaining controls before closing the M01 accessibility review.
+
+The contrast regression check covers the base palette plus explicit light-theme text colors against a reviewed set of pale surfaces. It is not a computed-style scan for every state and does not replace manual contrast acceptance.
 
 ## M02 — API and persistence foundation
 
