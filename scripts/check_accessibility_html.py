@@ -122,8 +122,13 @@ def audit_file(path: Path) -> tuple[list[str], int]:
     if not any(node.text_content for node in elements if node.tag == "title"):
         errors.append(f"{prefix}: document title is missing or empty")
 
+    relative_parts = path.relative(ROOT / "out").parts
+    is_framework_not_found = (
+        path.name == "404.html"
+        or any(part in {"404", "_not-found"} for part in relative_parts)
+    )
     mains = [node for node in elements if node.tag == "main" or node.attrs.get("role") == "main"]
-    if len(mains) != 1:
+    if not is_framework_not_found and len(mains) != 1:
         errors.append(f"{prefix}: expected exactly one main landmark, found {len(mains)}")
 
     if not any(node.text_content for node in elements if node.tag == "h1"):
@@ -134,12 +139,14 @@ def audit_file(path: Path) -> tuple[list[str], int]:
         if not accessible_name(nav, id_text):
             errors.append(f"{prefix}: navigation landmark {index} has no accessible name")
 
-    if not parser.skip_targets:
-        errors.append(f"{prefix}: localized skip link targeting main content is missing")
-    else:
-        for target in parser.skip_targets:
-            if target not in parser.ids:
-                errors.append(f"{prefix}: skip link target #{target} does not exist")
+    # The dashboard has navigation and therefore needs a skip link. The
+    # dedicated OIDC callback is a single-purpose status page with no nav;
+    # framework-generated 404 documents are not the application shell.
+    if navs and not parser.skip_targets:
+        errors.append(f"{prefix}: page with navigation is missing its skip link")
+    for target in parser.skip_targets:
+        if target not in parser.ids:
+            errors.append(f"{prefix}: skip link target #{target} does not exist")
 
     for element_id in parser.duplicates:
         errors.append(f"{prefix}: duplicate id '{element_id}'")
