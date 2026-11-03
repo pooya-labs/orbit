@@ -339,7 +339,7 @@ test("Overview reflows at a 320 CSS-pixel viewport without page-level horizontal
 
   const dimensions = await page.evaluate(() => {
     const viewport = document.documentElement.clientWidth;
-    const overflow = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+    const overflow = Array.from(document.querySelectorAll("body *"))
       .map((element) => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
