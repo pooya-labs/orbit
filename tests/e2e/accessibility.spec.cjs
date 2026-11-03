@@ -143,6 +143,7 @@ test("theme and language controls update visible theme and RTL direction", async
 
 test("Metrics chart table renders Prometheus samples and updates with the API time window", async ({ page }) => {
   const now = Math.floor(Date.now() / 1000);
+  const requestedMetrics = [];
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     const json = (body) => route.fulfill({
@@ -179,6 +180,8 @@ test("Metrics chart table renders Prometheus samples and updates with the API ti
     }
     if (url.pathname === "/api/v1/telemetry/metrics") {
       const window = url.searchParams.get("window") || "1h";
+      const metric = url.searchParams.get("metric") || "request_rate";
+      requestedMetrics.push(metric);
       const values = (offset) => [
         [now - 120, String(12.5 + offset)],
         [now - 60, String(14.2 + offset)],
@@ -188,7 +191,12 @@ test("Metrics chart table renders Prometheus samples and updates with the API ti
         source: "prometheus",
         window,
         queried_at: new Date().toISOString(),
-        query: "sum(rate(orbit_demo_requests_total[5m]))",
+        query: metric === "failed_request_rate"
+          ? 'sum(rate(orbit_demo_requests_total{slo_outcome="bad"}[5m]))'
+          : metric === "successful_request_rate"
+            ? 'sum(rate(orbit_demo_requests_total{slo_outcome="good"}[5m]))'
+            : "sum(rate(orbit_demo_requests_total[5m]))",
+        metric,
         step: "60s",
         service: "orbit-telemetry-demo",
         group_by: ["instance"],
@@ -215,11 +223,24 @@ test("Metrics chart table renders Prometheus samples and updates with the API ti
   await navigation.getByRole("button", { name: "Metrics", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Metrics" })).toBeVisible();
 
+  const metricSelector = page.getByLabel("Metric");
+  await expect(metricSelector).toHaveValue("request_rate");
+  await expect(metricSelector.locator("option")).toHaveCount(3);
+  const failedMetricRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/v1/telemetry/metrics" && url.searchParams.get("metric") === "failed_request_rate";
+  });
+  await metricSelector.selectOption("failed_request_rate");
+  await failedMetricRequest;
+  await expect.poll(() => requestedMetrics.at(-1)).toBe("failed_request_rate");
+  await expect(page.locator(".telemetry-stat-row .telemetry-kicker").first()).toHaveText("FAILED REQUEST RATE");
+
   const disclosure = page.locator("details.telemetry-data-table");
   await expect(disclosure).toBeVisible();
   await disclosure.locator("summary").click();
 
   const table = disclosure.getByRole("table");
+  await expect(table.locator("caption")).toContainText("FAILED REQUEST RATE samples");
   await expect(table.locator("caption")).toContainText("orbit-telemetry-demo");
   await expect(table.locator("caption")).toContainText("1h");
   await expect(table.locator("thead th")).toHaveCount(3);
