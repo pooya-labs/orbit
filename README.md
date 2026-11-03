@@ -15,7 +15,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 ## Current implementation
 
 - Responsive Next.js + TypeScript observability workspace with an explicit demo/API source switch and English / Persian language support, including RTL layout.
-- The dashboard reads service/incident inventories and telemetry queries from a configured ORBIT API. Metrics, Logs, and Traces share a cursor-paginated service selector populated from Prometheus, Loki, and Tempo; the Metrics view supports allow-listed multi-series grouping and timestamp-based stale/gap warnings.
+- The dashboard reads service/incident inventories from workspace-scoped APIs. The telemetry views are still being migrated from legacy unscoped read endpoints to authenticated workspace-scoped routes; those legacy endpoints are disabled in staging/production. Metrics, Logs, and Traces share a cursor-paginated service selector populated from Prometheus, Loki, and Tempo; the Metrics view supports allow-listed multi-series grouping and timestamp-based stale/gap warnings.
 - Go HTTP API with liveness, readiness, metadata, service/incident inventory, workspace-scoped incident lifecycle and alert-rule definition APIs, immutable incident timelines, and bounded Prometheus/Loki/Tempo query endpoints.
 - PostgreSQL repository with versioned migrations, clearly marked seed data, and a normalized telemetry service catalog.
 - Docker Compose stack for PostgreSQL, Redis, NATS, and the Go API.
