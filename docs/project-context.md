@@ -556,3 +556,9 @@ Audit-log filters and telemetry metric-group controls already exposed selected s
 The code head `086137db0a05fbdf8ca050a6f8ce4730a31bb0ba` passed CI run `41473967465` (all four jobs) and Security run `41473967524` (all 13 jobs). The web job explicitly passed the accessibility contract, TypeScript typecheck, and production build. All 11 expected CycloneDX SBOM artifacts were uploaded and unexpired. These automated results do not close manual acceptance: keyboard-only browser testing, NVDA/VoiceOver/TalkBack, contrast in both themes, chart/data alternatives, and final control review remain open. Do not merge PR #109 or mark M01 accessibility complete solely from these CI results.
 
 Production tenant ingestion remains disabled until the environment-specific M06 gates elsewhere in this document and `docs/roadmap.md` have recorded evidence.
+
+## M01 accessibility follow-through — generated HTML regression audit (2026-11-03)
+
+PR #109 adds `scripts/check_accessibility_html.py` and runs it after `npm run build` in the web CI job. It inspects the actual static HTML export (rather than only checking JSX source strings) for the document language/title, primary landmarks, heading presence, skip-link target, duplicate IDs, accessible names on rendered links/buttons and role-based controls, form-control labels, image alternatives, and ARIA ID references.
+
+The checker uses only Python's standard library and needs the production export in `out/`. It is a structural regression check, not browser automation, an accessibility-tree/axe scan, contrast verification, WCAG certification, or screen-reader evidence. Keep the M01 manual acceptance checkbox open until the keyboard, NVDA/VoiceOver/TalkBack, contrast, chart-alternative, and control review has been completed. The new checker and its CI integration must be verified on the exact latest PR head; do not reuse a run from a preceding commit.
