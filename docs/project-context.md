@@ -656,3 +656,10 @@ Latest main commit at this handoff: `5b3c0fc344f043640b01c670a84deb6c78d09a5c`. 
 Repository-level M06 regression coverage now includes: actual Collector listener stop/restart, PostgreSQL TCP-path interruption/recovery, sustained real-PostgreSQL + Collector backpressure (PR #110; 639 successful exports in its 20-second CI phase), and clean PostgreSQL container/process restart (PR #111). Avoid repeating these tests or adding duplicate roadmap entries.
 
 Remaining deployment gates are distinct: target-environment sustained load and p50/p95/p99 measurements, dashboard-query load, multiple gateway replicas under real workload, crash/power-loss and storage failure testing, HA/failover/replication and partition behavior, encrypted off-host backups/PITR with measured RPO/RTO, real DNS/ACME/firewall/trusted-proxy/network controls, provider-backed PKCE, durable-history retention/archive policy, hosted API/managed persistence, and operational rollout. Production tenant ingestion remains disabled until those environment-specific gates are evidenced.
+
+
+## M06 PostgreSQL crash-recovery regression — PR #112 in progress
+
+PR #112 extends the merged PR #111 PostgreSQL container restart test with a second failure phase. The same Repository/pgxpool instance first recovers from a graceful Compose stop/start, then recovers again after the PostgreSQL container is killed with SIGKILL and restarted with its existing persistent data volume. The test waits for an observable pool outage and proves the postmaster start timestamp advances after both phases.
+
+The second cycle exercises PostgreSQL startup crash/WAL recovery after an ungraceful process termination. It does not simulate host power loss, storage corruption, disk loss, HA failover/replication, network partition, PITR, or production RPO/RTO.
