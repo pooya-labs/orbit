@@ -2,6 +2,8 @@ package telemetry
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"encoding/json"
 	"net/http"
@@ -654,12 +656,19 @@ func TestWorkspaceTraceDetailRequiresMatchingWorkspaceOnEveryBatch(t *testing.T)
 	traceID := strings.Repeat("a", 32)
 	spanID := strings.Repeat("b", 16)
 
+	encodeID := func(id string) string {
+		decoded, err := hex.DecodeString(id)
+		if err != nil {
+			t.Fatalf("invalid hexadecimal test ID %q: %v", id, err)
+		}
+		return base64.StdEncoding.EncodeToString(decoded)
+	}
 	payload := func(workspaceIDs []string, spanTraceID string) string {
 		batches := make([]string, 0, len(workspaceIDs))
 		for _, workspaceID := range workspaceIDs {
-			batches = append(batches, `{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"api-gateway"}},{"key":"orbit.workspace.id","value":{"stringValue":"`+workspaceID+`"}}]},"scopeSpans":[{"spans":[{"traceId":"`+spanTraceID+`","spanId":"`+spanID+`","name":"GET /checkout","startTimeUnixNano":"1000000","endTimeUnixNano":"2000000"}]}]}`)
+			batches = append(batches, `{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"api-gateway"}},{"key":"orbit.workspace.id","value":{"stringValue":"`+workspaceID+`"}}]},"scopeSpans":[{"spans":[{"traceId":"`+encodeID(spanTraceID)+`","spanId":"`+encodeID(spanID)+`","name":"GET /checkout","kind":"SPAN_KIND_SERVER","startTimeUnixNano":"1000000","endTimeUnixNano":"2000000","status":{"code":"STATUS_CODE_OK"}}]}]}`)
 		}
-		return `{"batches":[` + strings.Join(batches, ",") + `]}`
+		return `{"trace":{"resourceSpans":[` + strings.Join(batches, ",") + `]}}`
 	}
 
 	t.Run("returns a trace only when every batch is workspace-owned", func(t *testing.T) {
@@ -680,8 +689,8 @@ func TestWorkspaceTraceDetailRequiresMatchingWorkspaceOnEveryBatch(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if result.Source != "tempo" || result.TraceID != traceID || result.QueriedAt.IsZero() || !strings.Contains(string(result.Data), "GET /checkout") {
-			t.Fatalf("unexpected trace detail response: %+v", result)
+		if result.Source != "tempo" || result.TraceID != traceID || result.QueriedAt.IsZero() || !strings.Contains(string(result.Data), "GET /checkout") || !strings.Contains(string(result.Data), `"traceId":"`+traceID+`"`) || !strings.Contains(string(result.Data), `"spanId":"`+spanID+`"`) || !strings.Contains(string(result.Data), `"code":1`) {
+			t.Fatalf("unexpected normalized trace detail response: %+v", result)
 		}
 	})
 
@@ -713,7 +722,10 @@ func TestWorkspaceTraceDetailRequiresMatchingWorkspaceOnEveryBatch(t *testing.T)
 
 	t.Run("rejects missing workspace attribution", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte(`{"batches":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"api-gateway"}}]},"scopeSpans":[{"spans":[{"traceId":"`+traceID+`","spanId":"`+spanID+`"}]}]}]}`))
+			traceBytes, _ := hex.DecodeString(traceID)
+			spanBytes, _ := hex.DecodeString(spanID)
+			payload := `{"trace":{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"api-gateway"}}]},"scopeSpans":[{"spans":[{"traceId":"`+base64.StdEncoding.EncodeToString(traceBytes)+`","spanId":"`+base64.StdEncoding.EncodeToString(spanBytes)+`"}]}]}]}}`
+			_, _ = w.Write([]byte(payload))
 		}))
 		defer server.Close()
 		client, _ := NewClient("", "", server.URL)
