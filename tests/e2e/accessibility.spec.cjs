@@ -609,7 +609,7 @@ test("keyboard users can reach and activate every primary view in natural tab or
 
     await page.keyboard.press("Enter");
     await expect(item).toHaveAttribute("aria-current", "page");
-    const headingLabel = label === "Overview" ? "Good morning" : label;
+    const headingLabel = label === "Overview" ? "Good morning, team." : label;
     await expect(page.getByRole("heading", { level: 1, name: headingLabel, exact: true })).toBeVisible();
   }
 });
