@@ -223,22 +223,10 @@ enableOnPageLoad = True
   Write-Host $edgeWindows
 
   $cleanEdgeWindows = [regex]::Replace($edgeWindows, "\x1B\[[0-9;]*m", "")
-  $edgeHandleMatch = [regex]::Match($cleanEdgeWindows, '(?im)^\s*HWND\s+(\d+):\s+"ORBIT — Systems Observatory"')
-  if (-not $edgeHandleMatch.Success) {
-    throw ("Could not identify the ORBIT Edge window handle." + [Environment]::NewLine + $cleanEdgeWindows)
+  if ($cleanEdgeWindows -notmatch "(?i)\bforeground\b") {
+    throw ("ORBIT is not the foreground Edge window; refusing to inject keyboard input." + [Environment]::NewLine + $cleanEdgeWindows)
   }
-  $edgeWindowHandle = $edgeHandleMatch.Groups[1].Value
-  $edgeTree = Invoke-WinApp -Arguments @("ui", "inspect", "-w", $edgeWindowHandle, "--depth", "8")
-  $cleanEdgeTree = [regex]::Replace($edgeTree, "\x1B\[[0-9;]*m", "")
-  $webDocumentMatch = [regex]::Match($cleanEdgeTree, '(?im)^\s*(doc-[a-z0-9-]+)\s+Document\s+"ORBIT — Systems Observatory"')
-  if (-not $webDocumentMatch.Success) {
-    throw ("Could not identify the ORBIT web-document selector." + [Environment]::NewLine + $cleanEdgeTree)
-  }
-  $webDocumentSelector = $webDocumentMatch.Groups[1].Value
-  Write-Host ("ORBIT web-document selector: " + $webDocumentSelector)
-  Invoke-WinApp -Arguments @(
-    "ui", "focus", $webDocumentSelector, "-w", $edgeWindowHandle
-  ) | Write-Host
+  Write-Host "ORBIT is already the foreground Edge window; sending NVDA test keys to msedge."
   Start-Sleep -Seconds 1
 
   Write-Host "=== Move focus into the web document ==="
