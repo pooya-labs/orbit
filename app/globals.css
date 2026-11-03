@@ -324,8 +324,20 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
   .page-footer { gap: 10px; font-size: 7px; }
 }
 @media (max-width: 390px) {
+  .topbar { gap: 8px; padding: 0 10px; }
+  .topbar-left { min-width: 0; flex: 0 1 auto; gap: 5px; }
+  .topbar-left .breadcrumbs > span:first-child,
+  .topbar-left .breadcrumbs .crumb-separator,
+  .topbar-left .environment-pill { display: none; }
+  .topbar-left .breadcrumbs { min-width: 0; max-width: 70px; gap: 0; font-size: 9px; }
+  .topbar-left .breadcrumbs strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-actions { min-width: 0; flex: 0 0 auto; gap: 4px; }
+  .topbar-actions > .topbar-divider { display: none; }
+  .topbar-actions .global-search { width: 28px; padding: 0 5px; }
+  .topbar-actions .icon-button { width: 28px; height: 28px; }
+  .language-switch { gap: 0; padding: 2px; }
+  .language-switch button { min-width: 28px; height: 24px; padding: 0 4px; }
   .environment-pill { font-size: 7px; letter-spacing: .02em; }
-  .topbar-left { gap: 6px; }
   .breadcrumbs { font-size: 9px; }
   .button-secondary, .button-primary { padding: 0 8px; font-size: 9px; }
   .range-switcher button { padding: 5px 4px; }
