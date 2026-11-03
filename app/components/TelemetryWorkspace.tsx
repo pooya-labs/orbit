@@ -499,10 +499,10 @@ export default function TelemetryWorkspace({
           ? current
           : response.data[0]?.id ?? "request_rate");
       })
-      .catch((cause) => {
+      .catch(() => {
         if (!mounted || controller.signal.aborted) return;
         setMetricCatalog([]);
-        setMetricCatalogError(cause instanceof Error ? cause.message : tr("metricCatalogUnavailable"));
+        setMetricCatalogError(tr("metricCatalogUnavailable"));
       })
       .finally(() => {
         if (mounted && !controller.signal.aborted) setMetricCatalogLoading(false);
