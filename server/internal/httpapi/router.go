@@ -443,6 +443,14 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 
 
 func writeTelemetryError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, backend string, err error) {
+	if errors.Is(err, telemetry.ErrInvalidTraceID) {
+		writeError(w, r, http.StatusBadRequest, "invalid_trace_id", "Trace ID must be a non-zero 32-character hexadecimal value")
+		return
+	}
+	if errors.Is(err, telemetry.ErrWorkspaceTraceNotFound) {
+		writeError(w, r, http.StatusNotFound, "workspace_trace_not_found", "Trace was not found in this workspace")
+		return
+	}
 	if errors.Is(err, telemetry.ErrNotConfigured) {
 		writeError(w, r, http.StatusServiceUnavailable, "telemetry_unavailable", backend+" is not configured")
 		return

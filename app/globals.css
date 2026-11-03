@@ -429,6 +429,37 @@ h1 { margin: 12px 0 5px; font: 600 clamp(24px, 2.2vw, 29px)/1.2 Manrope, sans-se
 .telemetry-trace-side { flex: 0 0 auto; display: grid; gap: 4px; text-align: right; }
 .telemetry-trace-side strong { color: #d1c1ed; font: 10px "DM Mono", monospace; }
 .telemetry-trace-side span { color: #71818b; font: 8px "DM Mono", monospace; }
+.telemetry-trace-row.selected { border-color: rgba(101,217,193,.32); background: rgba(101,217,193,.035); }
+.telemetry-trace-actions { flex: 0 0 auto; }
+.telemetry-trace-actions button,
+.telemetry-trace-detail-header button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 29px; padding: 5px 9px; border: 1px solid #2b3e47; border-radius: 6px;
+  color: #9ecdbf; background: #111d23; font: 9px "DM Mono", monospace; cursor: pointer;
+}
+.telemetry-trace-actions button:hover,
+.telemetry-trace-detail-header button:hover { border-color: #4d8e7f; color: #d4f5e9; background: #15272a; }
+.telemetry-trace-detail {
+  margin-top: 14px; padding: 13px; border: 1px solid #2a3a43; border-radius: 9px;
+  background: rgba(10,18,23,.42);
+}
+.telemetry-trace-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 11px; border-bottom: 1px solid #26353d; }
+.telemetry-trace-detail-header > div { min-width: 0; display: grid; gap: 5px; }
+.telemetry-trace-detail-header h3 { margin: 0; color: #d2e0e4; font-size: 11px; font-weight: 600; }
+.telemetry-trace-detail-header code { color: #82959e; font: 8px "DM Mono", monospace; overflow-wrap: anywhere; }
+.telemetry-trace-detail-state { margin: 12px 0 2px; color: #9baeb5; font-size: 10px; }
+.telemetry-span-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.telemetry-span-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 10px 8px; border-bottom: 1px solid #1d2a31; border-radius: 5px; }
+.telemetry-span-row:last-child { border-bottom: 0; }
+.telemetry-span-main { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.telemetry-span-main strong { color: #cbd7dc; font-size: 10px; overflow-wrap: anywhere; }
+.telemetry-span-status { padding: 2px 5px; border-radius: 4px; font: 8px "DM Mono", monospace; }
+.telemetry-span-status.ok { color: #8fd3b8; background: rgba(93,183,151,.1); }
+.telemetry-span-status.error { color: #f0a5a5; background: rgba(218,105,105,.12); }
+.telemetry-span-status.unset { color: #8999a1; background: rgba(125,145,155,.1); }
+.telemetry-span-meta { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px; color: #7f9099; font: 8px "DM Mono", monospace; }
+.telemetry-span-meta code { color: #7e9a9f; direction: ltr; }
+.telemetry-span-meta time { white-space: nowrap; }
 .telemetry-source-note { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 1px 3px; color: var(--subtle); font: 8px "DM Mono", monospace; }
 .telemetry-connect-prompt { display: flex; align-items: center; gap: 14px; padding: 19px; }
 .telemetry-connect-prompt > div:nth-child(2) { min-width: 0; flex: 1; }
@@ -898,12 +929,23 @@ html[data-theme="light"] .telemetry-attribute-item small { color: #5e6b72; }
 html[data-theme="light"] .telemetry-stat-card,
 html[data-theme="light"] .telemetry-log-row,
 html[data-theme="light"] .telemetry-trace-row,
+html[data-theme="light"] .telemetry-trace-detail,
+html[data-theme="light"] .telemetry-span-row,
 html[data-theme="light"] .telemetry-attribute-item {
   border-color: #e7edef;
   background: #f8fafb;
 }
 html[data-theme="light"] .telemetry-stat-card strong,
-html[data-theme="light"] .telemetry-trace-side strong { color: #4c5e68; }
+html[data-theme="light"] .telemetry-trace-side strong,
+html[data-theme="light"] .telemetry-span-main strong,
+html[data-theme="light"] .telemetry-trace-detail-header h3 { color: #4c5e68; }
+html[data-theme="light"] .telemetry-trace-detail-header { border-color: #e0e8eb; }
+html[data-theme="light"] .telemetry-trace-detail-header code,
+html[data-theme="light"] .telemetry-span-meta { color: #5e6b72; }
+html[data-theme="light"] .telemetry-trace-actions button,
+html[data-theme="light"] .telemetry-trace-detail-header button {
+  border-color: #dce5e9; color: #176f62; background: #f3f8f7;
+}
 html[data-theme="light"] .telemetry-log-row strong,
 html[data-theme="light"] .telemetry-log-row code { color: #465a64; }
 html[data-theme="light"] .telemetry-log-row time,
@@ -936,6 +978,14 @@ html[data-theme="light"] .telemetry-connect-prompt .button-primary { color: #fff
 html[data-theme="light"] .empty-state { color: #5f6b72; }
 html[data-theme="light"] .telemetry-spinner { border-color: #dce5e9; border-top-color: #168f7b; }
 
+@media (max-width: 700px) {
+  .telemetry-trace-row { flex-wrap: wrap; }
+  .telemetry-trace-side { margin-inline-start: auto; }
+  .telemetry-trace-actions { width: 100%; margin-inline-start: 42px; }
+  .telemetry-trace-actions button { width: 100%; }
+  .telemetry-span-row { grid-template-columns: minmax(0,1fr); gap: 7px; }
+  .telemetry-span-meta { justify-content: flex-start; }
+}
 @media (max-width: 760px) {
   html[data-theme="light"] .sidebar { box-shadow: 18px 0 45px rgba(34,57,67,.12); }
   html[data-theme="light"] .app-shell[dir="rtl"] .sidebar { box-shadow: -18px 0 45px rgba(34,57,67,.12); }

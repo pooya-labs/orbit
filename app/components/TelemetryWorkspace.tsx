@@ -5,9 +5,11 @@ import {
   Activity,
   AlertCircle,
   Clock3,
+  Eye,
   FileText,
   RefreshCw,
   Workflow,
+  X,
 } from "lucide-react";
 import {
   getTelemetryMetrics,
@@ -17,6 +19,7 @@ import {
   getTelemetryServiceAttributes,
   getWorkspaceMembership,
   getWorkspaceTelemetryMetrics,
+  getWorkspaceTelemetryTrace,
   listWorkspaceTelemetryLogs,
   listWorkspaceTelemetryServices,
   listWorkspaceTelemetryTraces,
@@ -27,7 +30,9 @@ import type {
   TelemetryLogsResponse,
   TelemetryMetricsResponse,
   TelemetryTracesResponse,
+  TempoTraceSpan,
   TelemetryWindow,
+  WorkspaceTraceDetailResponse,
   WorkspaceMembershipSummary,
   WorkspaceSummary,
 } from "../../lib/orbit/contracts";
@@ -164,6 +169,10 @@ export default function TelemetryWorkspace({
   const [metrics, setMetrics] = useState<TelemetryMetricsResponse | null>(null);
   const [logs, setLogs] = useState<TelemetryLogsResponse | null>(null);
   const [traces, setTraces] = useState<TelemetryTracesResponse | null>(null);
+  const [selectedTraceId, setSelectedTraceId] = useState("");
+  const [traceDetail, setTraceDetail] = useState<WorkspaceTraceDetailResponse | null>(null);
+  const [traceDetailLoading, setTraceDetailLoading] = useState(false);
+  const [traceDetailError, setTraceDetailError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -179,6 +188,10 @@ export default function TelemetryWorkspace({
     setMembershipWorkspaceId("");
     setDiscoveredServices([]);
     setResourceAttributes(null);
+    setSelectedTraceId("");
+    setTraceDetail(null);
+    setTraceDetailError("");
+    setTraceDetailLoading(false);
   }), []);
 
   useEffect(() => {
@@ -513,6 +526,54 @@ export default function TelemetryWorkspace({
     };
   }, [view, windowRange, apiBaseUrl, reloadKey, selectedService, language, metricGroupBy, useLegacyDevelopmentReads, user?.sub, workspaceId, membership, membershipWorkspaceId]);
 
+  useEffect(() => {
+    if (!selectedTraceId) {
+      setTraceDetail(null);
+      setTraceDetailError("");
+      setTraceDetailLoading(false);
+      return;
+    }
+    if (useLegacyDevelopmentReads || !user || !workspaceId || !membership || membershipWorkspaceId !== workspaceId) {
+      setTraceDetail(null);
+      setTraceDetailError(tr("traceDetailsFailed"));
+      setTraceDetailLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    let mounted = true;
+    setTraceDetail(null);
+    setTraceDetailError("");
+    setTraceDetailLoading(true);
+    getWorkspaceTelemetryTrace(workspaceId, selectedTraceId, controller.signal, apiBaseUrl)
+      .then((response) => {
+        if (mounted && !controller.signal.aborted) setTraceDetail(response);
+      })
+      .catch(() => {
+        if (mounted && !controller.signal.aborted) {
+          setTraceDetail(null);
+          setTraceDetailError(tr("traceDetailsFailed"));
+        }
+      })
+      .finally(() => {
+        if (mounted && !controller.signal.aborted) setTraceDetailLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [apiBaseUrl, language, membership, membershipWorkspaceId, selectedTraceId, user?.sub, useLegacyDevelopmentReads, workspaceId]);
+
+  useEffect(() => {
+    if (view !== "Traces" && selectedTraceId) {
+      setSelectedTraceId("");
+      setTraceDetail(null);
+      setTraceDetailError("");
+      setTraceDetailLoading(false);
+    }
+  }, [view, selectedTraceId]);
+
   const metricSeries = useMemo(() => {
     if (!metrics) return [];
     return metrics.data.map((series, index) => {
@@ -606,6 +667,44 @@ export default function TelemetryWorkspace({
   }, [logs]);
 
   const traceRows = traces?.data ?? [];
+  const traceSpanRows = useMemo(() => {
+    const spans: TempoTraceSpan[] = traceDetail?.data.batches.flatMap((batch) =>
+      (batch.scopeSpans ?? []).flatMap((scope) => scope.spans ?? []),
+    ) ?? [];
+    const byId = new Map(spans.map((span) => [span.spanId, span]));
+    const parseNanos = (value: string): bigint | null => {
+      if (!/^\d+$/.test(value)) return null;
+      try {
+        return BigInt(value);
+      } catch {
+        return null;
+      }
+    };
+    const ordered = [...spans].sort((left, right) => {
+      const leftStart = parseNanos(left.startTimeUnixNano);
+      const rightStart = parseNanos(right.startTimeUnixNano);
+      if (leftStart === null) return 1;
+      if (rightStart === null) return -1;
+      return leftStart < rightStart ? -1 : leftStart > rightStart ? 1 : 0;
+    });
+
+    return ordered.map((span) => {
+      let depth = 0;
+      let parentSpanId = span.parentSpanId;
+      const visited = new Set<string>();
+      while (parentSpanId && byId.has(parentSpanId) && !visited.has(parentSpanId) && depth < 6) {
+        visited.add(parentSpanId);
+        depth += 1;
+        parentSpanId = byId.get(parentSpanId)?.parentSpanId;
+      }
+      const start = parseNanos(span.startTimeUnixNano);
+      const end = parseNanos(span.endTimeUnixNano);
+      const durationMs = start !== null && end !== null && end >= start
+        ? Number(end - start) / 1_000_000
+        : Number.NaN;
+      return { span, depth, durationMs };
+    });
+  }, [traceDetail]);
   const queriedAt =
     view === "Metrics" ? metrics?.queried_at :
     view === "Logs" ? logs?.queried_at :
@@ -637,6 +736,9 @@ export default function TelemetryWorkspace({
               onChange={(event) => {
                 setMembership(null);
                 setMembershipWorkspaceId("");
+                setSelectedTraceId("");
+                setTraceDetail(null);
+                setTraceDetailError("");
                 setWorkspaceId(event.target.value);
               }}
               disabled={workspaceLoading || workspaces.length === 0}
@@ -653,7 +755,12 @@ export default function TelemetryWorkspace({
           <span>{tr("service")}</span>
           <select
             value={selectedService}
-            onChange={(event) => setSelectedService(event.target.value)}
+            onChange={(event) => {
+              setSelectedTraceId("");
+              setTraceDetail(null);
+              setTraceDetailError("");
+              setSelectedService(event.target.value);
+            }}
             disabled={serviceLoading || discoveredServices.length === 0}
             aria-label={tr("selectService")}
           >
@@ -678,7 +785,12 @@ export default function TelemetryWorkspace({
         <div className="telemetry-controls">
           <div className="range-switcher" role="group" aria-label={tr("windowLabel")}>
             {windowOptions.map((item) => (
-              <button key={item.value} className={windowRange === item.value ? "selected" : ""} aria-pressed={windowRange === item.value} onClick={() => setWindowRange(item.value)}>
+              <button key={item.value} className={windowRange === item.value ? "selected" : ""} aria-pressed={windowRange === item.value} onClick={() => {
+                setSelectedTraceId("");
+                setTraceDetail(null);
+                setTraceDetailError("");
+                setWindowRange(item.value);
+              }}>
                 {item.label}
               </button>
             ))}
@@ -888,22 +1000,82 @@ export default function TelemetryWorkspace({
           {loading && !traces ? <TelemetryLoading language={language} /> : traceRows.length === 0 ? (
             <TelemetryEmpty title={tr("noTracesTitle")} message={language === "fa" ? tr("noTracesMessage").replace("این سرویس", selectedService) : tr("noTracesMessage").replace("this service", selectedService)} />
           ) : (
-            <div className="telemetry-trace-list">
-              {traceRows.map((trace) => (
-                <article className="telemetry-trace-row" key={trace.traceID}>
-                  <div className="telemetry-trace-icon"><Workflow size={16} /></div>
-                  <div className="telemetry-trace-main">
-                    <strong>{trace.rootTraceName || (language === "fa" ? "ردیابی" : "Trace")}</strong>
-                    <span>{trace.rootServiceName || (language === "fa" ? "سرویس نامشخص" : "unknown-service")}</span>
-                    <code>{trace.traceID}</code>
-                  </div>
-                  <div className="telemetry-trace-side">
-                    <strong>{Number.isFinite(trace.durationMs) ? `${new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 1 }).format(trace.durationMs)} ms` : "—"}</strong>
-                    <span>{trace.startTimeUnixNano ? formatClock(nanoTimestamp(trace.startTimeUnixNano), language) : t(language, "timeUnavailable")}</span>
-                  </div>
-                </article>
-              ))}
-            </div>
+            <>
+              <div className="telemetry-trace-list">
+                {traceRows.map((trace) => {
+                  const selected = selectedTraceId === trace.traceID;
+                  return (
+                    <article className={`telemetry-trace-row${selected ? " selected" : ""}`} key={trace.traceID}>
+                      <div className="telemetry-trace-icon"><Workflow size={16} /></div>
+                      <div className="telemetry-trace-main">
+                        <strong>{trace.rootTraceName || (language === "fa" ? "ردیابی" : "Trace")}</strong>
+                        <span>{trace.rootServiceName || (language === "fa" ? "سرویس نامشخص" : "unknown-service")}</span>
+                        <code>{trace.traceID}</code>
+                      </div>
+                      <div className="telemetry-trace-side">
+                        <strong>{Number.isFinite(trace.durationMs) ? `${new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 1 }).format(trace.durationMs)} ms` : "—"}</strong>
+                        <span>{trace.startTimeUnixNano ? formatClock(nanoTimestamp(trace.startTimeUnixNano), language) : t(language, "timeUnavailable")}</span>
+                      </div>
+                      {!useLegacyDevelopmentReads && user && membership && membershipWorkspaceId === workspaceId && (
+                        <div className="telemetry-trace-actions">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedTraceId(selected ? "" : trace.traceID);
+                              setTraceDetail(null);
+                              setTraceDetailError("");
+                            }}
+                            aria-expanded={selected}
+                            aria-controls="telemetry-trace-detail"
+                            aria-label={`${selected ? tr("closeTraceDetails") : tr("viewTraceDetails")}: ${trace.rootTraceName || trace.traceID}`}
+                          >
+                            {selected ? <X size={13} /> : <Eye size={13} />}
+                            <span>{selected ? tr("closeTraceDetails") : tr("viewTraceDetails")}</span>
+                          </button>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+              <section id="telemetry-trace-detail" className="telemetry-trace-detail" hidden={!selectedTraceId} aria-labelledby="telemetry-trace-detail-title" aria-live="polite">
+                  <header className="telemetry-trace-detail-header">
+                    <div>
+                      <h3 id="telemetry-trace-detail-title">{tr("traceDetails")}</h3>
+                      <code>{traceDetail?.trace_id ?? selectedTraceId}</code>
+                    </div>
+                    <button type="button" onClick={() => setSelectedTraceId("")} aria-label={tr("closeTraceDetails")}>
+                      <X size={14} />
+                      <span>{tr("closeTraceDetails")}</span>
+                    </button>
+                  </header>
+                  {traceDetailLoading ? (
+                    <p className="telemetry-trace-detail-state" role="status">{tr("traceDetailsLoading")}</p>
+                  ) : traceDetailError ? (
+                    <p className="telemetry-trace-detail-state" role="alert">{traceDetailError}</p>
+                  ) : !traceDetail || traceSpanRows.length === 0 ? (
+                    <p className="telemetry-trace-detail-state">{tr("traceDetailsEmpty")}</p>
+                  ) : (
+                    <ol className="telemetry-span-list">
+                      {traceSpanRows.map(({ span, depth, durationMs }) => (
+                        <li className="telemetry-span-row" key={span.spanId} style={{ paddingInlineStart: `${depth * 16}px` }}>
+                          <div className="telemetry-span-main">
+                            <strong>{span.name || (language === "fa" ? "بازهٔ بدون نام" : "Unnamed span")}</strong>
+                            <span className={`telemetry-span-status ${span.status?.code === 2 ? "error" : span.status?.code === 1 ? "ok" : "unset"}`}>
+                              {span.status?.code === 2 ? tr("spanStatusError") : span.status?.code === 1 ? tr("spanStatusOk") : tr("spanStatusUnset")}
+                            </span>
+                          </div>
+                          <div className="telemetry-span-meta">
+                            <code>{span.spanId}</code>
+                            <span>{Number.isFinite(durationMs) ? `${new Intl.NumberFormat(formatLocale(language), { maximumFractionDigits: 2 }).format(durationMs)} ${tr("spanDurationUnit")}` : "—"}</span>
+                            <time>{span.startTimeUnixNano ? formatClock(nanoTimestamp(span.startTimeUnixNano), language) : t(language, "timeUnavailable")}</time>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+              </section>
+            </>
           )}
         </div>
       )}

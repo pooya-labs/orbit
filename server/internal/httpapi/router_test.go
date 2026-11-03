@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -1098,5 +1100,77 @@ func TestWorkspaceTelemetryQueriesRequireMembershipBeforeBackendAccess(t *testin
 				t.Fatalf("member request backend calls = %d, want 1", backendCalls[route.key])
 			}
 		})
+	}
+}
+
+
+func TestWorkspaceTraceDetailRouteRequiresMembershipBeforeTempoRead(t *testing.T) {
+	const workspaceID = "00000000-0000-4000-8000-000000000001"
+	const otherWorkspaceID = "00000000-0000-4000-8000-000000000099"
+	traceID := strings.Repeat("a", 32)
+	tempoCalls := 0
+	tempoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		tempoCalls++
+		if request.URL.Path != "/api/v2/traces/"+traceID {
+			t.Errorf("Tempo path = %q; want trace detail path", request.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		traceBytes, _ := hex.DecodeString(traceID)
+		spanBytes, _ := hex.DecodeString(strings.Repeat("b", 16))
+		_, _ = w.Write([]byte(`{"trace":{"resourceSpans":[{"resource":{"attributes":[{"key":"orbit.workspace.id","value":{"stringValue":"`+workspaceID+`"}}]},"scopeSpans":[{"spans":[{"traceId":"`+base64.StdEncoding.EncodeToString(traceBytes)+`","spanId":"`+base64.StdEncoding.EncodeToString(spanBytes)+`","name":"GET /checkout","startTimeUnixNano":"1000000","endTimeUnixNano":"2000000"}]}]}]}}`))
+	}))
+	defer tempoServer.Close()
+
+	telemetryClient, err := telemetry.NewClient("", "", tempoServer.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &fakeRepository{}
+	viewer := fixedTokenVerifier{principal: auth.Principal{
+		Issuer: "https://identity.example", Subject: "member-1", Roles: []string{"viewer"},
+	}}
+	handler := NewHandler(Config{Environment: "production", AuthVerifier: viewer, Telemetry: telemetryClient}, repository, testLogger())
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/telemetry/traces/"+traceID, nil)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "GET /checkout") {
+		t.Fatalf("member detail response = %d %s; want 200 with span", recorder.Code, recorder.Body.String())
+	}
+	if tempoCalls != 1 {
+		t.Fatalf("Tempo calls = %d; want 1 after authorized read", tempoCalls)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/telemetry/traces/not-a-trace-id", nil)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("invalid trace ID status = %d; want 400; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if tempoCalls != 1 {
+		t.Fatalf("invalid trace ID reached Tempo; calls = %d, want 1", tempoCalls)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+otherWorkspaceID+"/telemetry/traces/"+traceID, nil)
+	request.Header.Set("Authorization", "Bearer valid-token")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("non-member detail status = %d; want 404; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if tempoCalls != 1 {
+		t.Fatalf("non-member request reached Tempo; calls = %d, want 1", tempoCalls)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/"+workspaceID+"/telemetry/traces/"+traceID, nil)
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated detail status = %d; want 401; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if tempoCalls != 1 {
+		t.Fatalf("unauthenticated request reached Tempo; calls = %d, want 1", tempoCalls)
 	}
 }
