@@ -154,7 +154,6 @@ type tempoTraceBatch struct {
 }
 
 type tempoTraceScopeSpans struct {
-	Scope json.RawMessage `json:"scope"`
 	Spans []tempoTraceSpan `json:"spans"`
 }
 
@@ -188,7 +187,6 @@ type workspaceTraceDetailBatch struct {
 }
 
 type workspaceTraceDetailScopeSpans struct {
-	Scope json.RawMessage                `json:"scope,omitempty"`
 	Spans []workspaceTraceDetailSpan     `json:"spans"`
 }
 
@@ -719,7 +717,6 @@ func (c *Client) WorkspaceTrace(ctx context.Context, workspaceID, traceID string
 		}
 		for _, scope := range batch.ScopeSpans {
 			normalizedScope := workspaceTraceDetailScopeSpans{
-				Scope: scope.Scope,
 				Spans: make([]workspaceTraceDetailSpan, 0, len(scope.Spans)),
 			}
 			for _, span := range scope.Spans {
