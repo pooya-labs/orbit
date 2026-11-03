@@ -1,0 +1,53 @@
+name: NVDA Windows screen-reader smoke test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/nvda-screen-reader-smoke.yml"
+      - "scripts/nvda-screen-reader-smoke.ps1"
+      - "app/**"
+      - "lib/**"
+      - "next.config.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nvda-screen-reader:
+    name: Real NVDA Browse Mode heading navigation
+    runs-on: windows-latest
+    timeout-minutes: 20
+    # Experimental until the first hosted Windows run confirms reliable
+    # desktop and Speech Viewer automation. Keep failures visible without
+    # blocking the normal CI and Security checks while the harness matures.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+
+      - name: Install web dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build the exact PR version of the static site
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Install NVDA and Microsoft WinApp CLI
+        shell: pwsh
+        run: |
+          winget install --id NVAccess.NVDA --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+          if ($LASTEXITCODE -ne 0) { throw "NVDA installation failed with exit code $LASTEXITCODE" }
+          winget install --id Microsoft.WinAppCli --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+          if ($LASTEXITCODE -ne 0) { throw "WinApp CLI installation failed with exit code $LASTEXITCODE" }
+
+      - name: Run NVDA Speech Viewer and real H-key smoke test
+        shell: pwsh
+        run: ./scripts/nvda-screen-reader-smoke.ps1
