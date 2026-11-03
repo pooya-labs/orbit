@@ -76,6 +76,7 @@ checks = [
     (i18n, 'skipToMainContent: "Skip to main content"', "the skip link is localized in English"),
     (i18n, 'skipToMainContent: "رفتن به محتوای اصلی"', "the skip link is localized in Persian"),
     (page, 'className="workspace-switcher preview-unavailable" disabled', "the workspace switcher is not exposed as an inert action"),
+    (page, 'ORBIT, ${language === "fa" ? "فضای کاری شخصی" : "Personal workspace"}', "the disabled workspace switcher accessible name includes its visible label"),
     (page, """className="nav-item preview-unavailable" disabled aria-label={`${tr("settings")} —""", "the unavailable settings control is explicitly disabled and named"),
     (page, """className="nav-item preview-unavailable" disabled aria-label={`${tr("helpSupport")} —""", "the unavailable help control is explicitly disabled and named"),
     (page, 'className="icon-button subtle-more preview-unavailable" disabled', "the unavailable incident-options control is explicitly disabled"),
