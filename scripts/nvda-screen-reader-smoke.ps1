@@ -99,17 +99,7 @@ try {
   }
   Write-Host ("Static site ready: " + $siteUrl)
 
-  Write-Host "=== Install NVDA and Windows UI Automation CLI ==="
-  winget install --id NVAccess.NVDA --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-  if ($LASTEXITCODE -ne 0) {
-    throw ("NVDA installation failed with exit code " + $LASTEXITCODE)
-  }
-
-  winget install --id Microsoft.WinAppCli --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-  if ($LASTEXITCODE -ne 0) {
-    throw ("WinApp CLI installation failed with exit code " + $LASTEXITCODE)
-  }
-
+  Write-Host "=== Locate the NVDA and Windows UI Automation CLI installations prepared by the workflow ==="
   $winappCommand = Get-Command "winapp.exe" -ErrorAction SilentlyContinue
   if ($null -eq $winappCommand) {
     $aliasPath = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\winapp.exe"
