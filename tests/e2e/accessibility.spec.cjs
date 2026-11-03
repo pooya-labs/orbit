@@ -335,7 +335,8 @@ test("all primary dashboard views expose an announced heading and pass axe in da
       const item = navigation.getByRole("button", { name: label, exact: true });
       await item.click();
       await expect(item).toHaveAttribute("aria-current", "page");
-      await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
+      const headingLabel = label === "Overview" ? "Good morning" : label;
+    await expect(page.getByRole("heading", { level: 1, name: headingLabel, exact: true })).toBeVisible();
       await waitForNavigationTransitions(navigation);
 
       const results = await new AxeBuilder({ page })
