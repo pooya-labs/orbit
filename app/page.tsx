@@ -519,7 +519,7 @@ export default function Home() {
               <button type="button" className={language === "en" ? "selected" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button>
               <button type="button" className={language === "fa" ? "selected" : ""} aria-pressed={language === "fa"} onClick={() => changeLanguage("fa")}>فارسی</button>
             </div>
-            <a className="help-button" href="https://github.com/pooya16pg-spec/orbit/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp size={16} /><span>{tr("docs")}</span></a>
+            <a className="help-button" href="https://github.com/pooya-labs/orbit/tree/main/docs" target="_blank" rel="noreferrer"><CircleHelp size={16} /><span>{tr("docs")}</span></a>
           </div>
         </header>
 
