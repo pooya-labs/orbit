@@ -1,4 +1,5 @@
 import { getAccessToken } from "./oidc";
+import { isAppsScriptRuntime, requestAppsScriptApi } from "./apps-script-bridge";
 import type {
   AlertInstanceStatus,
   AlertRuleOperator,
@@ -50,9 +51,9 @@ export class OrbitApiError extends Error {
 }
 
 function resolveApiBaseUrl(override?: string): string {
-  return (override ?? process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "")
-    .trim()
-    .replace(/\/+$/, "");
+  const configured = (override ?? process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "").trim();
+  if (!configured && isAppsScriptRuntime()) return "apps-script://bridge";
+  return configured.replace(/\/+$/, "");
 }
 
 async function requestJSON<T>(
@@ -69,6 +70,35 @@ async function requestJSON<T>(
       0,
       "api_not_configured",
     );
+  }
+
+  if (apiBaseUrl === "apps-script://bridge") {
+    let result;
+    try {
+      result = await requestAppsScriptApi(method, path, body, signal);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      throw new OrbitApiError(
+        error instanceof Error ? error.message : "The Apps Script demo could not be reached.",
+        0,
+        "apps_script_bridge_error",
+      );
+    }
+    if (result.status === 204) return undefined as T;
+    if (result.status < 200 || result.status >= 300) {
+      const errorPayload = result.body as ApiErrorPayload | null;
+      throw new OrbitApiError(
+        errorPayload?.error?.message ?? "The ORBIT demo returned an unexpected error.",
+        result.status,
+        errorPayload?.error?.code ?? "demo_http_error",
+        errorPayload?.error?.request_id ?? "",
+      );
+    }
+    if (result.body === null || result.body === undefined) {
+      if (method === "DELETE") return undefined as T;
+      throw new OrbitApiError("The ORBIT demo returned an empty response.", result.status, "invalid_response");
+    }
+    return result.body as T;
   }
 
   const accessToken = await getAccessToken();

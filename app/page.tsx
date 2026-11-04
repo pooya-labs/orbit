@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getMetadata, listWorkspaceIncidents, listWorkspaceServices, listWorkspaces } from "../lib/orbit/client";
 import { getCurrentAuthUser } from "../lib/orbit/oidc";
+import { isAppsScriptRuntime } from "../lib/orbit/apps-script-bridge";
 import type { ApiMetadata, IncidentSummary, ServiceSummary } from "../lib/orbit/contracts";
 import { chartArea, chartPoints, chartSamples, demoIncidents, demoServices } from "../lib/orbit/demo";
 import { formatLocale, navLabel, t, type Language, type TranslationKey } from "../lib/orbit/i18n";
@@ -298,8 +299,10 @@ export default function Home() {
   const [showAllServices, setShowAllServices] = useState(false);
   const [sourceMode, setSourceMode] = useState<SourceMode>("demo");
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
-  const [apiUrlInput, setApiUrlInput] = useState(
-    process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "http://localhost:8080",
+  const [apiUrlInput, setApiUrlInput] = useState(() =>
+    isAppsScriptRuntime()
+      ? "apps-script://bridge"
+      : process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "http://localhost:8080",
   );
   const [apiStatus, setApiStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
   const [apiError, setApiError] = useState("");
@@ -339,6 +342,7 @@ export default function Home() {
   }, [theme, themeReady]);
 
   useEffect(() => {
+    if (isAppsScriptRuntime()) return;
     try {
       const savedUrl = window.localStorage.getItem("orbit.apiBaseUrl");
       if (savedUrl) setApiUrlInput(savedUrl);
@@ -354,17 +358,21 @@ export default function Home() {
 
   const connectSource = async () => {
     let endpoint: string;
-    try {
-      const parsed = new URL(apiUrlInput.trim());
-      if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password ||
-          parsed.search || parsed.hash || (parsed.pathname !== "/" && parsed.pathname !== "")) {
-        throw new Error(tr("invalidApiUrl"));
+    if (isAppsScriptRuntime()) {
+      endpoint = "apps-script://bridge";
+    } else {
+      try {
+        const parsed = new URL(apiUrlInput.trim());
+        if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password ||
+            parsed.search || parsed.hash || (parsed.pathname !== "/" && parsed.pathname !== "")) {
+          throw new Error(tr("invalidApiUrl"));
+        }
+        endpoint = parsed.origin;
+      } catch (error) {
+        setApiStatus("error");
+        setApiError(error instanceof Error ? error.message : tr("validApiUrl"));
+        return;
       }
-      endpoint = parsed.origin;
-    } catch (error) {
-      setApiStatus("error");
-      setApiError(error instanceof Error ? error.message : tr("validApiUrl"));
-      return;
     }
 
     setApiStatus("connecting");
@@ -392,10 +400,12 @@ export default function Home() {
       setApiUrlInput(endpoint);
       setSourceMode("api");
       setApiStatus("connected");
-      try {
-        window.localStorage.setItem("orbit.apiBaseUrl", endpoint);
-      } catch {
-        // A working connection should not depend on local storage support.
+      if (!isAppsScriptRuntime()) {
+        try {
+          window.localStorage.setItem("orbit.apiBaseUrl", endpoint);
+        } catch {
+          // A working connection should not depend on local storage support.
+        }
       }
       setSourcePanelOpen(false);
     } catch (error) {
@@ -403,6 +413,13 @@ export default function Home() {
       setApiError(error instanceof Error ? error.message : tr("connectFailed"));
     }
   };
+
+  const appsScriptAutoConnectStarted = useRef(false);
+  useEffect(() => {
+    if (!isAppsScriptRuntime() || appsScriptAutoConnectStarted.current) return;
+    appsScriptAutoConnectStarted.current = true;
+    void connectSource();
+  }, []);
 
   const sourceServices = sourceMode === "api" ? apiServices.map((item, index) => mapApiService(item, index, language)) : demoServices;
   const filteredServices = useMemo(() => {

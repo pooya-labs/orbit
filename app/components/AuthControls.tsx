@@ -7,6 +7,7 @@ import {
   clearAuthSession,
   getCurrentAuthUser,
   isOidcConfigured,
+  isAppsScriptRuntime,
   subscribeToAuth,
   type OrbitAuthUser
 } from "../../lib/orbit/oidc";
@@ -21,6 +22,15 @@ export default function AuthControls({ language }: { language: Language }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => subscribeToAuth(() => setUser(getCurrentAuthUser())), []);
+  if (isAppsScriptRuntime()) {
+    return (
+      <div className="auth-controls" aria-live="polite">
+        <span className="auth-user" title="Synthetic session; no production identity is used">
+          {language === "fa" ? "اپراتور نمایشی" : "Demo operator"}
+        </span>
+      </div>
+    );
+  }
   if (!isOidcConfigured()) return null;
 
   const signIn = async () => {
