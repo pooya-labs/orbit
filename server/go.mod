@@ -31,8 +31,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0 // indirect
-	go.opentelemetry.io/otel/metric/x v0.68.0 // indirect
-	gonum.org/v1/gonum v0.17.0 // indirect
 )
 
 require (
