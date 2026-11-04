@@ -193,6 +193,11 @@ jobs:
         with:
           node-version: 22
 
+      - name: Validate Apps Script demo runtime contract
+        run: |
+          python3 scripts/check_apps_script_contract.py
+          node --check apps-script/Code.js
+
       - name: Test safe log-to-trace correlation parsing
         run: npm run test:trace-correlation
 
