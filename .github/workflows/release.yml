@@ -52,16 +52,17 @@ jobs:
             - Authenticated OTLP/HTTP and OTLP/gRPC workload gateways with workspace/signal grants, canonical tenant attribution, shared rate limits, bounded admission, revocation checks, and fail-closed behavior.
             - Workspace operations: incident lifecycle and immutable timelines, alert rules/evaluation, webhook notification outbox and attempt history, deployment annotations, SLO/error budgets, and searchable audit history.
             - CI-verified workspace A/B telemetry write-to-query isolation using PostgreSQL, Collector, Prometheus, Loki, and Tempo.
+            - Workspace-safe telemetry investigation: fixed-ID total/success/failure request-rate catalog, bounded workspace/service matchers and grouping, interactive workspace trace/span detail, and validated Logs-to-Trace correlation; arbitrary PromQL is not accepted.
+            - Optional bounded Go API and background-worker self-telemetry: request/duration metrics, route-template spans, worker run/item counters and duration histograms, and static lifecycle/error events. Export is fail-open and targets the private Collector; raw errors and tenant/user/delivery identifiers are excluded.
             - Local Docker Compose stack, instrumented Go telemetry demo, OpenAPI 3.1 contract, Go/TypeScript tests, accessibility automation, NVDA Speech Viewer smoke coverage, security scans, SBOM generation, and PostgreSQL backup/restore CI.
 
             ### Known limitations and v1 readiness
             - GitHub Pages hosts the static frontend only. It does not host the ORBIT API, PostgreSQL, or telemetry data plane; the hosted dashboard is a demo preview until a separately deployed HTTPS API and managed services are configured.
-            - The Metrics/Logs/Traces UI still calls legacy unscoped read endpoints, which the API deliberately disables in staging/production. Authenticated workspace-scoped query routes and catalog persistence exist, but frontend workspace selection and route integration remain a v1 blocker.
-            - Browser PKCE and server-side OIDC verification are implemented as provider-neutral foundations, but no real identity provider/client is configured or verified end-to-end.
+            - The static GitHub Pages site hosts only the frontend. Hosted API, managed PostgreSQL, and telemetry backends are not deployed; connect a live dashboard only after the HTTPS API, exact CORS allowlist, and authentication design are configured.
+            - Browser PKCE and server-side OIDC verification are provider-neutral foundations, but no real human/workload identity provider and client are configured or verified end to end.
             - Production tenant ingestion remains disabled pending real DNS/TLS, firewall/trusted-proxy and private-network controls, deployment-specific quotas, target-environment capacity/recovery evidence, encrypted off-host backups/PITR, measured RPO/RTO, and an approved durable-history retention/archive policy.
-            - Metrics grouping is limited to the allow-listed demo \`request_rate\` metric. A safe general metric catalog/selection model is not yet implemented.
-            - Traces currently provide bounded search summaries; an interactive span-detail view and explicit log-to-trace correlation remain planned.
-            - The production Go API is not yet self-instrumented.
+            - The workspace metric catalog is intentionally limited to three fixed IDs (`request_rate`, `successful_request_rate`, `failed_request_rate`) with bounded workspace/service matchers, grouping, windows, series counts, and upstream timeout. Arbitrary metric names, label matchers, and PromQL are not accepted.
+            - API and alert/notification worker self-telemetry is opt-in via `ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT`; an unset endpoint disables export. It targets the private Collector and excludes raw worker errors and sensitive identifiers.
             - Redis and NATS are provisioned for local development but remain intentionally deferred until measured demand justifies application integration (ADR 0004).
             - Human keyboard-only and assistive-technology review on real Android/Apple devices remains open. Automated axe/Playwright and Windows NVDA Speech Viewer coverage are not a substitute for those sessions.
 
