@@ -119,7 +119,7 @@ const sandbox = {
 vm.createContext(sandbox);
 vm.runInContext(serverCode, sandbox, { filename: "apps-script/Code.js" });
 
-const setup = sandbox.setupOrbitDemo();
+const setup = sandbox.setupOrbitDemo_();
 assert.match(setup.spreadsheetUrl, /^https:\/\/docs\.google\.com\/spreadsheets\/d\//);
 const spreadsheet = spreadsheets.get(setup.spreadsheetId);
 assert.ok(spreadsheet, "setup creates a private spreadsheet");

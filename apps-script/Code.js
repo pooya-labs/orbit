@@ -27,7 +27,7 @@ function doGet() {
 }
 
 /** Run once from the Apps Script editor to create the private demo datastore. */
-function setupOrbitDemo() {
+function setupOrbitDemo_() {
   const props = PropertiesService.getScriptProperties();
   let id = props.getProperty(ORBIT_CONFIG.databaseProperty);
   let spreadsheet;

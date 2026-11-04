@@ -21,7 +21,7 @@ webapp = MANIFEST.get("webapp", {})
 require(webapp.get("executeAs") == "USER_DEPLOYING", "the Web App must run as its deployer")
 require(webapp.get("access") == "ANYONE_ANONYMOUS", "the manifest must declare anonymous public demo access")
 
-for symbol in ("function doGet(", "function setupOrbitDemo(", "function orbitBootstrap(", "function orbitApi("):
+for symbol in ("function doGet(", "function setupOrbitDemo_(", "function orbitBootstrap(", "function orbitApi("):
     require(symbol in CODE, "missing Apps Script entry point: " + symbol)
 
 # Apps Script V8 is not a browser or Node runtime. These APIs are absent there.
