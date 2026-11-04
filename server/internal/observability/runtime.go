@@ -17,6 +17,7 @@ import (
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -125,11 +126,7 @@ func resourceFor(version, environment string) *resource.Resource {
 	if environment != "" {
 		attributes = append(attributes, attribute.String("deployment.environment", environment))
 	}
-	res, err := resource.NewWithAttributes("", attributes...)
-	if err != nil {
-		return resource.Empty()
-	}
-	return res
+	return resource.NewWithAttributes("", attributes...)
 }
 
 func (r *Runtime) Enabled() bool { return r != nil && r.traces != nil }
