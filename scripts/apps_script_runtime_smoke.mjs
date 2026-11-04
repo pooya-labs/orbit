@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-const root = new URL("../", import.meta.url);
 const serverCode = readFileSync(new URL("../apps-script/Code.js", import.meta.url), "utf8");
 
 class FakeRange {
@@ -109,7 +107,7 @@ const sandbox = {
     DigestAlgorithm: { SHA_256: "sha256" },
     Charset: { UTF_8: "utf8" },
     computeDigest(_algorithm, value) {
-      return createHash("sha256").update(String(value), "utf8").digest();
+      return Array.from(createHash("sha256").update(String(value), "utf8").digest());
     },
     newBlob(value) {
       return { getBytes: () => Buffer.from(String(value), "utf8") };
