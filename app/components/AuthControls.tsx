@@ -7,10 +7,10 @@ import {
   clearAuthSession,
   getCurrentAuthUser,
   isOidcConfigured,
-  isAppsScriptRuntime,
   subscribeToAuth,
   type OrbitAuthUser
 } from "../../lib/orbit/oidc";
+import { isAppsScriptRuntime } from "../../lib/orbit/apps-script-bridge";
 import { t, type Language } from "../../lib/orbit/i18n";
 
 function displayName(user: OrbitAuthUser): string {
