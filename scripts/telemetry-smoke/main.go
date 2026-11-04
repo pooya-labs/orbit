@@ -174,7 +174,7 @@ func smoke() error {
 		return fmt.Errorf("request ORBIT API metadata for self-telemetry smoke: %w", err)
 	}
 	apiMetricURL := queryURL(prometheusURL, "/api/v1/query", url.Values{
-		"query": {`orbit_api_http_requests{service_name="orbit-api"}`},
+		"query": {`orbit_api_http_requests_total{service_name="orbit-api"}`},
 	})
 	if err := waitFor("ORBIT API request metrics are queryable in Prometheus", 120*time.Second, func() (bool, error) {
 		body, err := getJSON(apiMetricURL)
