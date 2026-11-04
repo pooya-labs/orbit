@@ -84,7 +84,7 @@ jobs:
     env:
       ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS: hooks.example.test
-      ORBIT_ALERT_WEBHOOK_SECRET_CI: https://hooks.example.test/ci-placeholder
+      ORBIT_ALERT_WEBHOOK_SECRET_OPS_PRIMARY: https://hooks.example.test/ci-placeholder
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
