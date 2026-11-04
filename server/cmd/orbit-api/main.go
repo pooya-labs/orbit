@@ -244,7 +244,7 @@ func main() {
 
 	if evaluationRepository, ok := repository.(store.AlertEvaluationRepository); ok &&
 		evaluationRepository != nil && cfg.PrometheusURL != "" {
-		worker := alerts.NewWorker(evaluationRepository, telemetryClient, logger, 30*time.Second)
+		worker := alerts.NewWorker(evaluationRepository, telemetryClient, logger, 30*time.Second, apiObservability)
 		go worker.Run(ctx)
 		logger.Info("workspace alert evaluator started", "interval", "30s")
 	} else {
@@ -254,7 +254,7 @@ func main() {
 	var notificationWorkerDone chan struct{}
 	if deliveryRepository, ok := repository.(store.AlertNotificationDeliveryRepository); ok &&
 		deliveryRepository != nil && webhookSender != nil {
-		worker := notifications.NewWorker(deliveryRepository, webhookSender, logger, 5*time.Second)
+		worker := notifications.NewWorker(deliveryRepository, webhookSender, logger, 5*time.Second, apiObservability)
 		notificationWorkerDone = make(chan struct{})
 		go func() {
 			defer close(notificationWorkerDone)
