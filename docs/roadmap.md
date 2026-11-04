@@ -148,12 +148,12 @@ Production rollout is tracked by the individual environment gates below and in t
 - Documentation describes what is implemented, not only what is intended.
 
 
-## v1.0.0 release readiness — audited 2026-11-03
+## v1.0.0 release readiness — audited 2026-11-04
 
 ### Current release baseline
 
 - Latest published tag: \`v0.10.0\`, published as a GitHub prerelease / Public Preview. No \`v1.0.0\` release exists yet.
-- Source baseline at the start of this audit: \`main\` commit \`3698959f060342ed1dd5993151175f5a33272ded\` (PR #126 merged). Pages deployment, Security, and the v0.10.0 release workflow succeeded on that revision. The post-merge CI run was still completing its final real-backend workspace-isolation and PostgreSQL-restart steps at audit time; do not record that run as fully green until those steps finish.
+- Source baseline for this audit: `main` commit `73d1dce65a506e77c145d85e27490d04614d4928` (PR #133 merged as `58f948be49412567a1a84da9f753b08a21cb531e`, followed by the Gitleaks fixture correction and documentation reconciliation). On this exact baseline, CI run [41775804127](https://github.com/pooya-labs/orbit/actions/runs/41775804127) passed all four jobs, Security run [41775804189](https://github.com/pooya-labs/orbit/actions/runs/41775804189) passed all 13 jobs including Gitleaks, Pages deployment [41775804224](https://github.com/pooya-labs/orbit/actions/runs/41775804224) succeeded, and release workflow [41775907365](https://github.com/pooya-labs/orbit/actions/runs/41775907365) succeeded. The latest published tag remains `v0.10.0` Public Preview; no `v1.0.0` release exists.
 - Audit reconciliation: 95 of 107 previously recorded checkboxes were complete. Several open boxes duplicated the same production OIDC, ingress, and target-load gates; the historical duplicate boxes are consolidated below. The count is not a measure of v1 completeness because some deferred items are deliberately non-blocking.
 
 ### Verified and completed — do not repeat
