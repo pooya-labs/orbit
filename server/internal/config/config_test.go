@@ -280,3 +280,34 @@ func TestValidateWebhookSecretsRequiresHTTPSAndExactHostnameAllowlist(t *testing
 		})
 	}
 }
+
+func TestLoadReadsOptionalAPISelfTelemetryEndpoint(t *testing.T) {
+	t.Setenv("ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT", " http://otel-collector:4318 ")
+	got := Load()
+	if got.SelfTelemetryOTLPHTTPURL != "http://otel-collector:4318" {
+		t.Fatalf("self telemetry endpoint = %q", got.SelfTelemetryOTLPHTTPURL)
+	}
+}
+
+func TestSelfTelemetryEndpointMustBeAnHTTPBaseURL(t *testing.T) {
+	base := Config{Environment: "development", RateLimitPerMinute: 120, OIDCRolesClaim: "roles"}
+	for _, endpoint := range []string{
+		"file:///tmp/otlp",
+		"http://user:secret@collector:4318",
+		"http://collector:4318/v1/traces",
+		"http://collector:4318?token=secret",
+	} {
+		cfg := base
+		cfg.SelfTelemetryOTLPHTTPURL = endpoint
+		if err := cfg.Validate(); err == nil {
+			t.Fatalf("Validate() accepted unsafe self telemetry endpoint %q", endpoint)
+		}
+	}
+	for _, endpoint := range []string{"", "http://otel-collector:4318", "https://collector.example"} {
+		cfg := base
+		cfg.SelfTelemetryOTLPHTTPURL = endpoint
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("Validate() rejected optional endpoint %q: %v", endpoint, err)
+		}
+	}
+}
