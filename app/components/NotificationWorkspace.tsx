@@ -27,6 +27,7 @@ import { formatLocale, t, type Language, type TranslationKey } from "../../lib/o
 import {
   getCurrentAuthUser, isOidcConfigured, subscribeToAuth, type OrbitAuthUser,
 } from "../../lib/orbit/oidc";
+import { isAppsScriptRuntime } from "../../lib/orbit/apps-script-bridge";
 
 type Props = { apiBaseUrl: string; language: Language; sourceMode: "demo" | "api" };
 type DeliveryFilter = "all" | AlertNotificationDeliveryStatus;
@@ -306,6 +307,14 @@ export default function NotificationWorkspace({ apiBaseUrl, language, sourceMode
         </div>
       </div>
 
+      {isAppsScriptRuntime() && (
+        <div className="incident-inline-notice" role="note">
+          <ShieldCheck size={14} />
+          {language === "fa"
+            ? "محیط نمایشی است؛ هیچ وب‌هوک واقعی ارسال نمی‌شود و سابقهٔ تحویل‌ها شبیه‌سازی شده است."
+            : "Demo simulator only: no outbound webhooks are sent; delivery history is synthetic."}
+        </div>
+      )}
       {error && <div className="incident-feedback error" role="alert">{error}</div>}
       {notice && <div className="incident-feedback success" role="status"><Check size={13} /> {notice}</div>}
       {membership && !canManage && (

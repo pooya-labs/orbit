@@ -46,9 +46,11 @@ function setupOrbitDemo() {
     sheet.setColumnWidths(1, ORBIT_HEADERS.length, 190);
     sheet.setColumnWidth(4, 520);
   }
-  return { spreadsheetId: id, spreadsheetUrl: spreadsheet.getUrl(),
+  const result = { spreadsheetId: id, spreadsheetUrl: spreadsheet.getUrl(),
     schemaVersion: ORBIT_CONFIG.schemaVersion,
     message: "ORBIT demo storage is ready. Keep this spreadsheet private." };
+  Logger.log("ORBIT demo spreadsheet: " + result.spreadsheetUrl);
+  return result;
 }
 
 /** Public bridge bootstrap. The browser key is random, pseudonymous and local. */
@@ -350,7 +352,7 @@ function routeApi_(method, path, body, workspaceId, sheet) {
 
   if (route === "alert-rules" && method === "GET") return { data: sortBy_(readCollection_("alert_rules", workspaceId, sheet), "created_at", false) };
   if (route === "alert-rules" && method === "POST") {
-    const rule = normalizeRule_(body, workspaceId, null);
+    const rule = normalizeRule_(body, workspaceId, null, sheet);
     writeRecord_("alert_rules", workspaceId, rule, sheet);
     audit_(workspaceId, "alert_rule.created", "alert_rule", rule.id, {}, sheet);
     return { data: rule };
@@ -358,7 +360,7 @@ function routeApi_(method, path, body, workspaceId, sheet) {
   match = route.match(/^alert-rules\/([^/]+)$/);
   if (match && method === "PUT") {
     const old = requireRecord_("alert_rules", workspaceId, decodeURIComponent(match[1]), sheet, "alert_rule_not_found");
-    const rule = normalizeRule_(body, workspaceId, old);
+    const rule = normalizeRule_(body, workspaceId, old, sheet);
     writeRecord_("alert_rules", workspaceId, rule, sheet);
     audit_(workspaceId, "alert_rule.updated", "alert_rule", rule.id, {}, sheet);
     return { data: rule };
@@ -552,12 +554,13 @@ function decodeQueryPart_(value) {
   catch (ignored) { return ""; }
 }
 
-function normalizeRule_(body, workspaceId, previous) {
+function normalizeRule_(body, workspaceId, previous, sheet) {
   const stamp = now_();
   return {
     id: previous ? previous.id : uuid_(), workspace_id: workspaceId,
     name: text_(body.name, 100, "name"), description: text_(body.description || "", 1000, "description"),
-    service_name: text_(body.service_name, 100, "service_name"), metric: "request_rate",
+    service_name: safeServiceName_(text_(body.service_name, 100, "service_name"), workspaceId, sheet),
+    metric: "request_rate",
     operator: enum_(body.operator, ["gt", "gte", "lt", "lte"], "operator"),
     threshold: boundedNumber_(body.threshold, 0, 1000000, "threshold"),
     window_seconds: boundedInteger_(body.window_seconds, 300, 60, 86400),
@@ -704,6 +707,7 @@ function demoTraceDetail_(traceId) {
   }] } };
 }
 function traceId_(index) {
+  if (index === 0) return "9f4a3c2d1e0b4a6789abcdef01234567";
   const suffix = ("000000000000000" + (index + 1).toString(16)).slice(-15);
   return "9f4a3c2d1e0b4a678" + suffix;
 }

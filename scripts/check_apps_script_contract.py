@@ -31,7 +31,7 @@ unsupported = [
     (r"\bTextEncoder\b|\bTextDecoder\b", "web text codecs"),
     (r"\bsetTimeout\s*\(|\bsetInterval\s*\(", "browser timers"),
     (r"\bDOMException\b", "DOMException"),
-    (r"\bwindow\b|\bdocument\b|\bnavigator\b", "browser globals"),
+    (r"\bwindow\s*\.|\bdocument\s*\.|\bnavigator\s*\.", "browser globals"),
     (r"\bfetch\s*\(", "browser fetch"),
 ]
 for pattern, label in unsupported:

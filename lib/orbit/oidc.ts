@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { isAppsScriptRuntime } from "./apps-script-bridge";
+import { getAppsScriptDemoUser, subscribeToAppsScriptDemoSession } from "./apps-script-session";
 
 export interface OrbitAuthUser {
   sub: string;
@@ -75,7 +76,7 @@ const listeners = new Set<() => void>();
 export const orbitBasePath = process.env.NEXT_PUBLIC_ORBIT_BASE_PATH ?? "";
 
 export function isOidcConfigured(): boolean {
-  if (isAppsScriptRuntime()) return true;
+  if (isAppsScriptRuntime()) return Boolean(getAppsScriptDemoUser());
   return Boolean(
     process.env.NEXT_PUBLIC_ORBIT_OIDC_ISSUER?.trim() &&
     process.env.NEXT_PUBLIC_ORBIT_OIDC_CLIENT_ID?.trim()
@@ -245,15 +246,15 @@ function notifyAuthChanged(): void {
   for (const listener of listeners) listener();
 }
 
+subscribeToAppsScriptDemoSession(notifyAuthChanged);
+
 export function subscribeToAuth(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
 export function getCurrentAuthUser(): OrbitAuthUser | null {
-  if (isAppsScriptRuntime()) {
-    return { sub: "demo-operator", name: "ORBIT Demo Operator", preferred_username: "demo-operator" };
-  }
+  if (isAppsScriptRuntime()) return getAppsScriptDemoUser();
   return activeSession?.user ?? null;
 }
 

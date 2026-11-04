@@ -1,3 +1,5 @@
+import { setAppsScriptDemoUser } from "./apps-script-session";
+
 export type AppsScriptApiResponse = { status: number; body: unknown };
 type BridgeBootstrap = {
   sessionToken: string;
@@ -65,6 +67,7 @@ function receiveBridgeMessage(event: MessageEvent<unknown>): void {
         typeof payload.user?.sub !== "string" || typeof payload.workspace?.id !== "string") return;
     sessionToken = payload.sessionToken;
     trustedParentOrigin = event.origin;
+    setAppsScriptDemoUser(payload.user);
     return;
   }
   if (message.type === "ORBIT_BRIDGE_RESPONSE" && typeof message.id === "string") {

@@ -23,10 +23,11 @@ export default function AuthControls({ language }: { language: Language }) {
   const [error, setError] = useState("");
   useEffect(() => subscribeToAuth(() => setUser(getCurrentAuthUser())), []);
   if (isAppsScriptRuntime()) {
+    if (!user) return null;
     return (
       <div className="auth-controls" aria-live="polite">
         <span className="auth-user" title="Synthetic session; no production identity is used">
-          {language === "fa" ? "اپراتور نمایشی" : "Demo operator"}
+          {displayName(user)}
         </span>
       </div>
     );
