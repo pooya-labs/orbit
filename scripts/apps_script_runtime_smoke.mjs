@@ -149,33 +149,6 @@ const sessionA = sandbox.orbitBootstrap(profileA);
 const sessionB = sandbox.orbitBootstrap(profileB);
 assert.notEqual(sessionA.workspace.id, sessionB.workspace.id, "browser profiles get different workspaces");
 assert.equal(sessionA.mode, "public-demo");
-const visitorIdForLimit = "33333333-3333-4333-8333-333333333333";
-const usageKey = "ORBIT_DEMO_DAILY_USAGE";
-properties.set(usageKey, JSON.stringify({
-  day: new Date().toISOString().slice(0, 10),
-  bootstraps: 25, requests: 0, mutations: 0
-}));
-assert.throws(
-  () => sandbox.orbitBootstrap(visitorIdForLimit),
-  /daily launch limit/,
-  "the global daily bootstrap budget must stop repeated fresh profiles"
-);
-properties.set(usageKey, JSON.stringify({
-  day: new Date().toISOString().slice(0, 10),
-  bootstraps: 2, requests: 800, mutations: 0
-}));
-expectStatus(api(sessionA, "GET", "/api/v1/meta"), 429, "global daily request budget");
-properties.set(usageKey, JSON.stringify({
-  day: new Date().toISOString().slice(0, 10),
-  bootstraps: 2, requests: 0, mutations: 200
-}));
-expectStatus(api(sessionA, "POST", workspacePath + "/incidents", {
-  title: "Daily mutation budget test", service_id: service.id, severity: "low",
-}), 429, "global daily mutation budget");
-properties.set(usageKey, JSON.stringify({
-  day: new Date().toISOString().slice(0, 10),
-  bootstraps: 2, requests: 0, mutations: 0
-}));
 assert.equal(sessionA.user.sub.startsWith("demo:"), true);
 
 function api(session, method, path, body) {
@@ -196,6 +169,35 @@ const services = expectStatus(api(sessionA, "GET", "/api/v1/workspaces/" + sessi
 assert.equal(services.data.length, 5);
 const service = services.data.find((item) => item.name === "api-gateway");
 assert.ok(service, "seeded API gateway exists");
+
+const visitorIdForLimit = "33333333-3333-4333-8333-333333333333";
+const usageKey = "ORBIT_DEMO_DAILY_USAGE";
+properties.set(usageKey, JSON.stringify({
+  day: new Date().toISOString().slice(0, 10),
+  bootstraps: 25, requests: 0, mutations: 0
+}));
+assert.throws(
+  () => sandbox.orbitBootstrap(visitorIdForLimit),
+  /daily launch limit/,
+  "the global daily bootstrap budget must stop repeated fresh profiles"
+);
+properties.set(usageKey, JSON.stringify({
+  day: new Date().toISOString().slice(0, 10),
+  bootstraps: 2, requests: 800, mutations: 0
+}));
+expectStatus(api(sessionA, "GET", "/api/v1/meta"), 429, "global daily request budget");
+properties.set(usageKey, JSON.stringify({
+  day: new Date().toISOString().slice(0, 10),
+  bootstraps: 2, requests: 0, mutations: 200
+}));
+expectStatus(api(sessionA, "POST", "/api/v1/workspaces/" + sessionA.workspace.id + "/incidents", {
+  title: "Daily mutation budget test", service_id: service.id, severity: "low",
+}), 429, "global daily mutation budget");
+properties.set(usageKey, JSON.stringify({
+  day: new Date().toISOString().slice(0, 10),
+  bootstraps: 2, requests: 0, mutations: 0
+}));
+
 
 const workspacePath = "/api/v1/workspaces/" + sessionA.workspace.id;
 const incidents = expectStatus(api(sessionA, "GET", workspacePath + "/incidents"), 200, "incidents");
