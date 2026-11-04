@@ -26,6 +26,9 @@ import (
 const (
 	httpRequestsMetric = "orbit_api_http_requests"
 	httpDurationMetric = "orbit_api_http_request_duration"
+	workerRunsMetric = "orbit_worker_runs"
+	workerItemsMetric = "orbit_worker_items"
+	workerDurationMetric = "orbit_worker_duration"
 )
 
 type Runtime struct {
@@ -37,6 +40,10 @@ type Runtime struct {
 	logger  otelLog.Logger
 	requests metric.Int64Counter
 	duration metric.Float64Histogram
+
+	workerRuns metric.Int64Counter
+	workerItems metric.Int64Counter
+	workerDuration metric.Float64Histogram
 }
 
 // New creates an optional, fail-open OTLP runtime. The endpoint is a private
@@ -107,12 +114,43 @@ func New(ctx context.Context, endpoint, version, environment string) (*Runtime, 
 		_ = traceProvider.Shutdown(context.Background())
 		return nil, fmt.Errorf("create ORBIT API HTTP duration histogram: %w", err)
 	}
+	workerRuns, err := meter.Int64Counter(workerRunsMetric,
+		metric.WithDescription("Background worker ticks completed by ORBIT."),
+		metric.WithUnit("{tick}"),
+	)
+	if err != nil {
+		_ = logProvider.Shutdown(context.Background())
+		_ = metricProvider.Shutdown(context.Background())
+		_ = traceProvider.Shutdown(context.Background())
+		return nil, fmt.Errorf("create ORBIT worker tick counter: %w", err)
+	}
+	workerItems, err := meter.Int64Counter(workerItemsMetric,
+		metric.WithDescription("Items processed by ORBIT background workers."),
+		metric.WithUnit("{item}"),
+	)
+	if err != nil {
+		_ = logProvider.Shutdown(context.Background())
+		_ = metricProvider.Shutdown(context.Background())
+		_ = traceProvider.Shutdown(context.Background())
+		return nil, fmt.Errorf("create ORBIT worker item counter: %w", err)
+	}
+	workerDuration, err := meter.Float64Histogram(workerDurationMetric,
+		metric.WithDescription("ORBIT background worker tick duration."),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		_ = logProvider.Shutdown(context.Background())
+		_ = metricProvider.Shutdown(context.Background())
+		_ = traceProvider.Shutdown(context.Background())
+		return nil, fmt.Errorf("create ORBIT worker duration histogram: %w", err)
+	}
 
 	return &Runtime{
 		traces: traceProvider, metrics: metricProvider, logs: logProvider,
 		tracer: traceProvider.Tracer("github.com/pooya16pg-spec/orbit/server/internal/observability"),
 		logger: logProvider.Logger("orbit-api"),
 		requests: requests, duration: duration,
+		workerRuns: workerRuns, workerItems: workerItems, workerDuration: workerDuration,
 	}, nil
 }
 
@@ -200,6 +238,71 @@ func (r *Runtime) emitServerError(ctx context.Context, attributes []attribute.Ke
 	record.SetSeverityText("ERROR")
 	record.SetBody(attribute.StringValue("http_server_request_failed"))
 	record.AddAttributes(attributes...)
+	r.logger.Emit(ctx, record)
+}
+
+// StartWorker opens one bounded worker-tick span. Worker names and outcomes are
+// allow-listed; error text and all per-tenant or per-delivery identifiers are omitted.
+func (r *Runtime) StartWorker(ctx context.Context, worker string) (context.Context, func(string, int64, error)) {
+	if !r.Enabled() || !validWorkerName(worker) {
+		return ctx, func(string, int64, error) {}
+	}
+	ctx, span := r.tracer.Start(ctx, "worker."+worker+".tick",
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(attribute.String("worker.name", worker)),
+	)
+	started := time.Now()
+	finish := func(outcome string, items int64, err error) {
+		outcome = normalizedWorkerOutcome(outcome)
+		attributes := []attribute.KeyValue{
+			attribute.String("worker.name", worker),
+			attribute.String("worker.outcome", outcome),
+		}
+		r.workerRuns.Add(ctx, 1, metric.WithAttributes(attributes...))
+		if items > 0 {
+			r.workerItems.Add(ctx, items, metric.WithAttributes(attributes...))
+		}
+		r.workerDuration.Record(ctx, time.Since(started).Seconds(), metric.WithAttributes(attributes...))
+		span.SetAttributes(attribute.String("worker.outcome", outcome), attribute.Int64("worker.items", items))
+		if err != nil {
+			span.SetStatus(codes.Error, "worker tick failed")
+			r.emitWorkerError(ctx, worker, outcome)
+		}
+		span.End()
+	}
+	return ctx, finish
+}
+
+func validWorkerName(worker string) bool {
+	switch worker {
+	case "alert_evaluator", "notification_delivery":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizedWorkerOutcome(outcome string) string {
+	switch outcome {
+	case "ok", "skipped", "error", "cancelled":
+		return outcome
+	default:
+		return "other"
+	}
+}
+
+func (r *Runtime) emitWorkerError(ctx context.Context, worker, outcome string) {
+	now := time.Now().UTC()
+	var record otelLog.Record
+	record.SetTimestamp(now)
+	record.SetObservedTimestamp(now)
+	record.SetSeverity(otelLog.SeverityError)
+	record.SetSeverityText("ERROR")
+	record.SetBody(attribute.StringValue("worker_tick_failed"))
+	record.AddAttributes(
+		attribute.String("worker.name", worker),
+		attribute.String("worker.outcome", outcome),
+	)
 	r.logger.Emit(ctx, record)
 }
 
