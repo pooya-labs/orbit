@@ -941,8 +941,10 @@ services, billing-enabled projects, PAYG upgrades, and paid fallbacks.
   logs, traces, and trace details.
 - The demo stores synthetic workspace records in one private Google
   Spreadsheet owned by the deploying account. Script Cache holds six-hour
-  session capabilities. A lock serializes sheet access; request size, request
-  counts, mutation counts, visitor count, and record count are bounded.
+  session capabilities. A lock serializes sheet access; per-session caps and
+  global daily quotas (25 bootstraps, 800 reads, 200 mutations) are enforced
+  through Script Properties; bodies are capped at 16 KiB, profiles at 500,
+  and storage at 20,000 rows.
 - This adapter intentionally does not ingest real OTLP telemetry, run a real
   Prometheus/Loki/Tempo data plane, send webhooks, or provide production
   identity/tenant security. Do not describe it as a production service.

@@ -57,8 +57,11 @@ use /dev as the public URL; /dev requires editor access.
   the owner's private spreadsheet.
 - Each browser profile gets a random local browser key, hashed before storage,
   and a random six-hour session capability kept only in the iframe's memory.
-- Requests are limited to the explicit /api/v1/ allowlist, bounded to 16 KiB,
-  and capped per session. Record count is hard-capped.
+- Requests are limited to the explicit /api/v1/ allowlist and 16 KiB bodies.
+  Each session is capped at 250 API requests and 60 mutations. The whole script
+  is capped at 25 new sessions, 800 API requests, and 200 mutations per UTC day.
+  Daily counters are stored in Script Properties, not the evictable session cache.
+  The datastore hard-stops at 20,000 rows and 500 browser profiles.
 - Each visitor can only address the workspace associated with that session.
   This is demo isolation, not production-grade identity or multi-tenant
   authorization.
