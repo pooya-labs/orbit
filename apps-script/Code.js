@@ -22,7 +22,7 @@ const ORBIT_HEADERS = ["collection", "id", "workspace_id", "payload_json", "upda
 const ORBIT_WINDOWS = Object.freeze({ "15m": 900, "1h": 3600, "6h": 21600, "24h": 86400 });
 
 function doGet() {
-  ensureDatabase_();
+  getRecordsSheet_();
   const template = HtmlService.createTemplateFromFile("Index");
   template.appUrl = ORBIT_CONFIG.appUrl;
   return template.evaluate().setTitle("ORBIT — Interactive Demo")
@@ -69,7 +69,7 @@ function orbitBootstrap(clientId) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const sheet = ensureDatabase_();
+    const sheet = getRecordsSheet_();
     if (typeof clientId !== "string" || !/^[a-f0-9-]{36}$/i.test(clientId)) {
       throw new Error("The browser demo identifier is invalid. Reload the demo.");
     }
@@ -130,7 +130,7 @@ function orbitApi(request) {
     if (!consumeRateLimit_(token, method !== "GET").ok) {
       return errorResponse_(429, "demo_rate_limited", "The demo request limit was reached. Wait a little and try again.");
     }
-    const result = routeApi_(method, path, body, workspaceId, ensureDatabase_());
+    const result = routeApi_(method, path, body, workspaceId, getRecordsSheet_());
     return { status: 200, body: result };
   } catch (error) {
     return errorResponse_(error && error.status ? Number(error.status) : 500,
@@ -141,11 +141,6 @@ function orbitApi(request) {
   }
 }
 
-function ensureDatabase_() {
-  const id = PropertiesService.getScriptProperties().getProperty(ORBIT_CONFIG.databaseProperty);
-  if (!id) setupOrbitDemo_();
-  return getRecordsSheet_();
-}
 function getRecordsSheet_() {
   const id = PropertiesService.getScriptProperties().getProperty(ORBIT_CONFIG.databaseProperty);
   if (!id) throw new Error("Run setupOrbitDemo_ once from the Apps Script editor.");

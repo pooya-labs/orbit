@@ -29,7 +29,8 @@ credentials, confidential data, or real webhook destinations.
    Replace appsscript.json with the manifest from this folder.
 5. Save. In the function selector choose setupOrbitDemo_ and click Run.
    Review the requested Google Sheets permission and authorize it. This creates
-   the private ORBIT Demo Database spreadsheet owned by your account.
+   the private ORBIT Demo Database spreadsheet owned by your account. The public
+   Web App will not auto-create this owner resource for visitors.
 6. Open the Apps Script execution log and copy the ORBIT demo spreadsheet URL
    for your own records. Keep that spreadsheet private; visitors never need
    direct access to it.
