@@ -19,20 +19,29 @@ type DeliveryRepository interface {
 	RecordAlertNotificationAttempt(context.Context, store.RecordAlertNotificationAttemptInput) error
 }
 
+type WorkerObserver interface {
+	StartWorker(context.Context, string) (context.Context, func(string, int64, error))
+}
+
 type Worker struct {
 	repository DeliveryRepository
 	sender Sender
 	logger *slog.Logger
 	interval time.Duration
 	now func() time.Time
+	observer WorkerObserver
 }
 
-func NewWorker(repository DeliveryRepository, sender Sender, logger *slog.Logger, interval time.Duration) *Worker {
+func NewWorker(repository DeliveryRepository, sender Sender, logger *slog.Logger, interval time.Duration, observers ...WorkerObserver) *Worker {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	if interval <= 0 {
 		interval = 5 * time.Second
+	}
+	var observer WorkerObserver
+	if len(observers) > 0 {
+		observer = observers[0]
 	}
 	return &Worker{
 		repository: repository,
@@ -40,6 +49,7 @@ func NewWorker(repository DeliveryRepository, sender Sender, logger *slog.Logger
 		logger: logger,
 		interval: interval,
 		now: time.Now,
+		observer: observer,
 	}
 }
 
@@ -60,7 +70,17 @@ func (w *Worker) Run(ctx context.Context) {
 	}
 }
 
-func (w *Worker) dispatch(ctx context.Context) {
+func (w *Worker) dispatch(parent context.Context) {
+	ctx := parent
+	finish := func(string, int64, error) {}
+	if w.observer != nil {
+		ctx, finish = w.observer.StartWorker(parent, "notification_delivery")
+	}
+	outcome, items, err := w.dispatchOnce(ctx)
+	finish(outcome, items, err)
+}
+
+func (w *Worker) dispatchOnce(ctx context.Context) (string, int64, error) {
 	deliveries, err := w.repository.ClaimAlertNotificationDeliveries(
 		ctx, maxDeliveriesPerTick, deliveryLeaseSeconds,
 	)
@@ -68,16 +88,18 @@ func (w *Worker) dispatch(ctx context.Context) {
 		if ctx.Err() == nil {
 			w.logger.Error("could not claim alert-notification deliveries", "error", err)
 		}
-		return
+		return "error", 0, err
 	}
+	var processed int64
+	var firstErr error
 	for _, delivery := range deliveries {
 		if ctx.Err() != nil {
-			return
+			return "cancelled", processed, ctx.Err()
 		}
 		result := w.sender.Send(ctx, delivery)
 		if ctx.Err() != nil {
 			// The lease will expire and another API replica can reclaim the item.
-			return
+			return "cancelled", processed, ctx.Err()
 		}
 		record := store.RecordAlertNotificationAttemptInput{
 			DeliveryID: delivery.ID,
@@ -105,11 +127,15 @@ func (w *Worker) dispatch(ctx context.Context) {
 				record.ErrorCode = "delivery_failed"
 			}
 		}
-		if err := w.repository.RecordAlertNotificationAttempt(ctx, record); err != nil {
+		if recordErr := w.repository.RecordAlertNotificationAttempt(ctx, record); recordErr != nil {
 			w.logger.Error("could not record alert-notification attempt",
-				"delivery_id", delivery.ID, "attempt", delivery.Attempts, "error", err)
+				"delivery_id", delivery.ID, "attempt", delivery.Attempts, "error", recordErr)
+			if firstErr == nil {
+				firstErr = recordErr
+			}
 			continue
 		}
+		processed++
 		if record.Outcome == "delivered" {
 			w.logger.Info("alert notification delivered",
 				"workspace_id", delivery.WorkspaceID,
@@ -133,6 +159,10 @@ func (w *Worker) dispatch(ctx context.Context) {
 				"next_attempt_at", record.NextAttemptAt)
 		}
 	}
+	if firstErr != nil {
+		return "error", processed, firstErr
+	}
+	return "ok", processed, nil
 }
 
 func retryDelay(attempt int) time.Duration {
