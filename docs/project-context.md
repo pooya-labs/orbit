@@ -882,3 +882,28 @@ Repository: `pooya-labs/orbit`; default branch: `main`.
 - PRs #130–#133 complete the safe M04 metric catalog, workspace trace detail, validated Logs-to-Trace correlation, and bounded API/worker self-observability. Do not rebuild these capabilities without a demonstrated regression.
 - Remaining M01 acceptance is human keyboard-only/rendered-state review plus real NVDA audible-output, Android TalkBack and Apple VoiceOver sessions. Remaining M06/v1 gates are deployment-owner choices and target-environment evidence: hosted API/managed persistence, real OIDC provider and key lifecycle, DNS/ACME/firewall/trusted-proxy/private networking and mTLS decision, approved durable-history retention/archive policy, encrypted off-host backups/PITR with measured RPO/RTO, sustained multi-replica ingestion/query capacity and recovery, and stable release provenance/attestation. Keep tenant-facing production ingestion disabled until these gates are evidenced; do not call v1.0 ready.
 - Redis/NATS application integration and resource-attribute expansion remain deferred under ADR 0004 and ADR 0005 unless measured need and privacy/cardinality review justify them.
+
+
+## Free-only infrastructure continuation (2026-11-04)
+
+- Current deployment remains on `main`; never introduce a paid service, paid
+  plan, paid domain, usage-based overage or automatic upgrade.
+- The OCI free deployment uses one 2-OCPU / 12-GB Ampere A1 instance, GitHub
+  Pages, DuckDNS, self-hosted PostgreSQL/Keycloak, Caddy, Collector, Prometheus,
+  Loki and Tempo. This is single-node and has no HA.
+- Keycloak is pinned to 26.8.1 (not 26.7.3); 26.8.1 fixes security issues
+  affecting 26.7.3, including the documented PAR single-use bypass.
+- `deploy/production/backup-to-oci.sh` uses the VM's OCI instance principal,
+  a dedicated private bucket, an age public recipient whose private identity is
+  kept offline, and a 16-GB maximum bucket budget. It backs up all PostgreSQL
+  databases/roles (ORBIT + Keycloak) as one compressed/encrypted cluster dump.
+  It never auto-deletes; uploads stop when the cap is reached. The daily systemd
+  timer is provided in `deploy/production/orbit-backup.timer`.
+- OCI Console tasks still require owner action: create the Always Free VM,
+  DuckDNS names, private Object Storage bucket, dynamic group/policy, and
+  offline age identity. No VM/DNS/bucket has been confirmed provisioned by the
+  assistant. Do not mark deployment complete until the owner supplies that
+  the resources are ready and exact-hostname configuration is present.
+- Before v1 keep only essential live smoke checks; postpone device accessibility
+  acceptance, broad load/capacity and longer operational exercises until
+  after v1.

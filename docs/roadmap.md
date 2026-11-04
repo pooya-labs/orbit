@@ -127,7 +127,8 @@ Production rollout is tracked by the individual environment gates below and in t
 - [x] Add a documented full-database PostgreSQL logical backup/restore runbook and CI-verified pg_dump/pg_restore round-trip covering the schema migration ledger, workspace audit data, actor context, and post-restore append-only guards (PR #83; `docs/postgres-backup-restore.md`).
 - [x] Instrument inbound production Go API requests with bounded OTLP request/duration metrics, route-template traces, and static lifecycle/server-error logs; self-telemetry is optional and uses the private Collector (PR #133).
 - [x] Instrument alert-evaluator and notification-delivery worker loops with bounded OTLP run/item counters, duration histograms, tick spans, and static error events; only allow-listed worker names and outcomes are recorded, never workspace, delivery, channel, request, or user identifiers (PR #133).
-- [ ] Configure encrypted off-host production backups, retention/PITR, backup alerting, and a target-environment restore rehearsal with measured RPO/RTO; the CI round-trip does not satisfy this deployment gate.
+- [x] Add quota-bounded age-encrypted full-cluster backups to OCI Always Free Object Storage, instance-principal authentication, and a daily systemd timer. The script refuses uploads above 16 GiB and never auto-deletes prior backups.
+- [ ] Create the private Always Free backup bucket, instance dynamic group/policy, and offline age identity; run one target-environment restore before accepting real tenant data. Full retention/PITR, backup alerting, and measured RPO/RTO remain post-v1 operational work.
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
 - [ ] Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
 - [x] Merge the repository threat model and automated Gitleaks, govulncheck, npm audit, and Dependency Review workflows (PR #90; squash merge `4a4c46445d7f6b0129cba647d1bd71c49bbd0d45`; all 13 Security jobs passed on final PR head `d388b4702f1dca3b26f55a5fa8ef1e93328c98ee`, run `41406376150`).
@@ -161,6 +162,23 @@ prove that a VM or DNS records have already been provisioned.
 Manual accessibility and broad capacity testing are deferred until after v1.
 Only the minimal health, authentication, authorization and tenant-isolation
 smoke checks remain pre-release requirements.
+
+## Free-only infrastructure status (2026-11-04)
+
+- [x] Production Compose overlay and Caddy routes for API, OIDC and OTLP.
+- [x] Self-hosted PostgreSQL/Keycloak and the private telemetry stack.
+- [x] Free-stack setup, DuckDNS update and secret generation.
+- [x] GitHub Pages build variables for API and browser OIDC.
+- [x] Encrypted full-cluster backup script with OCI instance-principal access,
+  a 16 GiB hard bucket cap and daily systemd timer.
+- [ ] Provision the Always Free VM and DuckDNS records.
+- [ ] Create the private OCI backup bucket, dynamic-group policy and offline age key.
+- [ ] Start the stack, configure Keycloak clients and connect the live Pages dashboard.
+- [ ] Perform one isolated restore and the minimal pre-release smoke checks.
+
+Human accessibility sessions and broad capacity testing remain deferred until
+after v1 as requested. Do not enable customer ingestion before the essential
+identity, health, and tenant-isolation smoke checks pass.
 
 ## Definition of done
 

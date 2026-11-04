@@ -89,6 +89,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Validate deployment shell scripts
+        run: bash -n deploy/production/free-stack.sh deploy/production/backup-to-oci.sh
+
       - name: Validate Compose configuration
         run: docker compose --profile observability config --quiet
 
@@ -127,7 +130,7 @@ jobs:
           assert not published("otel-collector"), published("otel-collector")
           assert {"default", "ingress", "telemetry-internal"} <= set(services["api"]["networks"])
           assert {"default", "ingress"} <= set(services["keycloak"]["networks"])
-          assert services["keycloak"]["image"] == "quay.io/keycloak/keycloak:26.7.3"
+          assert services["keycloak"]["image"] == "quay.io/keycloak/keycloak:26.8.1"
           assert "ingress" in services["caddy"]["networks"]
           assert "default" not in services["caddy"]["networks"]
           assert "telemetry-internal" not in services["caddy"]["networks"]

@@ -13,6 +13,11 @@ case "${1:-}" in
     read -r -p "OTLP/gRPC hostname: " OTLP_GRPC_DOMAIN
     read -r -s -p "DuckDNS token: " DUCKDNS_TOKEN
     printf '\n'
+    read -r -p "OCI Object Storage bucket name (e.g. orbit-backups): " ORBIT_BACKUP_BUCKET
+    read -r -p "OCI Object Storage namespace: " ORBIT_BACKUP_NAMESPACE
+    read -r -p "Offline age public recipient (age1...): " ORBIT_BACKUP_AGE_RECIPIENT
+    [[ -n "$ORBIT_BACKUP_BUCKET" && -n "$ORBIT_BACKUP_NAMESPACE" ]] || { echo "Bucket and namespace are required." >&2; exit 1; }
+    [[ "$ORBIT_BACKUP_AGE_RECIPIENT" =~ ^age1[0-9a-z]{20,}$ ]] || { echo "A valid age public recipient is required." >&2; exit 1; }
     for domain in "$API_DOMAIN" "$AUTH_DOMAIN" "$OTLP_HTTP_DOMAIN" "$OTLP_GRPC_DOMAIN"; do
       [[ "$domain" == *.duckdns.org ]] || { echo "All hostnames must end in .duckdns.org." >&2; exit 1; }
     done
@@ -40,6 +45,10 @@ ORBIT_WORKLOAD_OIDC_ISSUER=https://$AUTH_DOMAIN/realms/orbit
 ORBIT_WORKLOAD_OIDC_AUDIENCE=orbit-ingestion
 DUCKDNS_DOMAINS=$DUCKDNS_DOMAINS
 DUCKDNS_TOKEN=$DUCKDNS_TOKEN
+ORBIT_BACKUP_BUCKET=$ORBIT_BACKUP_BUCKET
+ORBIT_BACKUP_NAMESPACE=$ORBIT_BACKUP_NAMESPACE
+ORBIT_BACKUP_AGE_RECIPIENT=$ORBIT_BACKUP_AGE_RECIPIENT
+ORBIT_BACKUP_MAX_BUCKET_BYTES=16000000000
 EOF
     chmod 600 "$ENV_FILE"
     echo "Created $ENV_FILE (mode 600). Keep it private; it contains all bootstrap secrets."

@@ -1,0 +1,16 @@
+[Unit]
+Description=Encrypted ORBIT PostgreSQL backup to OCI Always Free Object Storage
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/orbit
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/opt/orbit/deploy/production/backup-to-oci.sh
+Nice=10
+IOSchedulingClass=idle
+UMask=0077

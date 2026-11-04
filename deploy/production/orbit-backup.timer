@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily encrypted ORBIT database backup
+
+[Timer]
+OnCalendar=*-*-* 03:17:00 UTC
+RandomizedDelaySec=5m
+Persistent=true
+Unit=orbit-backup.service
+
+[Install]
+WantedBy=timers.target
