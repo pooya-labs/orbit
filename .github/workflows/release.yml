@@ -28,6 +28,23 @@ jobs:
           VERSION="$(node -p 'require("./package.json").version')"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Fast-forward preview tag to deployed revision
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          REF="tags/v${VERSION}"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/${REF}" >/dev/null 2>&1; then
+            # Do not rewrite a published tag backwards or over unrelated history.
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/${REF}" \
+              -f sha="${DEPLOYED_SHA}"
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/${REF}" \
+              -f sha="${DEPLOYED_SHA}"
+          fi
+
       - name: Create or update matching preview release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
@@ -57,8 +74,7 @@ jobs:
             - Local Docker Compose stack, instrumented Go telemetry demo, OpenAPI 3.1 contract, Go/TypeScript tests, accessibility automation, NVDA Speech Viewer smoke coverage, security scans, SBOM generation, and PostgreSQL backup/restore CI.
 
             ### Known limitations and v1 readiness
-            - GitHub Pages hosts the static frontend only. It does not host the ORBIT API, PostgreSQL, or telemetry data plane; the hosted dashboard is a demo preview until a separately deployed HTTPS API and managed services are configured.
-            - The static GitHub Pages site hosts only the frontend. Hosted API, managed PostgreSQL, and telemetry backends are not deployed; connect a live dashboard only after the HTTPS API, exact CORS allowlist, and authentication design are configured.
+            - GitHub Pages hosts the static frontend only. It does not host the ORBIT API, managed PostgreSQL, or telemetry data plane. A live dashboard requires a separately deployed HTTPS API, exact CORS allowlist, and authentication configuration.
             - Browser PKCE and server-side OIDC verification are provider-neutral foundations, but no real human/workload identity provider and client are configured or verified end to end.
             - Production tenant ingestion remains disabled pending real DNS/TLS, firewall/trusted-proxy and private-network controls, deployment-specific quotas, target-environment capacity/recovery evidence, encrypted off-host backups/PITR, measured RPO/RTO, and an approved durable-history retention/archive policy.
             - The workspace metric catalog is intentionally limited to three fixed IDs (`request_rate`, `successful_request_rate`, `failed_request_rate`) with bounded workspace/service matchers, grouping, windows, series counts, and upstream timeout. Arbitrary metric names, label matchers, and PromQL are not accepted.
