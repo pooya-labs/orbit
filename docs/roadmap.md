@@ -39,7 +39,7 @@ The browser dashboard reads service and incident inventories from a configured A
 - [x] Publish OpenAPI 3.1 contract.
 - [x] Add typed frontend API client and explicit API error types.
 - [x] Separate demo fixtures from the dashboard and add an explicit Demo / ORBIT API source switch with connection validation.
-- [ ] Connect the public dashboard to a hosted API after backend deployment and CORS/auth design.
+- [x] Implement the typed API client, Demo/API source switch and browser API configuration. The live host, CORS and OIDC connection is tracked once in the M06 free-only deployment gate.
 
 ## M03 — Local platform
 
@@ -130,7 +130,7 @@ Production rollout is tracked by the individual environment gates below and in t
 - [x] Add quota-bounded age-encrypted full-cluster backups to OCI Always Free Object Storage, instance-principal authentication, and a daily systemd timer. The script refuses uploads above 16 GB and never auto-deletes prior backups.
 - [ ] Create the private Always Free backup bucket, instance dynamic group/policy, and offline age identity; run one target-environment restore before accepting real tenant data. Full retention/PITR, backup alerting, and measured RPO/RTO remain post-v1 operational work.
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
-- [ ] Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
+- [ ] (Post-v1) Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
 - [x] Merge the repository threat model and automated Gitleaks, govulncheck, npm audit, and Dependency Review workflows (PR #90; squash merge `4a4c46445d7f6b0129cba647d1bd71c49bbd0d45`; all 13 Security jobs passed on final PR head `d388b4702f1dca3b26f55a5fa8ef1e93328c98ee`, run `41406376150`).
 - [x] Enable the repository Dependency Graph and obtain a successful PR Dependency Review result (PR #90 Security run `41406376150`; latest-head check passed with no denied or HIGH-or-higher dependency packages).
 - [x] Merge the immutable full-commit-SHA GitHub Actions pin policy and scheduled Dependabot updates (PR #90; squash merge `4a4c464`; latest-head action-pin CI check passed in run `41406376148`).
@@ -138,7 +138,7 @@ Production rollout is tracked by the individual environment gates below and in t
 - [x] Generate and retain CycloneDX SBOM artifacts for the first-party images and Compose/base image inventory (PR #90; all 11 planned CycloneDX artifacts were generated and uploaded with 30-day retention in Security run `41406376150`). Signed build/release provenance and attestation remain a separate release gate.
 - [x] Refresh and verify the Go telemetry-demo dependency lockfile and re-scan the image after fixing Trivy HIGH findings in `golang.org/x/net` (0.58.0 → 0.60.0) and `google.golang.org/grpc` (1.83.1 → 1.83.2); the latest dependency review and telemetry demo image scan passed in Security run `41406376150`.
 - [x] Publish an operator runbook template covering production preflight gates, safe deployment and post-deploy verification, incident response, rollback boundaries, backup/restore coordination, and evidence capture (`docs/operations-runbook.md`). Executing its environment-specific gates remains open above.
-- [ ] Deploy the API, PostgreSQL, Keycloak and telemetry stack using the free-only single-node path in [the deployment guide](deployment/free-only-orbit.md), then connect GitHub Pages.
+- [ ] Provision the Oracle Always Free VM and DNS, deploy API/PostgreSQL/Keycloak/telemetry, and connect GitHub Pages using [the free-only deployment guide](deployment/free-only-orbit.md). This is the single canonical live-hosting task.
 
 ## Free-only infrastructure implementation status (2026-11-04)
 
@@ -171,10 +171,11 @@ smoke checks remain pre-release requirements.
 - [x] GitHub Pages build variables for API and browser OIDC.
 - [x] Encrypted full-cluster backup script with OCI instance-principal access,
   a 16 GB hard bucket cap and daily systemd timer.
-- [ ] Provision the Always Free VM and DuckDNS records.
-- [ ] Create the private OCI backup bucket, dynamic-group policy and offline age key.
-- [ ] Start the stack, configure Keycloak clients and connect the live Pages dashboard.
-- [ ] Perform one isolated restore and the minimal pre-release smoke checks.
+- [x] Provider-side setup instructions for the private bucket, dynamic group,
+  restricted bucket policy, offline age identity and isolated restore.
+- [x] Provisioning and live activation are consolidated into the single
+  M06 free-only hosting task above; do not track VM, DNS and Pages connection
+  as separate duplicate release blockers.
 
 Human accessibility sessions and broad capacity testing remain deferred until
 after v1 as requested. Do not enable customer ingestion before the essential
