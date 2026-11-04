@@ -155,10 +155,7 @@ func (r *Runtime) HTTPMiddleware(next http.Handler, routePattern func(*http.Requ
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		route := routePattern(request)
-		if route == "" {
-			route = "unmatched"
-		}
+		route := normalizedRoute(routePattern(request))
 		method := normalizedMethod(request.Method)
 		parent := propagation.TraceContext{}.Extract(request.Context(), propagation.HeaderCarrier(request.Header))
 		ctx, span := r.tracer.Start(parent, "HTTP "+method+" "+route,
@@ -271,3 +268,14 @@ func (w *responseRecorder) Write(body []byte) (int, error) {
 }
 
 func (w *responseRecorder) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func normalizedRoute(pattern string) string {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return "unmatched"
+	}
+	if _, path, ok := strings.Cut(pattern, " "); ok && strings.HasPrefix(path, "/") {
+		return path
+	}
+	return pattern
+}
