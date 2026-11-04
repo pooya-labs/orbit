@@ -24,7 +24,7 @@ credentials, confidential data, or real webhook destinations.
    will own the demo.
 2. Create a standalone Apps Script project named ORBIT Demo Runtime.
 3. In Project Settings, enable Show "appsscript.json" manifest file in editor.
-4. Replace the generated Code.js contents with apps-script/Code.js.
+4. Replace the generated Code.gs file contents with apps-script/Code.js (paste the server code; the editor uses the .gs extension).
    Add an HTML file named Index and paste apps-script/Index.html.
    Replace appsscript.json with the manifest from this folder.
 5. Save. In the function selector choose setupOrbitDemo_ and click Run.
@@ -36,7 +36,7 @@ credentials, confidential data, or real webhook destinations.
    - Execute as: Me
    - Who has access: Anyone (anonymous access)
    - Deploy and authorize the web app.
-8. Open the /exec URL in a private/incognito browser. The dashboard should
+8. Copy the deployed /exec URL and send it back in this chat so the live bridge can be checked. The dashboard should
    show the PUBLIC DEMO · SYNTHETIC DATA wrapper and connect automatically.
 
 Google may show different labels or restrict anonymous deployment for some
@@ -73,7 +73,7 @@ use /dev as the public URL; /dev requires editor access.
 
 This design relies on Google Apps Script and Google Sheets quotas, which Google
 may change. The current documented consumer-account limit is six minutes per
-execution and 30 simultaneous executions per user; these are generous for a
-few demo launches per day, but they are not an uptime guarantee. It is intentionally suitable for a few demo sessions per day, not
-sustained telemetry ingestion. The project does not activate billing, add a
+execution and 30 simultaneous executions per user. These limits are generous
+for a few demo launches per day, but they are not an uptime guarantee. The
+runtime is intentionally unsuitable for sustained telemetry ingestion. The project does not activate billing, add a
 paid Google Cloud project, or provision any paid service.
