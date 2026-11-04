@@ -123,7 +123,7 @@ Production rollout is tracked by the individual environment gates below and in t
 - [x] Merge and CI-verify the shared PostgreSQL rate limiter for horizontally scaled API instances (`db45843`); staging/production require PostgreSQL and the limiter stores only hashed short-lived keys.
 - [x] Add CI-verified 7-day retention and explicit ingestion/cardinality/size guardrails for the single-tenant local Prometheus, Loki, and Tempo stack; document the limits and their production boundary (`docs/observability-retention.md`).
 - [x] Preserve the existing ephemeral API rate-limit retention: two-minute expiry with request-driven pruning and an indexed expiry column.
-- [ ] Define and implement a compliant retention/archive policy for durable API history (workspace audit, incident timelines, alert lifecycle, notification attempts, and deployment annotations); do not TTL-prune immutable history until its policy is approved.
+- [ ] (Deferred — production path, not portfolio v1) Define and implement a compliant retention/archive policy for durable API history (workspace audit, incident timelines, alert lifecycle, notification attempts, and deployment annotations); do not TTL-prune immutable history until its policy is approved.
 - [x] Add a documented full-database PostgreSQL logical backup/restore runbook and CI-verified pg_dump/pg_restore round-trip covering the schema migration ledger, workspace audit data, actor context, and post-restore append-only guards (PR #83; `docs/postgres-backup-restore.md`).
 - [x] Instrument inbound production Go API requests with bounded OTLP request/duration metrics, route-template traces, and static lifecycle/server-error logs; self-telemetry is optional and uses the private Collector (PR #133).
 - [x] Instrument alert-evaluator and notification-delivery worker loops with bounded OTLP run/item counters, duration histograms, tick spans, and static error events; only allow-listed worker names and outcomes are recorded, never workspace, delivery, channel, request, or user identifiers (PR #133).
@@ -217,30 +217,36 @@ local OpenTelemetry pipeline remain part of the repository and can still be
 run locally; they are not prerequisites for the public demo. Do not recreate
 PRs #128 and #130–#133.
 
-1. **Apps Script runtime:** implement and CI-check the Apps Script Web App
-   wrapper, google.script.run bridge, request allowlist, short-lived demo
-   sessions, synthetic workspace seed, and Google Sheets persistence. Preserve
-   the existing dashboard pages and typed client; do not fork a second UI.
-2. **Feature parity for the demo:** serve the existing v1 screen flows through
-   the adapter: services, incidents/timelines, Metrics, Logs, Traces and trace
-   detail, alert rules/instances, notification channel/delivery history,
-   deployments/comparison, SLO budgets, and audit events. Keep telemetry and
-   all seeded data explicitly synthetic. Never send real webhooks or ingest
-   customer telemetry through this public demo.
-3. **Owner-side setup:** create the standalone Apps Script project, authorize
-   its private owner-owned Spreadsheet, and deploy the Web App with Execute
-   as me and anonymous access only if Google offers it for the account. No
-   billing, paid Cloud project, OAuth token exposure, or public spreadsheet.
-4. **Live smoke evidence:** verify the /exec URL opens from a clean browser,
-   bootstrap succeeds, the dashboard connects without CORS, one synthetic
-   change persists after refresh, each major page loads, separate browser
-   profiles receive separate demo workspaces, rate/size limits fail closed,
-   and notifications never send outbound requests. Keep the demo sheet private.
-5. **Stable release:** require green exact-head CI, Security and GitHub Pages
+1. **Apps Script runtime — repository implementation added:** `apps-script/Code.js`,
+   `apps-script/Index.html`, the V8 manifest, private Sheets datastore setup,
+   the fixed-origin `postMessage` / `google.script.run` bridge, six-hour
+   demo sessions, per-session request/mutation caps, body/record/visitor limits,
+   and the synthetic workspace bootstrap are present on `main`. The owner
+   initializer ends in an underscore and is unavailable to anonymous
+   `google.script.run` callers. Automated contract and Node runtime smoke tests
+   are wired into CI. Exact-head CI/Security/Pages success is still pending.
+2. **Feature parity — repository adapter added:** the Apps Script adapter
+   covers services, incidents/timelines, Metrics, Logs, Traces/detail and
+   correlation, alert rules/instances, notification channel/delivery history,
+   deployments/comparison, SLO budgets, and audit events. All values and
+   changes are synthetic. Notifications are simulation-only: no outbound
+   webhook is ever sent, and no real OTLP/customer telemetry is accepted.
+3. **Owner-side setup — open:** create the standalone Apps Script project,
+   paste the committed server/HTML/manifest files, run the private
+   `setupOrbitDemo_` from the editor and authorize the private Spreadsheet.
+   Deploy the Web App with Execute as me and anonymous access only if Google
+   offers it for the account. No billing, paid Cloud project, public sheet, or
+   identity/location misrepresentation is allowed.
+4. **Live smoke evidence — open:** verify the owner-deployed `/exec` URL from
+   a clean browser, successful bootstrap/dashboard connection, one synthetic
+   mutation persisted after refresh, each major view, separate browser-profile
+   workspaces, fail-closed size/rate limits, and that notifications cause no
+   outbound requests. Keep the demo sheet private.
+5. **Stable release — open:** require green exact-head CI, Security and Pages
    build/deploy; review the owner-deployed Apps Script version and live smoke
-   evidence; align app/manifest/docs/release version at 1.0.0; publish a
-   stable GitHub Release, not a prerelease. Do not label the demo production
-   ready or claim real telemetry ingestion.
+   evidence; align app/manifest/docs/release version at 1.0.0; publish a stable
+   GitHub Release, not a prerelease. Do not label the demo production-ready or
+   claim real telemetry ingestion.
 
 The Apps Script runtime is deliberately sized for a handful of demo sessions
 per day. Google quotas can change, and the spreadsheet is a small demo store,
