@@ -115,10 +115,27 @@ const sandbox = {
     getUuid: () => randomUUID(),
   },
   Logger: { log() {} },
+  HtmlService: {
+    createTemplateFromFile(name) {
+      assert.equal(name, "Index");
+      return {
+        appUrl: "",
+        evaluate() {
+          return {
+            setTitle() { return this; },
+            addMetaTag() { return this; },
+          };
+        },
+      };
+    },
+  },
 };
 vm.createContext(sandbox);
 vm.runInContext(serverCode, sandbox, { filename: "apps-script/Code.js" });
 
+assert.equal(typeof sandbox.setupOrbitDemo, "undefined", "owner setup must not be exposed as a public google.script.run function");
+const html = sandbox.doGet();
+assert.equal(typeof html.addMetaTag, "function", "doGet returns an HtmlOutput-like object");
 const setup = sandbox.setupOrbitDemo_();
 assert.match(setup.spreadsheetUrl, /^https:\/\/docs\.google\.com\/spreadsheets\/d\//);
 const spreadsheet = spreadsheets.get(setup.spreadsheetId);
