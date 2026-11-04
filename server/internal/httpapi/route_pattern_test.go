@@ -17,7 +17,7 @@ func TestHandlerRoutePatternUsesTemplatesAndBoundsUnknownPaths(t *testing.T) {
 		want string
 	}{
 		{name: "static metadata route", method: "GET", path: "/api/v1/meta", want: "GET /api/v1/meta"},
-		{name: "workspace metric route", method: "GET", path: "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/telemetry/metrics", want: "GET /api/v1/workspaces/{workspaceID}/telemetry/metrics"},
+		{name: "workspace membership route", method: "GET", path: "/api/v1/workspaces/00000000-0000-4000-8000-000000000001/membership", want: "GET /api/v1/workspaces/{workspaceID}/membership"},
 		{name: "unknown path is one bounded value", method: "GET", path: "/unbounded/user/supplied/path/123", want: "unmatched"},
 	}
 	for _, test := range tests {
