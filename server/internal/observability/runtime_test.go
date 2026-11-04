@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -149,5 +150,67 @@ func TestNewWithoutEndpointDisablesInstrumentation(t *testing.T) {
 	}
 	if runtime != nil && runtime.Enabled() {
 		t.Fatal("empty endpoint must disable self-observability")
+	}
+}
+
+func TestStartWorkerExportsBoundedSignalsWithoutSensitiveDetails(t *testing.T) {
+	capture := &capturedOTLP{payloads: make(map[string][][]byte)}
+	collector := httptest.NewServer(capture)
+	defer collector.Close()
+
+	runtime, err := New(context.Background(), collector.URL, "test-version", "test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx, finish := runtime.StartWorker(context.Background(), "alert_evaluator")
+	finish("error", 2, errors.New("private workspace-secret-123 delivery-secret-456"))
+	_, finish = runtime.StartWorker(ctx, "notification_delivery")
+	finish("unexpected-sensitive-result", 3, nil)
+	_, finish = runtime.StartWorker(ctx, "untrusted-worker-name")
+	finish("ok", 99, nil)
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := runtime.Shutdown(shutdownCtx); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
+	}
+
+	payloads := capture.all()
+	var exported strings.Builder
+	for _, signal := range []string{"/v1/traces", "/v1/metrics", "/v1/logs"} {
+		if len(payloads[signal]) == 0 {
+			t.Fatalf("expected %s worker telemetry export", signal)
+		}
+		for _, body := range payloads[signal] {
+			exported.Write(body)
+		}
+	}
+	encoded := exported.String()
+	for _, expected := range []string{
+		"orbit_worker_runs",
+		"orbit_worker_items",
+		"orbit_worker_duration",
+		"alert_evaluator",
+		"notification_delivery",
+		"worker.outcome",
+		"worker_tick_failed",
+		"other",
+	} {
+		if !strings.Contains(encoded, expected) {
+			t.Fatalf("worker telemetry does not include bounded field %q", expected)
+		}
+	}
+	for _, forbidden := range []string{
+		"workspace-secret-123",
+		"delivery-secret-456",
+		"private workspace",
+		"private-error-detail",
+		"untrusted-worker-name",
+		"unexpected-sensitive-result",
+	} {
+		if strings.Contains(encoded, forbidden) {
+			t.Fatalf("worker telemetry unexpectedly contains sensitive/unbounded value %q", forbidden)
+		}
 	}
 }
