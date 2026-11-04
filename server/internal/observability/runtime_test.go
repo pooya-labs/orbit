@@ -30,6 +30,7 @@ func (c *capturedOTLP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.mu.Lock()
 	c.payloads[r.URL.Path] = append(c.payloads[r.URL.Path], body)
 	c.mu.Unlock()
+	w.Header().Set("Content-Type", "application/x-protobuf")
 	w.WriteHeader(http.StatusOK)
 }
 
