@@ -197,6 +197,7 @@ jobs:
         run: |
           python3 scripts/check_apps_script_contract.py
           node --check apps-script/Code.js
+          node scripts/apps_script_runtime_smoke.mjs
 
       - name: Test safe log-to-trace correlation parsing
         run: npm run test:trace-correlation
