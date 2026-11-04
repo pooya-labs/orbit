@@ -35,6 +35,51 @@ OpenTelemetry Collector
                          Next.js workspace
 ```
 
+## Public portfolio demo runtime (v1 target)
+
+The public low-volume demo uses a deliberately separate path from the extended
+Go/PostgreSQL/OTLP development stack:
+
+```text
+Visitor
+  |
+  v
+Google Apps Script Web App (HtmlService wrapper, executes as owner)
+  |
+  +---- iframe ----> GitHub Pages static Next.js dashboard
+  |                      |
+  |                      +---- postMessage (fixed origin) ----+
+  |                                                           |
+  +---- google.script.run <---- validated request bridge <----+
+  |
+  +---- Apps Script API adapter
+          |
+          +---- Script Cache: short-lived demo session capabilities
+          |
+          +---- private Google Spreadsheet: synthetic workspace records
+```
+
+- The wrapper embeds the existing dashboard; it does not maintain a forked UI.
+- The iframe calls the parent bridge with postMessage; the parent verifies
+  the exact Pages origin and iframe source, then calls Apps Script using
+  google.script.run. No browser CORS exception or public API key is needed.
+- The server validates the demo session, workspace ID, API route, request size
+  and per-session request/mutation budget. Spreadsheet writes are serialized
+  with a script lock.
+- Each browser profile receives a separate synthetic workspace. The spreadsheet
+  remains private to the deploying Google account; visitors do not receive its
+  URL or direct access.
+- Notifications are simulation records only. Metrics, logs, traces and SLO
+  budgets are synthetic. This runtime must never receive real credentials,
+  customer telemetry, private data, or real webhook targets.
+- This is a small portfolio demo, not production-grade identity, tenant
+  isolation, PostgreSQL semantics, continuous ingestion, or HA. Apps Script
+  quotas are account-wide and may change. No Google Cloud billing or paid plan
+  is enabled.
+
+The Apps Script deployment is owner-controlled. Until the owner authorizes the
+private spreadsheet and deploys the Web App, the GitHub Pages URL remains the
+static preview and the public interactive demo is not live.
 ## Current implementation
 
 ### Web workspace
@@ -129,7 +174,7 @@ OpenTelemetry Collector
 - A shared service selector reads the active persisted service catalog using cursor pagination; each option shows which telemetry stores reported that service, and a bounded resource-attribute panel displays attribute provenance.
 - The UI distinguishes loading, empty, error, and partial results. Metrics series are rendered independently, and Prometheus sample freshness/gaps are flagged using query-step and sample timestamps; those scrape-interval checks are not applied to event-driven logs or traces.
 - Redis and NATS are available in Compose but are intentionally not used by the Go API under ADR 0004. The current read paths have no measured cache bottleneck, and PostgreSQL provides the authoritative transactional state and notification outbox.
-- The Pages deployment is frontend-only. The Go API is local-only, not publicly hosted.
+- The GitHub Pages origin is still a static frontend. The Apps Script wrapper can provide the interactive synthetic demo after owner deployment; it is not live until that deployment exists. The Go API remains available as an extended local runtime and is not publicly hosted by Pages.
 - The Overview dashboard consumes the service and incident API in API mode; the Metrics/Logs/Traces views consume the bounded telemetry query API and persisted observed service catalog. Full resource-attribute extraction from all telemetry backends remains future work.
 
 

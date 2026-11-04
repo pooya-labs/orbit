@@ -128,7 +128,7 @@ Production rollout is tracked by the individual environment gates below and in t
 - [x] Instrument inbound production Go API requests with bounded OTLP request/duration metrics, route-template traces, and static lifecycle/server-error logs; self-telemetry is optional and uses the private Collector (PR #133).
 - [x] Instrument alert-evaluator and notification-delivery worker loops with bounded OTLP run/item counters, duration histograms, tick spans, and static error events; only allow-listed worker names and outcomes are recorded, never workspace, delivery, channel, request, or user identifiers (PR #133).
 - [x] Add quota-bounded age-encrypted full-cluster backups to OCI Always Free Object Storage, instance-principal authentication, and a daily systemd timer. The script refuses uploads above 16 GB and never auto-deletes prior backups.
-- [ ] Create the private Always Free backup bucket, instance dynamic group/policy, and offline age identity; run one target-environment restore before accepting real tenant data. Full retention/PITR, backup alerting, and measured RPO/RTO remain post-v1 operational work.
+- [ ] (Deferred — production path, not portfolio v1) Create the private Always Free backup bucket, instance dynamic group/policy, and offline age identity; run one target-environment restore before accepting real tenant data. Full retention/PITR, backup alerting, and measured RPO/RTO remain production operational work.
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
 - [ ] (Post-v1) Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
 - [x] Merge the repository threat model and automated Gitleaks, govulncheck, npm audit, and Dependency Review workflows (PR #90; squash merge `4a4c46445d7f6b0129cba647d1bd71c49bbd0d45`; all 13 Security jobs passed on final PR head `d388b4702f1dca3b26f55a5fa8ef1e93328c98ee`, run `41406376150`).
@@ -138,7 +138,7 @@ Production rollout is tracked by the individual environment gates below and in t
 - [x] Generate and retain CycloneDX SBOM artifacts for the first-party images and Compose/base image inventory (PR #90; all 11 planned CycloneDX artifacts were generated and uploaded with 30-day retention in Security run `41406376150`). Signed build/release provenance and attestation remain a separate release gate.
 - [x] Refresh and verify the Go telemetry-demo dependency lockfile and re-scan the image after fixing Trivy HIGH findings in `golang.org/x/net` (0.58.0 → 0.60.0) and `google.golang.org/grpc` (1.83.1 → 1.83.2); the latest dependency review and telemetry demo image scan passed in Security run `41406376150`.
 - [x] Publish an operator runbook template covering production preflight gates, safe deployment and post-deploy verification, incident response, rollback boundaries, backup/restore coordination, and evidence capture (`docs/operations-runbook.md`). Executing its environment-specific gates remains open above.
-- [ ] Provision the Oracle Always Free VM and DNS, deploy API/PostgreSQL/Keycloak/telemetry, and connect GitHub Pages using [the free-only deployment guide](deployment/free-only-orbit.md). This is the single canonical live-hosting task.
+- [ ] (Deferred — production path, not portfolio v1) Provision the Oracle Always Free VM and DNS, deploy API/PostgreSQL/Keycloak/telemetry, and connect GitHub Pages using [the archived free-only deployment guide](deployment/free-only-orbit.md). This is not required for the Apps Script portfolio demo.
 
 ## Free-only infrastructure implementation status (2026-11-04)
 
@@ -208,29 +208,43 @@ identity, health, and tenant-isolation smoke checks pass.
 - **M06 code-level security/recovery:** human OIDC verifier/role gate, provider-neutral browser PKCE, workspace membership, workload identities/grants, authenticated OTLP gateways, rate limits/admission/revocation/fail-closed behavior, A/B tenant integration tests, local retention/cardinality guardrails, backup/restore CI, security scans, pinned Actions, SBOM artifacts, fault/recovery tests, runbook templates, and optional bounded API/worker self-instrumentation (PR #133) are present. They do not establish a production deployment.
 - **Recent no-duplicate guard:** do not recreate the completed suites in PRs #110, #111, #112, #113, #114, #115, #116, #119, #124, #125, the allowlist contract in PR #126, or the workspace-scoped telemetry UI in PR #128 unless a new regression is identified.
 
-### Unique v1 blockers — free-only deployment sequence
+### Unique v1 blockers — zero-cost Apps Script portfolio demo
 
-The workspace-scoped telemetry UI, bounded metric catalog, trace detail,
-Logs-to-Trace correlation and bounded API/worker self-telemetry are already
-delivered. Do not recreate PRs #128, #130–#133.
+The v1 target is a low-volume, interactive portfolio demonstration. It is **not**
+a production tenant-ingestion service or an enterprise multi-tenant control
+plane. The existing Go API, PostgreSQL migrations, OIDC security model and
+local OpenTelemetry pipeline remain part of the repository and can still be
+run locally; they are not prerequisites for the public demo. Do not recreate
+PRs #128 and #130–#133.
 
-1. **Free hosting:** create the single Oracle Always Free VM, deploy API,
-   PostgreSQL and telemetry containers, and connect the GitHub Pages dashboard.
-   The design is deliberately single-node and has no HA failover.
-2. **Free identity and ingress:** create the self-hosted Keycloak realm/clients,
-   role and audience claims, four DuckDNS records, Caddy HTTPS, firewall and
-   exact Pages CORS origin.
-3. **Data protection:** provision the private Always-Free Object Storage
-   bucket, bucket-scoped instance-principal policy and offline age identity;
-   run one isolated restore from the automated encrypted backup. Keep
-   append-only workspace history; do not TTL-delete it.
-4. **Minimal pre-release smoke:** verify health/readiness, version metadata,
-   browser login, API authorization, one controlled telemetry write/query and
-   A/B workspace isolation. Do not enable tenant ingestion before these pass.
-5. **Stable release:** require green CI, Security, Pages deploy and
-   dependency/image/SBOM checks; publish build provenance/attestation or an
-   approved equivalent; align application/API/Compose/docs/tag at `1.0.0`;
-   publish a stable GitHub Release, not a prerelease.
+1. **Apps Script runtime:** implement and CI-check the Apps Script Web App
+   wrapper, google.script.run bridge, request allowlist, short-lived demo
+   sessions, synthetic workspace seed, and Google Sheets persistence. Preserve
+   the existing dashboard pages and typed client; do not fork a second UI.
+2. **Feature parity for the demo:** serve the existing v1 screen flows through
+   the adapter: services, incidents/timelines, Metrics, Logs, Traces and trace
+   detail, alert rules/instances, notification channel/delivery history,
+   deployments/comparison, SLO budgets, and audit events. Keep telemetry and
+   all seeded data explicitly synthetic. Never send real webhooks or ingest
+   customer telemetry through this public demo.
+3. **Owner-side setup:** create the standalone Apps Script project, authorize
+   its private owner-owned Spreadsheet, and deploy the Web App with Execute
+   as me and anonymous access only if Google offers it for the account. No
+   billing, paid Cloud project, OAuth token exposure, or public spreadsheet.
+4. **Live smoke evidence:** verify the /exec URL opens from a clean browser,
+   bootstrap succeeds, the dashboard connects without CORS, one synthetic
+   change persists after refresh, each major page loads, separate browser
+   profiles receive separate demo workspaces, rate/size limits fail closed,
+   and notifications never send outbound requests. Keep the demo sheet private.
+5. **Stable release:** require green exact-head CI, Security and GitHub Pages
+   build/deploy; review the owner-deployed Apps Script version and live smoke
+   evidence; align app/manifest/docs/release version at 1.0.0; publish a
+   stable GitHub Release, not a prerelease. Do not label the demo production
+   ready or claim real telemetry ingestion.
+
+The Apps Script runtime is deliberately sized for a handful of demo sessions
+per day. Google quotas can change, and the spreadsheet is a small demo store,
+not a PostgreSQL replacement.
 
 ### Deferred until after v1
 

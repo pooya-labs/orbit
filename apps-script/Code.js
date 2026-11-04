@@ -38,7 +38,15 @@ function setupOrbitDemo() {
     props.setProperty(ORBIT_CONFIG.databaseProperty, id);
   }
   let sheet = spreadsheet.getSheetByName(ORBIT_CONFIG.sheetName);
-  if (!sheet) sheet = spreadsheet.insertSheet(ORBIT_CONFIG.sheetName);
+  if (!sheet) {
+    const firstSheet = spreadsheet.getSheets()[0];
+    if (firstSheet && firstSheet.getName() === "Sheet1" && firstSheet.getLastRow() === 0) {
+      firstSheet.setName(ORBIT_CONFIG.sheetName);
+      sheet = firstSheet;
+    } else {
+      sheet = spreadsheet.insertSheet(ORBIT_CONFIG.sheetName);
+    }
+  }
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, ORBIT_HEADERS.length).setValues([ORBIT_HEADERS]);
     sheet.setFrozenRows(1);
@@ -137,7 +145,15 @@ function getRecordsSheet_() {
   if (!id) throw new Error("Run setupOrbitDemo once from the Apps Script editor.");
   const spreadsheet = SpreadsheetApp.openById(id);
   let sheet = spreadsheet.getSheetByName(ORBIT_CONFIG.sheetName);
-  if (!sheet) sheet = spreadsheet.insertSheet(ORBIT_CONFIG.sheetName);
+  if (!sheet) {
+    const firstSheet = spreadsheet.getSheets()[0];
+    if (firstSheet && firstSheet.getName() === "Sheet1" && firstSheet.getLastRow() === 0) {
+      firstSheet.setName(ORBIT_CONFIG.sheetName);
+      sheet = firstSheet;
+    } else {
+      sheet = spreadsheet.insertSheet(ORBIT_CONFIG.sheetName);
+    }
+  }
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, ORBIT_HEADERS.length).setValues([ORBIT_HEADERS]);
     sheet.setFrozenRows(1);

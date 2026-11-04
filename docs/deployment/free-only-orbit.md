@@ -1,5 +1,12 @@
 # ORBIT — zero-cost infrastructure deployment
 
+> **Superseded for portfolio v1 (2026-11-04):** ORBIT's public low-volume
+> demo now targets Google Apps Script + a private Google Spreadsheet. This OCI
+> VM/Keycloak/Object Storage plan is retained only as a future production-path
+> reference. Do not provision OCI resources for the portfolio demo; use
+> [the Apps Script demo setup](../../apps-script/README.md). No paid fallback
+> is permitted.
+
 **Hard budget: $0/month.** Do not add paid plans, usage-billed services,
 managed databases, paid domains, paid Cloudflare add-ons or automatic paid
 overages. If an Always Free resource is unavailable, wait or use hardware you

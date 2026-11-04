@@ -10,7 +10,7 @@ ORBIT is an engineering-first observability platform for understanding the healt
 
 **[Open the ORBIT dashboard](https://pooya-labs.github.io/orbit/)**
 
-The public preview is a static, responsive workspace. Demo mode uses clearly labelled illustrative data; API mode can read service and incident inventories from an explicitly configured ORBIT API. No production systems are connected by default.
+GitHub Pages hosts the responsive static workspace and remains the public project front door. The interactive, zero-cost portfolio demo is being moved to a Google Apps Script Web App that embeds this same dashboard and persists synthetic demo changes in a private Google Spreadsheet. **The Apps Script Web App has not yet been deployed by the project owner**; follow [the setup guide](apps-script/README.md) after the repository-side implementation is ready. No production systems or real customer telemetry are connected.
 
 ## Current implementation
 
@@ -35,6 +35,7 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 - [PostgreSQL backup and restore runbook](docs/postgres-backup-restore.md) — full-database logical dumps, safe restore checks, and the remaining production backup gates.
 - [Deployment and operations runbook](docs/operations-runbook.md) — production preflight, deployment verification, incident response, rollback, and recovery evidence.
 - [GitHub Pages deployment](docs/deployment/github-pages.md) — Actions-only publishing source, automated source validation, and the public project URL.
+- [Apps Script demo setup](apps-script/README.md) — owner-side setup, private Sheets datastore, anonymous Web App deployment, and the synthetic demo safety boundary.
 - [Security threat model](docs/security-threat-model.md) — current trust boundaries, implemented controls, evidence, and remaining production go-live gates.
 
 ## Technology
@@ -42,8 +43,10 @@ The public preview is a static, responsive workspace. Demo mode uses clearly lab
 | Layer | Technology |
 | --- | --- |
 | Web application | Next.js · React · TypeScript |
-| API | Go 1.26+ |
-| Persistence | PostgreSQL 17 |
+| Public portfolio demo API | Google Apps Script Web App |
+| Public demo persistence | Private Google Sheets datastore (synthetic records only) |
+| Extended local API | Go 1.27+ |
+| Extended local persistence | PostgreSQL 17 |
 | Cache | Redis 7 (stack provisioned; application integration pending) |
 | Event transport | NATS JetStream (stack provisioned; application integration pending) |
 | Local telemetry pipeline | OpenTelemetry Collector · Prometheus · Loki · Tempo · instrumented Go demo (opt-in Compose profile) |
@@ -64,7 +67,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Connect the dashboard to the local API
 
-For a local API, run the dashboard locally with `npm run dev` and run the backend with Docker Compose. Open `http://localhost:3000`, choose **Connect a source**, enter `http://localhost:8080`, then select **Test and connect**. The dashboard verifies metadata and reads services and incidents. The URL is stored only in this browser. The public GitHub Pages site does not host the Go API; connecting that hosted site requires a separately hosted HTTPS API whose CORS allowlist includes the Pages origin.
+For the extended local API, run the dashboard locally with npm run dev and run the Go backend with Docker Compose. Open http://localhost:3000, choose **Connect a source**, enter http://localhost:8080, then select **Test and connect**. This retains the PostgreSQL-backed and real local OpenTelemetry path for development. The public portfolio demo uses the Apps Script Web App wrapper: it embeds this same static dashboard, bridges API calls through google.script.run, and stores only synthetic data in the owner's private Google Spreadsheet. That wrapper avoids a public browser-to-Apps-Script CORS/API-key setup. The Pages URL by itself remains a static frontend; the interactive demo becomes public only after the owner deploys the Apps Script /exec Web App.
 
 When connected, select Metrics, Logs, or Traces to query live telemetry. The service selector merges discovered names across Prometheus, Loki, and Tempo, shows their source backends, and refreshes the catalog every 60 seconds. Demo mode remains available at any time.
 
