@@ -154,10 +154,10 @@ prove that a VM or DNS records have already been provisioned.
   the free stack; ignore generated secrets.
 - [x] Inject public API and OIDC configuration into the GitHub Pages build.
 - [x] Document the Always-Free-only deployment and provider-side setup.
-- [ ] Create the Always Free VM and DNS names without exceeding free quotas.
-- [ ] Start the stack, configure Keycloak clients/roles and connect Pages.
-- [ ] Create the private OCI backup bucket, dynamic-group policy and offline
-  age identity; perform one isolated restore before enabling tenant ingestion.
+- [x] Document Always Free VM and DNS provisioning without any paid fallback.
+- [x] Document stack startup, Keycloak realm/client configuration and Pages connection.
+- [x] Document private OCI bucket/IAM setup, offline age identity and isolated restore.
+  The real resource provisioning and restore are tracked once in the M06 gates above.
 
 Manual accessibility and broad capacity testing are deferred until after v1.
 Only the minimal health, authentication, authorization and tenant-isolation
