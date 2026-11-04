@@ -91,7 +91,12 @@ services:
       - orbit-caddy-config:/config
     mem_limit: 128m
     networks:
-      - ingress
+      ingress:
+        aliases:
+          # The API resolves the public OIDC issuer to this internal Caddy
+          # endpoint, avoiding a public-IP hairpin while preserving the exact
+          # issuer URL and TLS hostname used by browsers.
+          - ${ORBIT_AUTH_DOMAIN:?set ORBIT_AUTH_DOMAIN}
     depends_on:
       api:
         condition: service_started
