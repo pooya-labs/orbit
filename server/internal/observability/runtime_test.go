@@ -70,7 +70,7 @@ func TestHTTPMiddlewareExportsBoundedOTLPSignals(t *testing.T) {
 
 	runtime.EmitStartupLog(ctx)
 	request := httptest.NewRequest(http.MethodGet,
-		"http://orbit.example/api/v1/workspaces/workspace-secret-123/telemetry/metrics?token=query-secret",
+		"http://orbit.example/api/v1/workspaces/workspace-fixture-123/telemetry/metrics?token=query-secret",
 		nil,
 	)
 	request.Header.Set("Authorization", "Bearer authorization-secret")
@@ -127,7 +127,7 @@ func TestHTTPMiddlewareExportsBoundedOTLPSignals(t *testing.T) {
 		exported.Write(group)
 	}
 	for _, secret := range []string{
-		"workspace-secret-123",
+		"workspace-fixture-123",
 		"query-secret",
 		"authorization-secret",
 		"request-id-secret",
@@ -164,7 +164,7 @@ func TestStartWorkerExportsBoundedSignalsWithoutSensitiveDetails(t *testing.T) {
 	}
 
 	ctx, finish := runtime.StartWorker(context.Background(), "alert_evaluator")
-	finish("error", 2, errors.New("private workspace-secret-123 delivery-secret-456"))
+	finish("error", 2, errors.New("private workspace-fixture-123 delivery-fixture-456"))
 	_, finish = runtime.StartWorker(ctx, "notification_delivery")
 	finish("unexpected-sensitive-result", 3, nil)
 	_, finish = runtime.StartWorker(ctx, "untrusted-worker-name")
@@ -202,8 +202,8 @@ func TestStartWorkerExportsBoundedSignalsWithoutSensitiveDetails(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
-		"workspace-secret-123",
-		"delivery-secret-456",
+		"workspace-fixture-123",
+		"delivery-fixture-456",
 		"private workspace",
 		"private-error-detail",
 		"untrusted-worker-name",
