@@ -127,7 +127,7 @@ Production rollout is tracked by the individual environment gates below and in t
 - [x] Add a documented full-database PostgreSQL logical backup/restore runbook and CI-verified pg_dump/pg_restore round-trip covering the schema migration ledger, workspace audit data, actor context, and post-restore append-only guards (PR #83; `docs/postgres-backup-restore.md`).
 - [x] Instrument inbound production Go API requests with bounded OTLP request/duration metrics, route-template traces, and static lifecycle/server-error logs; self-telemetry is optional and uses the private Collector (PR #133).
 - [x] Instrument alert-evaluator and notification-delivery worker loops with bounded OTLP run/item counters, duration histograms, tick spans, and static error events; only allow-listed worker names and outcomes are recorded, never workspace, delivery, channel, request, or user identifiers (PR #133).
-- [x] Add quota-bounded age-encrypted full-cluster backups to OCI Always Free Object Storage, instance-principal authentication, and a daily systemd timer. The script refuses uploads above 16 GiB and never auto-deletes prior backups.
+- [x] Add quota-bounded age-encrypted full-cluster backups to OCI Always Free Object Storage, instance-principal authentication, and a daily systemd timer. The script refuses uploads above 16 GB and never auto-deletes prior backups.
 - [ ] Create the private Always Free backup bucket, instance dynamic group/policy, and offline age identity; run one target-environment restore before accepting real tenant data. Full retention/PITR, backup alerting, and measured RPO/RTO remain post-v1 operational work.
 - [x] Add deterministic in-process sustained-concurrency tests and repeatable allocation/throughput benchmarks for authenticated OTLP HTTP/gRPC gateway paths; see [M06 load-testing guide](m06-load-testing.md).
 - [ ] Run and record target-environment load tests for sustained ingestion and dashboard queries with real PostgreSQL and Collector dependencies; capture throughput, p50/p95/p99 latency, rejection rates, saturation, and recovery.
@@ -156,8 +156,8 @@ prove that a VM or DNS records have already been provisioned.
 - [x] Document the Always-Free-only deployment and provider-side setup.
 - [ ] Create the Always Free VM and DNS names without exceeding free quotas.
 - [ ] Start the stack, configure Keycloak clients/roles and connect Pages.
-- [ ] Configure encrypted PostgreSQL backups within the Always Free Object
-  Storage quota and verify one restore.
+- [ ] Create the private OCI backup bucket, dynamic-group policy and offline
+  age identity; perform one isolated restore before enabling tenant ingestion.
 
 Manual accessibility and broad capacity testing are deferred until after v1.
 Only the minimal health, authentication, authorization and tenant-isolation
@@ -170,7 +170,7 @@ smoke checks remain pre-release requirements.
 - [x] Free-stack setup, DuckDNS update and secret generation.
 - [x] GitHub Pages build variables for API and browser OIDC.
 - [x] Encrypted full-cluster backup script with OCI instance-principal access,
-  a 16 GiB hard bucket cap and daily systemd timer.
+  a 16 GB hard bucket cap and daily systemd timer.
 - [ ] Provision the Always Free VM and DuckDNS records.
 - [ ] Create the private OCI backup bucket, dynamic-group policy and offline age key.
 - [ ] Start the stack, configure Keycloak clients and connect the live Pages dashboard.
@@ -219,9 +219,10 @@ delivered. Do not recreate PRs #128, #130–#133.
 2. **Free identity and ingress:** create the self-hosted Keycloak realm/clients,
    role and audience claims, four DuckDNS records, Caddy HTTPS, firewall and
    exact Pages CORS origin.
-3. **Data protection:** configure encrypted PostgreSQL backups to an
-   Always-Free Object Storage bucket, stay within its free quota, and complete
-   one controlled restore. Keep append-only workspace history; do not TTL-delete it.
+3. **Data protection:** provision the private Always-Free Object Storage
+   bucket, bucket-scoped instance-principal policy and offline age identity;
+   run one isolated restore from the automated encrypted backup. Keep
+   append-only workspace history; do not TTL-delete it.
 4. **Minimal pre-release smoke:** verify health/readiness, version metadata,
    browser login, API authorization, one controlled telemetry write/query and
    A/B workspace isolation. Do not enable tenant ingestion before these pass.

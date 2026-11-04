@@ -30,6 +30,9 @@ set +a
 : "${ORBIT_BACKUP_NAMESPACE:?ORBIT_BACKUP_NAMESPACE is required}"
 : "${ORBIT_BACKUP_AGE_RECIPIENT:?ORBIT_BACKUP_AGE_RECIPIENT is required}"
 
+[[ "$ORBIT_BACKUP_BUCKET" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$ ]] || fail "invalid OCI bucket name"
+[[ "$ORBIT_BACKUP_NAMESPACE" =~ ^[A-Za-z0-9_-]+$ ]] || fail "invalid OCI namespace"
+
 MAX_BUCKET_BYTES="${ORBIT_BACKUP_MAX_BUCKET_BYTES:-16000000000}"
 [[ "$MAX_BUCKET_BYTES" =~ ^[0-9]+$ ]] || fail "ORBIT_BACKUP_MAX_BUCKET_BYTES must be an integer"
 (( MAX_BUCKET_BYTES > 0 && MAX_BUCKET_BYTES <= 16000000000 )) ||

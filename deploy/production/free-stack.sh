@@ -16,10 +16,12 @@ case "${1:-}" in
     read -r -p "OCI Object Storage bucket name (e.g. orbit-backups): " ORBIT_BACKUP_BUCKET
     read -r -p "OCI Object Storage namespace: " ORBIT_BACKUP_NAMESPACE
     read -r -p "Offline age public recipient (age1...): " ORBIT_BACKUP_AGE_RECIPIENT
-    [[ -n "$ORBIT_BACKUP_BUCKET" && -n "$ORBIT_BACKUP_NAMESPACE" ]] || { echo "Bucket and namespace are required." >&2; exit 1; }
+    [[ "$ORBIT_BACKUP_BUCKET" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$ ]] || { echo "Invalid OCI bucket name." >&2; exit 1; }
+    [[ "$ORBIT_BACKUP_NAMESPACE" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid OCI namespace." >&2; exit 1; }
     [[ "$ORBIT_BACKUP_AGE_RECIPIENT" =~ ^age1[0-9a-z]{20,}$ ]] || { echo "A valid age public recipient is required." >&2; exit 1; }
+    [[ "$DUCKDNS_TOKEN" =~ ^[A-Za-z0-9_-]{16,128}$ ]] || { echo "Invalid DuckDNS token format." >&2; exit 1; }
     for domain in "$API_DOMAIN" "$AUTH_DOMAIN" "$OTLP_HTTP_DOMAIN" "$OTLP_GRPC_DOMAIN"; do
-      [[ "$domain" == *.duckdns.org ]] || { echo "All hostnames must end in .duckdns.org." >&2; exit 1; }
+      [[ "$domain" =~ ^[a-z0-9-]+\.duckdns\.org$ ]] || { echo "Use a lowercase DuckDNS hostname, e.g. orbit-api.duckdns.org." >&2; exit 1; }
     done
     [[ "$API_DOMAIN" != "$AUTH_DOMAIN" && "$API_DOMAIN" != "$OTLP_HTTP_DOMAIN" && "$API_DOMAIN" != "$OTLP_GRPC_DOMAIN" &&
        "$AUTH_DOMAIN" != "$OTLP_HTTP_DOMAIN" && "$AUTH_DOMAIN" != "$OTLP_GRPC_DOMAIN" && "$OTLP_HTTP_DOMAIN" != "$OTLP_GRPC_DOMAIN" ]] ||
