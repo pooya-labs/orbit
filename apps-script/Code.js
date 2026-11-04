@@ -263,8 +263,8 @@ function createDemoWorkspace_(browserHash, sheet) {
 }
 
 function routeApi_(method, path, body, workspaceId, sheet) {
-  const url = new URL("https://orbit.invalid" + path);
-  const pathname = url.pathname;
+  const parsedPath = parseApiPath_(path);
+  const pathname = parsedPath.pathname;
   if (method === "GET" && pathname === "/api/v1/meta") {
     return { name: "orbit-api", version: "1.0.0-demo", environment: "demo" };
   }
@@ -278,7 +278,7 @@ function routeApi_(method, path, body, workspaceId, sheet) {
   const requestedWorkspaceId = decodeURIComponent(slash < 0 ? rest : rest.slice(0, slash));
   if (requestedWorkspaceId !== workspaceId) fault_(404, "workspace_not_found", "The demo workspace was not found.");
   const route = slash < 0 ? "" : rest.slice(slash + 1);
-  const query = url.searchParams;
+  const query = parsedPath.query;
 
   if (method === "GET" && route === "membership") {
     const workspace = readOne_("workspaces", workspaceId, workspaceId, sheet);
@@ -526,6 +526,30 @@ function routeApi_(method, path, body, workspaceId, sheet) {
   if (match && method === "GET") return demoTraceDetail_(match[1].toLowerCase());
 
   fault_(404, "route_not_found", "The requested demo API route was not found.");
+}
+
+function parseApiPath_(path) {
+  const question = path.indexOf("?");
+  const pathname = question < 0 ? path : path.slice(0, question);
+  const rawQuery = question < 0 ? "" : path.slice(question + 1);
+  const values = {};
+  if (rawQuery) {
+    rawQuery.split("&").forEach(function (part) {
+      if (!part) return;
+      const separator = part.indexOf("=");
+      const rawKey = separator < 0 ? part : part.slice(0, separator);
+      const rawValue = separator < 0 ? "" : part.slice(separator + 1);
+      const key = decodeQueryPart_(rawKey);
+      if (!Object.prototype.hasOwnProperty.call(values, key)) values[key] = decodeQueryPart_(rawValue);
+    });
+  }
+  return { pathname: pathname, query: { get: function (key) {
+    return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : null;
+  } } };
+}
+function decodeQueryPart_(value) {
+  try { return decodeURIComponent(String(value).replace(/\+/g, " ")); }
+  catch (ignored) { return ""; }
 }
 
 function normalizeRule_(body, workspaceId, previous) {
