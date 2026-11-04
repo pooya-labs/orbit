@@ -56,9 +56,12 @@
               setStatus("Connected · isolated demo workspace");
               postToFrame({ type: "ORBIT_BRIDGE_INIT", payload: payload });
             })
-            .withFailureHandler(function () {
-              setStatus("Demo setup failed · reload this page");
-              postToFrame({ type: "ORBIT_BRIDGE_INIT_ERROR", message: "The demo workspace could not be prepared." });
+            .withFailureHandler(function (error) {
+              var message = error && typeof error.message === "string"
+                ? error.message
+                : "The demo workspace could not be prepared. Reload this page.";
+              setStatus(message);
+              postToFrame({ type: "ORBIT_BRIDGE_INIT_ERROR", message: message });
             })
             .orbitBootstrap(message.clientId);
           return;

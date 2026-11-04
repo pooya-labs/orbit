@@ -12,8 +12,11 @@ const ORBIT_CONFIG = Object.freeze({
   maxRequestsPerSession: 250,
   maxMutationsPerSession: 60,
   maxBodyBytes: 16384,
-  maxRecords: 15000,
-  maxVisitors: 100
+  maxRecords: 20000,
+  maxVisitors: 500,
+  maxDailyBootstraps: 25,
+  maxDailyRequests: 800,
+  maxDailyMutations: 200
 });
 const ORBIT_HEADERS = ["collection", "id", "workspace_id", "payload_json", "updated_at"];
 const ORBIT_WINDOWS = Object.freeze({ "15m": 900, "1h": 3600, "6h": 21600, "24h": 86400 });
@@ -69,6 +72,9 @@ function orbitBootstrap(clientId) {
     const sheet = ensureDatabase_();
     if (typeof clientId !== "string" || !/^[a-f0-9-]{36}$/i.test(clientId)) {
       throw new Error("The browser demo identifier is invalid. Reload the demo.");
+    }
+    if (!consumeDailyBudget_("bootstraps", ORBIT_CONFIG.maxDailyBootstraps)) {
+      throw new Error("The public demo's daily launch limit has been reached. Please try again tomorrow.");
     }
     const browserHash = sha256_(clientId);
     let visitor = readOne_("visitors", "", browserHash, sheet);
@@ -760,8 +766,31 @@ function consumeRateLimit_(token, mutation) {
   const limit = mutation ? ORBIT_CONFIG.maxMutationsPerSession : ORBIT_CONFIG.maxRequestsPerSession;
   const count = Number(cache.get(key) || 0);
   if (count >= limit) return { ok: false };
+  const dailyKind = mutation ? "mutations" : "requests";
+  const dailyLimit = mutation ? ORBIT_CONFIG.maxDailyMutations : ORBIT_CONFIG.maxDailyRequests;
+  if (!consumeDailyBudget_(dailyKind, dailyLimit)) return { ok: false };
   cache.put(key, String(count + 1), ORBIT_CONFIG.sessionTtlSeconds);
   return { ok: true };
+}
+
+function consumeDailyBudget_(kind, limit) {
+  const props = PropertiesService.getScriptProperties();
+  const propertyKey = "ORBIT_DEMO_DAILY_USAGE";
+  const today = new Date().toISOString().slice(0, 10);
+  let usage = {};
+  try {
+    usage = JSON.parse(props.getProperty(propertyKey) || "{}");
+  } catch (ignored) {
+    usage = {};
+  }
+  if (!usage || usage.day !== today) {
+    usage = { day: today, bootstraps: 0, requests: 0, mutations: 0 };
+  }
+  const count = Number(usage[kind] || 0);
+  if (!Number.isFinite(count) || count >= limit) return false;
+  usage[kind] = count + 1;
+  props.setProperty(propertyKey, JSON.stringify(usage));
+  return true;
 }
 function readCollection_(collection, workspaceId, sheet) {
   const last = sheet.getLastRow();
