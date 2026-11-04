@@ -99,11 +99,18 @@ jobs:
           ORBIT_OIDC_ISSUER: https://identity.example.test
           ORBIT_OIDC_AUDIENCE: orbit-api
           ORBIT_WORKLOAD_OIDC_ISSUER: https://identity.example.test
-          ORBIT_WORKLOAD_OIDC_AUDIENCE: orbit-otlp
+          ORBIT_WORKLOAD_OIDC_AUDIENCE: orbit-ingestion
+          ORBIT_WEB_ORIGIN: https://pooya-labs.github.io
+          ORBIT_API_DOMAIN: api.example.test
+          ORBIT_AUTH_DOMAIN: auth.example.test
           ORBIT_OTLP_HTTP_DOMAIN: otlp-http.example.test
           ORBIT_OTLP_GRPC_DOMAIN: otlp-grpc.example.test
+          KEYCLOAK_ADMIN_USER: orbit-admin
+          KEYCLOAK_ADMIN_PASSWORD: ci-placeholder
+          KEYCLOAK_DB_PASSWORD: ci-placeholder
         run: |
           docker run --rm \
+            -e ORBIT_API_DOMAIN -e ORBIT_AUTH_DOMAIN \
             -e ORBIT_OTLP_HTTP_DOMAIN -e ORBIT_OTLP_GRPC_DOMAIN \
             -v "$PWD/deploy/production/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.11.7-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
@@ -118,7 +125,9 @@ jobs:
           assert published("caddy") == {80, 443}, published("caddy")
           assert not ({4319, 4320} & published("api")), published("api")
           assert not published("otel-collector"), published("otel-collector")
-          assert "ingress" in services["api"]["networks"]
+          assert {"default", "ingress", "telemetry-internal"} <= set(services["api"]["networks"])
+          assert {"default", "ingress"} <= set(services["keycloak"]["networks"])
+          assert services["keycloak"]["image"] == "quay.io/keycloak/keycloak:26.7.3"
           assert "ingress" in services["caddy"]["networks"]
           assert "default" not in services["caddy"]["networks"]
           assert "telemetry-internal" not in services["caddy"]["networks"]

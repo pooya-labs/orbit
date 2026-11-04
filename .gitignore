@@ -14,3 +14,8 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Zero-cost production deployment secrets and local database exports
+.env.production
+*.dump
+*.dump.age

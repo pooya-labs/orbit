@@ -137,7 +137,30 @@ Production rollout is tracked by the individual environment gates below and in t
 - [x] Generate and retain CycloneDX SBOM artifacts for the first-party images and Compose/base image inventory (PR #90; all 11 planned CycloneDX artifacts were generated and uploaded with 30-day retention in Security run `41406376150`). Signed build/release provenance and attestation remain a separate release gate.
 - [x] Refresh and verify the Go telemetry-demo dependency lockfile and re-scan the image after fixing Trivy HIGH findings in `golang.org/x/net` (0.58.0 → 0.60.0) and `google.golang.org/grpc` (1.83.1 → 1.83.2); the latest dependency review and telemetry demo image scan passed in Security run `41406376150`.
 - [x] Publish an operator runbook template covering production preflight gates, safe deployment and post-deploy verification, incident response, rollback boundaries, backup/restore coordination, and evidence capture (`docs/operations-runbook.md`). Executing its environment-specific gates remains open above.
-- [ ] Hosted API and managed persistence deployment.
+- [ ] Deploy the API, PostgreSQL, Keycloak and telemetry stack using the free-only single-node path in [the deployment guide](deployment/free-only-orbit.md), then connect GitHub Pages.
+
+## Free-only infrastructure implementation status (2026-11-04)
+
+The repository now contains a zero-cost deployment scaffold: OCI Always Free
+single-node topology, self-hosted PostgreSQL and Keycloak, local Collector /
+Prometheus / Loki / Tempo, Caddy HTTPS ingress, DuckDNS dynamic DNS, generated
+production secrets, and Pages build-time API/OIDC variables. These files do not
+prove that a VM or DNS records have already been provisioned.
+
+- [x] Add the production Compose overlay, separate Keycloak database, resource
+  caps and API/Auth/OTLP reverse-proxy routes.
+- [x] Add a script to generate protected credentials, update DuckDNS and start
+  the free stack; ignore generated secrets.
+- [x] Inject public API and OIDC configuration into the GitHub Pages build.
+- [x] Document the Always-Free-only deployment and provider-side setup.
+- [ ] Create the Always Free VM and DNS names without exceeding free quotas.
+- [ ] Start the stack, configure Keycloak clients/roles and connect Pages.
+- [ ] Configure encrypted PostgreSQL backups within the Always Free Object
+  Storage quota and verify one restore.
+
+Manual accessibility and broad capacity testing are deferred until after v1.
+Only the minimal health, authentication, authorization and tenant-isolation
+smoke checks remain pre-release requirements.
 
 ## Definition of done
 
@@ -153,7 +176,7 @@ Production rollout is tracked by the individual environment gates below and in t
 ### Current release baseline
 
 - Latest published tag: \`v0.10.0\`, published as a GitHub prerelease / Public Preview. No \`v1.0.0\` release exists yet.
-- Source baseline for this audit: `main` commit `73d1dce65a506e77c145d85e27490d04614d4928` (PR #133 merged as `58f948be49412567a1a84da9f753b08a21cb531e`, followed by the Gitleaks fixture correction and documentation reconciliation). On this exact baseline, CI run [41775804127](https://github.com/pooya-labs/orbit/actions/runs/41775804127) passed all four jobs, Security run [41775804189](https://github.com/pooya-labs/orbit/actions/runs/41775804189) passed all 13 jobs including Gitleaks, Pages deployment [41775804224](https://github.com/pooya-labs/orbit/actions/runs/41775804224) succeeded, and release workflow [41775907365](https://github.com/pooya-labs/orbit/actions/runs/41775907365) succeeded. The latest published tag remains `v0.10.0` Public Preview; no `v1.0.0` release exists.
+- Source baseline at the start of the free-infrastructure update: `main` commit `2245d8e9cab1de1c9ead8259b7e430b81b06ae4c`. Exact-head CI run [41780453139](https://github.com/pooya-labs/orbit/actions/runs/41780453139) passed all four jobs, Security run [41780453343](https://github.com/pooya-labs/orbit/actions/runs/41780453343) passed all 13 jobs, Pages deployment [41780453408](https://github.com/pooya-labs/orbit/actions/runs/41780453408) succeeded, and release workflow [41780525127](https://github.com/pooya-labs/orbit/actions/runs/41780525127) succeeded with the preview tag aligned to main. The free deployment configuration is not yet running on a VM.
 - Audit reconciliation: 95 of 107 previously recorded checkboxes were complete. Several open boxes duplicated the same production OIDC, ingress, and target-load gates; the historical duplicate boxes are consolidated below. The count is not a measure of v1 completeness because some deferred items are deliberately non-blocking.
 
 ### Verified and completed — do not repeat
@@ -166,16 +189,36 @@ Production rollout is tracked by the individual environment gates below and in t
 - **M06 code-level security/recovery:** human OIDC verifier/role gate, provider-neutral browser PKCE, workspace membership, workload identities/grants, authenticated OTLP gateways, rate limits/admission/revocation/fail-closed behavior, A/B tenant integration tests, local retention/cardinality guardrails, backup/restore CI, security scans, pinned Actions, SBOM artifacts, fault/recovery tests, runbook templates, and optional bounded API/worker self-instrumentation (PR #133) are present. They do not establish a production deployment.
 - **Recent no-duplicate guard:** do not recreate the completed suites in PRs #110, #111, #112, #113, #114, #115, #116, #119, #124, #125, the allowlist contract in PR #126, or the workspace-scoped telemetry UI in PR #128 unless a new regression is identified.
 
-### Unique v1 blockers (linked to their detailed milestone checkboxes)
+### Unique v1 blockers — free-only deployment sequence
 
-The workspace-safe telemetry UI blocker was resolved by PR #128: the dashboard now selects an authenticated workspace, verifies membership, and uses the existing workspace-scoped catalog and Metrics/Logs/Traces routes. Legacy unscoped routes remain disabled in staging/production and are only used by the explicit local-development compatibility path. The bounded metric catalog (PR #132), workspace trace/span detail (PR #130), validated Logs-to-Trace correlation (PR #131), and bounded API/worker self-instrumentation (PR #133) are all delivered. No code-level implementation item from this M04/M06 sequence remains open; human accessibility and environment-specific deployment gates remain separate.
+The workspace-scoped telemetry UI, bounded metric catalog, trace detail,
+Logs-to-Trace correlation and bounded API/worker self-telemetry are already
+delivered. Do not recreate PRs #128, #130–#133.
 
-1. **Accessibility acceptance:** complete the existing M01 human keyboard-only, visual-state and chart/table review; record actual Windows NVDA audible-output, Android TalkBack, and Apple VoiceOver sessions. Do not claim WCAG conformance from automated scans or hosted NVDA transcript alone.
-2. **Hosted service:** deploy HTTPS ORBIT API, managed PostgreSQL, and telemetry backends; connect the static Pages frontend and prove live authenticated workflows end to end. The current Pages deployment is frontend-only.
-3. **Identity and edge security:** configure real human/workload OIDC providers and test browser PKCE, issuer/audience, callback/state/nonce, key rotation/revocation, and exact CORS. Deploy DNS/ACME, host firewall, trusted proxy, private backend/Collector/database networks, NetworkPolicy and document the internal-hop mTLS decision.
-4. **Data governance and recovery:** approve durable-history retention/archive/legal requirements, then implement the approved policy without weakening append-only history. Configure encrypted off-host PostgreSQL backups, WAL/PITR, retention and alerting; rehearse a target-environment restore and record RPO/RTO.
-5. **Target capacity and operations:** run sustained ingestion and dashboard-query tests with production-like managed dependencies; record throughput, p50/p95/p99, saturation, rejection/backpressure, failure and recovery. Execute deployment, incident, rollback and backup runbooks; assign monitoring and secret-rotation ownership.
-6. **Stable release process:** on the final candidate, require green CI, Security, Pages-source/deploy and dependency/image/SBOM checks; publish immutable source/build provenance and signed release attestations (or an approved equivalent); align app/API/Compose/documentation/tag/release version metadata at `1.0.0`; publish the GitHub release as stable, not prerelease.
+1. **Free hosting:** create the single Oracle Always Free VM, deploy API,
+   PostgreSQL and telemetry containers, and connect the GitHub Pages dashboard.
+   The design is deliberately single-node and has no HA failover.
+2. **Free identity and ingress:** create the self-hosted Keycloak realm/clients,
+   role and audience claims, four DuckDNS records, Caddy HTTPS, firewall and
+   exact Pages CORS origin.
+3. **Data protection:** configure encrypted PostgreSQL backups to an
+   Always-Free Object Storage bucket, stay within its free quota, and complete
+   one controlled restore. Keep append-only workspace history; do not TTL-delete it.
+4. **Minimal pre-release smoke:** verify health/readiness, version metadata,
+   browser login, API authorization, one controlled telemetry write/query and
+   A/B workspace isolation. Do not enable tenant ingestion before these pass.
+5. **Stable release:** require green CI, Security, Pages deploy and
+   dependency/image/SBOM checks; publish build provenance/attestation or an
+   approved equivalent; align application/API/Compose/docs/tag at `1.0.0`;
+   publish a stable GitHub Release, not a prerelease.
+
+### Deferred until after v1
+
+- Human keyboard-only and rendered-state review on real devices, including
+  TalkBack and VoiceOver. Do not claim WCAG conformance before this review.
+- Broad sustained-load/capacity benchmarking and longer operational rehearsals.
+- Full backup automation and formal RPO/RTO drills beyond the encrypted backup
+  and one restore check required before accepting real tenant traffic.
 
 ### Explicitly deferred — not v1 blockers unless measured evidence changes the decision
 

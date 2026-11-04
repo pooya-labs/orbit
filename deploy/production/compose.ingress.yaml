@@ -1,26 +1,73 @@
 services:
-  # Optional edge proxy for deployments that have real DNS and an OIDC provider.
-  # The API keeps its OTLP listeners private to this network; only Caddy publishes
-  # 80/443 and the proxy cannot reach the database or telemetry backends.
   api:
     environment:
       ORBIT_ENVIRONMENT: production
+      ORBIT_VERSION: 0.10.0
       ORBIT_DATABASE_URL: ${ORBIT_DATABASE_URL:?set ORBIT_DATABASE_URL}
+      ORBIT_ALLOWED_ORIGINS: ${ORBIT_WEB_ORIGIN:?set ORBIT_WEB_ORIGIN}
       ORBIT_OIDC_ISSUER: ${ORBIT_OIDC_ISSUER:?set ORBIT_OIDC_ISSUER}
       ORBIT_OIDC_AUDIENCE: ${ORBIT_OIDC_AUDIENCE:?set ORBIT_OIDC_AUDIENCE}
       ORBIT_WORKLOAD_OIDC_ISSUER: ${ORBIT_WORKLOAD_OIDC_ISSUER:?set ORBIT_WORKLOAD_OIDC_ISSUER}
       ORBIT_WORKLOAD_OIDC_AUDIENCE: ${ORBIT_WORKLOAD_OIDC_AUDIENCE:?set ORBIT_WORKLOAD_OIDC_AUDIENCE}
+      ORBIT_HTTP_ADDR: ":8080"
       ORBIT_INGESTION_HTTP_ADDR: ":4319"
       ORBIT_INGESTION_GRPC_ADDR: ":4320"
+      ORBIT_PROMETHEUS_URL: http://prometheus:9090
+      ORBIT_LOKI_URL: http://loki:3100
+      ORBIT_TEMPO_URL: http://tempo:3200
       ORBIT_COLLECTOR_OTLP_HTTP_URL: http://otel-collector:4318
       ORBIT_COLLECTOR_OTLP_GRPC_ENDPOINT: otel-collector:4317
       ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    restart: unless-stopped
+    mem_limit: 768m
+    depends_on:
+      keycloak:
+        condition: service_started
     networks:
+      - default
+      - telemetry-internal
       - ingress
 
   postgres:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD}
+    mem_limit: 2g
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    command: ["start", "--http-enabled=true", "--proxy-headers=xforwarded"]
+    restart: unless-stopped
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:?set KEYCLOAK_ADMIN_USER}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: orbit_keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD}
+      KC_HOSTNAME: https://${ORBIT_AUTH_DOMAIN:?set ORBIT_AUTH_DOMAIN}
+      KC_HOSTNAME_STRICT: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      JAVA_OPTS_APPEND: "-XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=30.0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 1536m
+    networks:
+      - default
+      - ingress
+
+  prometheus:
+    mem_limit: 1g
+  loki:
+    mem_limit: 768m
+  tempo:
+    mem_limit: 768m
+  otel-collector:
+    mem_limit: 512m
 
   caddy:
     image: orbit-caddy:local
@@ -30,6 +77,8 @@ services:
     profiles: ["production-ingress"]
     restart: unless-stopped
     environment:
+      ORBIT_API_DOMAIN: ${ORBIT_API_DOMAIN:?set ORBIT_API_DOMAIN}
+      ORBIT_AUTH_DOMAIN: ${ORBIT_AUTH_DOMAIN:?set ORBIT_AUTH_DOMAIN}
       ORBIT_OTLP_HTTP_DOMAIN: ${ORBIT_OTLP_HTTP_DOMAIN:?set ORBIT_OTLP_HTTP_DOMAIN}
       ORBIT_OTLP_GRPC_DOMAIN: ${ORBIT_OTLP_GRPC_DOMAIN:?set ORBIT_OTLP_GRPC_DOMAIN}
     ports:
@@ -40,10 +89,13 @@ services:
       - ./deploy/production/Caddyfile:/etc/caddy/Caddyfile:ro
       - orbit-caddy-data:/data
       - orbit-caddy-config:/config
+    mem_limit: 128m
     networks:
       - ingress
     depends_on:
       api:
+        condition: service_started
+      keycloak:
         condition: service_started
 
 networks:

@@ -67,6 +67,10 @@ jobs:
         env:
           GITHUB_ACTIONS: true
           NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_ORBIT_API_URL: ${{ vars.NEXT_PUBLIC_ORBIT_API_URL }}
+          NEXT_PUBLIC_ORBIT_OIDC_ISSUER: ${{ vars.NEXT_PUBLIC_ORBIT_OIDC_ISSUER }}
+          NEXT_PUBLIC_ORBIT_OIDC_CLIENT_ID: ${{ vars.NEXT_PUBLIC_ORBIT_OIDC_CLIENT_ID }}
+          NEXT_PUBLIC_ORBIT_OIDC_AUDIENCE: ${{ vars.NEXT_PUBLIC_ORBIT_OIDC_AUDIENCE }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
