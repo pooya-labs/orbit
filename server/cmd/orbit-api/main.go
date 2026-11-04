@@ -17,6 +17,7 @@ import (
 	"github.com/pooya16pg-spec/orbit/server/internal/httpapi"
 	"github.com/pooya16pg-spec/orbit/server/internal/ingest"
 	"github.com/pooya16pg-spec/orbit/server/internal/notifications"
+	"github.com/pooya16pg-spec/orbit/server/internal/observability"
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 	"github.com/pooya16pg-spec/orbit/server/internal/store/postgres"
 	"github.com/pooya16pg-spec/orbit/server/internal/telemetry"
@@ -77,17 +78,34 @@ func main() {
 		logger.Warn("PostgreSQL is not configured; readiness and data endpoints will be unavailable")
 	}
 
+	apiHandler := httpapi.NewHandler(httpapi.Config{
+		Version: cfg.Version, Environment: cfg.Environment, AllowedOrigins: cfg.AllowedOrigins,
+		Telemetry: telemetryClient, AuthVerifier: authVerifier,
+		RateLimitPerMinute: cfg.RateLimitPerMinute,
+		AlertWebhookSecretRefs: func() []string {
+			if webhookSender == nil { return []string{} }
+			return webhookSender.ConfiguredSecretRefs()
+		}(),
+	}, repository, logger)
+	var apiObservability *observability.Runtime
+	var apiHTTPHandler http.Handler = apiHandler
+	if cfg.SelfTelemetryOTLPHTTPURL != "" {
+		observabilityCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		runtime, runtimeErr := observability.New(observabilityCtx, cfg.SelfTelemetryOTLPHTTPURL, cfg.Version, cfg.Environment)
+		cancel()
+		if runtimeErr != nil {
+			logger.Warn("API self-observability disabled; application startup will continue", "error", runtimeErr)
+		} else if runtime != nil {
+			apiObservability = runtime
+			apiHTTPHandler = runtime.HTTPMiddleware(apiHandler, apiHandler.RoutePattern)
+			runtime.EmitStartupLog(context.Background())
+			logger.Info("API self-observability enabled", "service", "orbit-api")
+		}
+	}
+
 	apiServer := &http.Server{
 		Addr: cfg.HTTPAddr,
-		Handler: httpapi.NewHandler(httpapi.Config{
-			Version: cfg.Version, Environment: cfg.Environment, AllowedOrigins: cfg.AllowedOrigins,
-			Telemetry: telemetryClient, AuthVerifier: authVerifier,
-			RateLimitPerMinute: cfg.RateLimitPerMinute,
-			AlertWebhookSecretRefs: func() []string {
-				if webhookSender == nil { return []string{} }
-				return webhookSender.ConfiguredSecretRefs()
-			}(),
-		}, repository, logger),
+		Handler: apiHTTPHandler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -273,6 +291,11 @@ func main() {
 	if err := apiServer.Shutdown(shutdownCtx); err != nil {
 		logger.Error("API HTTP graceful shutdown failed", "error", err)
 		_ = apiServer.Close()
+	}
+	if apiObservability != nil {
+		if err := apiObservability.Shutdown(shutdownCtx); err != nil {
+			logger.Warn("API self-observability flush failed during shutdown", "error", err)
+		}
 	}
 	if ingestionHTTPServer != nil {
 		if err := ingestionHTTPServer.Shutdown(shutdownCtx); err != nil {
