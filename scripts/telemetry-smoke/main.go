@@ -188,6 +188,21 @@ func smoke() error {
 		"start": {fmt.Sprint(time.Now().Add(-10*time.Minute).UnixNano())},
 		"end": {fmt.Sprint(time.Now().Add(time.Minute).UnixNano())},
 	})
+	for _, worker := range []string{"alert_evaluator", "notification_delivery"} {
+		workerMetricURL := queryURL(prometheusURL, "/api/v1/query", url.Values{
+			"query": {fmt.Sprintf("orbit_worker_runs_total{service_name=\"orbit-api\",worker_name=%q}", worker)},
+		})
+		if err := waitFor("ORBIT "+worker+" telemetry is queryable in Prometheus", 120*time.Second, func() (bool, error) {
+			body, err := getJSON(workerMetricURL)
+			if err != nil {
+				return false, err
+			}
+			return stringValue(body["status"]) == "success" && hasData(body), nil
+		}); err != nil {
+			return err
+		}
+	}
+
 	if err := waitFor("ORBIT API lifecycle log is queryable in Loki", 120*time.Second, func() (bool, error) {
 		body, err := getJSON(apiLogURL)
 		if err != nil { return false, err }
