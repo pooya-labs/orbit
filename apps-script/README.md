@@ -72,6 +72,8 @@ use /dev as the public URL; /dev requires editor access.
 ## Free-tier boundaries
 
 This design relies on Google Apps Script and Google Sheets quotas, which Google
-may change. It is intentionally suitable for a few demo sessions per day, not
+may change. The current documented consumer-account limit is six minutes per
+execution and 30 simultaneous executions per user; these are generous for a
+few demo launches per day, but they are not an uptime guarantee. It is intentionally suitable for a few demo sessions per day, not
 sustained telemetry ingestion. The project does not activate billing, add a
 paid Google Cloud project, or provision any paid service.

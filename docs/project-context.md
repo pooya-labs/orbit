@@ -907,3 +907,78 @@ Repository: `pooya-labs/orbit`; default branch: `main`.
 - Before v1 keep only essential live smoke checks; postpone device accessibility
   acceptance, broad load/capacity and longer operational exercises until
   after v1.
+
+## 16. Current handoff — Apps Script portfolio demo pivot (2026-11-04)
+
+The public v1 target is now a **zero-cost, low-volume portfolio demo**, not a
+production tenant-ingestion deployment. The user clarified expected use is
+approximately two or three launches per day and explicitly rejected paid
+services, billing-enabled projects, PAYG upgrades, and paid fallbacks.
+
+### Repository implementation
+
+- apps-script/Code.js implements an Apps Script V8 Web App API adapter.
+- apps-script/Index.html is the Apps Script HtmlService wrapper. It embeds
+  the existing GitHub Pages dashboard and bridges requests using a fixed-origin
+  postMessage channel and google.script.run.
+- apps-script/appsscript.json selects owner execution and anonymous access;
+  actual deployment may still be restricted by the owner's Google account or
+  region. Do not switch to paid billing or a less-safe fallback if denied.
+- apps-script/README.md is the owner setup/deployment runbook.
+- lib/orbit/apps-script-bridge.ts implements the browser side of the API
+  bridge; lib/orbit/apps-script-session.ts activates the synthetic user only
+  after a valid bridge bootstrap. The typed API client routes Apps Script
+  requests through this bridge only when opened inside the Web App wrapper.
+- lib/orbit/oidc.ts and AuthControls retain the existing real OIDC path for
+  non-demo deployments; Apps Script demo identity is synthetic and does not
+  return a production token.
+- NotificationWorkspace clearly says that deliveries are simulated and no
+  real webhook is sent.
+- The API adapter covers dashboard v1 flows: services, workspace membership,
+  incidents and timeline events, audit, alert rules and alert instances,
+  notification channels/deliveries/attempts, deployments and comparison,
+  SLO definitions/budget, telemetry services/catalog, synthetic metrics,
+  logs, traces, and trace details.
+- The demo stores synthetic workspace records in one private Google
+  Spreadsheet owned by the deploying account. Script Cache holds six-hour
+  session capabilities. A lock serializes sheet access; request size, request
+  counts, mutation counts, visitor count, and record count are bounded.
+- This adapter intentionally does not ingest real OTLP telemetry, run a real
+  Prometheus/Loki/Tempo data plane, send webhooks, or provide production
+  identity/tenant security. Do not describe it as a production service.
+
+### Reconciliation with the earlier OCI plan
+
+- The OCI/Keycloak/Caddy/DuckDNS/Object Storage implementation is preserved in
+  the repository as a future production-path reference, but it is **not a v1
+  blocker** for the portfolio demo.
+- No OCI VM, DNS records, bucket, dynamic group, policy, or age backup identity
+  has been provisioned. Do not claim otherwise and do not ask the user to
+  create them for this demo.
+- The current live public GitHub Pages URL is still the static frontend.
+  There is no Apps Script /exec URL or live interactive demo until the owner
+  creates the Apps Script project, authorizes the private Spreadsheet, and
+  deploys the Web App.
+- The Apps Script runtime contract check is added to the web CI job, together
+  with Node syntax validation for the Apps Script server file. Exact-head CI,
+  Security and Pages results must be rechecked before claiming success.
+
+### Next non-duplicate actions
+
+1. Finish API/bridge contract review and preserve all existing dashboard pages.
+2. Confirm exact-head CI, Security and Pages workflow outcomes. Fix only
+   demonstrated regressions.
+3. Owner creates the standalone Apps Script project and private Spreadsheet,
+   authorizes the script, and deploys the /exec Web App as described in
+   apps-script/README.md.
+4. After receiving the public /exec URL, verify the live bridge, read/write
+   persistence after refresh, profile isolation and synthetic notification
+   behavior. If anonymous access is unavailable in the owner's account or
+   region, stop and choose another genuine zero-cost path; never falsify country
+   or identity information.
+5. Stable v1 release remains open until exact-head CI/Security/Pages and the
+   actual owner-deployed live demo smoke evidence pass.
+
+Human device accessibility acceptance and broad sustained-load/capacity work
+remain deferred until after the portfolio v1 release, as previously requested.
+
