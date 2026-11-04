@@ -81,6 +81,10 @@ jobs:
     name: Local telemetry pipeline end-to-end smoke test
     runs-on: ubuntu-latest
     timeout-minutes: 18
+    env:
+      ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS: hooks.example.test
+      ORBIT_ALERT_WEBHOOK_SECRET_OPS_PRIMARY: https://hooks.example.test/ci-placeholder
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -138,6 +142,12 @@ jobs:
 
       - name: Verify OTLP signals and ORBIT API query endpoints end to end
         run: docker compose --profile observability run --rm telemetry-smoke smoke
+
+      - name: Capture telemetry containers after smoke failure
+        if: failure()
+        run: |
+          docker compose --profile observability ps --all
+          docker compose --profile observability logs --no-color --tail=500 api otel-collector prometheus
 
       - name: Verify Prometheus scrapes the ORBIT Collector
         run: docker compose --profile observability run --rm telemetry-smoke scrape

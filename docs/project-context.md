@@ -841,7 +841,7 @@ Repository: `pooya-labs/orbit`; default branch: `main`.
 
 1. [x] Implement the safe, workspace-scoped metric catalog/selection model (PR #132): fixed total/success/failure request-rate IDs, exact workspace/service matchers, three approved grouping labels, ten-series cap, 24-hour maximum window, five-second upstream timeout, and no arbitrary PromQL.
 2. [x] Complete interactive trace detail and Logs-to-Trace correlation (PRs #130–#131), with workspace membership checks and tenant verification on every detail request.
-3. Instrument the production Go API and background workers with bounded, useful OTLP metrics/traces/logs. Do not claim this is complete based only on the example workload.
+3. [x] Add bounded OTLP instrumentation to API HTTP requests and the alert-evaluator/notification-delivery worker loops (PR #133): request/duration metrics, route-template spans, worker run/item counters, tick-duration histograms and spans, and static lifecycle/error events. Export is opt-in and fail-open; worker names/outcomes are allow-listed and no workspace/delivery/channel IDs or raw error text enter worker telemetry.
 4. Keep the M01 human accessibility acceptance and all M06 target-environment deployment, identity, network, retention, recovery, and capacity gates open until real evidence exists. Keep tenant-facing production ingestion disabled.
 
 Do not repeat the already merged M06 recovery/security tests (#110–#126), the M01 browser/NVDA suites (#109, #113–#125), or the workspace UI migration in PR #128 unless a concrete regression is found. Redis/NATS application integration and resource-attribute allowlist expansion remain deferred under their existing ADR/policy gates.
@@ -862,3 +862,11 @@ Do not repeat the already merged M06 recovery/security tests (#110–#126), the 
 - The catalog endpoint is exposed under the authenticated workspace route and is returned only after membership verification. The old global metrics route remains a local-development-only compatibility path and uses the same metric allow-list.
 - Successful/failed request rates use the already-instrumented `slo_outcome=good|bad` label. Producers without that outcome do not contribute to these two views; no values are inferred from missing data. The total request rate remains available wherever the base counter exists.
 - The next implementation item is bounded OTLP instrumentation for the production Go API and background workers. Keep arbitrary PromQL, arbitrary metric discovery, resource-attribute expansion, production tenant ingestion, human device accessibility acceptance, and target-environment M06 deployment/recovery/capacity/release gates open.
+
+
+## 14. Latest implementation handoff — API self-observability
+
+- PR #133 introduces an optional Go OTel runtime for the production API and its background workers, sending OTLP/HTTP only to the private Collector endpoint from `ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT`. Empty endpoint disables instrumentation; exporter initialization failure logs a warning and does not prevent API startup.
+- The API instruments inbound HTTP requests with a request counter and duration histogram, route-template spans, and static startup/5xx log events. Labels are restricted to normalized HTTP method, route template, and status class. Raw paths, query strings, request/Authorization headers, request IDs, workspace IDs, and bodies are excluded.
+- The alert evaluator and notification delivery workers now emit bounded run/item counters, tick-duration histograms, tick spans, and static error events. Only the two allow-listed worker names and four bounded outcomes are exported; workspace IDs, alert/delivery/channel IDs, request/user identifiers, and raw error text are excluded.
+- Local Compose keeps the endpoint opt-in; CI enables it for the isolated local telemetry E2E and asserts both worker metric series are queryable. The production ingress overlay targets the private Collector from the API's telemetry-internal network, not through Caddy. Production tenant ingestion remains disabled until M06 deployment gates have real evidence.

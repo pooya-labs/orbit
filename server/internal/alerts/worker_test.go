@@ -11,6 +11,18 @@ import (
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 )
 
+type fakeWorkerObserver struct {
+	worker string
+	outcome string
+	items int64
+	err error
+}
+func (f *fakeWorkerObserver) StartWorker(ctx context.Context, worker string) (context.Context, func(string, int64, error)) {
+	return ctx, func(outcome string, items int64, err error) {
+		f.worker, f.outcome, f.items, f.err = worker, outcome, items, err
+	}
+}
+
 type fakeEvaluationRepository struct {
 	acquired bool
 	lockErr error
@@ -59,9 +71,13 @@ func TestWorkerGroupsPrometheusQueriesAndEvaluatesMatchingServices(t *testing.T)
 		{workspaceID:"workspace-a",windowSeconds:60}:{"api-gateway":3.5},
 		{workspaceID:"workspace-b",windowSeconds:300}:{"worker":0.5},
 	}}
-	worker := NewWorker(repository,metrics,slog.New(slog.NewTextHandler(discardWriter{},nil)),time.Second)
+	observer := &fakeWorkerObserver{}
+	worker := NewWorker(repository,metrics,slog.New(slog.NewTextHandler(discardWriter{},nil)),time.Second,observer)
 	worker.now = func() time.Time { return time.Date(2026,11,2,0,0,0,0,time.UTC) }
 	worker.evaluate(context.Background())
+	if observer.worker != "alert_evaluator" || observer.outcome != "ok" || observer.items != 5 || observer.err != nil {
+		t.Fatalf("worker observation = %+v", observer)
+	}
 
 	wantCalls:=[]evaluationGroup{
 		{workspaceID:"workspace-a",windowSeconds:60},

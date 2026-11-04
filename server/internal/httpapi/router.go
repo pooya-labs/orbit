@@ -125,7 +125,26 @@ type incidentsResponse struct {
 	Data []store.Incident `json:"data"`
 }
 
-func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) http.Handler {
+type Handler struct {
+	handler http.Handler
+	routes  *http.ServeMux
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.handler.ServeHTTP(w, r)
+}
+
+// RoutePattern returns the Go ServeMux route template, never a caller-supplied
+// path. Unmatched requests collapse to one bounded label.
+func (h *Handler) RoutePattern(r *http.Request) string {
+	_, pattern := h.routes.Handler(r)
+	if pattern == "" {
+		return "unmatched"
+	}
+	return pattern
+}
+
+func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -443,7 +462,7 @@ func NewHandler(cfg Config, repository store.Repository, logger *slog.Logger) ht
 	handler = withSecurityHeaders(handler)
 	handler = withRecovery(logger, handler)
 	handler = withCORS(cfg.AllowedOrigins, handler)
-	return handler
+	return &Handler{handler: handler, routes: mux}
 }
 
 

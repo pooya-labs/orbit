@@ -9,6 +9,18 @@ import (
 	"github.com/pooya16pg-spec/orbit/server/internal/store"
 )
 
+type fakeWorkerObserver struct {
+	worker string
+	outcome string
+	items int64
+	err error
+}
+func (f *fakeWorkerObserver) StartWorker(ctx context.Context, worker string) (context.Context, func(string, int64, error)) {
+	return ctx, func(outcome string, items int64, err error) {
+		f.worker, f.outcome, f.items, f.err = worker, outcome, items, err
+	}
+}
+
 type fakeDeliveryRepository struct {
 	deliveries []store.AlertNotificationDelivery
 	records []store.RecordAlertNotificationAttemptInput
@@ -44,10 +56,14 @@ func (s fakeSender) Send(context.Context, store.AlertNotificationDelivery) SendR
 
 func TestWorkerSchedulesRetryWithExponentialBackoff(t *testing.T) {
 	repository := &fakeDeliveryRepository{deliveries: []store.AlertNotificationDelivery{{ID: "delivery-1", Attempts: 2}}}
-	worker := NewWorker(repository, fakeSender{result: SendResult{ErrorCode: "network_error"}}, slog.Default(), time.Second)
+	observer := &fakeWorkerObserver{}
+	worker := NewWorker(repository, fakeSender{result: SendResult{ErrorCode: "network_error"}}, slog.Default(), time.Second, observer)
 	now := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
 	worker.now = func() time.Time { return now }
 	worker.dispatch(context.Background())
+	if observer.worker != "notification_delivery" || observer.outcome != "ok" || observer.items != 1 || observer.err != nil {
+		t.Fatalf("worker observation = %+v", observer)
+	}
 
 	if len(repository.records) != 1 {
 		t.Fatalf("record count = %d, want 1", len(repository.records))

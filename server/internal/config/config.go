@@ -27,6 +27,7 @@ type Config struct {
 	IngestionGRPCAddr           string
 	CollectorOTLPHTTPURL        string
 	CollectorOTLPGRPCEndpoint   string
+	SelfTelemetryOTLPHTTPURL    string
 	RateLimitPerMinute          int
 	AlertWebhookSecrets         map[string]string
 	AlertWebhookAllowedHosts    []string
@@ -51,6 +52,7 @@ func Load() Config {
 		IngestionGRPCAddr:         valueOrDefault("ORBIT_INGESTION_GRPC_ADDR", "127.0.0.1:4320"),
 		CollectorOTLPHTTPURL:      strings.TrimSpace(os.Getenv("ORBIT_COLLECTOR_OTLP_HTTP_URL")),
 		CollectorOTLPGRPCEndpoint: strings.TrimSpace(os.Getenv("ORBIT_COLLECTOR_OTLP_GRPC_ENDPOINT")),
+		SelfTelemetryOTLPHTTPURL: strings.TrimSpace(os.Getenv("ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT")),
 		RateLimitPerMinute:        integerOrDefault("ORBIT_RATE_LIMIT_PER_MINUTE", 120),
 		AlertWebhookSecrets:       alertWebhookSecretsFromEnv(),
 		AlertWebhookAllowedHosts:  lowerCaseList(os.Getenv("ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS")),
@@ -58,6 +60,11 @@ func Load() Config {
 }
 
 func (c Config) Validate() error {
+	if c.SelfTelemetryOTLPHTTPURL != "" {
+		if err := validateCollectorHTTPURL(c.SelfTelemetryOTLPHTTPURL); err != nil {
+			return fmt.Errorf("ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT: %w", err)
+		}
+	}
 	if c.RateLimitPerMinute < 1 || c.RateLimitPerMinute > 10000 {
 		return fmt.Errorf("ORBIT_RATE_LIMIT_PER_MINUTE must be between 1 and 10000")
 	}
