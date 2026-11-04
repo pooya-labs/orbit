@@ -141,6 +141,12 @@ jobs:
       - name: Verify OTLP signals and ORBIT API query endpoints end to end
         run: docker compose --profile observability run --rm telemetry-smoke smoke
 
+      - name: Capture telemetry containers after smoke failure
+        if: failure()
+        run: |
+          docker compose --profile observability ps --all
+          docker compose --profile observability logs --no-color --tail=500 api otel-collector prometheus
+
       - name: Verify Prometheus scrapes the ORBIT Collector
         run: docker compose --profile observability run --rm telemetry-smoke scrape
 
