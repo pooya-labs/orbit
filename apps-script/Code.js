@@ -137,12 +137,12 @@ function orbitApi(request) {
 
 function ensureDatabase_() {
   const id = PropertiesService.getScriptProperties().getProperty(ORBIT_CONFIG.databaseProperty);
-  if (!id) setupOrbitDemo();
+  if (!id) setupOrbitDemo_();
   return getRecordsSheet_();
 }
 function getRecordsSheet_() {
   const id = PropertiesService.getScriptProperties().getProperty(ORBIT_CONFIG.databaseProperty);
-  if (!id) throw new Error("Run setupOrbitDemo once from the Apps Script editor.");
+  if (!id) throw new Error("Run setupOrbitDemo_ once from the Apps Script editor.");
   const spreadsheet = SpreadsheetApp.openById(id);
   let sheet = spreadsheet.getSheetByName(ORBIT_CONFIG.sheetName);
   if (!sheet) {

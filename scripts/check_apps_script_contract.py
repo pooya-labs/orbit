@@ -23,6 +23,7 @@ require(webapp.get("access") == "ANYONE_ANONYMOUS", "the manifest must declare a
 
 for symbol in ("function doGet(", "function setupOrbitDemo_(", "function orbitBootstrap(", "function orbitApi("):
     require(symbol in CODE, "missing Apps Script entry point: " + symbol)
+require("function setupOrbitDemo(" not in CODE, "spreadsheet setup function must remain private to google.script.run")
 
 # Apps Script V8 is not a browser or Node runtime. These APIs are absent there.
 unsupported = [
