@@ -168,6 +168,38 @@ func smoke() error {
 	}
 	fmt.Printf("Submitted OTLP smoke payload; trace_id=%s\n", traceID)
 
+	// Exercise the production API itself after it has been started with the optional
+	// private-Collector endpoint. The API emits no IDs, query strings, or auth data.
+	if _, err := getJSON(orbitAPIURL + "/api/v1/meta"); err != nil {
+		return fmt.Errorf("request ORBIT API metadata for self-telemetry smoke: %w", err)
+	}
+	apiMetricURL := queryURL(prometheusURL, "/api/v1/query", url.Values{
+		"query": {`orbit_api_http_requests{service_name="orbit-api"}`},
+	})
+	if err := waitFor("ORBIT API request metrics are queryable in Prometheus", 120*time.Second, func() (bool, error) {
+		body, err := getJSON(apiMetricURL)
+		if err != nil { return false, err }
+		return stringValue(body["status"]) == "success" && hasData(body), nil
+	}); err != nil { return err }
+
+	apiLogURL := queryURL(lokiURL, "/loki/api/v1/query_range", url.Values{
+		"query": {`{service_name="orbit-api"} |= "orbit_api_runtime_started"`},
+		"limit": {"10"}, "direction": {"backward"},
+		"start": {fmt.Sprint(time.Now().Add(-10*time.Minute).UnixNano())},
+		"end": {fmt.Sprint(time.Now().Add(time.Minute).UnixNano())},
+	})
+	if err := waitFor("ORBIT API lifecycle log is queryable in Loki", 120*time.Second, func() (bool, error) {
+		body, err := getJSON(apiLogURL)
+		if err != nil { return false, err }
+		return stringValue(body["status"]) == "success" && hasData(body), nil
+	}); err != nil { return err }
+
+	if err := waitFor("ORBIT API request traces are queryable through Tempo", 120*time.Second, func() (bool, error) {
+		body, err := getJSON(orbitAPIURL + "/api/v1/telemetry/traces?window=1h&service=orbit-api&limit=10")
+		if err != nil { return false, err }
+		return stringValue(body["source"]) == "tempo" && len(array(body["data"])) > 0, nil
+	}); err != nil { return err }
+
 	metricURL := queryURL(prometheusURL, "/api/v1/query", url.Values{"query": {"orbit_demo_requests_total"}})
 	if err := waitFor("OTLP metric is queryable in Prometheus", 120*time.Second, func() (bool, error) {
 		body, err := getJSON(metricURL)
