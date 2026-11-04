@@ -133,17 +133,22 @@ const sandbox = {
 vm.createContext(sandbox);
 vm.runInContext(serverCode, sandbox, { filename: "apps-script/Code.js" });
 
-assert.equal(typeof sandbox.setupOrbitDemo, "undefined", "owner setup must not be exposed as a public google.script.run function");
+assert.equal(typeof sandbox.setupOrbitDemo, "undefined", "no public setup alias may expose spreadsheet metadata");
+assert.equal(typeof sandbox.initializeOrbitDemo, "function", "the safe owner initializer must be selectable in the editor Run menu");
 assert.throws(
   () => sandbox.doGet(),
-  /Run setupOrbitDemo_ once from the Apps Script editor/,
-  "the public Web App must not create owner data stores on behalf of anonymous visitors"
+  /Run initializeOrbitDemo once from the Apps Script editor/,
+  "the public Web App must not create owner data stores during page rendering"
 );
-const setup = sandbox.setupOrbitDemo_();
+const initialized = sandbox.initializeOrbitDemo();
+assert.equal(initialized.ready, true);
+assert.equal(initialized.schemaVersion, 1);
+assert.equal("spreadsheetId" in initialized, false, "initializer must not return the private spreadsheet ID");
+assert.equal("spreadsheetUrl" in initialized, false, "initializer must not return the private spreadsheet URL");
+const spreadsheetId = properties.get("ORBIT_DEMO_SPREADSHEET_ID");
 const html = sandbox.doGet();
 assert.equal(typeof html.addMetaTag, "function", "doGet returns an HtmlOutput-like object");
-assert.match(setup.spreadsheetUrl, /^https:\/\/docs\.google\.com\/spreadsheets\/d\//);
-const spreadsheet = spreadsheets.get(setup.spreadsheetId);
+const spreadsheet = spreadsheets.get(spreadsheetId);
 assert.ok(spreadsheet, "setup creates a private spreadsheet");
 assert.equal(spreadsheet.getSheetByName("records")?.getLastRow(), 1, "default sheet becomes the records sheet");
 const records = spreadsheet.getSheetByName("records");

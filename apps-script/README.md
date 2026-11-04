@@ -27,7 +27,7 @@ credentials, confidential data, or real webhook destinations.
 4. Replace the generated Code.gs file contents with apps-script/Code.js (paste the server code; the editor uses the .gs extension).
    Add an HTML file named Index and paste apps-script/Index.html.
    Replace appsscript.json with the manifest from this folder.
-5. Save. In the function selector choose setupOrbitDemo_ and click Run.
+5. Save. In the function selector choose initializeOrbitDemo and click Run.
    Review the requested Google Sheets permission and authorize it. This creates
    the private ORBIT Demo Database spreadsheet owned by your account. The public
    Web App will not auto-create this owner resource for visitors.

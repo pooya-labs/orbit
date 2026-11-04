@@ -21,9 +21,12 @@ webapp = MANIFEST.get("webapp", {})
 require(webapp.get("executeAs") == "USER_DEPLOYING", "the Web App must run as its deployer")
 require(webapp.get("access") == "ANYONE_ANONYMOUS", "the manifest must declare anonymous public demo access")
 
-for symbol in ("function doGet(", "function setupOrbitDemo_(", "function orbitBootstrap(", "function orbitApi("):
+for symbol in ("function doGet(", "function initializeOrbitDemo(", "function setupOrbitDemo_(", "function orbitBootstrap(", "function orbitApi("):
     require(symbol in CODE, "missing Apps Script entry point: " + symbol)
-require("function setupOrbitDemo(" not in CODE, "spreadsheet setup function must remain private to google.script.run")
+require("function setupOrbitDemo(" not in CODE, "spreadsheet setup alias must not be public")
+require("function initializeOrbitDemo(" in CODE, "the owner initializer must be visible in the editor Run menu")
+require("return { ready: true, schemaVersion: ORBIT_CONFIG.schemaVersion }" in CODE,
+        "the public initializer must return readiness only, never spreadsheet metadata")
 require("if (!id) setupOrbitDemo_()" not in CODE, "anonymous requests must not auto-create the owner spreadsheet")
 
 # Apps Script V8 is not a browser or Node runtime. These APIs are absent there.
@@ -48,6 +51,7 @@ for required in (
     "ORBIT_CONFIG.maxMutationsPerSession",
     "ORBIT_CONFIG.maxBodyBytes",
     "ORBIT_CONFIG.maxRecords",
+    "ORBIT_CONFIG.maxDailyInitializers",
     "ORBIT_CONFIG.maxDailyBootstraps",
     "ORBIT_CONFIG.maxDailyRequests",
     "ORBIT_CONFIG.maxDailyMutations",

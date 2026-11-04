@@ -14,6 +14,7 @@ const ORBIT_CONFIG = Object.freeze({
   maxBodyBytes: 16384,
   maxRecords: 20000,
   maxVisitors: 500,
+  maxDailyInitializers: 5,
   maxDailyBootstraps: 25,
   maxDailyRequests: 800,
   maxDailyMutations: 200
@@ -62,6 +63,28 @@ function setupOrbitDemo_() {
     message: "ORBIT demo storage is ready. Keep this spreadsheet private." };
   Logger.log("ORBIT demo spreadsheet: " + result.spreadsheetUrl);
   return result;
+}
+
+/**
+ * Safe, idempotent setup entry point. It is visible in the editor Run menu,
+ * but returns no spreadsheet URL or ID to anonymous google.script.run callers.
+ */
+function initializeOrbitDemo() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const id = PropertiesService.getScriptProperties().getProperty(ORBIT_CONFIG.databaseProperty);
+    if (!id) {
+      if (!consumeDailyBudget_("initializers", ORBIT_CONFIG.maxDailyInitializers)) {
+        throw new Error("The demo setup limit has been reached. Please try again tomorrow.");
+      }
+      setupOrbitDemo_();
+    }
+    getRecordsSheet_();
+    return { ready: true, schemaVersion: ORBIT_CONFIG.schemaVersion };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /** Public bridge bootstrap. The browser key is random, pseudonymous and local. */
@@ -143,7 +166,7 @@ function orbitApi(request) {
 
 function getRecordsSheet_() {
   const id = PropertiesService.getScriptProperties().getProperty(ORBIT_CONFIG.databaseProperty);
-  if (!id) throw new Error("Run setupOrbitDemo_ once from the Apps Script editor.");
+  if (!id) throw new Error("Run initializeOrbitDemo once from the Apps Script editor.");
   const spreadsheet = SpreadsheetApp.openById(id);
   let sheet = spreadsheet.getSheetByName(ORBIT_CONFIG.sheetName);
   if (!sheet) {
