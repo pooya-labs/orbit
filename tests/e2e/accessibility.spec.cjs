@@ -787,8 +787,14 @@ test("Settings dialog applies theme and language preferences, traps focus, and o
 
   const dialog = page.getByRole("dialog", { name: "Workspace settings" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Close dialog" })).toBeFocused();
+  const close = dialog.getByRole("button", { name: "Close dialog" });
+  await expect(close).toBeFocused();
   await expectNoAxeViolations(page, "Settings dialog");
+
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("button", { name: "Manage source", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(close).toBeFocused();
 
   const dark = dialog.getByRole("button", { name: "Dark", exact: true });
   const light = dialog.getByRole("button", { name: "Light", exact: true });
@@ -796,8 +802,10 @@ test("Settings dialog applies theme and language preferences, traps focus, and o
   await light.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(light).toHaveAttribute("aria-pressed", "true");
+  await expectNoAxeViolations(page, "Light theme Settings dialog");
 
   await dialog.getByRole("button", { name: "فارسی", exact: true }).click();
+  await expectNoAxeViolations(page, "Persian RTL Settings dialog");
   await expect(page.locator(".app-shell")).toHaveAttribute("dir", "rtl");
   await expect(page.locator(".app-shell")).toHaveAttribute("lang", "fa");
 
@@ -815,6 +823,7 @@ test("Settings dialog applies theme and language preferences, traps focus, and o
 });
 
 test("Help dialog exposes useful project documentation and support destinations", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const help = page.locator(".sidebar-bottom > button").nth(1);
   await expect(help).toBeEnabled();
   await expect(help).toHaveText("Help & support");
@@ -822,7 +831,11 @@ test("Help dialog exposes useful project documentation and support destinations"
 
   const dialog = page.getByRole("dialog", { name: "Help & support" });
   await expect(dialog).toBeVisible();
-  await expectNoAxeViolations(page, "Help dialog");
+  await expectNoAxeViolations(page, "Mobile Help dialog");
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("link", { name: "Report an issue" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "Close dialog" })).toBeFocused();
   await expect(dialog.getByRole("link", { name: "Project README" }))
     .toHaveAttribute("href", "https://github.com/pooya-labs/orbit/blob/main/README.md");
   await expect(dialog.getByRole("link", { name: "Apps Script demo setup" }))
