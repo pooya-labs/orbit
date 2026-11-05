@@ -1034,3 +1034,11 @@ remain deferred until after the portfolio v1 release, as previously requested.
   verifies the repository-owned browser bridge contract with a mocked
   `google.script.run`; it does not exercise the owner's live Google deployment
   or replace the still-open refresh-persistence/profile-isolation live smoke.
+
+- The first Chromium run exposed a real static-hydration mismatch: the API URL
+  state initializer inspected `window.location` during client hydration, so
+  the Apps Script query parameter changed the initial value from the server
+  HTML. Runtime detection now moves to the post-mount effect, preserving an
+  identical server/client initial render. The browser mock also returns the
+  documented empty workspace envelope rather than a generic response. The
+  regression remains pending a successful rerun.
