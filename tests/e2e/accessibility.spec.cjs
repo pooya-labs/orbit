@@ -824,6 +824,8 @@ test("Settings dialog applies theme and language preferences, traps focus, and o
 
 test("Help dialog exposes useful project documentation and support destinations", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  const mobileMenu = page.getByRole("button", { name: "Open navigation" });
+  await mobileMenu.click();
   const help = page.locator(".sidebar-bottom > button").nth(1);
   await expect(help).toBeEnabled();
   await expect(help).toHaveText("Help & support");
@@ -846,6 +848,9 @@ test("Help dialog exposes useful project documentation and support destinations"
   await dialog.getByRole("button", { name: "Close dialog" }).click();
   await expect(dialog).toBeHidden();
   await expect(help).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(mobileMenu).toHaveAttribute("aria-expanded", "false");
+  await expect(mobileMenu).toBeFocused();
 });
 
 test("creator profile links use the current GitHub account and show its mark", async ({ page }) => {
