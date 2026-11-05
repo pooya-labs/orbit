@@ -77,9 +77,15 @@ Google Apps Script Web App (HtmlService wrapper, executes as owner)
   quotas are account-wide and may change. No Google Cloud billing or paid plan
   is enabled.
 
-The Apps Script deployment is owner-controlled. Until the owner authorizes the
-private spreadsheet and deploys the Web App, the GitHub Pages URL remains the
-static preview and the public interactive demo is not live.
+The Apps Script deployment is owner-controlled. The owner supplied the
+public `/exec` deployment URL separately; the exact endpoint is not stored in
+this repository. The assistant verification environment cannot fetch
+`script.google.com`, so this is not evidence that the deployment is broken,
+but successful live bootstrap, initialization, and refresh persistence are
+not independently verified by this project handoff. The repository-owned
+bridge, simulated Apps Script runtime, and Playwright contract are automated
+in CI. The public Pages URL remains the static frontend entry point; the
+owner-controlled Apps Script URL is the interactive synthetic demo entry point.
 ## Current implementation
 
 ### Web workspace
