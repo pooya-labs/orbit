@@ -575,11 +575,13 @@ export default function Home() {
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="usage-card">
-            <div className="usage-heading"><span>{tr("telemetryVolume")}</span><span>68%</span></div>
-            <div className="usage-track"><span /></div>
-            <p>6.8 GB <span>{language === "fa" ? "از ۱۰ گیگابایت در ماه" : "of 10 GB monthly"}</span></p>
-          </div>
+          {sourceMode === "demo" && (
+            <div className="usage-card">
+              <div className="usage-heading"><span>{tr("demoVolume")}</span><span>68%</span></div>
+              <div className="usage-track"><span /></div>
+              <p>6.8 GB <span>{tr("illustrativeUsage")}</span></p>
+            </div>
+          )}
           <button ref={settingsButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "settings"} onClick={() => setUtilityDialog("settings")}><Settings2 size={17} /><span>{tr("settings")}</span></button>
           <button ref={helpButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "help"} onClick={() => setUtilityDialog("help")}><CircleHelp size={17} /><span>{tr("helpSupport")}</span></button>
           <div className="profile-row">
@@ -594,7 +596,7 @@ export default function Home() {
           <div className="topbar-left">
             <button ref={mobileMenuButtonRef} type="button" className="icon-button mobile-menu" aria-label={tr("openNavigation")} aria-expanded={mobileNavOpen} aria-controls="primary-navigation" onClick={() => setMobileNavOpen(true)}><Menu size={19} /></button>
             <div className="breadcrumbs"><span>{tr("workspace")}</span><span className="crumb-separator">/</span><strong>{navLabel(language, activeNav)}</strong></div>
-            <span className="environment-pill"><span /> {tr("production")}</span>
+            <span className="environment-pill"><span /> {sourceMode === "api" ? (apiMetadata?.environment ?? tr("apiConnected")) : tr("demoEnvironment")}</span>
           </div>
           <div className="topbar-actions">
             <label className="global-search">
