@@ -535,8 +535,9 @@ The existing M01 accessibility branch now also addresses the visible-control aud
 
 - The top-bar Notifications button opens the existing Notifications view instead of acting as a no-op.
 - The Docs affordance links to the repository documentation index.
-- The workspace switcher, Settings, Help/Support, and incident-options placeholders are native disabled controls with localized unavailable labels and a visible disabled treatment; they no longer masquerade as working actions.
-- The static accessibility contract checks guard these destinations, disabled states, and English/Persian unavailable text. docs/accessibility-review.md records the actual behavior and updates the remaining manual control checklist.
+- Settings is an interactive preferences dialog for dark/light theme, English/Persian language, and opening the API source panel. Help/Support opens an accessible documentation and support dialog; both support Escape, focus containment, and focus restoration.
+- The profile links in the sidebar and footer use the current GitHub account URL https://github.com/pooya-labs with the GitHub mark. The repository link uses https://github.com/pooya-labs/orbit.
+- The workspace switcher and incident-options placeholder remain visibly disabled with localized unavailable labels because those actions are not part of the public demo. The static accessibility contract now guards the working dialogs, profile destinations, and responsive dialog styles; docs/accessibility-review.md records the behavior and manual review steps.
 
 PR #109 has since merged this tested keyboard/landmark baseline into `main`. The merge does not close the manual M01 acceptance gate: the application still requires real keyboard-only testing at browser breakpoints, NVDA/VoiceOver/TalkBack verification, rendered contrast review in both themes, and review of chart/data alternatives. Always inspect CI and Security against the exact latest PR head before merging future changes; passing runs on older commits do not validate later code or documentation changes. Do not mark M01 complete or claim screen-reader/WCAG conformance until the human findings are recorded.
 
