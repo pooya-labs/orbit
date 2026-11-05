@@ -6,11 +6,11 @@
 
 ORBIT is an engineering-first observability platform for understanding the health, behavior, and reliability of distributed services.
 
-## Live preview
+## Stable v1.0.0 portfolio demo
 
-**[Open the ORBIT dashboard](https://pooya-labs.github.io/orbit/)**
+**[Open the ORBIT dashboard](https://pooya-labs.github.io/orbit/)** · **[Stable release notes](https://github.com/pooya-labs/orbit/releases/tag/v1.0.0)**
 
-GitHub Pages hosts the responsive static workspace and remains the public project front door. The interactive, zero-cost portfolio demo is being moved to a Google Apps Script Web App that embeds this same dashboard and persists synthetic demo changes in a private Google Spreadsheet. **The Apps Script Web App has not yet been deployed by the project owner**; follow [the setup guide](apps-script/README.md) after the repository-side implementation is ready. No production systems or real customer telemetry are connected.
+GitHub Pages hosts the static workspace. The zero-cost interactive demo uses a Google Apps Script Web App wrapper and a private, owner-owned Google Spreadsheet for synthetic records. The project owner supplied the Web App deployment URL separately; it is intentionally not embedded in this repository. The assistant verification environment cannot fetch `script.google.com`, so the owner-controlled live bootstrap and post-refresh behavior are not claimed as independently verified here. No production systems, customer records, credentials, or real telemetry are connected. See the [Apps Script setup and runtime guide](apps-script/README.md) for the owner-side boundary.
 
 ## Current implementation
 
@@ -113,7 +113,7 @@ The legacy discovery response merges valid names from Prometheus, Loki, and Temp
 
 These development services bind to loopback and have no authentication. Do not expose their ports to a public network. Prometheus, Loki, and Tempo use a seven-day local retention baseline with explicit scrape, label, stream, attribute, and trace-size bounds; see [the retention policy](docs/observability-retention.md). Durable API audit/lifecycle history is not automatically deleted, and local single-tenant limits are not production per-workspace quotas. Data volumes persist until removed. Stop only these services with `docker compose stop postgres api prometheus loki tempo otel-collector telemetry-demo`.
 
-The local sample service proves end-to-end delivery of all three OTLP signals. The Go API exposes bounded read-only queries to Prometheus, Loki, and Tempo, and the dashboard renders those results in separate Metrics, Logs, and Traces views. The v0.10.0 preview adds bounded resource-attribute discovery with per-attribute provenance, cursor pagination, allow-listed multi-series request-rate grouping, and Prometheus sample freshness/gap warnings. The M04 follow-up adds curated workload-side OpenTelemetry resource capture to the authenticated gateways and persists metadata per workspace; expanding the semantic-convention allowlist remains a reviewed follow-up rather than accepting arbitrary producer attributes. PRs #130–#132 add authenticated workspace trace/span detail, validated Logs-to-Trace correlation, and the safe three-ID workspace metric catalog. PR #133 adds opt-in bounded self-telemetry for the production Go API and alert/notification workers, exported only to the private Collector. Production hosting, identity, networking, retention, recovery, and capacity gates remain open.
+The local sample service proves end-to-end delivery of all three OTLP signals. The Go API exposes bounded read-only queries to Prometheus, Loki, and Tempo, and the dashboard renders those results in separate Metrics, Logs, and Traces views. The previous v0.10.0 preview added bounded resource-attribute discovery with per-attribute provenance, cursor pagination, allow-listed multi-series request-rate grouping, and Prometheus sample freshness/gap warnings. The M04 follow-up adds curated workload-side OpenTelemetry resource capture to the authenticated gateways and persists metadata per workspace; expanding the semantic-convention allowlist remains a reviewed follow-up rather than accepting arbitrary producer attributes. PRs #130–#132 add authenticated workspace trace/span detail, validated Logs-to-Trace correlation, and the safe three-ID workspace metric catalog. PR #133 adds opt-in bounded self-telemetry for the production Go API and alert/notification workers, exported only to the private Collector. Production hosting, identity, networking, retention, recovery, and capacity gates remain open.
 
 ## Quality checks
 
@@ -148,7 +148,7 @@ See [docs/roadmap.md](docs/roadmap.md), [docs/architecture.md](docs/architecture
 
 ## Release status
 
-The v0.10.0 preview is the current documented product baseline. M01–M04 delivered the responsive Next.js workspace, Go/PostgreSQL API foundation, optional local OpenTelemetry pipeline, bounded Metrics/Logs/Traces investigation views, cross-backend service discovery, persisted service catalog, provenance, pagination, and English/Persian localization. GitHub Pages publishes the static frontend only; it does not host the API or telemetry data plane.
+The v1.0.0 portfolio release builds on the v0.10.0 engineering baseline. M01–M04 delivered the responsive Next.js workspace, Go/PostgreSQL API foundation, optional local OpenTelemetry pipeline, bounded Metrics/Logs/Traces investigation views, cross-backend service discovery, persisted service catalog, provenance, pagination, and English/Persian localization. GitHub Pages publishes the static frontend only; it does not host the API or telemetry data plane.
 
 **M05 — Operations workflows is implemented on `main`.** The workspace now includes authenticated incident lifecycle and immutable timelines, workspace alert rules and their evaluator, transactional webhook delivery/retry history, deployment annotations and release comparison, HTTP request-success SLOs/error budgets, and the searchable workspace audit log with pseudonymous actor references and captured roles. See [the roadmap](docs/roadmap.md) and [the OpenAPI contract](docs/openapi.yaml).
 
