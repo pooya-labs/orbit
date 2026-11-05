@@ -25,7 +25,7 @@ func TestLoadDefaultsVersionToStableRelease(t *testing.T) {
 
 	got := Load()
 	if got.Version != "1.0.0" {
-		t.Fatalf("default version = %q, want 0.10.0", got.Version)
+		t.Fatalf("default version = %q, want 1.0.0", got.Version)
 	}
 }
 
