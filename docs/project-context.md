@@ -957,10 +957,13 @@ services, billing-enabled projects, PAYG upgrades, and paid fallbacks.
 - No OCI VM, DNS records, bucket, dynamic group, policy, or age backup identity
   has been provisioned. Do not claim otherwise and do not ask the user to
   create them for this demo.
-- The current live public GitHub Pages URL is still the static frontend.
-  There is no Apps Script /exec URL or live interactive demo until the owner
-  creates the Apps Script project, authorizes the private Spreadsheet, and
-  deploys the Web App.
+- The current live public GitHub Pages URL remains the static frontend. The
+  owner has now supplied an Apps Script `/exec` deployment URL. The assistant
+  toolchain could not fetch `script.google.com` (the host request was blocked),
+  so successful live bootstrap, API reads/writes, and post-refresh persistence
+  are **not yet independently verified**. Do not interpret the tool-side fetch
+  restriction as proof that the owner's deployment is broken; continue with the
+  supplied URL and require live smoke evidence before claiming v1 completion.
 - The Apps Script runtime contract check is added to the web CI job, together
   with Node syntax validation for the Apps Script server file. Exact-head CI,
   Security and Pages results must be rechecked before claiming success.
@@ -970,14 +973,15 @@ services, billing-enabled projects, PAYG upgrades, and paid fallbacks.
 1. Finish API/bridge contract review and preserve all existing dashboard pages.
 2. Confirm exact-head CI, Security and Pages workflow outcomes. Fix only
    demonstrated regressions.
-3. Owner creates the standalone Apps Script project and private Spreadsheet,
-   authorizes the script, and deploys the /exec Web App as described in
-   apps-script/README.md.
-4. After receiving the public /exec URL, verify the live bridge, read/write
-   persistence after refresh, profile isolation and synthetic notification
-   behavior. If anonymous access is unavailable in the owner's account or
-   region, stop and choose another genuine zero-cost path; never falsify country
-   or identity information.
+3. Use the already supplied public `/exec` URL for live smoke validation:
+   verify bootstrap, API reads/writes, persistence after refresh, profile
+   isolation, and simulation-only notification behavior. Do not ask the owner to
+   recreate or redeploy the Apps Script project unless a concrete deployment
+   error is observed.
+4. If the supplied URL cannot be opened in a clean browser, capture the exact
+   Google Apps Script error and diagnose the existing deployment. If anonymous
+   access is unavailable in the owner's account or region, stop and choose
+   another genuine zero-cost path; never falsify country or identity information.
 5. Stable v1 release remains open until exact-head CI/Security/Pages and the
    actual owner-deployed live demo smoke evidence pass.
 
