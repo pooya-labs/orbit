@@ -104,7 +104,7 @@ test("mobile navigation hides closed controls and traps/restores keyboard focus"
   await expect(menu).toHaveAttribute("aria-expanded", "true");
 
   const close = page.getByRole("button", { name: "Close navigation" });
-  const profileLink = page.locator("aside.sidebar").getByRole("link", { name: "@pooya16pg-spec" });
+  const profileLink = page.locator("aside.sidebar").getByRole("link", { name: "@pooya-labs" });
   await expect(close).toBeFocused();
 
   await page.keyboard.press("Shift+Tab");
@@ -776,4 +776,72 @@ test("every primary view exposes its current H1 in Chromium's accessibility tree
   }
 
   console.log("ORBIT all-view Chromium accessibility-tree report:", JSON.stringify(report, null, 2));
+});
+
+
+test("Settings dialog applies theme and language preferences, traps focus, and opens source setup", async ({ page }) => {
+  const settings = page.locator(".sidebar-bottom > button").first();
+  await expect(settings).toBeEnabled();
+  await expect(settings).toHaveText("Settings");
+  await settings.click();
+
+  const dialog = page.getByRole("dialog", { name: "Workspace settings" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Close dialog" })).toBeFocused();
+  await expectNoAxeViolations(page, "Settings dialog");
+
+  const dark = dialog.getByRole("button", { name: "Dark", exact: true });
+  const light = dialog.getByRole("button", { name: "Light", exact: true });
+  await expect(dark).toHaveAttribute("aria-pressed", "true");
+  await light.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(light).toHaveAttribute("aria-pressed", "true");
+
+  await dialog.getByRole("button", { name: "فارسی", exact: true }).click();
+  await expect(page.locator(".app-shell")).toHaveAttribute("dir", "rtl");
+  await expect(page.locator(".app-shell")).toHaveAttribute("lang", "fa");
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(settings).toBeFocused();
+
+  await page.getByRole("button", { name: "EN", exact: true }).click();
+  await settings.click();
+  const reopened = page.getByRole("dialog", { name: "Workspace settings" });
+  await reopened.getByRole("button", { name: "Manage source", exact: true }).click();
+  const apiUrl = page.locator("#orbit-api-url");
+  await expect(apiUrl).toBeVisible();
+  await expect(apiUrl).toBeFocused();
+});
+
+test("Help dialog exposes useful project documentation and support destinations", async ({ page }) => {
+  const help = page.locator(".sidebar-bottom > button").nth(1);
+  await expect(help).toBeEnabled();
+  await expect(help).toHaveText("Help & support");
+  await help.click();
+
+  const dialog = page.getByRole("dialog", { name: "Help & support" });
+  await expect(dialog).toBeVisible();
+  await expectNoAxeViolations(page, "Help dialog");
+  await expect(dialog.getByRole("link", { name: "Project README" }))
+    .toHaveAttribute("href", "https://github.com/pooya-labs/orbit/blob/main/README.md");
+  await expect(dialog.getByRole("link", { name: "Apps Script demo setup" }))
+    .toHaveAttribute("href", "https://github.com/pooya-labs/orbit/blob/main/apps-script/README.md");
+  await expect(dialog.getByRole("link", { name: "Report an issue" }))
+    .toHaveAttribute("href", "https://github.com/pooya-labs/orbit/issues");
+
+  await dialog.getByRole("button", { name: "Close dialog" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(help).toBeFocused();
+});
+
+test("creator profile links use the current GitHub account and show its mark", async ({ page }) => {
+  const sidebarProfile = page.locator(".profile-github-link");
+  await expect(sidebarProfile).toHaveAttribute("href", "https://github.com/pooya-labs");
+  await expect(sidebarProfile).toHaveText("@pooya-labs");
+  await expect(sidebarProfile.locator("svg").first()).toBeVisible();
+
+  const footerProfile = page.locator(".owner-credit .owner-github-link");
+  await expect(footerProfile).toHaveAttribute("href", "https://github.com/pooya-labs");
+  await expect(footerProfile.locator("svg")).toBeVisible();
 });
