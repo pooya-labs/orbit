@@ -153,7 +153,7 @@ test("Metrics chart table renders Prometheus samples and updates with the API ti
     });
 
     if (url.pathname === "/api/v1/meta") {
-      return json({ name: "orbit-api", version: "0.10.0", environment: "development" });
+      return json({ name: "orbit-api", version: "1.0.0", environment: "development" });
     }
     if (url.pathname === "/api/v1/workspaces") {
       return json({ data: [] });
@@ -282,7 +282,7 @@ test("staging telemetry requires workspace authentication and never calls legacy
     });
 
     if (url.pathname === "/api/v1/meta") {
-      return json({ name: "orbit-api", version: "0.10.0", environment: "staging" });
+      return json({ name: "orbit-api", version: "1.0.0", environment: "staging" });
     }
     if (url.pathname === "/api/v1/workspaces") {
       workspaceRequests.push(url.pathname);
