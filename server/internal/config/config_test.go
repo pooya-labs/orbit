@@ -20,11 +20,11 @@ func TestCommaSeparatedOriginsEmpty(t *testing.T) {
 }
 
 
-func TestLoadDefaultsVersionToCurrentPreview(t *testing.T) {
+func TestLoadDefaultsVersionToStableRelease(t *testing.T) {
 	t.Setenv("ORBIT_VERSION", " ")
 
 	got := Load()
-	if got.Version != "0.10.0" {
+	if got.Version != "1.0.0" {
 		t.Fatalf("default version = %q, want 0.10.0", got.Version)
 	}
 }
