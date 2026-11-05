@@ -47,6 +47,9 @@ Use a physical keyboard. Once the page is loaded, do not use the mouse until the
 
 Do not count a control as passing merely because it can receive focus: it must also have an understandable name, a predictable action, and a visible state change where applicable.
 
+8. Activate **Settings** from the sidebar. Confirm the dialog opens, the close control receives focus, theme and language options update the live page, the selected option is announced, Escape closes the dialog, and focus returns to Settings. Use **Manage source** and verify the API source panel opens with its URL field focused.
+9. Activate **Help & support**. Confirm the dialog opens, its project-documentation and support links have meaningful names and valid destinations, Escape and the close button both dismiss it, and focus returns to the Help control. Repeat both dialogs at a narrow mobile viewport and in Persian RTL.
+
 ### C. Forms and mobile navigation
 
 1. On the Incidents, Alerts, Notifications, Deployments, and SLO views, tab through the visible fields and action buttons.
