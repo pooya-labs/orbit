@@ -232,8 +232,9 @@ PRs #128 and #130–#133.
    changes are synthetic. Notifications are simulation-only: no outbound
    webhook is ever sent, and no real OTLP/customer telemetry is accepted.
 3. **Owner-side setup — open:** create the standalone Apps Script project,
-   paste the committed server/HTML/manifest files, run the private
-   `setupOrbitDemo_` from the editor and authorize the private Spreadsheet.
+   paste the committed server/HTML/manifest files, run the public, safe editor entry point
+   `initializeOrbitDemo` and authorize the private Spreadsheet. The private
+   helper `setupOrbitDemo_` must not be selected or exposed to visitors.
    Deploy the Web App with Execute as me and anonymous access only if Google
    offers it for the account. No billing, paid Cloud project, public sheet, or
    identity/location misrepresentation is allowed.
