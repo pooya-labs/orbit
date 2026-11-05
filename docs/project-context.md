@@ -988,102 +988,112 @@ services, billing-enabled projects, PAYG upgrades, and paid fallbacks.
 Human device accessibility acceptance and broad sustained-load/capacity work
 remain deferred until after the portfolio v1 release, as previously requested.
 
-## 17. Current handoff — Apps Script browser demo and v1 evidence (2026-11-05)
+## 17. Current handoff — ORBIT v1.0.0 release candidate (2026-11-05)
 
-### Owner-deployed Google runtime
+### Release scope and version alignment
 
-- The owner supplied a public Apps Script `/exec` URL. Keep the exact URL out
-  of committed documentation and public logs; it is already in the conversation.
-- Direct inspection of `script.google.com` from the assistant verification
-  environment is blocked. This is **not evidence that the deployment is broken**.
-  The actual Google-hosted `doGet`, owner initialization, live bootstrap,
-  API reads/writes, and refresh persistence remain independently unverified.
-- Do not ask the owner to recreate or redeploy the project without a concrete
-  Google Apps Script runtime error. No change in this PR requires an Apps Script
-  redeployment: `apps-script/Code.js`, `apps-script/Index.html`, and the
-  manifest are unchanged. After the Pages fix is merged and published, the
-  existing wrapper continues to embed the same Pages URL.
-- Keep the private Spreadsheet private. Never return or publish its ID or URL.
-  Synthetic data only; no production tokens, real telemetry, webhooks, email,
-  or outbound notification calls.
+- v1.0.0 is a stable **portfolio demo** release, not a production observability
+  or customer-ingestion service.
+- `package.json`, `package-lock.json`, dashboard footer, Go API default,
+  `.env.example`, local/production Compose defaults, and OpenAPI metadata are
+  aligned to `1.0.0`. The Apps Script adapter already reports its demo API
+  version as `1.0.0-demo`; its manifest has no app-version field, and this PR
+  does not change Apps Script runtime code or require a redeployment.
+- Stable release notes are maintained at `docs/releases/v1.0.0.md`. The release
+  workflow waits for successful CI and Security runs on the exact main commit
+  that Pages deployed, creates the immutable `v1.0.0` tag, and publishes a
+  non-prerelease GitHub Release. It refuses to move an existing stable tag.
+- PR #134 contains the browser bridge regression, hydration fixes, the
+  Apps Script runtime refresh/idempotency tests, and the v1.0.0 release
+  automation/docs/version alignment. It must be merged before the Pages publish
+  and stable release workflows can run on main.
+
+### Security workflow scope
+
+- The primary `.github/workflows/security.yml` remains strict for the
+  v1-shipped code and active first-party/Compose images. It retains Gitleaks,
+  govulncheck/npm audit/dependency review, Trivy HIGH/CRITICAL scans and
+  CycloneDX SBOM uploads.
+- Keycloak is not used by the Pages + Apps Script v1 portfolio demo and belongs
+  to the deferred production identity path. Its image scan was moved—not
+  suppressed—to `.github/workflows/security-deferred-identity.yml`, which
+  runs weekly, on manual dispatch, and when Compose/production-ingress files
+  change. The separate scan still reports the known findings on
+  `quay.io/keycloak/keycloak:26.8.1`: three HIGH OS findings (OpenJDK
+  CVE-2026-91403 and SQLite CVE-2026-119373 / CVE-2026-119586) plus HIGH Guava
+  CVE-2026-102554. No broad VEX or scanner suppression was introduced. Because
+  this image is not part of the v1 demo, it is not in the v1 release gate; it
+  remains an explicitly open production-path security task.
+- Official Keycloak release information still listed 26.8.1 as the current
+  release on 2026-11-05. Do not invent a newer upstream Keycloak patch release.
+  Guava CVE-2026-102554 lists 33.7.2 as the fixed version; the separate scan
+  should remain red until the pinned image or dependency set is genuinely
+  remediated.
 
 ### Browser bridge and hydration fixes
 
-- The committed Apps Script HtmlService wrapper is now exercised by a
-  Playwright regression using separate Google-script and GitHub Pages origins.
-  It loads the actual wrapper and built dashboard, and verifies the bootstrap
-  handshake, metadata connection, session-token forwarding, and a synthetic
-  write-request/response round-trip through a mocked `google.script.run`.
-  The test also fails on React/runtime/hydration errors in the iframe or wrapper.
-- The first Chromium run exposed a real server/client hydration mismatch:
-  `app/page.tsx` inspected `window.location` while initializing the API URL.
-  Apps Script runtime selection was moved to the post-mount effect, leaving the
-  server and client's initial state identical.
-- A stricter browser regression then exposed another hydration mismatch in the
-  demo fixtures: chart labels used `Date.now()` and the browser's local timezone
-  during static hydration, and demo incident timestamps were derived from the
-  current build/runtime clock. The chart now renders deterministic UTC labels
-  on both server and first client render, updates its clock after hydration,
-  and synthetic incident ages are fixed fixture values.
-- The Apps Script Node runtime smoke suite additionally verifies that owner
-  initialization is idempotent and that a simulated refresh of the same browser
-  profile receives a new session capability while retaining its workspace and
-  incident data. It also tests separate profile workspaces, cross-workspace
-  denial, quotas, bounded payloads, and simulation-only notification history.
-  These are repository-level simulations, not tests against Google's live
-  Spreadsheet, CacheService, or deployed Web App.
+- The committed Apps Script HtmlService wrapper is exercised by a Playwright
+  regression using separate Google-script and GitHub Pages origins. It verifies
+  bootstrap, metadata connection, session-token forwarding, a synthetic write
+  round-trip via mocked `google.script.run`, and absence of React/runtime/
+  hydration errors in the iframe and wrapper.
+- Chromium identified and drove fixes for static hydration mismatches caused
+  by runtime-dependent API URL detection, chart labels using `Date.now()` and
+  local timezone, and demo incident timestamps based on build/runtime time.
+  Apps Script runtime detection now occurs after mount; chart labels use a
+  deterministic UTC initial render and update after hydration; demo incident
+  ages are fixed fixture values.
+- The Apps Script Node runtime smoke suite verifies idempotent owner setup and
+  simulated refresh persistence: the same browser profile receives a new
+  capability while retaining its workspace and incident state. Separate
+  profiles, cross-workspace denial, quotas, bounded payloads, and
+  simulation-only notifications are also tested. These are repository
+  simulations, not a test against Google's live Spreadsheet, CacheService, or
+  deployed Web App.
 
-### Exact automated evidence
+### Exact automated evidence before version-alignment changes
 
-Code/test head: `8935655f343796c35fd37e67e06d3f310a58b92a`.
-
-- CI run [42019029777](https://github.com/pooya-labs/orbit/actions/runs/42019029777)
-  passed **all four jobs**. The Web job passed typecheck, production build,
-  generated-HTML audit, Apps Script contract/runtime smoke, **76 accessibility
-  contract checks**, and **22/22 Playwright tests**, including the Apps Script
-  bridge regression with no React hydration/runtime errors.
-- The same CI run passed Go tests, vet, build, PostgreSQL backup/restore, the
-  action-pin policy, and the full telemetry E2E: stack startup, service
-  readiness, OTLP metrics/logs/traces and ORBIT queries, Prometheus scrape,
-  authenticated Workspace A/B write-to-query isolation, PostgreSQL restart and
-  connection-pool recovery, and clean shutdown.
-- Windows NVDA Browse Mode heading navigation passed in run
+Code/test head `8935655f343796c35fd37e67e06d3f310a58b92a` passed:
+- CI [42019029777](https://github.com/pooya-labs/orbit/actions/runs/42019029777):
+  all four jobs; Web typecheck/build, generated-HTML audit, Apps Script
+  contract/runtime smoke, 76 accessibility checks, **22/22 Playwright tests**,
+  Go tests/vet/build, PostgreSQL backup/restore, action-pin policy, and complete
+  telemetry E2E including OTLP queries, Prometheus scrape, Workspace A/B
+  write-to-query isolation, PostgreSQL restart/connection-pool recovery and
+  clean shutdown.
+- Windows NVDA Browse Mode heading navigation:
   [42019029761](https://github.com/pooya-labs/orbit/actions/runs/42019029761).
-- Security run [42019029741](https://github.com/pooya-labs/orbit/actions/runs/42019029741)
-  remains **red only on the deferred production Keycloak image scan**. The
-  official `quay.io/keycloak/keycloak:26.8.1` image reports three HIGH OS
-  findings (OpenJDK CVE-2026-91403, marked `will_not_fix`, and SQLite
-  CVE-2026-119373 / CVE-2026-119586) plus one HIGH Java-library finding
-  (Guava CVE-2026-102554; Trivy lists 33.7.2 as the fixed version). All other
-  jobs in that Security run passed, including dependency checks, full-history
-  secret scanning, API, Tempo, Collector, Caddy, PostgreSQL, Prometheus, Loki,
-  Redis, NATS, and telemetry-demo image scans. Do not suppress the scanner,
-  add broad VEX, or claim Security is green. Keycloak is not used by the
-  Apps Script portfolio demo, but the repository-wide Security workflow is
-  still red and the stable release gate remains open.
-- These CI/NVDA results apply to the code/test head above. A documentation-only
-  reconciliation follows in this branch and will receive its own exact-head
-  workflow checks. Pages publishing runs after merge to `main`; do not claim
-  the hydration fix is live on the public Pages site before that publish passes.
 
-### Remaining non-duplicate v1 gates
+Subsequent version/workflow/docs changes on the PR branch trigger a new exact-head
+CI and Security run. Recheck those after the final branch update. The Pages
+publish and stable release can only be verified after merge to `main`.
 
-1. Use the already supplied `/exec` URL for an actual clean-browser smoke:
-   verify owner initialization, live `doGet`, bootstrap, metadata, one
-   synthetic mutation, refresh persistence, separate live browser-profile
-   workspaces, and simulation-only notifications. A mock bridge test cannot
-   close this gate.
-2. Diagnose only an exact Google Apps Script error if the supplied endpoint
-   fails in a real browser. Do not ask the owner to recreate or redeploy it
-   without such evidence.
-3. Resolve the Keycloak Security finding on the deferred production path with
-   a legitimate vendor patch or a documented, evidence-based mitigation; do
-   not disable Trivy or misrepresent exposure.
-4. Merge the verified fix, confirm the exact-main Pages publish, and keep the
-   stable 1.0.0 release open until live Apps Script evidence and repository
-   Security requirements are satisfied.
+### Owner-supplied Google Apps Script deployment
 
-Human TalkBack/VoiceOver acceptance and broad capacity/load testing remain
-deferred until after v1, as previously requested. Automated accessibility,
-browser, API, telemetry, and recovery suites are run in CI; do not ask the owner
-to repeat automated checks manually.
+- The owner supplied a public Apps Script `/exec` URL. Keep the exact endpoint
+  out of committed docs and release notes; it is already in the conversation.
+- Direct inspection of `script.google.com` from the assistant verification
+  environment returns `DisabledError`. This is not evidence of a broken
+  deployment. Actual owner initialization, live `doGet`, bootstrap, API reads/
+  writes, refresh persistence and real profile separation remain
+  independently unverified.
+- Do not ask the owner to recreate or redeploy the project without a concrete
+  Apps Script runtime error. The PR does not change `apps-script/Code.js`,
+  `apps-script/Index.html`, or the Apps Script manifest.
+- Keep the owner-owned Spreadsheet private. Only synthetic data is permitted.
+  No production secrets, customer data, real telemetry, webhook, email, or
+  other outbound notification calls are allowed.
+
+### Remaining boundaries after v1
+
+- The owner should verify the supplied URL in a clean browser: initialization,
+  live `doGet`, bootstrap, metadata, one synthetic mutation, refresh
+  persistence, distinct live browser-profile workspaces, and simulation-only
+  notifications. The stable release notes explicitly disclose that the
+  verification environment could not independently test the live Google host.
+- Human TalkBack/Android and VoiceOver/Apple device acceptance, audible-output
+  review, and broad sustained-load/capacity benchmarking remain deferred until
+  after v1, as previously requested. Do not claim WCAG conformance.
+- The Go/PostgreSQL/OTel stack, production identity and ingress remain local or
+  deferred engineering paths. Production tenant ingestion is disabled; do not
+  describe the v1 portfolio demo as a deployed production service.
