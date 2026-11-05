@@ -1026,3 +1026,11 @@ remain deferred until after the portfolio v1 release, as previously requested.
   profile isolation, and confirmation that notifications remain simulation
   only. Keep stable v1 release open until live evidence and an exact-head
   Security result are resolved.
+
+- A Playwright browser regression now loads the actual committed HtmlService
+  wrapper around the GitHub Pages build using separate Google-script and Pages
+  origins. It checks the bootstrap handshake, automatic metadata connection,
+  session-token forwarding, and a write-request/response round-trip. This
+  verifies the repository-owned browser bridge contract with a mocked
+  `google.script.run`; it does not exercise the owner's live Google deployment
+  or replace the still-open refresh-persistence/profile-isolation live smoke.
