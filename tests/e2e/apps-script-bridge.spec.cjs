@@ -52,16 +52,18 @@ test("Apps Script HtmlService wrapper completes the cross-origin bridge handshak
           state.apiCalls.push(captured);
           const response = captured.path === "/api/v1/meta"
             ? { status: 200, body: { name: "orbit-api", version: "0.10.0", environment: "apps-script-browser-smoke" } }
-            : {
-                status: 200,
-                body: {
-                  ok: true,
-                  method: captured.method,
-                  path: captured.path,
-                  sessionToken: captured.sessionToken,
-                  body: captured.body ?? null,
-                },
-              };
+            : captured.path === "/api/v1/workspaces"
+              ? { status: 200, body: { data: [] } }
+              : {
+                  status: 200,
+                  body: {
+                    ok: true,
+                    method: captured.method,
+                    path: captured.path,
+                    sessionToken: captured.sessionToken,
+                    body: captured.body ?? null,
+                  },
+                };
           Promise.resolve().then(() => handlers.success?.(response));
           return runner;
         },
