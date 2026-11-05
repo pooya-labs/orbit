@@ -34,7 +34,6 @@ import {
   FileText,
   GitBranch,
   Globe2,
-  Github,
   Gauge,
   Menu,
   MoreHorizontal,
@@ -189,6 +188,14 @@ const navGroups: NavGroup[] = [
     ],
   },
 ];
+
+function GitHubMark({ size = 13 }: { size?: number }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" focusable="false">
+      <path d="M12 .5C5.65.5.5 5.75.5 12.24c0 5.2 3.36 9.6 8.02 11.16.59.11.82-.26.82-.58v-2.23c-3.26.72-3.95-1.42-3.95-1.42-.54-1.39-1.3-1.76-1.3-1.76-1.06-.75.08-.74.08-.74 1.17.08 1.79 1.22 1.79 1.22 1.04 1.82 2.73 1.3 3.4.99.11-.77.41-1.3.74-1.6-2.6-.3-5.34-1.33-5.34-5.91 0-1.3.46-2.36 1.21-3.19-.12-.3-.52-1.51.11-3.15 0 0 .99-.32 3.25 1.22a11.1 11.1 0 0 1 5.92 0c2.26-1.54 3.24-1.22 3.24-1.22.64 1.64.24 2.85.12 3.15.75.83 1.2 1.89 1.2 3.19 0 4.59-2.74 5.6-5.35 5.9.42.37.79 1.1.79 2.22v3.3c0 .32.22.69.83.57a11.75 11.75 0 0 0 8-11.15C23.5 5.75 18.35.5 12 .5z" />
+    </svg>
+  );
+}
 
 function serviceStateLabel(state: ServiceState, language: Language): string {
   const key: Record<ServiceState, TranslationKey> = { Operational: "operational", Degraded: "degraded", Incident: "incident", Unknown: "unknownStatus" };
@@ -577,7 +584,7 @@ export default function Home() {
           <button ref={helpButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "help"} onClick={() => setUtilityDialog("help")}><CircleHelp size={17} /><span>{tr("helpSupport")}</span></button>
           <div className="profile-row">
             <div className="profile-avatar" aria-hidden="true">P</div>
-            <div className="profile-copy"><strong>{tr("profileName")}</strong><a className="profile-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><Github size={13} aria-hidden="true" /><span>@pooya-labs</span><ExternalLink size={10} aria-hidden="true" /></a></div>
+            <div className="profile-copy"><strong>{tr("profileName")}</strong><a className="profile-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><GitHubMark size={13} /><span>@pooya-labs</span><ExternalLink size={10} aria-hidden="true" /></a></div>
           </div>
         </div>
       </aside>
@@ -808,7 +815,7 @@ export default function Home() {
             </>
           )}
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><strong>{tr("projectOwner")}:</strong> <a className="owner-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><Github size={12} aria-hidden="true" /><span>@pooya-labs</span></a> <span>·</span> <a href="https://github.com/pooya-labs/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a></span></footer>
+          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><strong>{tr("projectOwner")}:</strong> <a className="owner-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><GitHubMark size={12} /><span>@pooya-labs</span></a> <span>·</span> <a href="https://github.com/pooya-labs/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a></span></footer>
         </main>
       </section>
       {utilityDialog && (
