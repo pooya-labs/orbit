@@ -190,77 +190,94 @@ identity, health, and tenant-isolation smoke checks pass.
 - Documentation describes what is implemented, not only what is intended.
 
 
-## v1.0.0 release readiness — audited 2026-11-04
+## v1.0.0 release readiness — audited 2026-11-05
 
 ### Current release baseline
 
-- Latest published tag: \`v0.10.0\`, published as a GitHub prerelease / Public Preview. No \`v1.0.0\` release exists yet.
-- Source baseline at the start of the free-infrastructure update: `main` commit `2245d8e9cab1de1c9ead8259b7e430b81b06ae4c`. Exact-head CI run [41780453139](https://github.com/pooya-labs/orbit/actions/runs/41780453139) passed all four jobs, Security run [41780453343](https://github.com/pooya-labs/orbit/actions/runs/41780453343) passed all 13 jobs, Pages deployment [41780453408](https://github.com/pooya-labs/orbit/actions/runs/41780453408) succeeded, and release workflow [41780525127](https://github.com/pooya-labs/orbit/actions/runs/41780525127) succeeded with the preview tag aligned to main. The free deployment configuration is not yet running on a VM.
-- Audit reconciliation: 95 of 107 previously recorded checkboxes were complete. Several open boxes duplicated the same production OIDC, ingress, and target-load gates; the historical duplicate boxes are consolidated below. The count is not a measure of v1 completeness because some deferred items are deliberately non-blocking.
+- Current published baseline: `v0.10.0` (historical GitHub prerelease / Public Preview).
+  This branch is the `v1.0.0` stable portfolio-demo release candidate:
+  `package.json`, `package-lock.json`, the dashboard footer, Go API default,
+  Compose examples, and OpenAPI contract are aligned to `1.0.0`.
+- The stable release workflow now waits for successful **CI** and **Security**
+  workflows on the exact main commit that Pages deployed, then creates the
+  immutable `v1.0.0` tag and a non-prerelease GitHub Release. It refuses to
+  move an existing stable tag.
+- The v1 Security gate scans the shipped dashboard/runtime and the active
+  first-party/Compose images. The Keycloak identity provider belongs to the
+  deferred production identity path and is scanned separately each week and
+  when production-ingress/Compose files change. Its scan is not disabled or
+  suppressed; the currently known image findings remain documented in
+  `docs/project-context.md` and do not affect the Pages + Apps Script demo,
+  which does not use Keycloak.
+- The owner supplied the Apps Script `/exec` deployment URL. It is deliberately
+  not committed. The assistant verification environment cannot fetch
+  `script.google.com`, so live Google initialization/bootstrap/refresh behavior
+  is not claimed as independently verified. This is an external owner-side
+  smoke check, not evidence of a broken deployment and not a reason to recreate
+  or redeploy the supplied project without a concrete Google error.
 
 ### Verified and completed — do not repeat
 
-- **M01 UI/accessibility automation:** responsive dashboard, bilingual English/Persian RTL, light/dark themes, keyboard/landmark contracts, chart table alternatives, generated-HTML checks, 17 Playwright/axe tests across the primary views, and Windows NVDA 2026.2 Speech Viewer coverage through all 13 views are implemented and CI-verified (PRs #109, #114, #116, #119, #124, #125). Human device acceptance remains open below.
-- **M02 API/data foundation:** Go API, PostgreSQL migrations 001–016, typed client, OpenAPI 3.1, inventory and operational APIs, audit/history persistence and repository integration tests are implemented.
-- **M03 local platform:** Compose, PostgreSQL and optional Collector/Prometheus/Loki/Tempo pipeline, instrumented Go demo, and end-to-end signal checks are implemented. Redis and NATS are provisioned only; functional application integration is intentionally deferred under ADR 0004.
-- **M04 telemetry baseline:** bounded Metrics/Logs/Traces queries, cross-backend service discovery, persisted workspace catalog, source/resource provenance, cursor pagination, request-rate grouping, staleness/gap handling, authenticated OTLP capture over HTTP/gRPC, canonical workspace attribution, resource-allowlist parity/denylist guard (PR #126 / ADR 0005), authenticated workspace-scoped telemetry UI/API integration (PR #128), safe workspace metric catalog (PR #132), workspace trace detail (PR #130), and validated Logs-to-Trace correlation (PR #131) are implemented. Arbitrary PromQL and arbitrary metric discovery remain intentionally unsupported.
-- **M05 operations:** workspace-scoped incident timeline, alert rules/evaluation, webhook outbox and retry history, deployment annotations, SLO/error budget, and searchable immutable audit history are implemented and covered by CI (PRs #66–#82).
-- **M06 code-level security/recovery:** human OIDC verifier/role gate, provider-neutral browser PKCE, workspace membership, workload identities/grants, authenticated OTLP gateways, rate limits/admission/revocation/fail-closed behavior, A/B tenant integration tests, local retention/cardinality guardrails, backup/restore CI, security scans, pinned Actions, SBOM artifacts, fault/recovery tests, runbook templates, and optional bounded API/worker self-instrumentation (PR #133) are present. They do not establish a production deployment.
-- **Recent no-duplicate guard:** do not recreate the completed suites in PRs #110, #111, #112, #113, #114, #115, #116, #119, #124, #125, the allowlist contract in PR #126, or the workspace-scoped telemetry UI in PR #128 unless a new regression is identified.
+- **M01 UI/accessibility automation:** responsive dashboard, bilingual
+  English/Persian RTL, light/dark themes, keyboard/landmark contracts, chart
+  table alternatives, generated-HTML checks, 22 Playwright/axe browser tests,
+  76 accessibility source checks, and Windows NVDA Browse Mode navigation are
+  implemented and CI-verified. Human device acceptance remains deferred below.
+- **M02 API/data foundation:** Go API, PostgreSQL migrations, typed client,
+  OpenAPI 3.1, inventory and operational APIs, audit/history persistence and
+  repository integration tests are implemented.
+- **M03 local platform:** Compose, PostgreSQL and optional
+  Collector/Prometheus/Loki/Tempo pipeline, instrumented Go demo, and
+  end-to-end signal checks are implemented. Redis and NATS are provisioned
+  only; functional application integration is intentionally deferred under
+  ADR 0004.
+- **M04 telemetry baseline:** bounded Metrics/Logs/Traces queries,
+  cross-backend service discovery, persisted workspace catalog, source/resource
+  provenance, cursor pagination, request-rate grouping, staleness/gap handling,
+  authenticated OTLP capture, canonical workspace attribution, workspace
+  isolation, trace detail and validated Logs-to-Trace correlation are
+  implemented. Arbitrary PromQL and arbitrary metric discovery remain
+  intentionally unsupported.
+- **M05 operations:** workspace-scoped incident timeline, alert
+  rules/evaluation, webhook outbox and retry history, deployment annotations,
+  SLO/error budget, and searchable immutable audit history are implemented and
+  covered by CI.
+- **M06 code-level security/recovery:** human OIDC verifier/role gate,
+  provider-neutral browser PKCE, workspace membership, workload
+  identities/grants, authenticated OTLP gateways, rate limits/admission/
+  revocation/fail-closed behavior, A/B tenant integration tests, local
+  retention/cardinality guardrails, backup/restore CI, pinned Actions, SBOM
+  artifacts, fault/recovery tests, and optional bounded API/worker
+  self-instrumentation are present. They do not establish a production
+  deployment.
+- **Apps Script v1 runtime:** V8 Web App, private Spreadsheet data store,
+  safe editor initializer `initializeOrbitDemo`, pseudonymous
+  browser-profile workspaces, six-hour session capabilities, request/body/
+  storage quotas, fixed-origin iframe bridge, and synthetic adapter are
+  implemented. Contract and simulated runtime smoke tests verify safe,
+  idempotent initialization, profile separation, simulated refresh persistence,
+  cross-workspace denial, quotas, bounded payloads, and simulation-only
+  notifications.
+- **Browser integration:** Playwright loads the committed HtmlService wrapper
+  around the static dashboard across separate origins; verifies bootstrap,
+  metadata, session-token forwarding, a write round-trip, and absence of
+  hydration/runtime errors. It uses a mocked `google.script.run`; it is not a
+  substitute for testing Google's live deployment.
 
-### Unique v1 blockers — zero-cost Apps Script portfolio demo
+### Release gate
 
-The v1 target is a low-volume, interactive portfolio demonstration. It is **not**
-a production tenant-ingestion service or an enterprise multi-tenant control
-plane. The existing Go API, PostgreSQL migrations, OIDC security model and
-local OpenTelemetry pipeline remain part of the repository and can still be
-run locally; they are not prerequisites for the public demo. Do not recreate
-PRs #128 and #130–#133.
-
-1. **Apps Script runtime — implemented and repository-verified:** `apps-script/Code.js`,
-   `apps-script/Index.html`, the V8 manifest, private Sheets datastore setup,
-   fixed-origin `postMessage` / `google.script.run` bridge, six-hour demo
-   sessions, per-session request/mutation caps, body/record/visitor limits,
-   and synthetic workspace bootstrap are present. The safe editor entry point
-   is `initializeOrbitDemo`; its private helper is `setupOrbitDemo_`. CI
-   contract/runtime smoke verifies safe initialization and data-layer behavior.
-   On PR head `8935655f343796c35fd37e67e06d3f310a58b92a`, CI run
-   [42019029777](https://github.com/pooya-labs/orbit/actions/runs/42019029777)
-   passed all four jobs, including **22/22 Playwright tests**, 76 accessibility
-   contract checks, Go tests/build, and the complete telemetry E2E pipeline.
-2. **Feature parity — repository adapter added:** the Apps Script adapter
-   covers services, incidents/timelines, Metrics, Logs, Traces/detail and
-   correlation, alert rules/instances, notification channel/delivery history,
-   deployments/comparison, SLO budgets, and audit events. All values and
-   changes are synthetic. Notifications are simulation-only: no outbound
-   webhook is ever sent, and no real OTLP/customer telemetry is accepted.
-3. **Owner-side deployment — URL supplied, live runtime unverified:** the owner
-   supplied an Apps Script `/exec` URL. The URL is deliberately not committed.
-   Direct inspection of `script.google.com` is blocked in the assistant's
-   verification environment; this is not evidence of a broken deployment.
-   It is not independently confirmed that `initializeOrbitDemo` completed,
-   that Google granted the necessary owner permissions, or that `doGet` and
-   the live bridge succeed. Do not ask the owner to recreate or redeploy the
-   project without a concrete Google Apps Script error.
-4. **Live smoke evidence — open:** verify the supplied `/exec` URL in a clean
-   browser, successful bootstrap and metadata connection, one synthetic
-   mutation persisted after refresh, separate live browser-profile workspaces,
-   key dashboard views, and simulation-only notifications. Repository tests
-   use a mocked browser bridge and simulated Apps Script services; they do not
-   substitute for this owner-deployed live verification. Keep the Spreadsheet
-   private.
-5. **Stable release — open:** CI on the PR head is green, but the repository
-   Security workflow remains red on the deferred production Keycloak image
-   (three HIGH OS-package findings and one HIGH Guava finding; see the current
-   handoff in `docs/project-context.md`). The Pages deployment must be checked
-   after merge, and the live Apps Script smoke evidence must pass. Then align
-   app/manifest/docs/release version at 1.0.0 and publish a stable GitHub
-   Release, not a prerelease. Do not label the demo production-ready or claim
-   real telemetry ingestion.
-
-The Apps Script runtime is deliberately sized for a handful of demo sessions
-per day. Google quotas can change, and the spreadsheet is a small demo store,
-not a PostgreSQL replacement.
+1. Merge this release-candidate PR only after its exact-head CI and Security
+   workflows pass. The Pages workflow must then publish the exact main commit.
+2. The release workflow checks exact-main CI and Security again after Pages
+   succeeds, then creates the stable `v1.0.0` release. It will not retag an
+   existing stable release.
+3. Keep the Google Apps Script URL owner-controlled and the backing Spreadsheet
+   private. The owner should verify initialization, live `doGet`, bootstrap,
+   one synthetic mutation, refresh persistence, and separate live browser
+   profiles in a clean browser; the release notes disclose that this could not
+   be independently tested by the assistant environment.
+4. Do not label v1 as a production monitoring service, real telemetry
+   ingestion, customer multi-tenancy, or formal WCAG conformance.
 
 ### Deferred until after v1
 
