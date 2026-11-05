@@ -908,7 +908,7 @@ export default function Home() {
                     <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/blob/main/apps-script/README.md" target="_blank" rel="noreferrer"><Database size={15} /><span>{tr("appsScriptSetup")}</span><ExternalLink size={12} /></a>
                     <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/blob/main/docs/manual-acceptance-guide.md" target="_blank" rel="noreferrer"><ShieldCheck size={15} /><span>{tr("accessibilityGuide")}</span><ExternalLink size={12} /></a>
                     <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/releases/tag/v1.0.0" target="_blank" rel="noreferrer"><FileText size={15} /><span>{tr("releaseNotes")}</span><ExternalLink size={12} /></a>
-                    <a className="utility-help-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><Github size={15} /><span>{tr("githubProfile")}</span><ExternalLink size={12} /></a>
+                    <a className="utility-help-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><GitHubMark size={15} /><span>{tr("githubProfile")}</span><ExternalLink size={12} /></a>
                     <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/issues" target="_blank" rel="noreferrer"><CircleHelp size={15} /><span>{tr("reportIssue")}</span><ExternalLink size={12} /></a>
                   </div>
                 </section>
