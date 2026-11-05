@@ -103,16 +103,23 @@ function mapApiService(item: ServiceSummary, index: number, language: Language):
   };
 }
 
-function formatAge(timestamp: string, language: Language): string {
-  const elapsed = Math.max(0, Date.now() - new Date(timestamp).getTime());
-  if (!Number.isFinite(elapsed)) return t(language, "timeUnavailable");
-  const minutes = Math.floor(elapsed / 60000);
+function formatElapsedAge(elapsedMs: number, language: Language): string {
+  if (!Number.isFinite(elapsedMs)) return t(language, "timeUnavailable");
+  const minutes = Math.floor(Math.max(0, elapsedMs) / 60000);
   const relative = new Intl.RelativeTimeFormat(formatLocale(language), { numeric: "auto" });
   if (minutes < 1) return t(language, "justNow");
   if (minutes < 60) return relative.format(-minutes, "minute");
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return relative.format(-hours, "hour");
   return relative.format(-Math.floor(hours / 24), "day");
+}
+
+function formatAge(timestamp: string, language: Language): string {
+  return formatElapsedAge(Date.now() - new Date(timestamp).getTime(), language);
+}
+
+function formatDemoAge(ageMinutes: number, language: Language): string {
+  return formatElapsedAge(ageMinutes * 60000, language);
 }
 
 function toIncidentRow(
@@ -143,7 +150,7 @@ function toDemoIncidentRow(item: (typeof demoIncidents)[number], language: Langu
     severityLabel: t(language, item.severity),
     severityTone: item.severity === "critical" ? "critical" : "warning",
     statusLabel: t(language, item.status),
-    timeAgo: formatAge(item.startedAt, language),
+    timeAgo: formatDemoAge(item.ageMinutes, language),
     source: item.source,
   };
 }
@@ -238,10 +245,14 @@ export default function Home() {
   const [themeReady, setThemeReady] = useState(false);
   const tr = (key: TranslationKey) => t(language, key);
   const [range, setRange] = useState("1 hour");
+  // Static export and the browser must render the same initial clock labels.
+  // Switch to the current UTC clock only after hydration, then refresh each minute.
+  const [demoChartNow, setDemoChartNow] = useState(Date.UTC(2026, 10, 5, 12, 0, 0));
   const demoChartWindowMinutes = range === "6 hours" ? 360 : range === "24 hours" ? 1440 : 60;
   const demoChartTimeAt = (elapsedFraction: number) =>
-    new Intl.DateTimeFormat(formatLocale(language), { hour: "2-digit", minute: "2-digit" })
-      .format(Date.now() - ((1 - elapsedFraction) * demoChartWindowMinutes * 60_000));
+    new Intl.DateTimeFormat(formatLocale(language), {
+      hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+    }).format(demoChartNow - ((1 - elapsedFraction) * demoChartWindowMinutes * 60_000));
   const demoChartTickLabels = Array.from({ length: 7 }, (_, index) => demoChartTimeAt(index / 6));
   const demoChartRangeLabel = language === "fa"
     ? range === "1 hour" ? "۱ ساعت" : range === "6 hours" ? "۶ ساعت" : "۲۴ ساعت"
@@ -329,6 +340,13 @@ export default function Home() {
     root.lang = language;
     root.dir = language === "fa" ? "rtl" : "ltr";
   }, [language]);
+
+  useEffect(() => {
+    const updateDemoClock = () => setDemoChartNow(Date.now());
+    updateDemoClock();
+    const clock = window.setInterval(updateDemoClock, 60_000);
+    return () => window.clearInterval(clock);
+  }, []);
 
   useEffect(() => {
     if (!themeReady) return;
