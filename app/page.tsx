@@ -299,10 +299,10 @@ export default function Home() {
   const [showAllServices, setShowAllServices] = useState(false);
   const [sourceMode, setSourceMode] = useState<SourceMode>("demo");
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
-  const [apiUrlInput, setApiUrlInput] = useState(() =>
-    isAppsScriptRuntime()
-      ? "apps-script://bridge"
-      : process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "http://localhost:8080",
+  // Keep the initial state identical during static HTML hydration. The
+  // Apps Script runtime is detected after mount in the effect below.
+  const [apiUrlInput, setApiUrlInput] = useState(
+    process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "http://localhost:8080",
   );
   const [apiStatus, setApiStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
   const [apiError, setApiError] = useState("");
@@ -342,7 +342,10 @@ export default function Home() {
   }, [theme, themeReady]);
 
   useEffect(() => {
-    if (isAppsScriptRuntime()) return;
+    if (isAppsScriptRuntime()) {
+      setApiUrlInput("apps-script://bridge");
+      return;
+    }
     try {
       const savedUrl = window.localStorage.getItem("orbit.apiBaseUrl");
       if (savedUrl) setApiUrlInput(savedUrl);
