@@ -6,7 +6,7 @@
 [![CI](https://github.com/pooya-labs/orbit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pooya-labs/orbit/actions)
 [![Security](https://github.com/pooya-labs/orbit/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/pooya-labs/orbit/actions)
 
-**Project owner & maintainer:** [@pooya16pg-spec](https://github.com/pooya16pg-spec) · **Source:** [pooya-labs/orbit](https://github.com/pooya-labs/orbit)
+**Project owner & maintainer:** [@pooya-labs](https://github.com/pooya-labs) · **Source:** [pooya-labs/orbit](https://github.com/pooya-labs/orbit)
 
 ORBIT is an engineering-focused observability workspace for exploring service health, incidents, operational workflows, and distributed telemetry across metrics, logs, and traces.
 
