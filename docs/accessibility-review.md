@@ -15,7 +15,9 @@ The keyboard and landmark baseline was merged into `main` via PR #109 (squash co
 - The demo chart time-range selector is a named group; its selected option is exposed with `aria-pressed`, with localized group names in English and Persian.
 - Incident and alert filters, notification delivery filters, the selected incident, and the selected SLO objective expose their state with `aria-pressed`; Audit filters and telemetry grouping already did so.
 - Both charts now have expandable native HTML data tables. The live Metrics table uses the same Prometheus response as its SVG chart and includes localized time, series, and request-rate columns. The Overview table derives clearly labelled illustrative samples from the exact SVG fixture points; its time axis and table timestamps both follow the selected 1-hour, 6-hour, or 24-hour window.
-- Preview-only controls without an implemented action are disabled and expose a localized unavailable description. The top-bar Notifications control opens the implemented Notifications view, and the Docs affordance links to the repository documentation.
+- Settings opens an accessible preferences dialog with working dark/light theme controls, English/Persian language controls, and a shortcut to the API source panel. Help & support opens an accessible dialog with links to the README, roadmap, architecture, Apps Script setup, accessibility guide, release notes, GitHub profile, and issue tracker. Both dialogs support Escape, focus containment, focus restoration, and responsive layouts.
+- The sidebar and footer creator links point to the current GitHub account at https://github.com/pooya-labs and display the GitHub mark. The repository link points to https://github.com/pooya-labs/orbit.
+- Remaining preview-only controls without an implemented action (workspace switcher and incident-options placeholder) are disabled and expose a localized unavailable description. The top-bar Notifications control opens the implemented Notifications view, and the Docs affordance links to the repository documentation.
 
 ## Automated verification
 
@@ -82,7 +84,7 @@ Before closing the M01 accessibility review, test the deployed and local applica
 1. Keyboard only: skip link, every primary view, forms and validation errors, drawer open/close, Escape, tab order, focus restoration, zoom/reflow, both LTR and RTL layouts.
 2. Screen readers: NVDA with Firefox or Edge on Windows; VoiceOver with Safari on macOS/iOS; TalkBack with Chrome on Android. Confirm navigation landmarks, headings, active view, form labels, loading/error/success announcements, table/list structure, and chart alternatives.
 3. Visual access: text and control contrast in dark and light themes, focus visibility, status information that may rely on color, and reduced-motion behavior.
-4. Control audit: confirm each visible control has a real action or is clearly presented as unavailable; verify that the Notifications control opens the Notifications view, and review the unavailable workspace, settings, incident-options, and help affordances.
+4. Control audit: confirm each visible control has a real action or is clearly presented as unavailable; verify that Settings opens its preferences dialog, Help opens its documentation/support dialog, the Notifications control opens the Notifications view, and the unavailable workspace and incident-options placeholders are clearly identified.
 
 Record browser/OS/assistive-technology versions, findings, and remediations here. Do not claim screen-reader support or WCAG conformance solely from passing static checks or the automated Chromium/axe suite.
 
