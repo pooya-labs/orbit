@@ -1653,3 +1653,21 @@ html[data-theme="light"] .audit-filter.active { background: rgba(42,159,140,.1);
   .utility-source-setting { grid-template-columns: 1fr; }
   .utility-source-setting .button-secondary { width: 100%; }
 }
+
+
+html[data-theme="light"] .profile-github-link,
+html[data-theme="light"] .owner-github-link,
+html[data-theme="light"] .owner-credit a { color: #107667; }
+html[data-theme="light"] .profile-github-link:hover,
+html[data-theme="light"] .owner-github-link:hover,
+html[data-theme="light"] .owner-credit a:hover { color: #0b5148; }
+.profile-github-link > span,
+.owner-github-link > span { color: inherit; font-size: inherit; }
+.page-footer { flex-wrap: wrap; row-gap: 9px; }
+.owner-credit { min-width: 0; flex-wrap: wrap; }
+@media (max-width: 700px) {
+  .page-footer { align-items: flex-start; }
+  .page-footer > span:first-child,
+  .page-footer > span:nth-child(2) { flex: 1 1 auto; }
+  .page-footer > .owner-credit { flex: 1 1 100%; }
+}
