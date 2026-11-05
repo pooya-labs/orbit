@@ -103,16 +103,23 @@ function mapApiService(item: ServiceSummary, index: number, language: Language):
   };
 }
 
-function formatAge(timestamp: string, language: Language): string {
-  const elapsed = Math.max(0, Date.now() - new Date(timestamp).getTime());
-  if (!Number.isFinite(elapsed)) return t(language, "timeUnavailable");
-  const minutes = Math.floor(elapsed / 60000);
+function formatElapsedAge(elapsedMs: number, language: Language): string {
+  if (!Number.isFinite(elapsedMs)) return t(language, "timeUnavailable");
+  const minutes = Math.floor(Math.max(0, elapsedMs) / 60000);
   const relative = new Intl.RelativeTimeFormat(formatLocale(language), { numeric: "auto" });
   if (minutes < 1) return t(language, "justNow");
   if (minutes < 60) return relative.format(-minutes, "minute");
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return relative.format(-hours, "hour");
   return relative.format(-Math.floor(hours / 24), "day");
+}
+
+function formatAge(timestamp: string, language: Language): string {
+  return formatElapsedAge(Date.now() - new Date(timestamp).getTime(), language);
+}
+
+function formatDemoAge(ageMinutes: number, language: Language): string {
+  return formatElapsedAge(ageMinutes * 60000, language);
 }
 
 function toIncidentRow(
@@ -143,7 +150,7 @@ function toDemoIncidentRow(item: (typeof demoIncidents)[number], language: Langu
     severityLabel: t(language, item.severity),
     severityTone: item.severity === "critical" ? "critical" : "warning",
     statusLabel: t(language, item.status),
-    timeAgo: formatAge(item.startedAt, language),
+    timeAgo: formatDemoAge(item.ageMinutes, language),
     source: item.source,
   };
 }
@@ -238,10 +245,14 @@ export default function Home() {
   const [themeReady, setThemeReady] = useState(false);
   const tr = (key: TranslationKey) => t(language, key);
   const [range, setRange] = useState("1 hour");
+  // Static export and the browser must render the same initial clock labels.
+  // Switch to the current UTC clock only after hydration, then refresh each minute.
+  const [demoChartNow, setDemoChartNow] = useState(Date.UTC(2026, 10, 5, 12, 0, 0));
   const demoChartWindowMinutes = range === "6 hours" ? 360 : range === "24 hours" ? 1440 : 60;
   const demoChartTimeAt = (elapsedFraction: number) =>
-    new Intl.DateTimeFormat(formatLocale(language), { hour: "2-digit", minute: "2-digit" })
-      .format(Date.now() - ((1 - elapsedFraction) * demoChartWindowMinutes * 60_000));
+    new Intl.DateTimeFormat(formatLocale(language), {
+      hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+    }).format(demoChartNow - ((1 - elapsedFraction) * demoChartWindowMinutes * 60_000));
   const demoChartTickLabels = Array.from({ length: 7 }, (_, index) => demoChartTimeAt(index / 6));
   const demoChartRangeLabel = language === "fa"
     ? range === "1 hour" ? "۱ ساعت" : range === "6 hours" ? "۶ ساعت" : "۲۴ ساعت"
@@ -299,10 +310,10 @@ export default function Home() {
   const [showAllServices, setShowAllServices] = useState(false);
   const [sourceMode, setSourceMode] = useState<SourceMode>("demo");
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
-  const [apiUrlInput, setApiUrlInput] = useState(() =>
-    isAppsScriptRuntime()
-      ? "apps-script://bridge"
-      : process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "http://localhost:8080",
+  // Keep the initial state identical during static HTML hydration. The
+  // Apps Script runtime is detected after mount in the effect below.
+  const [apiUrlInput, setApiUrlInput] = useState(
+    process.env.NEXT_PUBLIC_ORBIT_API_URL ?? "http://localhost:8080",
   );
   const [apiStatus, setApiStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
   const [apiError, setApiError] = useState("");
@@ -331,6 +342,13 @@ export default function Home() {
   }, [language]);
 
   useEffect(() => {
+    const updateDemoClock = () => setDemoChartNow(Date.now());
+    updateDemoClock();
+    const clock = window.setInterval(updateDemoClock, 60_000);
+    return () => window.clearInterval(clock);
+  }, []);
+
+  useEffect(() => {
     if (!themeReady) return;
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
@@ -342,7 +360,10 @@ export default function Home() {
   }, [theme, themeReady]);
 
   useEffect(() => {
-    if (isAppsScriptRuntime()) return;
+    if (isAppsScriptRuntime()) {
+      setApiUrlInput("apps-script://bridge");
+      return;
+    }
     try {
       const savedUrl = window.localStorage.getItem("orbit.apiBaseUrl");
       if (savedUrl) setApiUrlInput(savedUrl);
@@ -729,7 +750,7 @@ export default function Home() {
             </>
           )}
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v0.10.0</span></span><span className="owner-credit"><strong>{tr("projectOwner")}:</strong> <a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a> <span>·</span> <a href="https://github.com/pooya16pg-spec/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a></span></footer>
+          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><strong>{tr("projectOwner")}:</strong> <a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a> <span>·</span> <a href="https://github.com/pooya16pg-spec/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a></span></footer>
         </main>
       </section>
     </div>

@@ -4,7 +4,7 @@ This guide is for a contributor who has never performed a manual accessibility r
 
 ## 1. Before starting
 
-Use the public preview:
+Use the stable v1.0.0 portfolio dashboard:
 
 - https://pooya-labs.github.io/orbit/
 

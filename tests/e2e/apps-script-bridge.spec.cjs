@@ -1,7 +1,8 @@
 const { test, expect } = require("@playwright/test");
 const { readFileSync } = require("node:fs");
+const { join } = require("node:path");
 
-const wrapperTemplate = readFileSync(new URL("../../apps-script/Index.html", import.meta.url), "utf8");
+const wrapperTemplate = readFileSync(join(__dirname, "../../apps-script/Index.html"), "utf8");
 const pagesOrigin = "https://pooya-labs.github.io";
 const appUrl = pagesOrigin + "/orbit/?orbitRuntime=apps-script";
 const scriptUrl = "https://script.google.com/macros/s/orbit-test/exec";
@@ -12,6 +13,17 @@ test("Apps Script HtmlService wrapper completes the cross-origin bridge handshak
   const wrapperHtml = wrapperTemplate.replace("<?= appUrl ?>", appUrl);
 
   await context.addInitScript(() => {
+    const diagnostics = { origin: window.location.origin, messages: [], errors: [] };
+    Object.defineProperty(window, "__orbitBridgeDiagnostics", { value: diagnostics });
+    window.addEventListener("message", (event) => {
+      diagnostics.messages.push({
+        origin: event.origin,
+        fromParent: event.source === window.parent,
+        type: event.data && typeof event.data === "object" ? event.data.type : typeof event.data,
+      });
+    });
+    window.addEventListener("error", (event) => diagnostics.errors.push(String(event.message)));
+
     if (window.location.hostname !== "script.google.com") return;
 
     const state = { bootstrapCalls: [], apiCalls: [] };
@@ -39,17 +51,19 @@ test("Apps Script HtmlService wrapper completes the cross-origin bridge handshak
           const captured = JSON.parse(JSON.stringify(request));
           state.apiCalls.push(captured);
           const response = captured.path === "/api/v1/meta"
-            ? { status: 200, body: { name: "orbit-api", version: "0.10.0", environment: "apps-script-browser-smoke" } }
-            : {
-                status: 200,
-                body: {
-                  ok: true,
-                  method: captured.method,
-                  path: captured.path,
-                  sessionToken: captured.sessionToken,
-                  body: captured.body ?? null,
-                },
-              };
+            ? { status: 200, body: { name: "orbit-api", version: "1.0.0-demo", environment: "apps-script-browser-smoke" } }
+            : captured.path === "/api/v1/workspaces"
+              ? { status: 200, body: { data: [] } }
+              : {
+                  status: 200,
+                  body: {
+                    ok: true,
+                    method: captured.method,
+                    path: captured.path,
+                    sessionToken: captured.sessionToken,
+                    body: captured.body ?? null,
+                  },
+                };
           Promise.resolve().then(() => handlers.success?.(response));
           return runner;
         },
@@ -77,7 +91,21 @@ test("Apps Script HtmlService wrapper completes the cross-origin bridge handshak
     await expect(wrapperStatus).toHaveText("Connected · isolated demo workspace", { timeout: 20_000 });
 
     const frame = page.frameLocator("#orbit-frame");
-    await expect(frame.locator(".last-updated")).toContainText("apps-script-browser-smoke", { timeout: 20_000 });
+    try {
+      await expect.poll(
+        () => page.evaluate(() => window.__orbitScriptMock.apiCalls.filter((call) => call.path === "/api/v1/meta").length),
+        { timeout: 8_000 },
+      ).toBe(1);
+      await expect(frame.locator(".last-updated")).toContainText("apps-script-browser-smoke", { timeout: 8_000 });
+    } catch (error) {
+      const parentDiagnostics = await page.evaluate(() => ({
+        url: window.location.href,
+        state: window.__orbitScriptMock,
+        messages: window.__orbitBridgeDiagnostics,
+      }));
+      const frameDiagnostics = await frame.locator("body").evaluate(() => window.__orbitBridgeDiagnostics);
+      throw new Error("Apps Script bridge diagnostics: " + JSON.stringify({ parentDiagnostics, frameDiagnostics }) + "\\n" + String(error));
+    }
 
     const bootstrapCalls = await page.evaluate(() => window.__orbitScriptMock.bootstrapCalls);
     expect(bootstrapCalls).toHaveLength(1);
@@ -124,6 +152,11 @@ test("Apps Script HtmlService wrapper completes the cross-origin bridge handshak
         body: { title: "Bridge round-trip smoke", severity: "low" },
       },
     });
+
+    const frameDiagnostics = await frame.locator("body").evaluate(() => window.__orbitBridgeDiagnostics);
+    const parentDiagnostics = await page.evaluate(() => window.__orbitBridgeDiagnostics);
+    expect(frameDiagnostics.errors, "the embedded dashboard must not emit runtime or hydration errors").toEqual([]);
+    expect(parentDiagnostics.errors, "the HtmlService wrapper must not emit runtime errors").toEqual([]);
 
     const writeCalls = await page.evaluate(() =>
       window.__orbitScriptMock.apiCalls.filter((call) => call.method === "POST")

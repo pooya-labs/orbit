@@ -145,6 +145,9 @@ assert.equal(initialized.ready, true);
 assert.equal(initialized.schemaVersion, 1);
 assert.equal("spreadsheetId" in initialized, false, "initializer must not return the private spreadsheet ID");
 assert.equal("spreadsheetUrl" in initialized, false, "initializer must not return the private spreadsheet URL");
+const initializedAgain = sandbox.initializeOrbitDemo();
+assert.deepEqual(initializedAgain, initialized, "owner initialization is idempotent");
+assert.equal(spreadsheets.size, 1, "repeated initialization must not create another spreadsheet");
 const spreadsheetId = properties.get("ORBIT_DEMO_SPREADSHEET_ID");
 const html = sandbox.doGet();
 assert.equal(typeof html.addMetaTag, "function", "doGet returns an HtmlOutput-like object");
@@ -226,6 +229,15 @@ assert.equal(transitioned.data.status, "investigating");
 expectStatus(api(sessionA, "PATCH", workspacePath + "/incidents/" + createdIncident.data.id + "/status", {
   status: "open",
 }), 409, "invalid incident transition");
+
+// Simulate a page refresh: the same browser profile gets a fresh capability,
+// but keeps its workspace and persisted records in the owner spreadsheet.
+const refreshedSessionA = sandbox.orbitBootstrap(profileA);
+assert.equal(refreshedSessionA.workspace.id, sessionA.workspace.id, "the same browser profile must retain its workspace after refresh");
+assert.notEqual(refreshedSessionA.sessionToken, sessionA.sessionToken, "a refresh must receive a new session capability");
+const refreshedIncidents = expectStatus(api(refreshedSessionA, "GET", workspacePath + "/incidents"), 200, "incidents after refresh");
+const persistedIncident = refreshedIncidents.data.find((item) => item.id === createdIncident.data.id);
+assert.equal(persistedIncident?.status, "investigating", "incident changes must persist across a new browser session");
 
 const rules = expectStatus(api(sessionA, "GET", workspacePath + "/alert-rules"), 200, "alert rules");
 assert.ok(rules.data.length >= 1);
