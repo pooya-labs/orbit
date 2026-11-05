@@ -198,14 +198,14 @@ identity, health, and tenant-isolation smoke checks pass.
   This branch is the `v1.0.0` stable portfolio-demo release candidate:
   `package.json`, `package-lock.json`, the dashboard footer, Go API default,
   Compose examples, and OpenAPI contract are aligned to `1.0.0`.
-- The stable release workflow now waits for successful **CI** and **Security**
+- The stable release workflow waits for successful **CI** and **Security**
   workflows on the exact main commit that Pages deployed, then creates the
   immutable `v1.0.0` tag and a non-prerelease GitHub Release. It refuses to
-  move an existing stable tag.
+  move an existing stable tag and becomes a no-op after v1.0.0 is published.
 - The v1 Security gate scans the shipped dashboard/runtime and the active
   first-party/Compose images. The Keycloak identity provider belongs to the
   deferred production identity path and is scanned separately each week and
-  when production-ingress/Compose files change. Its scan is not disabled or
+  when identity/production identity files change. Its scan is not disabled or
   suppressed; the currently known image findings remain documented in
   `docs/project-context.md` and do not affect the Pages + Apps Script demo,
   which does not use Keycloak.
