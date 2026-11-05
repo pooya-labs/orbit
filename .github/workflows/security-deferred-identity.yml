@@ -1,0 +1,58 @@
+name: Deferred Production Identity Security
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "docker-compose.yml"
+      - "deploy/production/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docker-compose.yml"
+      - "deploy/production/**"
+
+permissions:
+  contents: read
+
+jobs:
+  keycloak-image:
+    name: Scan deferred Keycloak identity provider
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Scan the pinned Keycloak image for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: quay.io/keycloak/keycloak:26.8.1
+          version: v0.76.1
+          trivy-config: trivy.yaml
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          format: table
+          timeout: 10m
+
+      - name: Create SBOM output directory
+        run: mkdir -p sbom
+
+      - name: Generate Keycloak CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: quay.io/keycloak/keycloak:26.8.1
+          version: v0.76.1
+          trivy-config: trivy.yaml
+          format: cyclonedx
+          output: sbom/keycloak.cdx.json
+
+      - name: Upload Keycloak SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-sbom-deferred-keycloak-${{ github.run_id }}-${{ github.run_attempt }}
+          path: sbom/keycloak.cdx.json
+          if-no-files-found: error
+          retention-days: 30
