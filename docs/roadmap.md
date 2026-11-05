@@ -217,37 +217,46 @@ local OpenTelemetry pipeline remain part of the repository and can still be
 run locally; they are not prerequisites for the public demo. Do not recreate
 PRs #128 and #130–#133.
 
-1. **Apps Script runtime — repository implementation added:** `apps-script/Code.js`,
+1. **Apps Script runtime — implemented and repository-verified:** `apps-script/Code.js`,
    `apps-script/Index.html`, the V8 manifest, private Sheets datastore setup,
-   the fixed-origin `postMessage` / `google.script.run` bridge, six-hour
-   demo sessions, per-session request/mutation caps, body/record/visitor limits,
-   and the synthetic workspace bootstrap are present on `main`. The owner
-   initializer ends in an underscore and is unavailable to anonymous
-   `google.script.run` callers. Automated contract and Node runtime smoke tests
-   are wired into CI. Exact-head CI/Security/Pages success is still pending.
+   fixed-origin `postMessage` / `google.script.run` bridge, six-hour demo
+   sessions, per-session request/mutation caps, body/record/visitor limits,
+   and synthetic workspace bootstrap are present. The safe editor entry point
+   is `initializeOrbitDemo`; its private helper is `setupOrbitDemo_`. CI
+   contract/runtime smoke verifies safe initialization and data-layer behavior.
+   On PR head `8935655f343796c35fd37e67e06d3f310a58b92a`, CI run
+   [42019029777](https://github.com/pooya-labs/orbit/actions/runs/42019029777)
+   passed all four jobs, including **22/22 Playwright tests**, 76 accessibility
+   contract checks, Go tests/build, and the complete telemetry E2E pipeline.
 2. **Feature parity — repository adapter added:** the Apps Script adapter
    covers services, incidents/timelines, Metrics, Logs, Traces/detail and
    correlation, alert rules/instances, notification channel/delivery history,
    deployments/comparison, SLO budgets, and audit events. All values and
    changes are synthetic. Notifications are simulation-only: no outbound
    webhook is ever sent, and no real OTLP/customer telemetry is accepted.
-3. **Owner-side setup — open:** create the standalone Apps Script project,
-   paste the committed server/HTML/manifest files, run the public, safe editor entry point
-   `initializeOrbitDemo` and authorize the private Spreadsheet. The private
-   helper `setupOrbitDemo_` must not be selected or exposed to visitors.
-   Deploy the Web App with Execute as me and anonymous access only if Google
-   offers it for the account. No billing, paid Cloud project, public sheet, or
-   identity/location misrepresentation is allowed.
-4. **Live smoke evidence — open:** verify the owner-deployed `/exec` URL from
-   a clean browser, successful bootstrap/dashboard connection, one synthetic
-   mutation persisted after refresh, each major view, separate browser-profile
-   workspaces, fail-closed size/rate limits, and that notifications cause no
-   outbound requests. Keep the demo sheet private.
-5. **Stable release — open:** require green exact-head CI, Security and Pages
-   build/deploy; review the owner-deployed Apps Script version and live smoke
-   evidence; align app/manifest/docs/release version at 1.0.0; publish a stable
-   GitHub Release, not a prerelease. Do not label the demo production-ready or
-   claim real telemetry ingestion.
+3. **Owner-side deployment — URL supplied, live runtime unverified:** the owner
+   supplied an Apps Script `/exec` URL. The URL is deliberately not committed.
+   Direct inspection of `script.google.com` is blocked in the assistant's
+   verification environment; this is not evidence of a broken deployment.
+   It is not independently confirmed that `initializeOrbitDemo` completed,
+   that Google granted the necessary owner permissions, or that `doGet` and
+   the live bridge succeed. Do not ask the owner to recreate or redeploy the
+   project without a concrete Google Apps Script error.
+4. **Live smoke evidence — open:** verify the supplied `/exec` URL in a clean
+   browser, successful bootstrap and metadata connection, one synthetic
+   mutation persisted after refresh, separate live browser-profile workspaces,
+   key dashboard views, and simulation-only notifications. Repository tests
+   use a mocked browser bridge and simulated Apps Script services; they do not
+   substitute for this owner-deployed live verification. Keep the Spreadsheet
+   private.
+5. **Stable release — open:** CI on the PR head is green, but the repository
+   Security workflow remains red on the deferred production Keycloak image
+   (three HIGH OS-package findings and one HIGH Guava finding; see the current
+   handoff in `docs/project-context.md`). The Pages deployment must be checked
+   after merge, and the live Apps Script smoke evidence must pass. Then align
+   app/manifest/docs/release version at 1.0.0 and publish a stable GitHub
+   Release, not a prerelease. Do not label the demo production-ready or claim
+   real telemetry ingestion.
 
 The Apps Script runtime is deliberately sized for a handful of demo sessions
 per day. Google quotas can change, and the spreadsheet is a small demo store,
