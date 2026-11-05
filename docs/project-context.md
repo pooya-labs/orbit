@@ -1040,5 +1040,13 @@ remain deferred until after the portfolio v1 release, as previously requested.
   the Apps Script query parameter changed the initial value from the server
   HTML. Runtime detection now moves to the post-mount effect, preserving an
   identical server/client initial render. The browser mock also returns the
-  documented empty workspace envelope rather than a generic response. The
-  regression remains pending a successful rerun.
+  documented empty workspace envelope rather than a generic response.
+- The corrected browser test passed on code/test head
+  `2e8d771fa4df71b8c59364a0ae6c4d4acc723d9e` in CI run
+  [42016503124](https://github.com/pooya-labs/orbit/actions/runs/42016503124):
+  **22/22 Playwright tests**, including the HtmlService bridge, plus all 76
+  accessibility-contract checks. Go tests/vet/build and PostgreSQL backup /
+  restore passed; the real Windows NVDA Browse Mode run
+  [42016502913](https://github.com/pooya-labs/orbit/actions/runs/42016502913)
+  also passed. At this handoff the telemetry E2E job is still running, and the
+  Security workflow is still blocked only by the Keycloak image scan.
