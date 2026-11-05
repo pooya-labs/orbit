@@ -55,7 +55,7 @@ jobs:
                 | sort_by(.run_started_at // "")
                 | last
                 | if . == null then "missing"
-                  else "(.status):(.conclusion // "pending")"
+                  else ([.status, (.conclusion // "pending")] | join(":"))
                   end
               ' <<< "$runs")"
               echo "$workflow on $DEPLOYED_SHA: $state"
