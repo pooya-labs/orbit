@@ -988,3 +988,41 @@ services, billing-enabled projects, PAYG upgrades, and paid fallbacks.
 Human device accessibility acceptance and broad sustained-load/capacity work
 remain deferred until after the portfolio v1 release, as previously requested.
 
+## 17. Current handoff — Apps Script deployment URL received (2026-11-05)
+
+- The owner supplied the public Apps Script `/exec` URL in chat. Keep the
+  endpoint itself out of committed documentation; the URL is already in the
+  conversation.
+- Direct inspection of `script.google.com` from the assistant toolchain is
+  blocked (`DisabledError` from the web fetch, DNS resolution unavailable in
+  the container). This is **not evidence that the deployment is broken**.
+  Successful live `doGet`, bridge bootstrap, API mutations, and persistence
+  after refresh are not independently verified yet. The Node Apps Script
+  runtime smoke suite uses a simulated Apps Script environment and is not a
+  substitute for an actual Google-hosted deployment test.
+- On code head `7c9140392d40dd9bdba46bd245f8f16dadca6e65`, CI run
+  [41877356998](https://github.com/pooya-labs/orbit/actions/runs/41877356998)
+  passed all four jobs, including Apps Script contract/runtime smoke, frontend
+  typecheck/build, Playwright/axe browser checks, Go tests/build, and telemetry
+  E2E. Pages run
+  [41877356951](https://github.com/pooya-labs/orbit/actions/runs/41877356951)
+  passed both static build and publish jobs.
+- Security run
+  [41877356968](https://github.com/pooya-labs/orbit/actions/runs/41877356968)
+  did **not** pass: all jobs passed except the Trivy scan of the deferred
+  Keycloak 26.8.1 image. The scan reported three HIGH OS-package findings:
+  OpenJDK CVE-2026-91403 (marked `will_not_fix`) and SQLite CVE-2026-119373 /
+  CVE-2026-119586 (no fixed version reported). This Keycloak image is not used
+  by the Apps Script portfolio demo, but the repository-wide Security workflow
+  remains red. Do not disable the scanner or claim Security green.
+- Documentation-only follow-up commits corrected the roadmap to select the
+  public safe editor function `initializeOrbitDemo` (never the private
+  `setupOrbitDemo_`) and recorded that the deployment URL has been supplied.
+  Latest main at this handoff: `a1978eefae7ce20825f40424ab4034a30706f499`.
+  No Apps Script runtime code changed after the code head above.
+- Do not ask the owner to recreate or redeploy the Apps Script project without
+  a concrete deployment error. Next required v1 evidence is a real-browser
+  bootstrap, successful read/write, refresh persistence, distinct browser
+  profile isolation, and confirmation that notifications remain simulation
+  only. Keep stable v1 release open until live evidence and an exact-head
+  Security result are resolved.
