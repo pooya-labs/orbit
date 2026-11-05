@@ -34,6 +34,7 @@ import {
   FileText,
   GitBranch,
   Globe2,
+  Github,
   Gauge,
   Menu,
   MoreHorizontal,
@@ -263,6 +264,11 @@ export default function Home() {
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarCloseButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  const [utilityDialog, setUtilityDialog] = useState<"settings" | "help" | null>(null);
+  const utilityDialogRef = useRef<HTMLDivElement>(null);
+  const utilityDialogCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const helpButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -307,6 +313,59 @@ export default function Home() {
       window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
     };
   }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (!utilityDialog) return;
+    const dialog = utilityDialogRef.current;
+    if (!dialog) return;
+
+    utilityDialogCloseButtonRef.current?.focus();
+
+    const getFocusableElements = () =>
+      Array.from(dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => element.getClientRects().length > 0);
+
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setUtilityDialog(null);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = getFocusableElements();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleDialogKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleDialogKeyDown);
+      window.requestAnimationFrame(() => {
+        const trigger = utilityDialog === "settings" ? settingsButtonRef.current : helpButtonRef.current;
+        trigger?.focus();
+      });
+    };
+  }, [utilityDialog]);
+
+  useEffect(() => {
+    if (!sourcePanelOpen) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById("orbit-api-url")?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [sourcePanelOpen]);
+
   const [showAllServices, setShowAllServices] = useState(false);
   const [sourceMode, setSourceMode] = useState<SourceMode>("demo");
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
@@ -514,12 +573,11 @@ export default function Home() {
             <div className="usage-track"><span /></div>
             <p>6.8 GB <span>{language === "fa" ? "از ۱۰ گیگابایت در ماه" : "of 10 GB monthly"}</span></p>
           </div>
-          <button type="button" className="nav-item preview-unavailable" disabled aria-label={`${tr("settings")} — ${tr("notAvailableInPreview")}`} title={tr("notAvailableInPreview")}><Settings2 size={17} /><span>{tr("settings")}</span></button>
-          <button type="button" className="nav-item preview-unavailable" disabled aria-label={`${tr("helpSupport")} — ${tr("notAvailableInPreview")}`} title={tr("notAvailableInPreview")}><CircleHelp size={17} /><span>{tr("helpSupport")}</span><ExternalLink size={12} className="nav-external" /></button>
+          <button ref={settingsButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "settings"} onClick={() => setUtilityDialog("settings")}><Settings2 size={17} /><span>{tr("settings")}</span></button>
+          <button ref={helpButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "help"} onClick={() => setUtilityDialog("help")}><CircleHelp size={17} /><span>{tr("helpSupport")}</span></button>
           <div className="profile-row">
-            <div className="profile-avatar">P</div>
-            <div className="profile-copy"><strong>Pooya</strong><a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a></div>
-            <MoreHorizontal size={18} className="muted-icon" />
+            <div className="profile-avatar" aria-hidden="true">P</div>
+            <div className="profile-copy"><strong>{tr("profileName")}</strong><a className="profile-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><Github size={13} aria-hidden="true" /><span>@pooya-labs</span><ExternalLink size={10} aria-hidden="true" /></a></div>
           </div>
         </div>
       </aside>
@@ -750,9 +808,107 @@ export default function Home() {
             </>
           )}
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><strong>{tr("projectOwner")}:</strong> <a href="https://github.com/pooya16pg-spec" target="_blank" rel="noreferrer">@pooya16pg-spec</a> <span>·</span> <a href="https://github.com/pooya16pg-spec/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a></span></footer>
+          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><strong>{tr("projectOwner")}:</strong> <a className="owner-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><Github size={12} aria-hidden="true" /><span>@pooya-labs</span></a> <span>·</span> <a href="https://github.com/pooya-labs/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a></span></footer>
         </main>
       </section>
+      {utilityDialog && (
+        <div
+          className="utility-dialog-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setUtilityDialog(null);
+          }}
+        >
+          <div
+            ref={utilityDialogRef}
+            className="utility-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="utility-dialog-title"
+            aria-describedby="utility-dialog-description"
+          >
+            <div className="utility-dialog-header">
+              <div className="utility-dialog-heading">
+                <span className="utility-dialog-icon">
+                  {utilityDialog === "settings" ? <Settings2 size={18} /> : <CircleHelp size={18} />}
+                </span>
+                <div>
+                  <h2 id="utility-dialog-title">{utilityDialog === "settings" ? tr("settingsDialogTitle") : tr("helpDialogTitle")}</h2>
+                  <p id="utility-dialog-description">{utilityDialog === "settings" ? tr("settingsDialogDescription") : tr("helpDialogDescription")}</p>
+                </div>
+              </div>
+              <button
+                ref={utilityDialogCloseButtonRef}
+                type="button"
+                className="icon-button utility-dialog-close"
+                aria-label={tr("closeDialog")}
+                onClick={() => setUtilityDialog(null)}
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            {utilityDialog === "settings" ? (
+              <div className="utility-dialog-content">
+                <section className="utility-setting-card" aria-labelledby="appearance-title">
+                  <div className="utility-section-heading">
+                    <div>
+                      <h3 id="appearance-title">{tr("appearance")}</h3>
+                      <p>{tr("appearanceDescription")}</p>
+                    </div>
+                  </div>
+                  <div className="utility-choice-group" role="group" aria-label={tr("appearance")}>
+                    <button type="button" className={theme === "dark" ? "selected" : ""} aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}><Moon size={15} />{tr("darkAppearance")}</button>
+                    <button type="button" className={theme === "light" ? "selected" : ""} aria-pressed={theme === "light"} onClick={() => setTheme("light")}><Sun size={15} />{tr("lightAppearance")}</button>
+                  </div>
+                </section>
+
+                <section className="utility-setting-card" aria-labelledby="language-title">
+                  <div className="utility-section-heading">
+                    <div>
+                      <h3 id="language-title">{tr("languagePreference")}</h3>
+                      <p>{tr("languagePreferenceDescription")}</p>
+                    </div>
+                  </div>
+                  <div className="utility-choice-group" role="group" aria-label={tr("languagePreference")}>
+                    <button type="button" className={language === "en" ? "selected" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>{tr("english")}</button>
+                    <button type="button" className={language === "fa" ? "selected" : ""} aria-pressed={language === "fa"} onClick={() => changeLanguage("fa")}>{tr("persian")}</button>
+                  </div>
+                </section>
+
+                <section className="utility-setting-card utility-source-setting" aria-labelledby="source-title">
+                  <div className="utility-section-heading">
+                    <div>
+                      <h3 id="source-title">{tr("sourceSection")}</h3>
+                      <p>{sourceMode === "api" ? tr("apiSourceStatus") : tr("demoSourceStatus")}</p>
+                    </div>
+                    <span className={sourceMode === "api" ? "utility-source-indicator connected" : "utility-source-indicator demo"} />
+                  </div>
+                  <button type="button" className="button-secondary" onClick={() => { setUtilityDialog(null); setSourcePanelOpen(true); }}>{tr("manageSource")}</button>
+                </section>
+
+                <p className="utility-dialog-footnote">{tr("preferencesSaved")}</p>
+              </div>
+            ) : (
+              <div className="utility-dialog-content">
+                <section className="utility-help-section" aria-labelledby="quick-links-title">
+                  <h3 id="quick-links-title">{tr("quickLinks")}</h3>
+                  <div className="utility-help-links">
+                    <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/blob/main/README.md" target="_blank" rel="noreferrer"><FileText size={15} /><span>{tr("projectReadme")}</span><ExternalLink size={12} /></a>
+                    <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/blob/main/docs/roadmap.md" target="_blank" rel="noreferrer"><Workflow size={15} /><span>{tr("roadmap")}</span><ExternalLink size={12} /></a>
+                    <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/blob/main/docs/architecture.md" target="_blank" rel="noreferrer"><Network size={15} /><span>{tr("architecture")}</span><ExternalLink size={12} /></a>
+                    <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/blob/main/apps-script/README.md" target="_blank" rel="noreferrer"><Database size={15} /><span>{tr("appsScriptSetup")}</span><ExternalLink size={12} /></a>
+                    <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/blob/main/docs/manual-acceptance-guide.md" target="_blank" rel="noreferrer"><ShieldCheck size={15} /><span>{tr("accessibilityGuide")}</span><ExternalLink size={12} /></a>
+                    <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/releases/tag/v1.0.0" target="_blank" rel="noreferrer"><FileText size={15} /><span>{tr("releaseNotes")}</span><ExternalLink size={12} /></a>
+                    <a className="utility-help-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><Github size={15} /><span>{tr("githubProfile")}</span><ExternalLink size={12} /></a>
+                    <a className="utility-help-link" href="https://github.com/pooya-labs/orbit/issues" target="_blank" rel="noreferrer"><CircleHelp size={15} /><span>{tr("reportIssue")}</span><ExternalLink size={12} /></a>
+                  </div>
+                </section>
+                <p className="utility-dialog-footnote">{tr("helpDemoNotice")}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
