@@ -153,6 +153,11 @@ test("Apps Script HtmlService wrapper completes the cross-origin bridge handshak
       },
     });
 
+    const frameDiagnostics = await frame.locator("body").evaluate(() => window.__orbitBridgeDiagnostics);
+    const parentDiagnostics = await page.evaluate(() => window.__orbitBridgeDiagnostics);
+    expect(frameDiagnostics.errors, "the embedded dashboard must not emit runtime or hydration errors").toEqual([]);
+    expect(parentDiagnostics.errors, "the HtmlService wrapper must not emit runtime errors").toEqual([]);
+
     const writeCalls = await page.evaluate(() =>
       window.__orbitScriptMock.apiCalls.filter((call) => call.method === "POST")
     );
