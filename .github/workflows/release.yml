@@ -82,6 +82,7 @@ jobs:
           fi
 
       - name: Create immutable v1.0.0 tag
+        id: stable_tag
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -92,16 +93,19 @@ jobs:
           if EXISTING="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/${REF}" 2>/dev/null)"; then
             EXISTING_SHA="$(jq -r '.object.sha' <<< "$EXISTING")"
             if [[ "$EXISTING_SHA" != "$DEPLOYED_SHA" ]]; then
-              echo "::error title=Stable tag already exists::v1.0.0 points to $EXISTING_SHA; refusing to move a published stable tag."
-              exit 1
+              echo "v1.0.0 is already published at $EXISTING_SHA; preserving the immutable stable release."
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
             echo "The immutable v1.0.0 tag already points to the deployed commit."
           else
             gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
               -f ref="refs/$REF" -f sha="$DEPLOYED_SHA"
           fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
 
-      - name: Create or update the stable GitHub Release
+      - name: Create the stable GitHub Release
+        if: steps.stable_tag.outputs.publish == 'true'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: v1.0.0
