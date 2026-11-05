@@ -863,3 +863,10 @@ test("creator profile links use the current GitHub account and show its mark", a
   await expect(footerProfile).toHaveAttribute("href", "https://github.com/pooya-labs");
   await expect(footerProfile.locator("svg")).toBeVisible();
 });
+
+
+test("demo environment and sidebar usage are clearly identified as illustrative", async ({ page }) => {
+  await expect(page.locator(".environment-pill")).toContainText("DEMO ENVIRONMENT");
+  await expect(page.locator(".usage-card")).toContainText("Demo telemetry");
+  await expect(page.locator(".usage-card")).toContainText("not live usage");
+});
