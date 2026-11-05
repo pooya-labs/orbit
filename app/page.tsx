@@ -360,12 +360,6 @@ export default function Home() {
     };
   }, [utilityDialog]);
 
-  useEffect(() => {
-    if (!sourcePanelOpen) return;
-    const frame = window.requestAnimationFrame(() => document.getElementById("orbit-api-url")?.focus());
-    return () => window.cancelAnimationFrame(frame);
-  }, [sourcePanelOpen]);
-
   const [showAllServices, setShowAllServices] = useState(false);
   const [sourceMode, setSourceMode] = useState<SourceMode>("demo");
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
@@ -379,6 +373,12 @@ export default function Home() {
   const [apiMetadata, setApiMetadata] = useState<ApiMetadata | null>(null);
   const [apiServices, setApiServices] = useState<ServiceSummary[]>([]);
   const [apiIncidents, setApiIncidents] = useState<IncidentSummary[]>([]);
+
+  useEffect(() => {
+    if (!sourcePanelOpen) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById("orbit-api-url")?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [sourcePanelOpen]);
 
   useEffect(() => {
     try {
