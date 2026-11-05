@@ -16,7 +16,7 @@ export type DemoIncident = {
   region: string;
   severity: "critical" | "medium";
   status: "investigating" | "monitoring";
-  startedAt: string;
+  ageMinutes: number;
   source: "demo_seed";
 };
 
@@ -36,7 +36,7 @@ export const demoIncidents: DemoIncident[] = [
     region: "us-east-1",
     severity: "critical",
     status: "investigating",
-    startedAt: new Date(Date.now() - 14 * 60 * 1000).toISOString(),
+    ageMinutes: 14,
     source: "demo_seed",
   },
   {
@@ -46,7 +46,7 @@ export const demoIncidents: DemoIncident[] = [
     region: "eu-west-1",
     severity: "medium",
     status: "monitoring",
-    startedAt: new Date(Date.now() - 38 * 60 * 1000).toISOString(),
+    ageMinutes: 38,
     source: "demo_seed",
   },
 ];
