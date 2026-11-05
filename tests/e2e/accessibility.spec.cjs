@@ -853,15 +853,31 @@ test("Help dialog exposes useful project documentation and support destinations"
   await expect(mobileMenu).toBeFocused();
 });
 
-test("creator profile links use the current GitHub account and show its mark", async ({ page }) => {
+test("creator and repository credits use the right destinations and order", async ({ page }) => {
   const sidebarProfile = page.locator(".profile-github-link");
   await expect(sidebarProfile).toHaveAttribute("href", "https://github.com/pooya-labs");
   await expect(sidebarProfile).toHaveText("@pooya-labs");
   await expect(sidebarProfile.locator("svg").first()).toBeVisible();
 
-  const footerProfile = page.locator(".owner-credit .owner-github-link");
+  const footerCredit = page.locator(".owner-credit");
+  const repositoryCredit = footerCredit.locator("a").first();
+  const footerProfile = footerCredit.locator(".owner-github-link");
+
+  await expect(repositoryCredit).toHaveAttribute("href", "https://github.com/pooya-labs/orbit");
+  await expect(repositoryCredit).toHaveText("Created and maintained by");
+  await expect(footerCredit.locator("strong")).toHaveText("PROJECT OWNER:");
   await expect(footerProfile).toHaveAttribute("href", "https://github.com/pooya-labs");
+  await expect(footerProfile).toHaveText("@pooya-labs");
   await expect(footerProfile.locator("svg")).toBeVisible();
+
+  const englishOrder = await footerCredit.innerText();
+  expect(englishOrder.indexOf("Created and maintained by")).toBeLessThan(englishOrder.indexOf("PROJECT OWNER:"));
+
+  await page.getByRole("button", { name: "فارسی", exact: true }).click();
+  await expect(repositoryCredit).toHaveText("توسعه و نگه‌داری توسط");
+  await expect(footerCredit.locator("strong")).toHaveText("مالک پروژه:");
+  const persianOrder = await footerCredit.innerText();
+  expect(persianOrder.indexOf("توسعه و نگه‌داری توسط")).toBeLessThan(persianOrder.indexOf("مالک پروژه:"));
 });
 
 
