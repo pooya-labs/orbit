@@ -13,6 +13,17 @@ test("Apps Script HtmlService wrapper completes the cross-origin bridge handshak
   const wrapperHtml = wrapperTemplate.replace("<?= appUrl ?>", appUrl);
 
   await context.addInitScript(() => {
+    const diagnostics = { origin: window.location.origin, messages: [], errors: [] };
+    Object.defineProperty(window, "__orbitBridgeDiagnostics", { value: diagnostics });
+    window.addEventListener("message", (event) => {
+      diagnostics.messages.push({
+        origin: event.origin,
+        fromParent: event.source === window.parent,
+        type: event.data && typeof event.data === "object" ? event.data.type : typeof event.data,
+      });
+    });
+    window.addEventListener("error", (event) => diagnostics.errors.push(String(event.message)));
+
     if (window.location.hostname !== "script.google.com") return;
 
     const state = { bootstrapCalls: [], apiCalls: [] };
@@ -78,7 +89,21 @@ test("Apps Script HtmlService wrapper completes the cross-origin bridge handshak
     await expect(wrapperStatus).toHaveText("Connected · isolated demo workspace", { timeout: 20_000 });
 
     const frame = page.frameLocator("#orbit-frame");
-    await expect(frame.locator(".last-updated")).toContainText("apps-script-browser-smoke", { timeout: 20_000 });
+    try {
+      await expect.poll(
+        () => page.evaluate(() => window.__orbitScriptMock.apiCalls.filter((call) => call.path === "/api/v1/meta").length),
+        { timeout: 8_000 },
+      ).toBe(1);
+      await expect(frame.locator(".last-updated")).toContainText("apps-script-browser-smoke", { timeout: 8_000 });
+    } catch (error) {
+      const parentDiagnostics = await page.evaluate(() => ({
+        url: window.location.href,
+        state: window.__orbitScriptMock,
+        messages: window.__orbitBridgeDiagnostics,
+      }));
+      const frameDiagnostics = await frame.locator("body").evaluate(() => window.__orbitBridgeDiagnostics);
+      throw new Error("Apps Script bridge diagnostics: " + JSON.stringify({ parentDiagnostics, frameDiagnostics }) + "\\n" + String(error));
+    }
 
     const bootstrapCalls = await page.evaluate(() => window.__orbitScriptMock.bootstrapCalls);
     expect(bootstrapCalls).toHaveLength(1);
