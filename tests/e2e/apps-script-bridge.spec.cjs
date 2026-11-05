@@ -1,7 +1,8 @@
 const { test, expect } = require("@playwright/test");
 const { readFileSync } = require("node:fs");
+const { join } = require("node:path");
 
-const wrapperTemplate = readFileSync(new URL("../../apps-script/Index.html", import.meta.url), "utf8");
+const wrapperTemplate = readFileSync(join(__dirname, "../../apps-script/Index.html"), "utf8");
 const pagesOrigin = "https://pooya-labs.github.io";
 const appUrl = pagesOrigin + "/orbit/?orbitRuntime=apps-script";
 const scriptUrl = "https://script.google.com/macros/s/orbit-test/exec";
