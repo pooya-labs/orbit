@@ -1,4 +1,4 @@
-name: Create ORBIT GitHub Release
+name: Publish ORBIT v1.0.0 Stable Release
 
 on:
   workflow_run:
@@ -8,80 +8,109 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   release:
-    name: Publish versioned ORBIT preview release
+    name: Publish stable v1.0.0 after exact-head gates
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - name: Check out the deployed revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Read application version
+      - name: Verify application version is exactly 1.0.0
         id: version
         run: |
+          set -euo pipefail
           VERSION="$(node -p 'require("./package.json").version')"
+          if [[ "$VERSION" != "1.0.0" ]]; then
+            echo "::error title=Unexpected release version::Expected 1.0.0, found $VERSION"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Fast-forward preview tag to deployed revision
+      - name: Wait for exact-commit CI and Security workflows
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
           DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
         run: |
-          REF="tags/v${VERSION}"
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/${REF}" >/dev/null 2>&1; then
-            # Do not rewrite a published tag backwards or over unrelated history.
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/${REF}" \
-              -f sha="${DEPLOYED_SHA}"
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-              -f ref="refs/${REF}" \
-              -f sha="${DEPLOYED_SHA}"
+          set -euo pipefail
+          workflows=("CI" "Security")
+          all_green=false
+          for attempt in $(seq 1 90); do
+            runs="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" \
+              -f head_sha="$DEPLOYED_SHA" -f branch=main -F per_page=100)"
+            waiting=false
+            for workflow in "${workflows[@]}"; do
+              state="$(jq -r --arg name "$workflow" --arg sha "$DEPLOYED_SHA" '
+                [.workflow_runs[]
+                  | select(.name == $name and .head_sha == $sha and .event == "push" and .head_branch == "main")]
+                | sort_by(.run_started_at // "")
+                | last
+                | if . == null then "missing"
+                  else "(.status):(.conclusion // "pending")"
+                  end
+              ' <<< "$runs")"
+              echo "$workflow on $DEPLOYED_SHA: $state"
+              case "$state" in
+                completed:success) ;;
+                completed:failure|completed:cancelled|completed:timed_out|completed:action_required)
+                  echo "::error title=Release gate failed::$workflow did not pass on the deployed commit."
+                  exit 1
+                  ;;
+                *)
+                  waiting=true
+                  ;;
+              esac
+            done
+            if [[ "$waiting" == "false" ]]; then
+              all_green=true
+              break
+            fi
+            sleep 20
+          done
+          if [[ "$all_green" != "true" ]]; then
+            echo "::error title=Release gates not completed::CI and Security did not both complete successfully on the exact deployed commit."
+            exit 1
           fi
 
-      - name: Create or update matching preview release
+      - name: Create immutable v1.0.0 tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF="tags/v1.0.0"
+          if EXISTING="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/${REF}" 2>/dev/null)"; then
+            EXISTING_SHA="$(jq -r '.object.sha' <<< "$EXISTING")"
+            if [[ "$EXISTING_SHA" != "$DEPLOYED_SHA" ]]; then
+              echo "::error title=Stable tag already exists::v1.0.0 points to $EXISTING_SHA; refusing to move a published stable tag."
+              exit 1
+            fi
+            echo "The immutable v1.0.0 tag already points to the deployed commit."
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/$REF" -f sha="$DEPLOYED_SHA"
+          fi
+
+      - name: Create or update the stable GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          tag_name: v${{ steps.version.outputs.version }}
+          tag_name: v1.0.0
           target_commitish: ${{ github.event.workflow_run.head_sha }}
-          name: ORBIT v${{ steps.version.outputs.version }} — Public Preview
+          name: ORBIT v1.0.0 — Stable Portfolio Demo
+          body_path: docs/releases/v1.0.0.md
           draft: false
-          prerelease: true
-          make_latest: false
+          prerelease: false
+          make_latest: true
           generate_release_notes: false
-          body: |
-            ## ORBIT — Distributed Systems Intelligence & Observability
-
-            **Public preview:** https://pooya-labs.github.io/orbit/
-
-            ### Included
-            - Responsive Next.js dashboard with Overview, Metrics, Logs, and Traces views; English and Persian localization, RTL support, and persistent light/dark themes.
-            - Explicit Demo / API source switch; bounded service and incident inventory APIs.
-            - Bounded Metrics, Logs, and Traces queries through Prometheus, Loki, and Tempo, with shared service discovery, source provenance, refresh, and loading/empty/error states.
-            - PostgreSQL-backed workspace service catalog, cursor pagination, curated OpenTelemetry resource metadata, and per-attribute provenance.
-            - Authenticated human OIDC resource-server validation and role enforcement; workspace membership and tenant-scoped API reads.
-            - Authenticated OTLP/HTTP and OTLP/gRPC workload gateways with workspace/signal grants, canonical tenant attribution, shared rate limits, bounded admission, revocation checks, and fail-closed behavior.
-            - Workspace operations: incident lifecycle and immutable timelines, alert rules/evaluation, webhook notification outbox and attempt history, deployment annotations, SLO/error budgets, and searchable audit history.
-            - CI-verified workspace A/B telemetry write-to-query isolation using PostgreSQL, Collector, Prometheus, Loki, and Tempo.
-            - Workspace-safe telemetry investigation: fixed-ID total/success/failure request-rate catalog, bounded workspace/service matchers and grouping, interactive workspace trace/span detail, and validated Logs-to-Trace correlation; arbitrary PromQL is not accepted.
-            - Optional bounded Go API and background-worker self-telemetry: request/duration metrics, route-template spans, worker run/item counters and duration histograms, and static lifecycle/error events. Export is fail-open and targets the private Collector; raw errors and tenant/user/delivery identifiers are excluded.
-            - Local Docker Compose stack, instrumented Go telemetry demo, OpenAPI 3.1 contract, Go/TypeScript tests, accessibility automation, NVDA Speech Viewer smoke coverage, security scans, SBOM generation, and PostgreSQL backup/restore CI.
-
-            ### Known limitations and v1 readiness
-            - GitHub Pages hosts the static frontend only. It does not host the ORBIT API, managed PostgreSQL, or telemetry data plane. A live dashboard requires a separately deployed HTTPS API, exact CORS allowlist, and authentication configuration.
-            - Browser PKCE and server-side OIDC verification are provider-neutral foundations, but no real human/workload identity provider and client are configured or verified end to end.
-            - Production tenant ingestion remains disabled pending real DNS/TLS, firewall/trusted-proxy and private-network controls, deployment-specific quotas, target-environment capacity/recovery evidence, encrypted off-host backups/PITR, measured RPO/RTO, and an approved durable-history retention/archive policy.
-            - The workspace metric catalog is intentionally limited to three fixed IDs (`request_rate`, `successful_request_rate`, `failed_request_rate`) with bounded workspace/service matchers, grouping, windows, series counts, and upstream timeout. Arbitrary metric names, label matchers, and PromQL are not accepted.
-            - API and alert/notification worker self-telemetry is opt-in via `ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT`; an unset endpoint disables export. It targets the private Collector and excludes raw worker errors and sensitive identifiers.
-            - Redis and NATS are provisioned for local development but remain intentionally deferred until measured demand justifies application integration (ADR 0004).
-            - Human keyboard-only and assistive-technology review on real Android/Apple devices remains open. Automated axe/Playwright and Windows NVDA Speech Viewer coverage are not a substitute for those sessions.
-
-            This is a prerelease preview, not a production monitoring service or a claim of WCAG conformance.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
