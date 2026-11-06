@@ -28,7 +28,7 @@ test("API routes fail closed until the Go API origin and gateway secret are conf
   );
   assert.equal(response.status, 503);
   assert.equal((await response.json()).error.code, "origin_not_configured");
-  assert.equal(response.headers.get("access-control-allow-origin"), ORIGIN);
+  assert.equal(response.headers.get("access-control-allow-origin"), null);
 });
 
 test("unknown paths are not an open proxy", async () => {
