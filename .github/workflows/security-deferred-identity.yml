@@ -44,8 +44,37 @@ jobs:
             rpm -q ca-certificates java-21-openjdk-headless sqlite-libs || true
             echo "== SQLite command availability =="
             if command -v sqlite3 >/dev/null 2>&1; then sqlite3 --version; else echo "sqlite3 CLI is absent"; fi
-            echo "== Packages requiring sqlite-libs =="
-            rpm -q --whatrequires sqlite-libs || true
+            echo "== SQLite library and runtime references =="
+            find /usr/lib64 /lib64 /opt/keycloak/lib -iname '*sqlite*' -print 2>/dev/null || true
+            if command -v ldd >/dev/null 2>&1; then
+              for path in /usr/bin /usr/sbin /usr/libexec /opt/keycloak/bin; do
+                [ -d "$path" ] || continue
+                find "$path" -type f -perm /111 -exec sh -c '
+                  for binary do
+                    if ldd "$binary" 2>/dev/null | grep -q "libsqlite3"; then
+                      echo "SQLITE_LINKED_BINARY=$binary"
+                    fi
+                  done
+                ' sh {} + 2>/dev/null || true
+              done
+            fi
+            echo "== Guava jar and module references =="
+            find /opt/keycloak/lib -type f -iname '*guava*' -print 2>/dev/null || true
+            grep -R -n -E 'guava.*33\\.6\\.0|com\\.google\\.guava' /opt/keycloak/lib 2>/dev/null | head -30 || true
+            echo "== Java trust store location and eMudhra aliases =="
+            java_home="$(java -XshowSettings:properties -version 2>&1 | sed -n 's/^[[:space:]]*java.home = //p' | head -1)"
+            echo "JAVA_HOME=$java_home"
+            cacerts="$java_home/lib/security/cacerts"
+            if [ -e "$cacerts" ]; then
+              echo "CACERTS_REALPATH=$(readlink -f "$cacerts" 2>/dev/null || echo "$cacerts")"
+              if command -v keytool >/dev/null 2>&1; then
+                keytool -list -keystore "$cacerts" -storepass changeit 2>/dev/null | grep -i -E 'emSign|Comodo AAA' || echo "No matching eMudhra/Comodo aliases in Java trust store"
+              else
+                echo "keytool is absent"
+              fi
+            else
+              echo "Java cacerts path not found"
+            fi
           '
 
       - name: Export Keycloak package inventory for security triage
@@ -80,12 +109,7 @@ jobs:
                       item = (name, str(package.get("Version") or ""), str(package.get("PkgType") or ""))
                       if item not in seen:
                           seen.add(item)
-                          metadata = {
-                              key: package.get(key)
-                              for key in ("Name", "Version", "SrcName", "SrcVersion", "Release", "Epoch", "PkgIdentifier", "PkgType", "PkgPath")
-                              if key in package
-                          }
-                          print("PACKAGE_METADATA " + json.dumps(metadata, sort_keys=True))
+                          print("PACKAGE_FULL " + json.dumps(package, sort_keys=True))
               for vuln in result.get("Vulnerabilities") or []:
                   vuln_id = str(vuln.get("VulnerabilityID") or "")
                   if vuln_id in {"CVE-2026-91403", "CVE-2026-119373", "CVE-2026-119586", "CVE-2026-102554"}:
