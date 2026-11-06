@@ -54,7 +54,7 @@ The existing Go gateways remain responsible for the separate workload-token audi
 
 The connected Cloudflare account has a workers.dev subdomain, but no zones, Cloudflare Tunnels or Hyperdrive configs were present during inspection. R2 was not enabled. The design therefore uses the existing DuckDNS/Caddy API hostname as the origin and does not assume a Cloudflare-managed zone or private network connector.
 
-The Worker is deployed on workers.dev with Workers Logs and Traces enabled. Its API origin and gateway secret deliberately remain unset until the original origin deployment is configured; API routes fail closed with 503 meanwhile. A request to the workers.dev hostname could not be exercised from the current verification network, which blocks that destination, so a live external HTTP smoke is not claimed.
+The Worker is deployed on workers.dev (version 0.2.3) with Workers Logs and Traces enabled at 10% sampling. Remote settings confirm no resource bindings. Its API origin and gateway secret deliberately remain unset until the original origin deployment is configured; API routes fail closed with 503 meanwhile. A request to the workers.dev hostname could not be exercised from the current verification network, which blocks that destination, so a live external HTTP smoke is not claimed.
 
 ## Configuration
 
