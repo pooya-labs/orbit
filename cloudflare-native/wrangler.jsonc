@@ -23,7 +23,7 @@
   "vars": {
     "ALLOWED_ORIGIN": "https://pooya-labs.github.io",
     "ORBIT_OIDC_ISSUER": "https://REPLACE-WITH-OIDC-ISSUER",
-    "ORBIT_OIDC_AUDIENCE": "orbit-api",
+    "ORBIT_OIDC_AUDIENCE": "https://pooya-labs.github.io/orbit-api",
     "ORBIT_OIDC_ROLES_CLAIM": "roles"
   },
   "d1_databases": [
