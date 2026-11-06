@@ -100,7 +100,11 @@ For the Cloudflare Pages build, set `NEXT_PUBLIC_ORBIT_API_URL` to `https://orbi
 
 ## Cost and safety boundary
 
-Keep the original $0/month infrastructure policy. Cloudflare Workers Free currently allows 100,000 requests/day and 10 ms CPU per invocation; logs/traces are configured at 10% head sampling as a conservative ingestion guard. Those Free-plan limits do not prove this account is on Free: the deployed Worker reports `usage_model: standard`, which Cloudflare documents as a Workers Paid usage model. No paid billing, automatic overages, paid DNS, managed databases, or paid Cloudflare products are authorized. If the Worker free allowance is insufficient, leave the edge disabled rather than weakening the security boundary or adding an unapproved paid service.
+Keep the original $0/month infrastructure policy. The repository now explicitly sets `limits.cpu_ms: 10`, matching the Workers Free CPU cap. Workers Free allows 100,000 requests/day and 50 subrequests per invocation. Requests above the daily allowance fail until the UTC reset.
+
+Workers Logs are included on Free. Until November 30, 2026, the documented Free allowance is 200,000 log events/day with three-day retention. Beginning December 1, 2026, Workers Logs and Workers Traces share the Cloudflare Observability Free allowance of 0.5 GB ingestion/day with seven-day retention included; Free stops ingesting new data after the daily allowance is exhausted. The Worker keeps 10% head sampling for both signals to reduce volume.
+
+The deployed Worker currently reports `usage_model: standard`. Cloudflare documents Standard as a Workers Paid-plan usage model. The connected API token cannot read the billing/subscription endpoint, so the plan must be checked and, if necessary, changed to Free manually in the dashboard before origin traffic is enabled. Do not substitute the legacy `bundled` usage model; that is not a Free-plan setting. No billing or usage-model change has been made by this repository. No paid billing, automatic overages, paid DNS, managed databases, or paid Cloudflare products are authorized. If the Worker Free allowance is insufficient, leave the edge disabled rather than weakening the security boundary or adding an unapproved paid service.
 
 No real customer telemetry should be sent until the original Keycloak, workload grants, origin ingress, retention, backup/restore, capacity and workspace isolation gates have passed.
 
