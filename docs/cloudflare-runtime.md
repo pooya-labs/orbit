@@ -64,7 +64,7 @@ The original deployment script generates `ORBIT_WORKER_GATEWAY_SECRET` inside th
 bash deploy/production/configure-cloudflare-worker.sh
 ```
 
-That script reads the private origin and secret from `.env.production`, uses Wrangler, passes the secret through a temporary protected secrets file, and removes that file on exit. Keep the gateway secret out of source control, Pages variables, client code, browser storage and URLs.
+That script reads the private origin and secret from `.env.production`, uses Wrangler, passes the secret through a temporary protected secrets file, and removes that file on exit. Before deployment it also requires an explicit confirmation that the Cloudflare dashboard shows Workers Free; otherwise it exits without publishing. Follow [the step-by-step Free deployment runbook](deployment/cloudflare-free-worker.md). Keep the gateway secret out of source control, Pages variables, client code, browser storage and URLs.
 
 For the Cloudflare Pages build, set `NEXT_PUBLIC_ORBIT_API_URL` to `https://orbit-runtime.pooyagame141.workers.dev`; retain the exact same Keycloak issuer, public client ID and API audience as the Go origin. No new identity provider or separate Cloudflare role schema is required.
 
