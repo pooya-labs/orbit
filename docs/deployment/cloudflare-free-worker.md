@@ -95,9 +95,9 @@ These are public browser configuration values. Never add the Worker gateway secr
 
 ## 6. Acceptance checks
 
-- [ ] Cloudflare Billing shows Workers Free; no Workers Paid subscription is active.
-- [ ] Worker settings do not show the Paid-only Standard usage model; if they do, stop and resolve the account-plan mismatch before continuing.
-- [ ] Worker uses the Workers Free platform CPU limit (10 ms by default) and has no unexpected bindings or custom Standard-only CPU override.
+- [ ] Cloudflare Billing → Subscriptions confirms **Workers Free — Active** and no Workers Paid subscription is active. Use this account-level subscription page as the plan source of truth.
+- [ ] Do not infer the subscription tier from the per-Worker API `usage_model` field. Cloudflare's API schema defaults that field to `standard`; leave it unchanged and do not force the legacy `bundled` value.
+- [ ] The Worker has no unexpected bindings and no custom `limits.cpu_ms` override. Workers Free enforces its 10 ms CPU limit automatically.
 - [ ] `/health/live` returns 200 and `/health/ready` reflects origin readiness.
 - [ ] Direct Caddy API access without the gateway secret returns 403.
 - [ ] Browser login uses the existing Keycloak PKCE client and the browser sends API traffic only to the Worker URL.
@@ -109,4 +109,4 @@ Workers Free currently allows 100,000 requests/day and 10 ms CPU per invocation.
 
 ## Stop conditions
 
-Do not route real tenant traffic if the account remains on Workers Paid/Standard, `.env.production` is missing, the Go/Keycloak origin is not healthy, Caddy does not reject direct API bypass, or any auth/workspace-isolation check fails. Keep the Apps Script demo unchanged.
+Do not deploy or route real tenant traffic unless Cloudflare Billing confirms Workers Free is Active and no Workers Paid subscription is active. The per-Worker `usage_model: standard` metadata value alone is not a stop condition. Also stop if `.env.production` is missing, the Go/Keycloak origin is unhealthy, Caddy does not reject direct API bypass, or any auth/workspace-isolation check fails. Keep the Apps Script demo unchanged.
