@@ -1,5 +1,3 @@
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE workspaces (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
