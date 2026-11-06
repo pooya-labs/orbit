@@ -529,7 +529,8 @@ This is a separate no-VPS runtime profile approved for implementation. It does *
 - [x] Add the first SQLite/D1 migration for workspace-scoped services, incidents, append-only audit/timeline records, alerts, notification metadata, deployments and SLO definitions.
 - [x] Add generic OIDC discovery/JWKS verification for RS256/ES256 access tokens, exact issuer/audience, `iat`/`exp`/`sub`/`typ`/`kid` validation, configurable role-claim validation and D1-backed workspace role authorization.
 - [x] Implement the foundation routes for health, metadata, workspace creation/listing, memberships, audit history, services and incident lifecycle.
-- [x] Add CI coverage for native Worker policy helpers and a SQLite schema/tenant-isolation smoke test.
+- [x] Implement frontend-compatible global `/services` and `/incidents` inventory routes, filtered by the caller's workspace memberships.
+- [x] Add CI coverage for native Worker policy helpers, signed OIDC/API-contract tests and a SQLite schema/tenant-isolation smoke test.
 - [x] Complete the SQLite/D1 schema smoke test in GitHub Actions, including append-only audit, stable actor attribution, cross-workspace foreign keys and notification-channel uniqueness.
 - [x] Migrate workspace-scoped alert-rule CRUD with role checks, validation, uniqueness constraints and append-only audit events.
 - [ ] Implement alert evaluation only after a trustworthy live request-metrics source is available; define a bounded retry/cron model within Workers Free limits.
