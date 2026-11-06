@@ -527,10 +527,10 @@ This is a separate no-VPS runtime profile approved for implementation. It does *
 - [x] Record the separate Worker + D1 profile and its explicit limits in ADR 0007; keep the existing CF01 gateway architecture intact.
 - [x] Create an isolated `cloudflare-native/` Worker profile; keep `workers_dev` disabled until account configuration and acceptance are complete.
 - [x] Add the first SQLite/D1 migration for workspace-scoped services, incidents, append-only audit/timeline records, alerts, notification metadata, deployments and SLO definitions.
-- [x] Add generic OIDC discovery/JWKS verification for RS256/ES256 access tokens, exact issuer/audience checks and D1-backed workspace role authorization.
+- [x] Add generic OIDC discovery/JWKS verification for RS256/ES256 access tokens, exact issuer/audience, `iat`/`exp`/`sub`/`typ`/`kid` validation, configurable role-claim validation and D1-backed workspace role authorization.
 - [x] Implement the foundation routes for health, metadata, workspace creation/listing, memberships, audit history, services and incident lifecycle.
 - [x] Add CI coverage for native Worker policy helpers and a SQLite schema/tenant-isolation smoke test.
-- [ ] Complete the D1 schema smoke test in GitHub Actions and review its result before deployment.
+- [x] Complete the SQLite/D1 schema smoke test in GitHub Actions, including append-only audit, stable actor attribution, cross-workspace foreign keys and notification-channel uniqueness.
 - [x] Migrate workspace-scoped alert-rule CRUD with role checks, validation, uniqueness constraints and append-only audit events.
 - [ ] Implement alert evaluation only after a trustworthy live request-metrics source is available; define a bounded retry/cron model within Workers Free limits.
 - [x] Implement workspace-scoped deployment annotation CRUD/list/compare and SLO-definition CRUD with audit events.
