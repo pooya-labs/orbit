@@ -103,3 +103,8 @@ For the Cloudflare Pages build, set `NEXT_PUBLIC_ORBIT_API_URL` to `https://orbi
 Keep the original $0/month infrastructure policy. Cloudflare Workers Free currently allows 100,000 requests/day and 10 ms CPU per invocation; logs/traces are configured at 10% head sampling to protect the free Observability allowance, whose pricing changes on 2026-12-01. No paid billing, automatic overages, paid DNS, managed databases, or paid Cloudflare products. If the Worker free allowance is insufficient, leave the edge disabled rather than weakening the security boundary or adding an unapproved paid service.
 
 No real customer telemetry should be sent until the original Keycloak, workload grants, origin ingress, retention, backup/restore, capacity and workspace isolation gates have passed.
+
+
+## Billing-plan verification gate
+
+The deployed Worker's Cloudflare settings currently report `usage_model: standard`. Cloudflare's current pricing documentation associates Standard usage with Workers Paid. The connected API credential does not have permission to read billable subscription information (the read-only endpoint returned HTTP 403), so the account billing plan could not be independently confirmed. No paid plan, subscription, or usage-model change was made. Before any origin traffic is enabled, verify the Worker plan/usage model in the Cloudflare dashboard. Keep the runtime disabled rather than enabling paid billing to clear a limit.
