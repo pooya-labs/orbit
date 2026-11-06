@@ -20,10 +20,10 @@ function requestId() {
 function corsHeaders(origin, env) {
   const headers = new Headers({
     "cache-control": "no-store",
-    "vary": "Origin",
-    "access-control-allow-origin": origin || env.ALLOWED_ORIGIN
+    "vary": "Origin"
   });
-  if (origin === env.ALLOWED_ORIGIN) {
+  if (origin === env.ALLOWED_ORIGIN && origin) {
+    headers.set("access-control-allow-origin", origin);
     headers.set("access-control-expose-headers", "X-Request-ID, Retry-After");
   }
   return headers;
@@ -87,7 +87,7 @@ function handlePreflight(request, env, id, origin) {
 
 function buildUpstreamHeaders(request, env, id) {
   const headers = new Headers();
-  for (const name of ["accept", "authorization", "content-type", "content-encoding", "traceparent", "tracestate"]) {
+  for (const name of ["accept", "origin", "authorization", "content-type", "content-encoding", "traceparent", "tracestate"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
@@ -142,6 +142,7 @@ async function proxyToOrbit(request, env, url, id, origin) {
   };
   if (request.method !== "GET" && request.method !== "HEAD") {
     init.body = request.body;
+    init.duplex = "half";
   }
 
   let upstream;
