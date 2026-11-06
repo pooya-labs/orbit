@@ -5,13 +5,15 @@ import {
   incidentTransitionAllowed,
   parseBearer,
   roleAtLeast,
+  validAccessTokenClaims,
   validIssuer,
+  validUUID,
   validWorkspaceSlug
 } from "./worker.mjs";
 
 test("workspace slugs follow the API contract", () => {
-  for (const value of ["a", "orbit", "pooya-labs-2"]) assert.equal(validWorkspaceSlug(value), true);
-  for (const value of ["", "-orbit", "Orbit", "orbit-", "two words", "x".repeat(49)]) assert.equal(validWorkspaceSlug(value), false);
+  for (const value of ["ab", "orbit", "pooya-labs-2"]) assert.equal(validWorkspaceSlug(value), true);
+  for (const value of ["", "a", "-orbit", "Orbit", "orbit-", "two words", "x".repeat(49)]) assert.equal(validWorkspaceSlug(value), false);
 });
 
 test("OIDC issuer must be an HTTPS origin/path without credentials, query or fragment", () => {
@@ -97,4 +99,25 @@ test("CORS preflight only accepts explicitly allowed headers and methods", async
   );
   assert.equal(response.status, 204);
   assert.match(response.headers.get("access-control-allow-headers") || "", /authorization/);
+});
+
+test("workspace IDs use the canonical UUID shape", () => {
+  assert.equal(validUUID("123e4567-e89b-12d3-a456-426614174000"), true);
+  for (const value of ["123e4567-e89b-12d3-a456-42661417400", "123e4567-e89b-12d3-a456-42661417400z", "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"]) {
+    assert.equal(validUUID(value), false);
+  }
+});
+
+test("OIDC access token validation aligns with the Go verifier contract", () => {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = { iss: "https://identity.example.com/realms/orbit", sub: "user-123", iat: now, exp: now + 300, roles: ["viewer", "operator"] };
+  const header = { alg: "RS256", kid: "key-1", typ: "JWT" };
+  assert.equal(validAccessTokenClaims(payload, header, payload.iss, "roles"), true);
+  assert.equal(validAccessTokenClaims({ ...payload, iat: undefined }, header, payload.iss, "roles"), false);
+  assert.equal(validAccessTokenClaims({ ...payload, exp: now }, header, payload.iss, "roles"), false);
+  assert.equal(validAccessTokenClaims(payload, { ...header, jku: "https://attacker.example/jwks" }, payload.iss, "roles"), false);
+  assert.equal(validAccessTokenClaims(payload, { ...header, typ: "JWT+evil" }, payload.iss, "roles"), false);
+  assert.equal(validAccessTokenClaims(payload, { alg: "RS256", typ: "JWT" }, payload.iss, "roles"), false);
+  assert.equal(validAccessTokenClaims({ ...payload, custom_roles: 42 }, header, payload.iss, "custom_roles"), false);
+  assert.equal(validAccessTokenClaims({ ...payload, custom_roles: ["operator"] }, header, payload.iss, "custom_roles"), true);
 });
