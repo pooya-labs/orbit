@@ -35,6 +35,7 @@ CREATE TABLE workspace_audit_events (
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
   actor_issuer TEXT NOT NULL,
   actor_subject TEXT NOT NULL,
+  actor_role TEXT NOT NULL CHECK (actor_role IN ('owner', 'administrator', 'operator', 'viewer')),
   action TEXT NOT NULL CHECK (length(action) BETWEEN 1 AND 96 AND substr(action, 1, 1) GLOB '[a-z]' AND action NOT GLOB '*[^a-z0-9_.:-]*'),
   resource_type TEXT NOT NULL CHECK (length(resource_type) BETWEEN 1 AND 64 AND substr(resource_type, 1, 1) GLOB '[a-z]' AND resource_type NOT GLOB '*[^a-z0-9_.:-]*'),
   resource_id TEXT NOT NULL DEFAULT '' CHECK (length(resource_id) <= 256),
@@ -193,6 +194,8 @@ CREATE TABLE alert_notification_channels (
   updated_at TEXT NOT NULL,
   UNIQUE (id, workspace_id)
 );
+
+CREATE UNIQUE INDEX alert_notification_channels_workspace_name_unique ON alert_notification_channels (workspace_id, lower(name));
 
 CREATE TABLE alert_notification_deliveries (
   id TEXT PRIMARY KEY,
