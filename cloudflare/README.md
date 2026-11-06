@@ -74,7 +74,7 @@ Never store the gateway secret in GitHub Pages variables, browser code, URL quer
 
 ## Free-tier and service choices
 
-The Worker is a thin edge proxy. The existing origin keeps the authoritative data stores and its current telemetry pipeline. Redis and NATS stay deferred under ADR 0004; no Cloudflare Queues or Durable Objects are introduced. D1 and R2 are not needed for this design. No Cloudflare Tunnel, Cloudflare Access zone, Hyperdrive, Workers Paid plan, Containers, or paid add-on is required.
+The Worker is a thin edge proxy. Its observability sampling is capped at 10% for logs and traces so the edge stays within the zero-cost budget. Cloudflare Workers Free currently includes up to 100,000 requests/day and 10 ms CPU per invocation; Workers Logs and Cloudflare Traces have separate free ingestion/retention limits that change on 2026-12-01. Do not raise sampling or enable paid billing without a reviewed budget. The existing origin keeps the authoritative data stores and its current telemetry pipeline. Redis and NATS stay deferred under ADR 0004; no Cloudflare Queues or Durable Objects are introduced. D1 and R2 are not needed for this design. No Cloudflare Tunnel, Cloudflare Access zone, Hyperdrive, Workers Paid plan, Containers, or paid add-on is required.
 
 Keep the existing $0/month hard budget. If the account's free Worker allowance becomes insufficient, stop or leave the edge unavailable rather than enabling paid billing or a weaker auth path.
 
