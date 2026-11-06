@@ -36,6 +36,5 @@ npx --yes "wrangler@$WRANGLER_VERSION" deploy \
   --config "$ROOT/cloudflare/wrangler.jsonc" \
   --var "ORBIT_API_ORIGIN:https://$ORBIT_API_DOMAIN" \
   --secrets-file "$SECRET_FILE" \
-  --keep-vars
 
 echo "Cloudflare Worker updated. Secret values were not printed."
