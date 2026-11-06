@@ -5,6 +5,7 @@ This is a new, independent Cloudflare runtime profile. It does not replace the e
 ## What is included in the first increment
 
 - A separate Worker named `orbit-native-runtime`; it is deliberately not exposed on `workers.dev` yet.
+- Workspace creation bootstraps five curated services, two incidents and two example alert rules. Service/incident records are tagged `demo_seed`, and sample descriptions explicitly say the data are synthetic.
 - D1 schema for workspace data, memberships, immutable audit events, services, incidents and timelines, alerting, notification records, deployment annotations and SLO definitions.
 - OIDC access-token verification using the same issuer/audience model as the existing browser PKCE client and Go API.
 - Workspace role checks and tenant-scoped reads/writes for workspace, membership, audit, service and incident endpoints.
