@@ -430,6 +430,14 @@ export default function Home() {
       setApiUrlInput("apps-script://bridge");
       return;
     }
+    const runtime = new URLSearchParams(window.location.search).get("orbitRuntime");
+    if (runtime === "cloudflare") {
+      setApiUrlInput(
+        (process.env.NEXT_PUBLIC_ORBIT_CLOUDFLARE_API_URL || "https://orbit-runtime.pooyagame141.workers.dev").trim(),
+      );
+      setSourcePanelOpen(true);
+      return;
+    }
     try {
       const savedUrl = window.localStorage.getItem("orbit.apiBaseUrl");
       if (savedUrl) setApiUrlInput(savedUrl);
