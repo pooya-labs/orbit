@@ -279,12 +279,14 @@ identity, health, and tenant-isolation smoke checks pass.
   Spreadsheet remains private; no customer data, production secrets, real
   telemetry, outbound webhooks, email or messaging calls are allowed.
 - The deferred production Keycloak identity image is scanned independently
-  by `.github/workflows/security-deferred-identity.yml`. Its separate scan
-  reported the known HIGH OpenJDK/SQLite/Guava findings on
-  `quay.io/keycloak/keycloak:26.8.1` in run
-  [42032403489](https://github.com/pooya-labs/orbit/actions/runs/42032403489).
-  This image is not used by the Pages + Apps Script demo and was intentionally
-  excluded from the v1 release gate; it was not suppressed or VEX-exempted.
+  by `.github/workflows/security-deferred-identity.yml`. Historical run
+  [42032403489](https://github.com/pooya-labs/orbit/actions/runs/42032403489)
+  reported HIGH OpenJDK/SQLite/Guava findings on the superseded
+  `quay.io/keycloak/keycloak:26.8.1` image. The production Compose file and
+  deferred scan now pin Keycloak 26.8.2, with pull-request scanning and an explicit
+  linux/arm64 manifest check. The 26.8.2 exact-image Trivy result is still a blocking
+  production gate; no clean result is claimed until that scan succeeds. Keycloak
+  is not used by the Pages + Apps Script demo and remains outside the v1 release gate.
 - The release does not claim formal WCAG conformance. Human TalkBack/VoiceOver
   device acceptance and broad sustained-load/capacity benchmarking remain
   post-v1 work.
@@ -510,6 +512,7 @@ This is a post-v1 entry-point extension, not a reopening of the stable Apps Scri
 - [x] Replace the deployed prototype Worker with the canonical edge-gateway module; Cloudflare settings confirm `bindings: []` and Worker version 0.2.3 is the active upload.
 - [x] Delete the prototype D1 database after verifying the Worker had no D1 binding; the deleted database ID returns HTTP 404. Other account D1 resources were left untouched.
 - [x] Confirm the account Billing → Subscriptions page displays Workers Free — Active (owner-provided dashboard evidence); leave the per-Worker API `usage_model: standard` field unchanged and do not use legacy `bundled`.
+- [ ] Pass the exact-image Trivy HIGH/CRITICAL scan and linux/arm64 manifest check for pinned Keycloak 26.8.2 before provisioning production identity; keep findings visible and do not blanket-suppress them.
 - [ ] Provision and verify the original Go/PostgreSQL/Keycloak/Caddy origin. No origin VM, domain or identity-provider configuration is claimed as provisioned by this handoff.
 - [ ] Run the Worker deployment script against the provisioned origin; verify Caddy rejects direct API bypass without the Worker secret.
 - [ ] Build Pages using the Worker URL and the exact same Keycloak PKCE issuer/client/audience; test every existing typed API-client route through the Worker.
