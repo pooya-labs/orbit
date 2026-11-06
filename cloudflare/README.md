@@ -65,7 +65,7 @@ The origin is private by convention and protected by Caddy:
 1. Configure the original zero-cost origin stack from [the free deployment runbook](../docs/deployment/free-only-orbit.md). This is the same Go/PostgreSQL/Keycloak/Collector/Prometheus/Loki/Tempo deployment, not a replacement.
 2. The existing `deploy/production/free-stack.sh prepare` generates the private `.env.production` file, including a random `ORBIT_WORKER_GATEWAY_SECRET`. Keep that file mode 600 and out of Git.
 3. Start the origin stack, confirm DNS/TLS and Keycloak/API health.
-4. Install Wrangler locally or use the repository's deployment environment, authenticate to the intended Cloudflare account, and run:
+4. The script uses Wrangler 4.158.0 pinned in the repository and the account selected by `account_id` in `cloudflare/wrangler.jsonc`; run it from the existing deployment environment:
    `bash deploy/production/configure-cloudflare-worker.sh`
 5. The script reads the origin and secret from `.env.production`, writes a temporary mode-600 secrets file, deploys `cloudflare/wrangler.jsonc`, then deletes the temporary file. It does not print the secret.
 6. Build GitHub Pages with `NEXT_PUBLIC_ORBIT_API_URL=https://orbit-runtime.pooyagame141.workers.dev` and the same existing Keycloak issuer, public client ID and API audience used by the origin deployment. Open the dashboard's Connect a source panel and test the Worker URL.
