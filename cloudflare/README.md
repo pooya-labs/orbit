@@ -60,6 +60,8 @@ The Worker does not proxy OTLP or gRPC. Workloads continue to use the separate a
 
 ## Local configuration and deployment
 
+Read [the step-by-step Workers Free deployment runbook](../docs/deployment/cloudflare-free-worker.md) first. It begins with the billing/usage-model gate and then walks through origin setup, Worker deployment, Pages configuration and acceptance checks.
+
 The API hostname remains a public HTTPS transport endpoint, but Caddy protects all API and readiness routes with the Worker-only gateway secret; it is not a browser-facing API URL:
 
 1. Configure the original zero-cost origin stack from [the free deployment runbook](../docs/deployment/free-only-orbit.md). This is the same Go/PostgreSQL/Keycloak/Collector/Prometheus/Loki/Tempo deployment, not a replacement.
