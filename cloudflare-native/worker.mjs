@@ -252,7 +252,45 @@ async function handleApi(request, env, url, origin, id, principal) {
   const now = new Date().toISOString();
 
   if (path === "/api/v1/meta" && request.method === "GET") {
-    return response({ data: { name: "orbit-api", version: "cloudflare-native.0.1.0", environment: "cloudflare-free" } }, 200, origin, env, id);
+    return response({ name: "orbit-api", version: "cloudflare-native.0.2.0", environment: "cloudflare-free" }, 200, origin, env, id);
+  }
+
+  if (path === "/api/v1/services" && request.method === "GET") {
+    const result = await env.DB.prepare(`
+      SELECT s.id, s.name, s.description, s.environment, s.region, s.status,
+             s.latency_p95_ms, s.error_rate, s.last_seen_at, s.source
+      FROM services s
+      WHERE EXISTS (
+        SELECT 1 FROM workspace_memberships m
+        WHERE m.workspace_id = s.workspace_id
+          AND m.user_issuer = ? AND m.user_subject = ?
+      )
+      ORDER BY s.name ASC, s.environment ASC LIMIT 500
+    `).bind(principal.issuer, principal.subject).all();
+    return response({ data: result.results || [] }, 200, origin, env, id);
+  }
+
+  if (path === "/api/v1/incidents" && request.method === "GET") {
+    const status = url.searchParams.get("status") || "";
+    if (status && !["open", "investigating", "monitoring", "resolved"].includes(status)) {
+      return fail(400, "invalid_status", "status must be open, investigating, monitoring, or resolved.", origin, env, id);
+    }
+    const query = `
+      SELECT i.id, i.title, i.description, i.service_id, s.name AS service_name,
+             i.severity, i.status, i.started_at, i.updated_at, i.resolved_at, i.source
+      FROM incidents i
+      JOIN services s ON s.id = i.service_id AND s.workspace_id = i.workspace_id
+      WHERE EXISTS (
+        SELECT 1 FROM workspace_memberships m
+        WHERE m.workspace_id = i.workspace_id
+          AND m.user_issuer = ? AND m.user_subject = ?
+      ) ${status ? "AND i.status = ?" : ""}
+      ORDER BY i.started_at DESC, i.id DESC LIMIT 500
+    `;
+    const result = status
+      ? await env.DB.prepare(query).bind(principal.issuer, principal.subject, status).all()
+      : await env.DB.prepare(query).bind(principal.issuer, principal.subject).all();
+    return response({ data: result.results || [] }, 200, origin, env, id);
   }
 
   if (path === "/api/v1/workspaces" && request.method === "GET") {
@@ -306,6 +344,10 @@ async function handleApi(request, env, url, origin, id, principal) {
     const access = await requireWorkspace(env.DB, workspaceId, principal, requiredRole);
     if (access.error) return fail(access.error.status, access.error.code, access.error.message, origin, env, id);
     principal.role = access.membership.role;
+
+    if (suffix.startsWith("telemetry/")) {
+      return fail(503, "telemetry_source_unavailable", "This Cloudflare-native runtime does not have a Prometheus, Loki or Tempo source configured. The telemetry API remains in the Go/PostgreSQL profile.", origin, env, id);
+    }
 
     if (suffix === "membership" && request.method === "GET") {
       return response({ data: access.membership }, 200, origin, env, id);
