@@ -48,6 +48,54 @@ jobs:
             rpm -q --whatrequires sqlite-libs || true
           '
 
+      - name: Export Keycloak package inventory for security triage
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: quay.io/keycloak/keycloak:26.8.2
+          version: v0.76.1
+          trivy-config: trivy.yaml
+          vuln-type: os,library
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "0"
+          format: json
+          output: /tmp/keycloak-trivy.json
+          list-all-pkgs: true
+          timeout: 10m
+
+      - name: Report package versions relevant to current findings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("/tmp/keycloak-trivy.json").read_text())
+          needles = ("ca-certificates", "sqlite", "openjdk", "guava")
+          seen = set()
+          for result in report.get("Results") or []:
+              for package in result.get("Packages") or []:
+                  name = str(package.get("Name") or "")
+                  if any(needle in name.lower() for needle in needles):
+                      item = (name, str(package.get("Version") or ""), str(package.get("PkgType") or ""))
+                      if item not in seen:
+                          seen.add(item)
+                          print(f"PACKAGE name={item[0]} version={item[1]} type={item[2]}")
+              for vuln in result.get("Vulnerabilities") or []:
+                  vuln_id = str(vuln.get("VulnerabilityID") or "")
+                  if vuln_id in {"CVE-2026-91403", "CVE-2026-119373", "CVE-2026-119586", "CVE-2026-102554"}:
+                      print(
+                          "FINDING",
+                          vuln_id,
+                          "package=", vuln.get("PkgName"),
+                          "installed=", vuln.get("InstalledVersion"),
+                          "fixed=", vuln.get("FixedVersion"),
+                          "status=", vuln.get("Status"),
+                      )
+          if not seen:
+              print("No matching packages were present in Trivy's package inventory; retain the full scan as the security gate.")
+          PY
+
       - name: Scan the pinned Keycloak image for high and critical vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
