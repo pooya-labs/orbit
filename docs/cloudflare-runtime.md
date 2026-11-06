@@ -1,80 +1,105 @@
-# ORBIT Cloudflare runtime — post-v1 expansion
+# ORBIT Cloudflare runtime — edge expansion
 
-This is an explicitly separate post-v1 runtime. It preserves the released Apps Script portfolio demo and shares the existing static dashboard/API contracts where compatible.
+This is the post-v1 Cloudflare entry point. It preserves the Apps Script portfolio demo and follows the original ORBIT backend and deployment architecture.
 
-## Deployment checkpoint — 2026-11-06
+## Architectural correction — 2026-11-06
 
-- Git branch: `feat/cloudflare-dual-runtime`
-- Worker: `orbit-runtime`
-- Worker URL: https://orbit-runtime.pooyagame141.workers.dev
-- D1 database: `orbit-runtime`, UUID `579805c5-7688-4a1a-a26f-4ce8ff2af04e`, EU jurisdiction.
-- Worker upload succeeded with Workers Logs and Traces enabled.
-- Initial D1 schema migration was applied successfully.
-- Cloudflare account access is connected. R2 is not enabled in this account and is not a dependency of this first slice.
-- The live HTTP smoke request could not be completed from the current verification network because requests to the workers.dev hostname are blocked there. The Cloudflare control-plane confirms the Worker upload; this is not a successful external endpoint smoke test.
+The first D1-backed prototype was not aligned with ORBIT's accepted architecture. ORBIT already has the real Go API, PostgreSQL domain model, OIDC/role checks, workspace authorization, authenticated OTLP gateways, Collector and three telemetry stores. Duplicating those components inside a Worker/D1 implementation would have produced two different identity systems, two sets of operations records, and a second telemetry store.
+
+[ADR 0006](decisions/0006-cloudflare-edge-gateway.md) therefore defines the correct Cloudflare role: a narrow edge API gateway over the canonical origin.
 
 ## Runtime split
 
-| Runtime | Purpose | Data and capabilities |
+| Entry point | Role | Data authority |
 | --- | --- | --- |
-| Apps Script | Keep the existing zero-cost public synthetic demo unchanged | Private Google Spreadsheet, browser-profile demo workspaces, simulation-only notifications, no real customer telemetry |
-| Cloudflare | New full-feature runtime | Dedicated D1 database, OIDC/JWKS validation, workspace membership/grants, OTLP/HTTP JSON ingestion, bounded Metrics/Logs/Traces reads |
-| GitHub Pages | Shared static UI | No duplicated dashboard or forked frontend |
+| Apps Script Web App | Existing zero-cost, low-volume synthetic portfolio demo; unchanged | Owner-private Google Spreadsheet and Apps Script session boundary |
+| Cloudflare Worker | Edge entry point for the full Go API deployment | No application database; no user/workload session storage |
+| Go API + PostgreSQL | Canonical control plane, identity/roles, workspaces, incidents, alerts, outbox, deployments, SLOs and audit | PostgreSQL |
+| OTel Collector + Prometheus/Loki/Tempo | Authenticated telemetry ingestion and specialist signal storage | Prometheus metrics, Loki logs, Tempo traces |
+| GitHub Pages | Shared static Next.js dashboard | No server-side state |
 
-The Apps Script restrictions remain intentional. Do not weaken its quotas, synthetic-only boundary, bridge validation, or private Spreadsheet access to make it imitate the Cloudflare runtime.
+Apps Script remains synthetic-only. It is not expanded to accept production telemetry, send external webhooks, or imitate the full Go runtime.
 
-## Initial implementation
+## Cloudflare Worker contract
 
-- `cloudflare/worker.js`: Cloudflare Worker API.
-- `cloudflare/migrations/0001_initial.sql`: dedicated D1 schema for identity, workspace membership, workload grants, telemetry, incidents, alerts, notifications, deployments, SLOs, and audit.
-- Worker health and metadata routes: `/health/live`, `/health/ready`, `/api/v1/meta`.
-- OIDC access-token verification accepts only RS256/ES256, validates issuer, audience and time claims, then checks membership/grants in D1.
-- OTLP/HTTP JSON routes: `POST /v1/otlp/metrics`, `POST /v1/otlp/logs`, `POST /v1/otlp/traces`.
-- Workspace-scoped reads: `GET /api/v1/workspaces/{workspaceID}/telemetry/{services|metrics|logs|traces}`.
-- Every workload is mapped to a workspace through a server-side issuer/subject/signal grant; producer-supplied workspace attributes are not trusted.
-- Query windows and row counts are bounded. No browser-supplied SQL, PromQL, LogQL, or TraceQL is accepted.
+- Worker: `orbit-runtime`
+- Public entry URL: https://orbit-runtime.pooyagame141.workers.dev
+- GitHub Pages origin: `https://pooya-labs.github.io`
+- API browser URL: Worker URL, not the origin API hostname.
+- Origin API hostname: existing `ORBIT_API_DOMAIN` DuckDNS endpoint routed through Caddy.
+- Only `/api/v1/*`, `/health/live` and `/health/ready` are accepted.
+- Browser Bearer access token is forwarded to Go for validation; the Worker does not duplicate OIDC or roles.
+- Worker-to-origin uses the private `ORBIT_GATEWAY_SECRET`; Caddy rejects direct API requests without it and strips it before Go.
+- Cloudflare-derived client IP is forwarded through a separate header for the existing shared IP rate limit.
+- Authenticated responses are never cached. Cookies and upstream CORS grants are not passed through.
 
-## Not yet enabled — do not imply otherwise
+The Worker is an HTTP API edge only. It does not accept raw telemetry, and it does not proxy OTLP/gRPC. Workloads retain the original dedicated TLS hostnames and routes:
 
-1. Real OIDC provider and browser PKCE configuration; no identity provider or issuer has been provisioned for this Cloudflare runtime.
-2. Provisioning/admin APIs for workspaces, principals, memberships, and workload grants.
-3. Complete compatibility for all existing API routes: services, incident lifecycle/timeline, alert CRUD/evaluation, notification channel management/delivery attempts, deployment annotations/comparison, SLO budgets, audit search, trace detail, and resource-attribute catalog.
-4. Real webhook/email delivery with the existing HTTPS/host allowlist, DNS/public-address, redirect, timeout, retry, and idempotency protections.
-5. OTLP/HTTP protobuf and OTLP/gRPC. The first Worker slice accepts OTLP/HTTP JSON only.
-6. Complete frontend/API parity and GitHub Pages build configuration; an explicit `?orbitRuntime=cloudflare` entry point now pre-fills the Worker URL and opens the source panel, but does not imply that all dashboard routes are implemented yet.
-7. Live clean-browser smoke tests, cross-workspace negative tests, ingestion-to-query tests, retention/cleanup, load/capacity, and backup/recovery acceptance.
-8. Cost/limit review for all Cloudflare services before enabling ongoing ingestion or scheduled work.
+- OTLP/HTTP → Caddy → Go authenticated workload HTTP gateway → private Collector.
+- OTLP/gRPC → Caddy HTTP/2 → Go authenticated workload gRPC gateway → private Collector.
 
-## Next milestones
+The existing Go gateways remain responsible for the separate workload-token audience, workspace selector and grant, reserved tenant attributes, canonical workspace injection, reviewed attribute allowlist, shared rate limiting, concurrency/backpressure, request size and timeout.
 
-### CF01 — Identity and onboarding
-- Configure a real OIDC issuer, public browser client, API audience, and callback.
-- Add owner-only workspace and workload-grant provisioning with immutable audit records.
-- Add rate limits and per-workspace quotas; fail closed when identity or grant checks fail.
+## Existing infrastructure reused without replacement
 
-### CF02 — Full API parity
-- Implement every existing typed client route against D1, preserving the existing response contracts and role policy.
-- Port incident timelines, alert evaluation, notification outbox, deployment annotations, SLO semantics, audit history, and trace detail.
-- Keep mutations transactional where D1 supports the required atomic boundary; document any semantic differences.
+- Keycloak 26.8.1 remains the provider-neutral OIDC issuer for the browser Authorization Code + PKCE client and separate workload clients.
+- PostgreSQL remains authoritative for human workspace membership, workload identities/grants, alert evaluator coordination, durable notification outbox and attempt history, rate limits, deployments, SLOs, incidents and audit.
+- Collector remains private; Prometheus stores metrics, Loki stores logs, Tempo stores traces.
+- Caddy remains the only origin ingress and TLS termination.
+- Existing encrypted PostgreSQL backup and retention runbooks remain applicable.
+- Redis and NATS remain deferred under ADR 0004; Cloudflare Queues are not introduced.
+- No D1, R2, Hyperdrive, Durable Objects, Cloudflare Tunnel, Workers Paid, Containers or paid add-on is required.
 
-### CF03 — Telemetry parity and operations
-- Add OTLP/HTTP protobuf if feasible in Workers; evaluate gRPC separately rather than claiming compatibility.
-- Add retention enforcement, bounded cardinality, sampling and quotas.
-- Add safe webhook delivery and idempotent retries; keep email disabled until a verified sender is configured.
-- Add Cloudflare runtime logs/traces and application-level health metrics.
+## Actual Cloudflare account state
 
-### CF04 — Shared dashboard and dual-runtime acceptance
-- Add an explicit Cloudflare runtime entry point without changing the Apps Script wrapper.
-- Ensure both runtimes can be opened simultaneously in separate tabs and never share session tokens or storage.
-- Verify the complete UI against both runtime contracts and prove workspace A/B isolation.
+The connected Cloudflare account has a workers.dev subdomain, but no zones, Cloudflare Tunnels or Hyperdrive configs were present during inspection. R2 was not enabled. The design therefore uses the existing DuckDNS/Caddy API hostname as the origin and does not assume a Cloudflare-managed zone or private network connector.
 
-### CF05 — Release
-- Run typecheck/build, Worker syntax/runtime tests, D1 migration tests, API contract tests, security review, clean-browser end-to-end checks, and Cloudflare deployment smoke.
-- Publish a separate Cloudflare runtime release; do not move or rewrite the immutable v1.0.0 tag.
+The Worker is deployed on workers.dev with Workers Logs and Traces enabled. Its API origin and gateway secret deliberately remain unset until the original origin deployment is configured; API routes fail closed with 503 meanwhile. A request to the workers.dev hostname could not be exercised from the current verification network, which blocks that destination, so a live external HTTP smoke is not claimed.
 
-## Safety and cost policy
+## Configuration
 
-- Keep the Apps Script demo synthetic-only.
-- Do not send production/customer data until identity, grants, workspace isolation, retention, backups, and operational limits have passed their gates.
-- Do not enable paid billing, automatic upgrades, or usage-based overages without explicit approval.
-- R2 is optional for this design and remains off until a concrete archival/export requirement justifies enabling it.
+The original deployment script generates `ORBIT_WORKER_GATEWAY_SECRET` inside the private mode-600 `.env.production`. After the origin and Keycloak are live, run:
+
+```bash
+bash deploy/production/configure-cloudflare-worker.sh
+```
+
+That script reads the private origin and secret from `.env.production`, uses Wrangler, passes the secret through a temporary protected secrets file, and removes that file on exit. Keep the gateway secret out of source control, Pages variables, client code, browser storage and URLs.
+
+For the Cloudflare Pages build, set `NEXT_PUBLIC_ORBIT_API_URL` to `https://orbit-runtime.pooyagame141.workers.dev`; retain the exact same Keycloak issuer, public client ID and API audience as the Go origin. No new identity provider or separate Cloudflare role schema is required.
+
+## Roadmap — no duplicate application logic
+
+### CF01 — Edge and origin trust
+- Confirm the existing Go/Keycloak/Caddy origin is deployed and healthy.
+- Configure the private Worker gateway secret and origin.
+- Verify Caddy rejects direct API calls without the Worker secret.
+- Verify the Worker forwards the original user token and trusted client IP.
+
+### CF02 — Browser connection and full API parity
+- Build Pages with the Worker URL and existing Keycloak PKCE settings.
+- Run every existing typed API-client route through the Worker.
+- Preserve the Go API's response, role, workspace and audit contracts; add no duplicate route implementations to the Worker.
+- Test viewer/operator/administrator behavior and cross-workspace denial.
+
+### CF03 — Telemetry and operations
+- Verify OTLP/HTTP protobuf and OTLP/gRPC through their existing Caddy endpoints.
+- Verify workload-specific audience, explicit workspace/signal grants, canonical tenant attribution, reserved-attribute rejection, quotas and revocation.
+- Verify Collector routing and Metrics/Logs/Traces readback, plus workspace A/B isolation.
+- Keep webhook SSRF protections, PostgreSQL outbox, append-only history and SLO semantics in the canonical Go runtime.
+
+### CF04 — Dual-runtime acceptance
+- Test Apps Script and Cloudflare in separate tabs and browser profiles.
+- Confirm the Apps Script synthetic workspace and Cloudflare OIDC identity/session never share tokens or storage.
+- Keep the Apps Script Web App deployment and private spreadsheet unchanged.
+- Record live origin/API/telemetry smoke evidence.
+
+### CF05 — Separate runtime release
+- Run Worker contract tests, Caddy validation, Go race tests, PostgreSQL migrations/backup tests, full telemetry E2E, browser PKCE, security and live origin tests.
+- Publish a separate Cloudflare edge release only after evidence is complete. Do not rewrite the immutable ORBIT v1.0.0 tag.
+
+## Cost and safety boundary
+
+Keep the original $0/month infrastructure policy. No paid billing, automatic overages, paid DNS, managed databases, or paid Cloudflare products. If the Worker free allowance is insufficient, leave the edge disabled rather than weakening the security boundary or adding an unapproved paid service.
+
+No real customer telemetry should be sent until the original Keycloak, workload grants, origin ingress, retention, backup/restore, capacity and workspace isolation gates have passed.
