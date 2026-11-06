@@ -119,6 +119,50 @@ db.execute(
 )
 assert db.execute("SELECT COUNT(*) FROM incident_timeline_events WHERE incident_id = 'incident-a'").fetchone()[0] == 1
 
+# Operational CRUD tables enforce uniqueness and tenant-safe foreign keys.
+db.execute(
+    "INSERT INTO alert_rules "
+    "(id, workspace_id, name, description, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity, enabled, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) "
+    "VALUES ('rule-a', 'workspace-a', 'High request rate', '', 'api-gateway', 'request_rate', 'gt', 50, 60, 30, 'high', 1, 'https://id.example', 'user-a', 'https://id.example', 'user-a', ?, ?)",
+    (now, now),
+)
+expect_integrity_error(
+    "INSERT INTO alert_rules "
+    "(id, workspace_id, name, description, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity, enabled, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) "
+    "VALUES ('rule-a-duplicate', 'workspace-a', 'HIGH REQUEST RATE', '', 'api-gateway', 'request_rate', 'gt', 60, 60, 30, 'high', 1, 'https://id.example', 'user-a', 'https://id.example', 'user-a', ?, ?)",
+    (now, now),
+)
+expect_integrity_error(
+    "INSERT INTO deployment_annotations "
+    "(id, workspace_id, service_id, service_name, environment, version, deployed_at, created_by_issuer, created_by_subject, created_at) "
+    "VALUES ('deployment-bad', 'workspace-b', 'service-a', 'api-gateway', 'production', 'v1.0.0', ?, 'https://id.example', 'user-b', ?)",
+    (now, now),
+)
+db.execute(
+    "INSERT INTO deployment_annotations "
+    "(id, workspace_id, service_id, service_name, environment, version, deployed_at, created_by_issuer, created_by_subject, created_at) "
+    "VALUES ('deployment-a', 'workspace-a', 'service-a', 'api-gateway', 'production', 'v1.0.0', ?, 'https://id.example', 'user-a', ?)",
+    (now, now),
+)
+expect_integrity_error(
+    "INSERT INTO service_level_objectives "
+    "(id, workspace_id, service_id, name, route, target, rolling_window_days, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) "
+    "VALUES ('slo-bad', 'workspace-b', 'service-a', 'Availability', '/health', 0.999, 7, 'https://id.example', 'user-b', 'https://id.example', 'user-b', ?, ?)",
+    (now, now),
+)
+db.execute(
+    "INSERT INTO service_level_objectives "
+    "(id, workspace_id, service_id, name, route, target, rolling_window_days, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) "
+    "VALUES ('slo-a', 'workspace-a', 'service-a', 'Availability', '/health', 0.999, 7, 'https://id.example', 'user-a', 'https://id.example', 'user-a', ?, ?)",
+    (now, now),
+)
+expect_integrity_error(
+    "INSERT INTO service_level_objectives "
+    "(id, workspace_id, service_id, name, route, target, rolling_window_days, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) "
+    "VALUES ('slo-duplicate', 'workspace-a', 'service-a', 'availability', '/ready', 0.999, 7, 'https://id.example', 'user-a', 'https://id.example', 'user-a', ?, ?)",
+    (now, now),
+)
+
 # Tenant queries return only the current workspace's rows.
 rows = db.execute("SELECT id FROM services WHERE workspace_id = ?", ("workspace-b",)).fetchall()
 assert rows == [], rows
