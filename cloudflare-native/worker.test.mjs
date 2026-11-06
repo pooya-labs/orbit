@@ -1,6 +1,7 @@
 import test from "node:test";
 import worker from "./worker.mjs";
 import assert from "node:assert/strict";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import {
   incidentTransitionAllowed,
   parseBearer,
@@ -120,4 +121,116 @@ test("OIDC access token validation aligns with the Go verifier contract", () => 
   assert.equal(validAccessTokenClaims(payload, { alg: "RS256", typ: "JWT" }, payload.iss, "roles"), false);
   assert.equal(validAccessTokenClaims({ ...payload, custom_roles: 42 }, header, payload.iss, "custom_roles"), false);
   assert.equal(validAccessTokenClaims({ ...payload, custom_roles: ["operator"] }, header, payload.iss, "custom_roles"), true);
+});
+
+async function withSignedAccessToken(run) {
+  const originalFetch = globalThis.fetch;
+  const issuer = `https://oidc-${crypto.randomUUID()}.example/realm`;
+  const audience = "orbit-api";
+  const kid = "test-signing-key";
+  const { privateKey, publicKey } = await generateKeyPair("RS256");
+  const jwk = await exportJWK(publicKey);
+  Object.assign(jwk, { kid, alg: "RS256", use: "sig", key_ops: ["verify"] });
+  globalThis.fetch = async (input) => {
+    const target = new URL(input instanceof Request ? input.url : String(input));
+    if (target.href === issuer + "/.well-known/openid-configuration") {
+      return new Response(JSON.stringify({ issuer, jwks_uri: issuer + "/jwks" }), {
+        status: 200, headers: { "content-type": "application/json" }
+      });
+    }
+    if (target.href === issuer + "/jwks") {
+      return new Response(JSON.stringify({ keys: [jwk] }), {
+        status: 200, headers: { "content-type": "application/json" }
+      });
+    }
+    throw new Error("Unexpected test network request: " + target.href);
+  };
+  try {
+    const token = await new SignJWT({ roles: ["viewer", "operator"] })
+      .setProtectedHeader({ alg: "RS256", kid, typ: "JWT" })
+      .setIssuer(issuer)
+      .setSubject("native-api-test-user")
+      .setAudience(audience)
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(privateKey);
+    await run(token, { ALLOWED_ORIGIN: "https://pooya-labs.github.io", ORBIT_OIDC_ISSUER: issuer, ORBIT_OIDC_AUDIENCE: audience });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+function authorizedRequest(path, token) {
+  return new Request("https://native.example" + path, {
+    headers: {
+      origin: "https://pooya-labs.github.io",
+      authorization: "Bearer " + token
+    }
+  });
+}
+
+test("metadata response matches the direct ApiMetadata contract", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const response = await worker.fetch(authorizedRequest("/api/v1/meta", token), { ...env, DB: {} });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      name: "orbit-api",
+      version: "cloudflare-native.0.2.0",
+      environment: "cloudflare-free"
+    });
+  });
+});
+
+test("global service inventory is restricted to the caller's workspace memberships", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    let statement = "";
+    let bindings = [];
+    const DB = {
+      prepare(sql) {
+        statement = sql;
+        return { bind(...values) {
+          bindings = values;
+          return { all: async () => ({ results: [{
+            id: "service-visible",
+            name: "api-gateway",
+            description: "Demo service",
+            environment: "production",
+            region: "eu-west-1",
+            status: "unknown",
+            latency_p95_ms: null,
+            error_rate: null,
+            last_seen_at: null,
+            source: "demo_seed"
+          }] }) };
+        } };
+      }
+    };
+    const response = await worker.fetch(authorizedRequest("/api/v1/services", token), { ...env, DB });
+    assert.equal(response.status, 200);
+    assert.match(statement, /EXISTS\s*\(/);
+    assert.match(statement, /workspace_memberships/);
+    assert.deepEqual(bindings, ["native-api-test-user" ? env.ORBIT_OIDC_ISSUER : "", "native-api-test-user"]);
+    assert.deepEqual((await response.json()).data.map((item) => item.id), ["service-visible"]);
+  });
+});
+
+test("global incident inventory applies the requested status and membership filter", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    let statement = "";
+    let bindings = [];
+    const DB = {
+      prepare(sql) {
+        statement = sql;
+        return { bind(...values) {
+          bindings = values;
+          return { all: async () => ({ results: [] }) };
+        } };
+      }
+    };
+    const response = await worker.fetch(authorizedRequest("/api/v1/incidents?status=monitoring", token), { ...env, DB });
+    assert.equal(response.status, 200);
+    assert.match(statement, /workspace_memberships/);
+    assert.match(statement, /i\.status = \?/);
+    assert.deepEqual(bindings, [env.ORBIT_OIDC_ISSUER, "native-api-test-user", "monitoring"]);
+  });
 });
