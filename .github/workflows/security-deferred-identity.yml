@@ -40,38 +40,37 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm --entrypoint /bin/sh quay.io/keycloak/keycloak:26.8.2 -ec '
-            echo "== Runtime package versions =="
-            rpm -q ca-certificates java-21-openjdk-headless sqlite-libs || true
+            echo "== Runtime package database tools =="
+            command -v rpm || echo "rpm is absent"
+            command -v microdnf || echo "microdnf is absent"
             echo "== SQLite command availability =="
-            if command -v sqlite3 >/dev/null 2>&1; then sqlite3 --version; else echo "sqlite3 CLI is absent"; fi
-            echo "== SQLite library and runtime references =="
-            find /usr/lib64 /lib64 /opt/keycloak/lib -iname '*sqlite*' -print 2>/dev/null || true
-            if command -v ldd >/dev/null 2>&1; then
-              for path in /usr/bin /usr/sbin /usr/libexec /opt/keycloak/bin; do
-                [ -d "$path" ] || continue
-                for binary in $(find "$path" -type f -perm /111 2>/dev/null); do
-                  if ldd "$binary" 2>/dev/null | grep -q "libsqlite3"; then
-                    echo "SQLITE_LINKED_BINARY=$binary"
-                  fi
-                done
-              done
-            fi
-            echo "== Guava jar and module references =="
-            find /opt/keycloak/lib -type f -iname '*guava*' -print 2>/dev/null || true
-            grep -R -n -E 'guava.*33\\.6\\.0|com\\.google\\.guava' /opt/keycloak/lib 2>/dev/null | head -30 || true
-            echo "== Java trust store location and eMudhra aliases =="
-            java_home="$(java -XshowSettings:properties -version 2>&1 | sed -n 's/^[[:space:]]*java.home = //p' | head -1)"
-            echo "JAVA_HOME=$java_home"
+            command -v sqlite3 || echo "sqlite3 CLI is absent"
+            echo "== SQLite libraries in image =="
+            find /usr/lib64 /lib64 /opt/keycloak/lib -iname "*sqlite*" -print 2>/dev/null || true
+            echo "== Executables linked to SQLite =="
+            for binary in /usr/bin/* /usr/sbin/* /usr/libexec/* /opt/keycloak/bin/*; do
+              [ -f "$binary" ] || continue
+              if ldd "$binary" 2>/dev/null | grep -q "libsqlite3"; then
+                echo "SQLITE_LINKED_BINARY=$binary"
+              fi
+            done
+            echo "== Guava jar paths =="
+            find /opt/keycloak/lib -type f -iname "*guava*" -print 2>/dev/null || true
+            echo "== Guava module references =="
+            grep -R -l -F "com.google.guava" /opt/keycloak/lib 2>/dev/null || true
+            echo "== Java trust store location =="
+            java -XshowSettings:properties -version 2>&1 | grep "java.home =" || true
+            java_home="$(java -XshowSettings:properties -version 2>&1 | grep "java.home =" | cut -d= -f2- | xargs)"
             cacerts="$java_home/lib/security/cacerts"
-            if [ -e "$cacerts" ]; then
-              echo "CACERTS_REALPATH=$(readlink -f "$cacerts" 2>/dev/null || echo "$cacerts")"
-              if command -v keytool >/dev/null 2>&1; then
-                keytool -list -keystore "$cacerts" -storepass changeit 2>/dev/null | grep -i -E 'emSign|Comodo AAA' || echo "No matching eMudhra/Comodo aliases in Java trust store"
+            echo "CACERTS_PATH=$cacerts"
+            if [ -e "$cacerts" ] && command -v keytool >/dev/null 2>&1; then
+              if keytool -list -keystore "$cacerts" -storepass changeit > /tmp/keycloak-cacerts.txt 2>/dev/null; then
+                grep -i -E "emSign|Comodo AAA" /tmp/keycloak-cacerts.txt || echo "No matching eMudhra/Comodo aliases in Java trust store"
               else
-                echo "keytool is absent"
+                echo "keytool could not read the Java trust store with the default password"
               fi
             else
-              echo "Java cacerts path not found"
+              echo "Java trust store or keytool is absent"
             fi
           '
 
