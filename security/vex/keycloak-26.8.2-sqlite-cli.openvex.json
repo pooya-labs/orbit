@@ -1,0 +1,22 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/pooya-labs/orbit/blob/main/security/vex/keycloak-26.8.2-sqlite-cli.openvex.json",
+  "author": "ORBIT maintainers",
+  "timestamp": "2026-11-06T14:15:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-119586"
+      },
+      "products": [
+        {
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=x86_64&distro=redhat-9.8"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Narrowly scoped to sqlite-libs 3.34.1-11.el9_8 in quay.io/keycloak/keycloak:26.8.2. CVE-2026-119586 is in the SQLite command-line shell's .recover command; the affected shell implementation is not part of the sqlite-libs shared library. The image contains only /usr/lib64/libsqlite3.so.0 and /usr/lib64/libsqlite3.so.0.8.6 for SQLite, has no sqlite3 executable, has no SQLite-named Keycloak/JVM JAR, and the runtime executable-link inspection found no binary linked to libsqlite3. The statement does not apply to the sqlite CLI package, other packages/images, or the separate FTS5 library issue CVE-2026-119373. Evidence: CI run 42231828253 runtime inventory; https://bugzilla.redhat.com/show_bug.cgi?id=2563931; https://explore.alas.aws.amazon.com/CVE-2026-119586.html"
+    }
+  ]
+}
