@@ -286,7 +286,7 @@ async function handleApi(request, env, url, origin, id, principal) {
         auditStatement(env.DB, workspaceId, principal, "workspace.created", "workspace", workspaceId, id, {}, now)
       ]);
     } catch (error) {
-      if (/UNIQUE constraint failed: workspaces\\.slug/i.test(String(error))) {
+      if (/UNIQUE constraint failed: workspaces[.]slug/i.test(String(error))) {
         return fail(409, "workspace_slug_conflict", "That workspace slug is already in use.", origin, env, id);
       }
       return fail(503, "workspace_create_failed", "The workspace could not be created.", origin, env, id);
