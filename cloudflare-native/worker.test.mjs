@@ -209,7 +209,7 @@ test("global service inventory is restricted to the caller's workspace membershi
     assert.equal(response.status, 200);
     assert.match(statement, /EXISTS\s*\(/);
     assert.match(statement, /workspace_memberships/);
-    assert.deepEqual(bindings, ["native-api-test-user" ? env.ORBIT_OIDC_ISSUER : "", "native-api-test-user"]);
+    assert.deepEqual(bindings, [env.ORBIT_OIDC_ISSUER, "native-api-test-user"]);
     assert.deepEqual((await response.json()).data.map((item) => item.id), ["service-visible"]);
   });
 });
