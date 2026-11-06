@@ -25,7 +25,14 @@ git fetch origin pull/136/head:feat/cloudflare-dual-runtime
 git checkout feat/cloudflare-dual-runtime
 npm ci
 npm run test:cloudflare-gateway
-npx --yes wrangler@4.158.0 deploy --dry-run --config cloudflare/wrangler.jsonc
+secret_file="$(mktemp)"
+trap 'rm -f "$secret_file"' EXIT
+printf 'ORBIT_GATEWAY_SECRET=%064d\n' 0 > "$secret_file"
+npx --yes wrangler@4.158.0 deploy \
+  --config cloudflare/wrangler.jsonc \
+  --var ORBIT_API_ORIGIN:https://api.example.test \
+  --secrets-file "$secret_file" \
+  --dry-run
 ```
 
 Workers Free enforces its 10 ms CPU ceiling automatically; this project does not set `limits.cpu_ms`, because custom Wrangler `limits` are documented for the Standard usage model. The Worker has no D1/KV/R2/Queue/DO bindings. The dry run validates packaging only; it does not prove that the API origin is ready.
