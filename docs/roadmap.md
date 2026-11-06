@@ -492,3 +492,25 @@ Exact PR head `8af075d01fd3178857e6aafe867d5f091a3525e6` passed [CI run 41599111
 PR #120 was squash-merged into main as 0348f8831d8f008970ad6c42532620a12ff5a0e0. The dashboard footer now displays the existing application release version v0.10.0; a browser regression reads the version from package.json and asserts the footer matches it. Exact PR head 23625b2916457947b44611872508d469ca064130 passed all four CI jobs, including 18/18 Playwright tests and the full Docker telemetry/workspace-isolation/PostgreSQL-recovery job, plus all 13/13 Security jobs. After merge, Pages deployment [41612768102](https://github.com/pooya16pg-spec/orbit/actions/runs/41612768102), release workflow [41612863226](https://github.com/pooya16pg-spec/orbit/actions/runs/41612863226), and post-merge Security [41612767938](https://github.com/pooya16pg-spec/orbit/actions/runs/41612767938) succeeded. See project-context.md for the exact remaining gates and final post-merge CI status.
 
 The human M01 acceptance gate remains open. Use the step-by-step manual accessibility guide (manual-acceptance-guide.md); automated browser/axe success is not a substitute for actual NVDA, TalkBack, VoiceOver, keyboard-only, and visual review.
+
+
+## Post-v1 CF01 — Cloudflare edge gateway (2026-11-06)
+
+This is a post-v1 entry-point extension, not a reopening of the stable Apps Script v1 demo and not a replacement for the existing Go/PostgreSQL/OTel architecture.
+
+- [x] Inspect the accepted Go API, PostgreSQL migrations, OIDC/PKCE model, workload identity/grant model, private Collector topology, Prometheus/Loki/Tempo stores, Caddy ingress, retention, backup and free-only deployment runbooks.
+- [x] Record the architectural correction in ADR 0006: Cloudflare Worker is a narrow API edge; Go remains the only auth/role/business-logic authority; PostgreSQL and the existing telemetry stores remain canonical.
+- [x] Implement Worker proxy contract with exact Pages-origin CORS, explicit route allowlist, Bearer-token forwarding, request IDs, trusted Cloudflare client IP, streaming request/response bodies, no response cache and fail-closed origin configuration.
+- [x] Add Worker unit tests for liveness, CORS, origin validation, path allowlisting, authorization forwarding, header replacement, streamed mutations and upstream cookie handling.
+- [x] Protect the existing Caddy API origin with a random gateway secret; reject bypass requests, strip the secret before Go and forward the trusted edge IP.
+- [x] Generate the private gateway secret in the existing mode-600 `.env.production` setup; add a Wrangler deployment script that uses a temporary protected secrets file and never prints the secret.
+- [x] Add Worker contract tests and forwarded-client-IP tests to CI; validate the configuration/deployment shell script with `bash -n`.
+- [ ] Replace the deployed prototype Worker with the canonical edge-gateway module and verify remote Worker settings have no D1 binding.
+- [ ] Remove the empty D1 database created for the superseded prototype after the Worker is confirmed detached from it.
+- [ ] Provision and verify the original Go/PostgreSQL/Keycloak/Caddy origin. No origin VM, domain or identity-provider configuration is claimed as provisioned by this handoff.
+- [ ] Run the Worker deployment script against the provisioned origin; verify Caddy rejects direct API bypass without the Worker secret.
+- [ ] Build Pages using the Worker URL and the exact same Keycloak PKCE issuer/client/audience; test every existing typed API-client route through the Worker.
+- [ ] Run live viewer/operator/administrator and workspace A/B tests through the Worker, then test OTLP/HTTP protobuf and OTLP/gRPC through the existing dedicated ingress hostnames.
+- [ ] Complete clean-browser dual-runtime acceptance; Apps Script remains synthetic-only and unchanged.
+
+Do not introduce D1/Queues/Redis/NATS, duplicate JWT verification, raw telemetry storage in the Worker, or paid Cloudflare services to satisfy this milestone. Existing CI for Go/PostgreSQL, security, backup/restore, telemetry end-to-end and workspace isolation remains authoritative.
