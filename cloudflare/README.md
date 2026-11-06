@@ -74,9 +74,15 @@ Never store the gateway secret in GitHub Pages variables, browser code, URL quer
 
 ## Free-tier and service choices
 
-The Worker is a thin edge proxy. Its observability sampling is capped at 10% for logs and traces as a conservative ingestion guard. Cloudflare Workers Free currently includes up to 100,000 requests/day and 10 ms CPU per invocation; Workers Logs and Cloudflare Traces have separate free ingestion/retention limits. These figures describe the Free plan only and do not establish this account's plan. The existing origin keeps the authoritative data stores and its current telemetry pipeline. Redis and NATS stay deferred under ADR 0004; no Cloudflare Queues or Durable Objects are introduced. D1 and R2 are not needed for this design. No Cloudflare Tunnel, Cloudflare Access zone, Hyperdrive, Workers Paid plan, Containers, or paid add-on is required.
+The Worker is a thin edge proxy with no resource bindings. Its Wrangler configuration explicitly caps CPU time at **10 ms per invocation**, matching the Workers Free limit. Workers Free currently allows **100,000 requests per day**; exceeding that daily request allowance causes requests to fail until the UTC reset. Free also limits an invocation to 50 subrequests.
 
-Keep the existing $0/month hard budget. If the account's free Worker allowance becomes insufficient, stop or leave the edge unavailable rather than enabling paid billing or a weaker auth path.
+Workers Logs are included on Free. Until November 30, 2026, the documented Free allowance is 200,000 log events per day with three-day retention. Beginning December 1, 2026, Workers Logs and Workers Traces move to the shared Cloudflare Observability allowance: **0.5 GB ingestion per day with seven-day retention included**. On Free, Cloudflare stops ingesting additional telemetry when the daily allowance is reached; it does not continue metered ingestion. The Worker keeps 10% head sampling for logs and traces to conserve that allowance. Sampling reduces volume but is not itself a billing-plan switch.
+
+No D1, R2, Hyperdrive, Durable Objects, Queues, Cloudflare Tunnel, Workers AI, or paid add-on is required. The Go/PostgreSQL/Keycloak/Collector origin remains separate and must stay within its own $0/month hosting budget.
+
+The currently deployed Worker reports `usage_model: standard`. Cloudflare documents Standard as a Workers Paid-plan usage model, so the account/Worker must be switched to the intended Free plan in the dashboard before real traffic is enabled. The connected API token cannot read the account subscription/billing endpoint. Do not try to force Free by setting the legacy `bundled` usage model; that is not the Free plan. No billing or usage-model change is performed by this repository.
+
+Keep the existing $0/month hard budget. If the Free request or Observability allowance is exhausted, allow Cloudflare's Free-plan limit behavior to stop requests/telemetry rather than enabling paid billing or weakening the security boundary.
 
 ## Verification
 
