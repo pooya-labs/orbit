@@ -49,13 +49,11 @@ jobs:
             if command -v ldd >/dev/null 2>&1; then
               for path in /usr/bin /usr/sbin /usr/libexec /opt/keycloak/bin; do
                 [ -d "$path" ] || continue
-                find "$path" -type f -perm /111 -exec sh -c '
-                  for binary do
-                    if ldd "$binary" 2>/dev/null | grep -q "libsqlite3"; then
-                      echo "SQLITE_LINKED_BINARY=$binary"
-                    fi
-                  done
-                ' sh {} + 2>/dev/null || true
+                for binary in $(find "$path" -type f -perm /111 2>/dev/null); do
+                  if ldd "$binary" 2>/dev/null | grep -q "libsqlite3"; then
+                    echo "SQLITE_LINKED_BINARY=$binary"
+                  fi
+                done
               done
             fi
             echo "== Guava jar and module references =="
