@@ -171,7 +171,8 @@ function auditStatement(db, workspaceId, actor, action, resourceType, resourceId
   return db.prepare(`
     INSERT INTO workspace_audit_events
       (id, workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, request_id, details, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    WHERE changes() = 1
   `).bind(crypto.randomUUID(), workspaceId, actor.issuer, actor.subject, action, resourceType, resourceId || "", requestIdValue, JSON.stringify(details || {}), now);
 }
 
@@ -240,6 +241,10 @@ async function handleApi(request, env, url, origin, id, principal) {
       return fail(409, "workspace_slug_conflict", "That workspace slug is already in use or the workspace could not be created.", origin, env, id);
     }
     return response({ data: { id: workspaceId, name: name.trim(), slug, created_at: now, updated_at: now } }, 201, origin, env, id);
+  }
+
+  if (path.startsWith("/api/v1/telemetry/")) {
+    return fail(503, "telemetry_source_unavailable", "This Cloudflare-native runtime does not have a Prometheus, Loki or Tempo source configured. The telemetry API remains in the Go/PostgreSQL profile.", origin, env, id);
   }
 
   const match = path.match(/^\/api\/v1\/workspaces\/([0-9a-f-]{36})(?:\/(.*))?$/i);
