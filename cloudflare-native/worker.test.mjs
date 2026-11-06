@@ -5,6 +5,7 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import {
   incidentTransitionAllowed,
   parseBearer,
+  readBoundedResponseBytes,
   roleAtLeast,
   validAccessTokenClaims,
   validIssuer,
@@ -271,4 +272,25 @@ test("creating a workspace provisions explicitly labeled demo services, incident
     assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO alert_rules")).length, 2);
     assert.equal(batchStatements.filter((item) => item.sql.includes("\'demo_seed\'")).length, 7);
   });
+});
+
+test("OIDC metadata and JWKS bodies are bounded during streaming reads", async () => {
+  const exact = new Response(new Uint8Array([1, 2, 3]), {
+    headers: { "content-length": "3" }
+  });
+  assert.deepEqual([...await readBoundedResponseBytes(exact, 3)], [1, 2, 3]);
+
+  const oversizedHeader = new Response(null, {
+    headers: { "content-length": "1048577" }
+  });
+  await assert.rejects(readBoundedResponseBytes(oversizedHeader), /size limit/);
+
+  const oversizedStream = new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array(700 * 1024));
+      controller.enqueue(new Uint8Array(400 * 1024));
+      controller.close();
+    }
+  }));
+  await assert.rejects(readBoundedResponseBytes(oversizedStream), /size limit/);
 });
