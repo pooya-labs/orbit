@@ -1068,31 +1068,41 @@ remain deferred until after the portfolio v1 release, as previously requested.
   Guava CVE-2026-102554. The package inventory in
   [run 42227758708](https://github.com/pooya-labs/orbit/actions/runs/42227758708)
   gives the following exact package data:
-  - `ca-certificates` version `2026.2.92_v9.0.319`, release
-    `90.3.el9_8`; this full version matches Red Hat's fixed RHEL 9 package
-    `2026.2.92_v9.0.319-90.3.el9_8` for the eMudhra trust-store update
-    ([RHSA-2026:88459](https://access.redhat.com/errata/RHSA-2026:88459)).
-    Red Hat explains that RHEL OpenJDK uses the system `ca-certificates`
-    package for this issue and does not publish a separate Java fix for
-    CVE-2026-91403
-    ([CVE details](https://access.redhat.com/security/cve/cve-2026-91403)).
-    Trivy still reports the Java package as `will_not_fix`; keep that
-    scanner result visible until any future VEX is narrowly scoped to this
-    exact package/image evidence.
-  - `sqlite-libs` is `3.34.1-11.el9_8`; the `sqlite3` CLI is absent.
-    CVE-2026-119586 concerns SQLite CLI `.recover`; the Red Hat CSAF
-    product mapping identifies the `sqlite` package, not this image's
-    `sqlite-libs`-only runtime. This is a candidate package-mapping
-    non-applicability, not yet a suppressed finding
-    ([Red Hat VEX data](https://vulnerability.circl.lu/vuln/cve/CVE-2026-119586)).
+  - `ca-certificates` is `2026.2.92_v9.0.319-90.3.el9_8`, exactly the
+    RHEL 9 package in [RHSA-2026:88459](https://access.redhat.com/errata/RHSA-2026:88459).
+    Red Hat clarifies that CVE-2026-91403 was the insufficient first upstream
+    OpenJDK mitigation; RHEL OpenJDK RPMs rely on the system CA package, and the
+    later root-removal update is tracked under CVE-2026-114406 / upstream
+    CVE-2026-114820
+    ([CVE-2026-91403](https://access.redhat.com/security/cve/cve-2026-91403),
+    [CVE-2026-114406](https://access.redhat.com/security/cve/cve-2026-114406)).
+    CI inspected the actual Java trust store: the only matching alias was
+    `emsignrootca-g1`; the affected Comodo AAA Services and emSign ECC Root CA
+    G3 aliases were absent. A narrowly scoped OpenVEX statement now marks only
+    the exact RHEL `java-21-openjdk-headless` package PURL in this Keycloak
+    image not affected by CVE-2026-91403. It does not exempt other Java builds,
+    Red Hat build-of-OpenJDK, or other images.
+  - `sqlite-libs` is exactly `3.34.1-11.el9_8`; its installed files are the
+    shared library only. The `sqlite3` CLI is absent, no executable in the
+    inspected runtime paths links to `libsqlite3`, and no SQLite JAR exists
+    in the Keycloak/JVM application library path. CVE-2026-119586 is in the
+    SQLite command-line shell `.recover` implementation, not the shared
+    library. A narrowly scoped OpenVEX statement now marks only this exact
+    `sqlite-libs` PURL not affected by CVE-2026-119586. It does not cover the
+    SQLite CLI package or the separate FTS5 CVE.
   - CVE-2026-119373 affects SQLite FTS5 under specific application/table/query
-    preconditions. The image still contains `sqlite-libs`; no proof has yet
-    established whether any runtime consumer invokes the vulnerable FTS5 path
+    preconditions. The shared library remains installed; despite the lack of
+    discovered runtime consumers, we have not issued a VEX statement for this
+    finding. It remains a blocking HIGH finding pending stronger evidence or
+    a vendor-fixed package
     ([Red Hat CVE details](https://access.redhat.com/security/cve/cve-2026-119373)).
-  - Guava remains `33.6.0-jre`; Trivy identifies `33.7.2` as fixed.
-    This dependency remains unresolved in Keycloak 26.8.2
+  - Guava remains `33.6.0-jre` inside Keycloak's application classpath;
+    Trivy identifies `33.7.2` as fixed. This is unresolved and must be fixed by
+    an upstream Keycloak image or a tested, reproducible rebuild before origin
+    deployment
     ([advisory](https://advisories.gitlab.io/maven/com.google.guava/guava/CVE-2026-102554/)).
-  No findings are suppressed or called clean. Keep production identity blocked
+  The two VEX statements are package-version-specific and evidence-backed; no
+  broad image exception or blanket ignore was added. Keep production identity blocked
   until every remaining finding has an evidence-based disposition and the
   exact-image scan passes.
 - Keep the scan enabled weekly, on relevant pull requests, and for changes to
