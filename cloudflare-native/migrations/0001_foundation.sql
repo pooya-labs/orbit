@@ -44,6 +44,13 @@ CREATE TABLE workspace_audit_events (
 );
 CREATE INDEX workspace_audit_events_timeline_idx
   ON workspace_audit_events (workspace_id, created_at DESC, id DESC);
+CREATE TRIGGER workspace_audit_actor_ref_after_insert
+  AFTER INSERT ON workspace_audit_events
+  BEGIN
+    INSERT OR IGNORE INTO workspace_audit_actors
+      (workspace_id, actor_issuer, actor_subject, actor_ref, created_at)
+    VALUES (NEW.workspace_id, NEW.actor_issuer, NEW.actor_subject, NEW.id, NEW.created_at);
+  END;
 CREATE TRIGGER workspace_audit_events_no_update
   BEFORE UPDATE ON workspace_audit_events
   BEGIN SELECT RAISE(ABORT, 'workspace audit events are append-only'); END;
