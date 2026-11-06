@@ -24,6 +24,12 @@ set +a
 [[ "${ORBIT_API_DOMAIN:-}" =~ ^[a-z0-9-]+\.duckdns\.org$ ]] || { echo "ORBIT_API_DOMAIN in .env.production is invalid." >&2; exit 1; }
 [[ "${ORBIT_WORKER_GATEWAY_SECRET:-}" =~ ^[a-f0-9]{64}$ ]] || { echo "ORBIT_WORKER_GATEWAY_SECRET in .env.production is invalid." >&2; exit 1; }
 
+read -r -p "Confirm Cloudflare Dashboard shows Workers Free (not Workers Paid / Standard) before deployment [y/N]: " FREE_PLAN_CONFIRMED
+case "$FREE_PLAN_CONFIRMED" in
+  y|Y|yes|YES) ;;
+  *) echo "Deployment stopped. Verify the Workers Free plan first; no Worker update was made." >&2; exit 1 ;;
+esac
+
 WRANGLER_VERSION="4.158.0"
 npx --yes "wrangler@$WRANGLER_VERSION" whoami >/dev/null
 
