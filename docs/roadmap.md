@@ -289,17 +289,27 @@ identity, health, and tenant-isolation smoke checks pass.
   failed Trivy with three HIGH findings. The completed package inventory in
   [run 42227758708](https://github.com/pooya-labs/orbit/actions/runs/42227758708)
   confirms the CA package's full RPM version is
-  `2026.2.92_v9.0.319-90.3.el9_8`, the Red Hat fixed RHEL 9 release for the
-  eMudhra trust-store issue ([RHSA-2026:88459](https://access.redhat.com/errata/RHSA-2026:88459)).
-  Trivy still flags Java CVE-2026-91403 as `will_not_fix`, so retain the
-  evidence and only consider a narrowly scoped VEX after review. The image
-  contains `sqlite-libs` but no `sqlite3` CLI; CVE-2026-119586 is a CLI
-  `.recover` issue and remains a candidate package-mapping non-applicability,
-  not yet suppressed. SQLite FTS5 CVE-2026-119373 remains unresolved because
-  runtime use of that vulnerable path has not been ruled out. Guava remains
-  `33.6.0-jre` while Trivy identifies `33.7.2` as fixed. No VEX/ignore
-  suppressions have been added and no clean result is claimed. This remains
-  a blocking production gate. Keycloak is not used by the Pages + Apps Script
+  `2026.2.92_v9.0.319-90.3.el9_8`, the RHEL 9 update in
+  [RHSA-2026:88459](https://access.redhat.com/errata/RHSA-2026:88459).
+  Red Hat explains that RHEL OpenJDK uses the system CA bundle; the original
+  CVE-2026-91403 was an insufficient upstream mitigation, while root removal
+  is tracked under CVE-2026-114406 / CVE-2026-114820
+  ([CVE-2026-91403](https://access.redhat.com/security/cve/cve-2026-91403),
+  [CVE-2026-114406](https://access.redhat.com/security/cve/cve-2026-114406)).
+  The Java trust-store inventory confirmed the compromised Comodo AAA Services
+  and emSign ECC Root CA G3 aliases are absent. A narrowly scoped OpenVEX now
+  addresses only the exact RHEL OpenJDK package in this image.
+  The image contains `sqlite-libs` but no `sqlite3` CLI; no inspected
+  executable links to the shared library and no SQLite JAR exists in Keycloak's
+  application path. CVE-2026-119586 is specifically in the CLI `.recover`
+  implementation, so a package-version-specific OpenVEX addresses only the
+  `sqlite-libs` false match. No VEX is issued for SQLite FTS5
+  CVE-2026-119373, which remains unresolved. Guava remains `33.6.0-jre`
+  while Trivy identifies `33.7.2` as fixed; this remains unresolved too.
+  The two VEX records are narrow, package-specific and evidence-backed; no
+  blanket ignore or image-wide exception was added. The production identity
+  gate remains blocked until the remaining findings are resolved and the
+  exact-image scan succeeds. Keycloak is not used by the Pages + Apps Script
   demo and remains outside the v1 release gate.
 - The release does not claim formal WCAG conformance. Human TalkBack/VoiceOver
   device acceptance and broad sustained-load/capacity benchmarking remain
