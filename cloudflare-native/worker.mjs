@@ -73,7 +73,7 @@ function parseBearer(request) {
 }
 
 async function getVerifier(env) {
-  const issuer = String(env.ORBIT_OIDC_ISSUER || "").replace(/\/+$/, "");
+  const issuer = String(env.ORBIT_OIDC_ISSUER || "").trim();
   const audience = String(env.ORBIT_OIDC_AUDIENCE || "").trim();
   if (!issuer || !audience || !validIssuer(issuer)) {
     throw new Error("ORBIT OIDC issuer and audience are not configured safely.");
@@ -81,7 +81,7 @@ async function getVerifier(env) {
   const cacheKey = issuer + "|" + audience;
   if (!VERIFIER_CACHE.has(cacheKey)) {
     const pending = (async () => {
-      const discoveryUrl = issuer.replace(/\\/+$/, "") + "/.well-known/openid-configuration";
+      const discoveryUrl = issuer.replace(/\/+$/, "") + "/.well-known/openid-configuration";
       const discoveryResponse = await fetch(discoveryUrl, { headers: { accept: "application/json" }, redirect: "error", signal: AbortSignal.timeout(5000) });
       if (!discoveryResponse.ok) throw new Error("OIDC discovery is unavailable.");
       const discovery = await discoveryResponse.json();
