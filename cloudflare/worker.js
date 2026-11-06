@@ -125,7 +125,7 @@ function safeLimit(url) {
 function toArray(result) { return result.results || []; }
 function touchService(env, batch, workspaceId, service, attrs, now) {
   batch.push(env.DB.prepare(
-      touchService(env, batch, workspaceId, service, attrs, now);
+    "INSERT INTO telemetry_services(workspace_id,name,environment,region,first_seen_at,last_seen_at,sources_json,attributes_json) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(workspace_id,name) DO UPDATE SET last_seen_at=excluded.last_seen_at,attributes_json=excluded.attributes_json"
   ).bind(workspaceId, service, attrs["deployment.environment.name"] || null, attrs["cloud.region"] || null,
     new Date(now).toISOString(), new Date(now).toISOString(), '["otlp"]', JSON.stringify(attrs)));
 }
