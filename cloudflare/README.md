@@ -26,9 +26,15 @@ The D1 migration is in `cloudflare/migrations/0001_initial.sql`. It creates isol
 
 Do not commit credentials. OIDC issuer/audience values and the public client configuration must match the real identity provider. No identity provider has been provisioned by this change.
 
-## Deploy and test
+## Deployment status (2026-11-06)
 
-Deploy the Worker with Cloudflare's Workers tooling after the repository CI checks pass. Apply the SQL migration to the D1 database before enabling traffic. Keep the Worker on the account's no-cost limits; do not enable paid billing or automatic overages.
+- Worker `orbit-runtime` is deployed at https://orbit-runtime.pooyagame141.workers.dev.
+- D1 database `orbit-runtime` is provisioned in the EU jurisdiction and the initial schema migration is applied.
+- Worker Logs and Traces are enabled.
+- The deployed Worker upload was accepted by Cloudflare. The current verification network blocks direct requests to workers.dev, so external HTTP smoke is still pending; do not claim the endpoint has passed live request tests.
+- OIDC variables are intentionally unset until a real provider is configured. Authenticated telemetry routes therefore remain closed by default.
+
+Keep the Worker on the account's no-cost limits; do not enable paid billing or automatic overages.
 
 The Worker uses Cloudflare observability with logs and traces enabled. Never log bearer tokens or telemetry payload bodies.
 
