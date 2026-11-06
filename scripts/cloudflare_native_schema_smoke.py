@@ -52,9 +52,9 @@ expect_integrity_error(
 
 # Audit history is append-only.
 db.execute(
-    "INSERT INTO workspace_audit_events (id, workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, request_id, details, created_at) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ("audit-a", "workspace-a", "https://id.example", "user-a", "workspace.created", "workspace", "workspace-a", "req-a", "{}", now),
+    "INSERT INTO workspace_audit_events (id, workspace_id, actor_issuer, actor_subject, actor_role, action, resource_type, resource_id, request_id, details, created_at) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ("audit-a", "workspace-a", "https://id.example", "user-a", "owner", "workspace.created", "workspace", "workspace-a", "req-a", "{}", now),
 )
 expect_integrity_error("UPDATE workspace_audit_events SET action = 'tampered' WHERE id = 'audit-a'")
 expect_integrity_error("DELETE FROM workspace_audit_events WHERE id = 'audit-a'")
@@ -63,6 +63,25 @@ actor = db.execute(
     ("workspace-a", "https://id.example", "user-a"),
 ).fetchone()
 assert actor is not None and actor["actor_ref"] == "audit-a"
+event = db.execute("SELECT actor_role FROM workspace_audit_events WHERE id = 'audit-a'").fetchone()
+assert event is not None and event["actor_role"] == "owner"
+db.execute("DELETE FROM workspace_memberships WHERE workspace_id = 'workspace-a'")
+event = db.execute("SELECT actor_role FROM workspace_audit_events WHERE id = 'audit-a'").fetchone()
+assert event is not None and event["actor_role"] == "owner"
+
+# Notification channel names are case-insensitively unique per workspace.
+db.execute(
+    "INSERT INTO alert_notification_channels "
+    "(id, workspace_id, name, adapter, secret_ref, enabled, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) "
+    "VALUES ('channel-a', 'workspace-b', 'Operations', 'webhook', 'OPS_WEBHOOK', 1, 'https://id.example', 'user-b', 'https://id.example', 'user-b', ?, ?)",
+    (now, now),
+)
+expect_integrity_error(
+    "INSERT INTO alert_notification_channels "
+    "(id, workspace_id, name, adapter, secret_ref, enabled, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) "
+    "VALUES ('channel-b', 'workspace-b', 'operations', 'webhook', 'OPS_WEBHOOK_2', 1, 'https://id.example', 'user-b', 'https://id.example', 'user-b', ?, ?)",
+    (now, now),
+)
 
 
 # An incident transition and its history/audit entries commit as one batch.
@@ -82,8 +101,8 @@ db.execute(
     (now,),
 )
 db.execute(
-    "INSERT INTO workspace_audit_events (id, workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, request_id, details, created_at) "
-    "SELECT 'audit-transition-a', 'workspace-a', 'https://id.example', 'user-a', 'incident.status_changed', 'incident', 'incident-a', 'req-a', '{}', ? WHERE changes() = 1",
+    "INSERT INTO workspace_audit_events (id, workspace_id, actor_issuer, actor_subject, actor_role, action, resource_type, resource_id, request_id, details, created_at) "
+    "SELECT 'audit-transition-a', 'workspace-a', 'https://id.example', 'user-a', 'operator', 'incident.status_changed', 'incident', 'incident-a', 'req-a', '{}', ? WHERE changes() = 1",
     (now,),
 )
 assert db.execute("SELECT COUNT(*) FROM incident_timeline_events WHERE incident_id = 'incident-a'").fetchone()[0] == 1
