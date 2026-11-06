@@ -14,7 +14,7 @@ This is a new, independent Cloudflare runtime profile. It does not replace the e
 
 This is a staged foundation, not a claim of feature parity or a deployable v1. Live alert evaluation, webhook delivery, SLO error-budget calculation, API rate limiting and telemetry query routes are subsequent implementation milestones. In particular, D1 does not replace the current Prometheus/Loki/Tempo telemetry pipeline. The Cloudflare-native profile must either present clearly labelled D1/Workers runtime events and demo samples, or retain a separately hosted telemetry source; it must not label synthetic samples as real telemetry.
 
-The frontend still uses its existing OIDC Authorization Code + PKCE flow. The Worker validates the resulting Bearer access token against a configured HTTPS OIDC issuer and API audience. No identity provider is bundled or hosted by this Worker. A compatible issuer and audience must be selected and configured before the API can be activated.
+The frontend still uses its existing OIDC Authorization Code + PKCE flow. The Worker validates the resulting Bearer access token against a configured HTTPS OIDC issuer and API audience, including the same `iat`, `exp`, `sub`, `typ`, `kid`, signing-algorithm and configurable role-claim checks as the Go verifier. No identity provider is bundled or hosted by this Worker. A compatible issuer and audience must be selected and configured before the API can be activated.
 
 ## Deployment safety
 
