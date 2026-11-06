@@ -1,7 +1,7 @@
 CREATE TABLE workspaces (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
-  slug TEXT NOT NULL UNIQUE CHECK (length(slug) BETWEEN 1 AND 48 AND substr(slug, 1, 1) GLOB '[a-z0-9]' AND substr(slug, -1, 1) GLOB '[a-z0-9]' AND slug NOT GLOB '*[^a-z0-9-]*'),
+  slug TEXT NOT NULL UNIQUE CHECK (length(slug) BETWEEN 2 AND 48 AND substr(slug, 1, 1) GLOB '[a-z0-9]' AND substr(slug, -1, 1) GLOB '[a-z0-9]' AND slug NOT GLOB '*[^a-z0-9-]*'),
   created_by_issuer TEXT NOT NULL CHECK (length(created_by_issuer) BETWEEN 1 AND 512),
   created_by_subject TEXT NOT NULL CHECK (length(created_by_subject) BETWEEN 1 AND 512),
   created_at TEXT NOT NULL,
