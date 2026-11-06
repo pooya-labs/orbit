@@ -113,7 +113,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trivy image --platform linux/arm64 --config="" \
+          trivy image --image-src remote --platform linux/arm64 --config="" \
             --vuln-type os,library \
             --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
             --ignore-unfixed=false \
@@ -140,6 +140,21 @@ jobs:
           for platform, report_path in scans:
               report = json.loads(report_path.read_text())
               packages = [package for result in report.get("Results") or [] for package in result.get("Packages") or []]
+              if platform == "arm64":
+                  wrong_arch = [
+                      package
+                      for package in packages
+                      if package.get("AnalyzedBy") == "rpm"
+                      and package.get("Arch") not in (None, "noarch", "aarch64")
+                  ]
+                  if wrong_arch:
+                      raise SystemExit(
+                          "ARM64 inventory unexpectedly contains non-ARM RPMs: "
+                          + json.dumps(
+                              [{"name": p.get("Name"), "arch": p.get("Arch"), "version": p.get("Version")} for p in wrong_arch[:20]],
+                              sort_keys=True,
+                          )
+                      )
               for package in packages:
                   name = str(package.get("Name") or "")
                   if any(needle in name.lower() for needle in needles):
