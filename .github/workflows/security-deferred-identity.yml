@@ -140,17 +140,18 @@ jobs:
           PY
 
       - name: Scan the pinned Keycloak image for high and critical vulnerabilities
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: quay.io/keycloak/keycloak:26.8.2
-          version: v0.76.1
-          trivy-config: trivy.yaml
-          vuln-type: os,library
-          severity: HIGH,CRITICAL
-          ignore-unfixed: false
-          exit-code: "1"
-          format: table
-          timeout: 10m
+        shell: bash
+        run: |
+          set -euo pipefail
+          trivy --version
+          trivy image --config trivy.yaml \
+            --vuln-type os,library \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed=false \
+            --exit-code 1 \
+            --format table \
+            --timeout 10m \
+            quay.io/keycloak/keycloak:26.8.2
 
       - name: Create SBOM output directory
         run: mkdir -p sbom
