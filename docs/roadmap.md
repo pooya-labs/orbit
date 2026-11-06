@@ -517,3 +517,26 @@ This is a post-v1 entry-point extension, not a reopening of the stable Apps Scri
 - [ ] Complete clean-browser dual-runtime acceptance; Apps Script remains synthetic-only and unchanged.
 
 Do not introduce D1/Queues/Redis/NATS, duplicate JWT verification, raw telemetry storage in the Worker, or paid Cloudflare services to satisfy this milestone. Existing CI for Go/PostgreSQL, security, backup/restore, telemetry end-to-end and workspace isolation remains authoritative.
+
+
+## Post-v1 CF02 — Cloudflare-native D1 runtime (2026-11-06)
+
+This is a separate no-VPS runtime profile approved for implementation. It does **not** replace the existing `orbit-runtime` edge gateway, the Go/PostgreSQL engineering core, or the Apps Script demo.
+
+- [x] Inspect the existing typed API client, OIDC Authorization Code + PKCE flow, workspace membership/role model, tenant-scoped incident lifecycle and PostgreSQL schema.
+- [x] Record the separate Worker + D1 profile and its explicit limits in ADR 0007; keep the existing CF01 gateway architecture intact.
+- [x] Create an isolated `cloudflare-native/` Worker profile; keep `workers_dev` disabled until account configuration and acceptance are complete.
+- [x] Add the first SQLite/D1 migration for workspace-scoped services, incidents, append-only audit/timeline records, alerts, notification metadata, deployments and SLO definitions.
+- [x] Add generic OIDC discovery/JWKS verification for RS256/ES256 access tokens, exact issuer/audience checks and D1-backed workspace role authorization.
+- [x] Implement the foundation routes for health, metadata, workspace creation/listing, memberships, audit history, services and incident lifecycle.
+- [x] Add CI coverage for native Worker policy helpers and a SQLite schema/tenant-isolation smoke test.
+- [ ] Complete the D1 schema smoke test in GitHub Actions and review its result before deployment.
+- [ ] Migrate alert rule CRUD and alert evaluation to bounded Worker execution; define a safe retry/cron model within Workers Free limits.
+- [ ] Implement deployment annotations and SLO CRUD; define an honest error-budget source instead of pretending D1 replaces Prometheus.
+- [ ] Implement notification delivery with protected webhook-secret storage, retry limits and delivery-attempt history.
+- [ ] Decide the compatible hosted OIDC issuer and API audience; configure it without placing private credentials in the Pages bundle.
+- [ ] Define the native telemetry view using Workers runtime observability and clearly labelled synthetic samples; do not claim Prometheus/Loki/Tempo or OTLP parity.
+- [ ] Test every current frontend API-client method against the native runtime; only then introduce a guarded Pages API-origin switch.
+- [ ] Create the dedicated D1 database, apply migrations, configure issuer/audience, enable the Worker route and deploy after the complete acceptance matrix passes.
+
+**Important boundary:** this milestone is a staged foundation, not feature parity or a deployable v1. The full Prometheus/Loki/Tempo and raw OTLP pipeline remains available only in the separate Go/PostgreSQL reference profile until a genuinely supported zero-cost telemetry host is selected. Apps Script is unchanged.
