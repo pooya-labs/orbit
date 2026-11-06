@@ -1,3 +1,5 @@
 vulnerability:
   vex:
     - security/vex/tempo-cve-2026-28377.openvex.json
+    - security/vex/keycloak-26.8.2-openjdk-system-ca.openvex.json
+    - security/vex/keycloak-26.8.2-sqlite-cli.openvex.json
