@@ -338,3 +338,37 @@ test("workspace viewer membership can read but cannot perform operator mutations
     assert.equal(queryCount, 2);
   });
 });
+
+test("unavailable real telemetry and evaluation routes return explicit 503 responses without fabricated data", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const globalTelemetry = await worker.fetch(authorizedRequest("/api/v1/telemetry/metrics?window=1h", token), { ...env, DB: {} });
+    assert.equal(globalTelemetry.status, 503);
+    assert.equal((await globalTelemetry.json()).error.code, "telemetry_source_unavailable");
+
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174000";
+    const DB = {
+      prepare(sql) {
+        assert.match(sql, /FROM workspace_memberships/);
+        return {
+          bind() {
+            return {
+              first: async () => ({
+                workspace_id: workspaceId,
+                role: "owner",
+                created_at: "2026-11-06T12:00:00.000Z",
+                updated_at: "2026-11-06T12:00:00.000Z"
+              })
+            };
+          }
+        };
+      }
+    };
+    const alerts = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/alerts?limit=50`, token), { ...env, DB });
+    assert.equal(alerts.status, 503);
+    assert.equal((await alerts.json()).error.code, "alert_evaluator_unavailable");
+
+    const budget = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/slos/123e4567-e89b-12d3-a456-426614174001/budget`, token), { ...env, DB });
+    assert.equal(budget.status, 503);
+    assert.equal((await budget.json()).error.code, "slo_telemetry_unavailable");
+  });
+});
