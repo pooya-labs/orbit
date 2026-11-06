@@ -7,9 +7,16 @@ const HOP_BY_HOP_HEADERS = [
 ];
 
 function json(payload, status = 200, headers = {}) {
+  const responseHeaders = new Headers({
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store"
+  });
+  for (const [name, value] of new Headers(headers)) {
+    responseHeaders.set(name, value);
+  }
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers }
+    headers: responseHeaders
   });
 }
 
