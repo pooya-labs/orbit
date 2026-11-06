@@ -17,7 +17,7 @@ function requestId() { return crypto.randomUUID(); }
 function cors(response, env) {
   const headers = new Headers(response.headers);
   headers.set("access-control-allow-origin", env.ALLOWED_ORIGIN || "https://pooya-labs.github.io");
-  headers.set("access-control-allow-methods", "GET,POST,OPTIONS");
+  headers.set("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   headers.set("access-control-allow-headers", "authorization,content-type");
   headers.set("vary", "origin");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -123,6 +123,12 @@ function safeLimit(url) {
   return n;
 }
 function toArray(result) { return result.results || []; }
+function touchService(env, batch, workspaceId, service, attrs, now) {
+  batch.push(env.DB.prepare(
+      touchService(env, batch, workspaceId, service, attrs, now);
+  ).bind(workspaceId, service, attrs["deployment.environment.name"] || null, attrs["cloud.region"] || null,
+    new Date(now).toISOString(), new Date(now).toISOString(), '["otlp"]', JSON.stringify(attrs)));
+}
 async function listServices(env, workspaceId) {
   const result = await env.DB.prepare(
     "SELECT name, environment, region, first_seen_at, last_seen_at, sources_json, attributes_json FROM telemetry_services WHERE workspace_id=? AND last_seen_at >= ? ORDER BY name LIMIT ?"
@@ -183,12 +189,13 @@ async function ingestOtlp(request, env, signal) {
           batch.push(env.DB.prepare("INSERT INTO metric_samples(workspace_id,service_name,metric_name,metric_type,value,timestamp_ms,labels_json) VALUES(?,?,?,?,?,?,?)").bind(workspaceId,service,name,metric.type || "gauge",value,ts,JSON.stringify(attrs)));
         }
       }
-      batch.push(env.DB.prepare("INSERT INTO telemetry_services(workspace_id,name,environment,region,first_seen_at,last_seen_at,sources_json,attributes_json) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(workspace_id,name) DO UPDATE SET last_seen_at=excluded.last_seen_at,sources_json='[\"otlp\"]',attributes_json=excluded.attributes_json").bind(workspaceId,service,attrs["deployment.environment.name"] || null,attrs["cloud.region"] || null,new Date(now).toISOString(),new Date(now).toISOString(),'["otlp"]',JSON.stringify(attrs)));
+      touchService(env, batch, workspaceId, service, attrs, now);
     }
   } else if (signal === "logs") {
     for (const resource of payload.resourceLogs || []) {
       const attrs = Object.fromEntries((resource.resource?.attributes || []).map(a => [a.key, a.value?.stringValue ?? a.value?.intValue ?? a.value?.boolValue]));
       const service = String(attrs["service.name"] || "unknown").slice(0,128);
+      touchService(env, batch, workspaceId, service, attrs, now);
       for (const scope of resource.scopeLogs || []) for (const record of scope.logRecords || []) {
         const timestamp = Number(record.timeUnixNano || record.observedTimeUnixNano || 0) / 1e6 || now;
         const body = String(record.body?.stringValue ?? JSON.stringify(record.body || {})).slice(0,8192);
@@ -200,6 +207,7 @@ async function ingestOtlp(request, env, signal) {
     for (const resource of payload.resourceSpans || []) {
       const attrs = Object.fromEntries((resource.resource?.attributes || []).map(a => [a.key, a.value?.stringValue ?? a.value?.intValue ?? a.value?.boolValue]));
       const service = String(attrs["service.name"] || "unknown").slice(0,128);
+      touchService(env, batch, workspaceId, service, attrs, now);
       for (const scope of resource.scopeSpans || []) for (const span of scope.spans || []) {
         const start = Number(span.startTimeUnixNano || 0) / 1e6 || now;
         const end = Number(span.endTimeUnixNano || 0) / 1e6 || start;
