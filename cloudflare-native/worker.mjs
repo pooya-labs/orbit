@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify, customFetch } from "jose";
 
 const API_PREFIX = "/api/v1/";
 const METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
@@ -55,7 +55,7 @@ function validUUID(value) {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-function validAccessTokenClaims(payload, header, issuer) {
+function validAccessTokenClaims(payload, header, issuer, rolesClaim) {
   if (!payload || !header || typeof header !== "object") return false;
   if (["jku", "jwk", "x5u", "crit", "b64"].some((key) => Object.hasOwn(header, key))) return false;
   if (typeof header.kid !== "string" || !header.kid || header.kid.length > 256) return false;
@@ -64,10 +64,11 @@ function validAccessTokenClaims(payload, header, issuer) {
   const issuedAt = payload.iat;
   const expiresAt = payload.exp;
   if (typeof subject !== "string" || !subject.trim() || subject.length > 512) return false;
-  if (payload.iss !== issuer || !Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) || expiresAt <= issuedAt) return false;
-  const rolesClaim = payload.roles;
-  if (rolesClaim !== undefined &&
-      !(typeof rolesClaim === "string" || (Array.isArray(rolesClaim) && rolesClaim.every((role) => typeof role === "string")))) return false;
+  if (payload.iss !== issuer || !Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) ||
+      expiresAt <= issuedAt || issuedAt > Date.now() / 1000 + 60) return false;
+  const roles = payload[rolesClaim];
+  if (roles !== undefined &&
+      !(typeof roles === "string" || (Array.isArray(roles) && roles.every((role) => typeof role === "string")))) return false;
   return true;
 }
 
@@ -92,30 +93,59 @@ function parseBearer(request) {
   return value.slice(7).trim();
 }
 
+async function readOIDCJSON(url) {
+  const response = await fetch(url, {
+    headers: { accept: "application/json" },
+    redirect: "error",
+    signal: AbortSignal.timeout(5000)
+  });
+  if (!response.ok) throw new Error("OIDC metadata endpoint is unavailable.");
+  const declaredLength = Number(response.headers.get("content-length") || 0);
+  if (declaredLength > 1024 * 1024) throw new Error("OIDC metadata exceeds one MiB.");
+  const raw = await response.text();
+  if (new TextEncoder().encode(raw).byteLength > 1024 * 1024) throw new Error("OIDC metadata exceeds one MiB.");
+  return JSON.parse(raw);
+}
+
+async function boundedJWKSFetch(url, options) {
+  const response = await fetch(url, { ...options, redirect: "error" });
+  if (response.status !== 200) return response;
+  const declaredLength = Number(response.headers.get("content-length") || 0);
+  if (declaredLength > 1024 * 1024) return new Response(null, { status: 413 });
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength > 1024 * 1024) return new Response(null, { status: 413 });
+  return new Response(bytes, { status: response.status, headers: response.headers });
+}
+
 async function getVerifier(env) {
   const issuer = String(env.ORBIT_OIDC_ISSUER || "").trim();
   const audience = String(env.ORBIT_OIDC_AUDIENCE || "").trim();
-  if (!issuer || !audience || !validIssuer(issuer)) {
-    throw new Error("ORBIT OIDC issuer and audience are not configured safely.");
+  const rolesClaim = String(env.ORBIT_OIDC_ROLES_CLAIM || "roles").trim();
+  if (!issuer || !audience || !validIssuer(issuer) || !/^[A-Za-z0-9_.-]{1,64}$/.test(rolesClaim)) {
+    throw new Error("ORBIT OIDC issuer, audience and roles claim are not configured safely.");
   }
-  const cacheKey = issuer + "|" + audience;
+  const cacheKey = issuer + "|" + audience + "|" + rolesClaim;
   if (!VERIFIER_CACHE.has(cacheKey)) {
     const pending = (async () => {
       const discoveryUrl = issuer.replace(/\/+$/, "") + "/.well-known/openid-configuration";
-      const discoveryResponse = await fetch(discoveryUrl, { headers: { accept: "application/json" }, redirect: "error", signal: AbortSignal.timeout(5000) });
-      if (!discoveryResponse.ok) throw new Error("OIDC discovery is unavailable.");
-      const discovery = await discoveryResponse.json();
+      const discovery = await readOIDCJSON(discoveryUrl);
       if (!discovery || discovery.issuer !== issuer || typeof discovery.jwks_uri !== "string") {
         throw new Error("OIDC discovery issuer is invalid.");
       }
       const jwksUrl = new URL(discovery.jwks_uri);
       if (jwksUrl.protocol !== "https:" || jwksUrl.username || jwksUrl.password || jwksUrl.search || jwksUrl.hash) {
-        throw new Error("OIDC JWKS endpoint must be HTTPS and contain no credentials.");
+        throw new Error("OIDC JWKS endpoint must be HTTPS and contain no credentials, query or fragment.");
       }
       return {
-        jwks: createRemoteJWKSet(jwksUrl, { timeoutDuration: 5000, cooldownDuration: 30_000, cacheMaxAge: 5 * 60_000 }),
+        jwks: createRemoteJWKSet(jwksUrl, {
+          timeoutDuration: 5000,
+          cooldownDuration: 30_000,
+          cacheMaxAge: 5 * 60_000,
+          [customFetch]: boundedJWKSFetch
+        }),
         issuer,
-        audience
+        audience,
+        rolesClaim
       };
     })();
     VERIFIER_CACHE.set(cacheKey, pending);
@@ -135,7 +165,7 @@ async function authenticate(request, env) {
       algorithms: ["RS256", "ES256"],
       clockTolerance: 60
     });
-    if (!validAccessTokenClaims(payload, protectedHeader, verifier.issuer)) {
+    if (!validAccessTokenClaims(payload, protectedHeader, verifier.issuer, verifier.rolesClaim)) {
       return { error: "The access token is missing required claims or has an unsupported JWT header." };
     }
     return { principal: { issuer: payload.iss, subject: payload.sub } };
@@ -265,13 +295,14 @@ async function handleApi(request, env, url, origin, id, principal) {
     return fail(503, "telemetry_source_unavailable", "This Cloudflare-native runtime does not have a Prometheus, Loki or Tempo source configured. The telemetry API remains in the Go/PostgreSQL profile.", origin, env, id);
   }
 
-  const match = path.match(/^\/api\/v1\/workspaces\/([0-9a-f-]{36})(?:\/(.*))?$/i);
+  const match = path.match(/^\/api\/v1\/workspaces\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/(.*))?$/i);
   if (match) {
     const workspaceId = match[1];
     const suffix = match[2] || "";
     const requiredRole = request.method === "GET" ? "viewer" : "operator";
     const access = await requireWorkspace(env.DB, workspaceId, principal, requiredRole);
     if (access.error) return fail(access.error.status, access.error.code, access.error.message, origin, env, id);
+    principal.role = access.membership.role;
 
     if (suffix === "membership" && request.method === "GET") {
       return response({ data: access.membership }, 200, origin, env, id);
@@ -358,7 +389,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       return response({ data: { id: incidentId, title, description, service_id: serviceId, service_name: service.name, severity, status: "open", started_at: now, updated_at: now, resolved_at: null, source: "live" } }, 201, origin, env, id);
     }
 
-    const transition = suffix.match(/^incidents\/([0-9a-f-]{36})\/status$/i);
+    const transition = suffix.match(/^incidents\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/status$/i);
     if (transition && request.method === "PATCH") {
       const parsed = await readJson(request);
       if (parsed.error) return fail(400, "invalid_incident_transition", parsed.error, origin, env, id);
@@ -405,7 +436,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       return response({ data: { ...existing, status, updated_at: now, resolved_at: resolvedAt } }, 200, origin, env, id);
     }
 
-    const timeline = suffix.match(/^incidents\/([0-9a-f-]{36})\/timeline$/i);
+    const timeline = suffix.match(/^incidents\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/timeline$/i);
     if (timeline && request.method === "GET") {
       const limit = limitFromUrl(url);
       if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
@@ -458,7 +489,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       return response({ data: { id: ruleId, workspace_id: workspaceId, ...details, created_at: now, updated_at: now } }, 201, origin, env, id);
     }
 
-    const ruleMatch = suffix.match(/^alert-rules\/([0-9a-f-]{36})(?:\/(enabled))?$/i);
+    const ruleMatch = suffix.match(/^alert-rules\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/(enabled))?$/i);
     if (ruleMatch) {
       const ruleId = ruleMatch[1];
       if (ruleMatch[2] === "enabled" && request.method === "PATCH") {
@@ -531,7 +562,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       const limit = limitFromUrl(url, 100);
       if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
       const serviceId = url.searchParams.get("service_id") || "";
-      if (serviceId && !/^[0-9a-f-]{36}$/i.test(serviceId)) return fail(400, "invalid_deployment_filter", "Service identifier is invalid.", origin, env, id);
+      if (serviceId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(serviceId)) return fail(400, "invalid_deployment_filter", "Service identifier is invalid.", origin, env, id);
       const result = await env.DB.prepare("SELECT id, workspace_id, service_id, service_name, environment, version, commit_sha, change_reference, release_notes, deployed_at, created_at FROM deployment_annotations WHERE workspace_id = ? AND (? = '' OR service_id = ?) ORDER BY deployed_at DESC, id DESC LIMIT ?").bind(workspaceId, serviceId, serviceId, limit).all();
       return response({ data: result.results || [] }, 200, origin, env, id);
     }
@@ -546,7 +577,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       const changeReference = typeof input.change_reference === "string" ? input.change_reference.trim() : "";
       const releaseNotes = typeof input.release_notes === "string" ? input.release_notes.trim() : "";
       const deployedTimestamp = typeof input.deployed_at === "string" ? Date.parse(input.deployed_at) : (input.deployed_at === undefined ? Date.now() : NaN);
-      if (typeof serviceId !== "string" || !/^[0-9a-f-]{36}$/i.test(serviceId) ||
+      if (typeof serviceId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(serviceId) ||
           !/^[A-Za-z0-9][A-Za-z0-9.+_:/-]{0,127}$/.test(version) ||
           (commitSha && !/^[0-9a-f]{7,64}$/.test(commitSha)) ||
           (changeReference && !/^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,255}$/.test(changeReference)) ||
@@ -567,7 +598,7 @@ async function handleApi(request, env, url, origin, id, principal) {
     if (suffix === "deployments/compare" && request.method === "GET") {
       const fromId = url.searchParams.get("from_id") || "";
       const toId = url.searchParams.get("to_id") || "";
-      if (!/^[0-9a-f-]{36}$/i.test(fromId) || !/^[0-9a-f-]{36}$/i.test(toId) || fromId === toId) return fail(400, "invalid_deployment_comparison", "Compare two different deployment annotations.", origin, env, id);
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fromId) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(toId) || fromId === toId) return fail(400, "invalid_deployment_comparison", "Compare two different deployment annotations.", origin, env, id);
       const [from, to] = await Promise.all([
         env.DB.prepare("SELECT id, workspace_id, service_id, service_name, environment, version, commit_sha, change_reference, release_notes, deployed_at, created_at FROM deployment_annotations WHERE id = ? AND workspace_id = ?").bind(fromId, workspaceId).first(),
         env.DB.prepare("SELECT id, workspace_id, service_id, service_name, environment, version, commit_sha, change_reference, release_notes, deployed_at, created_at FROM deployment_annotations WHERE id = ? AND workspace_id = ?").bind(toId, workspaceId).first()
@@ -580,7 +611,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       const limit = limitFromUrl(url, 100);
       if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
       const serviceId = url.searchParams.get("service_id") || "";
-      if (serviceId && !/^[0-9a-f-]{36}$/i.test(serviceId)) return fail(400, "invalid_slo_filter", "Service identifier is invalid.", origin, env, id);
+      if (serviceId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(serviceId)) return fail(400, "invalid_slo_filter", "Service identifier is invalid.", origin, env, id);
       const result = await env.DB.prepare("SELECT slo.id, slo.workspace_id, slo.service_id, services.name AS service_name, services.environment, slo.name, slo.route, slo.target, slo.rolling_window_days, slo.enabled, slo.created_at, slo.updated_at FROM service_level_objectives slo JOIN services ON services.id = slo.service_id AND services.workspace_id = slo.workspace_id WHERE slo.workspace_id = ? AND (? = '' OR slo.service_id = ?) ORDER BY slo.enabled DESC, slo.updated_at DESC, slo.id DESC LIMIT ?").bind(workspaceId, serviceId, serviceId, limit).all();
       return response({ data: (result.results || []).map((row) => ({ ...row, enabled: Boolean(row.enabled) })) }, 200, origin, env, id);
     }
@@ -594,7 +625,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       const route = typeof input.route === "string" ? input.route.trim() : "";
       const target = input.target;
       const windowDays = input.rolling_window_days;
-      if (typeof serviceId !== "string" || !/^[0-9a-f-]{36}$/i.test(serviceId) ||
+      if (typeof serviceId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(serviceId) ||
           !name || name.length > 120 || !/^\/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$/.test(route) || route.includes("//") ||
           typeof target !== "number" || !Number.isFinite(target) || target < 0.90 || target > 0.9999 || ![1, 3, 7].includes(windowDays)) return fail(400, "invalid_slo", "SLO fields are invalid.", origin, env, id);
       const service = await env.DB.prepare("SELECT name, environment FROM services WHERE id = ? AND workspace_id = ?").bind(serviceId, workspaceId).first();
@@ -614,7 +645,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       return response({ data: { id: sloId, workspace_id: workspaceId, service_id: serviceId, service_name: service.name, environment: service.environment, name, route, target, rolling_window_days: windowDays, enabled: true, created_at: now, updated_at: now } }, 201, origin, env, id);
     }
 
-    const sloMatch = suffix.match(/^slos\/([0-9a-f-]{36})(?:\/(enabled|budget))?$/i);
+    const sloMatch = suffix.match(/^slos\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/(enabled|budget))?$/i);
     if (sloMatch) {
       const sloId = sloMatch[1];
       if (sloMatch[2] === "budget" && request.method === "GET") return fail(503, "slo_telemetry_unavailable", "SLO definitions are stored, but error budgets require real request telemetry that is not configured for this Cloudflare-only runtime.", origin, env, id);
@@ -694,7 +725,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       return response({ data: { id: channelId, workspace_id: workspaceId, name, adapter: "webhook", enabled: true, secret_configured: typeof env[secretRef] === "string" && env[secretRef].length > 0, created_at: now, updated_at: now } }, 201, origin, env, id);
     }
 
-    const channelState = suffix.match(/^alert-notification-channels\/([0-9a-f-]{36})\/enabled$/i);
+    const channelState = suffix.match(/^alert-notification-channels\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/enabled$/i);
     if (channelState && request.method === "PATCH") {
       const parsed = await readJson(request);
       if (parsed.error || typeof parsed.value?.enabled !== "boolean") return fail(400, "invalid_alert_notification_state", "enabled must be provided as a boolean.", origin, env, id);
