@@ -505,7 +505,7 @@ This is a post-v1 entry-point extension, not a reopening of the stable Apps Scri
 - [x] Protect the existing Caddy API origin with a random gateway secret; reject bypass requests, strip the secret before Go and forward the trusted edge IP.
 - [x] Generate the private gateway secret in the existing mode-600 `.env.production` setup; add a Wrangler deployment script that uses a temporary protected secrets file and never prints the secret.
 - [x] Add Worker contract tests and forwarded-client-IP tests to CI; validate the configuration/deployment shell script with `bash -n`.
-- [x] Preserve exact-origin CORS headers on JSON error responses and cap Worker CPU at the 10 ms Workers Free limit.
+- [x] Preserve exact-origin CORS headers on JSON error responses and align the Worker config with Free-plan defaults (no Standard-only custom CPU override).
 - [x] Require an explicit Workers Free confirmation before the Worker deployment script can publish, and add a full Cloudflare Free deployment runbook.
 - [x] Replace the deployed prototype Worker with the canonical edge-gateway module; Cloudflare settings confirm `bindings: []` and Worker version 0.2.3 is the active upload.
 - [x] Delete the prototype D1 database after verifying the Worker had no D1 binding; the deleted database ID returns HTTP 404. Other account D1 resources were left untouched.

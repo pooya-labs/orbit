@@ -2,17 +2,17 @@
 
 This runbook deploys the repository's Cloudflare edge gateway on the Workers Free plan. It does not replace the existing Go/PostgreSQL/Keycloak/Collector origin and does not change the Apps Script demo.
 
-## 0. Billing gate — do this first
+## 0. Billing gate — confirm the Free plan
 
 1. Sign in to the Cloudflare Dashboard and select the ORBIT account.
 2. Open **Manage Account → Billing → Subscriptions**.
-3. Inspect the Workers subscription. If a **Workers Paid** subscription is active, use **Change** and choose **Free**, or use **Cancel** and select **Free** when that is the offered downgrade path.
-4. Confirm the effective date. Cloudflare applies cancellations/downgrades at the end of the current billing period; paid features remain available until then. Make the change at least 24 hours before the renewal date.
-5. After that effective date, return to **Manage Account → Billing → Subscriptions** and confirm Workers Paid is no longer active. Then inspect **Workers & Pages → Overview → orbit-runtime → Settings → Usage Model**. If it still explicitly reports `standard`, stop and resolve the discrepancy with Cloudflare Billing before deploying real traffic; do not try to switch it to legacy `bundled`.
+3. Confirm the Workers row says **Workers Free — Active** and that no Workers Paid subscription is active. The owner-provided dashboard view already showed exactly this state, with **Upgrade to Workers Paid** and **No payment method on file**.
+4. Do not upgrade, add a payment method, enable automatic overages, or change a subscription for this project.
+5. The Worker settings API currently reports `usage_model: standard`, while the Billing page confirms Workers Free is Active. Treat the Billing subscription page as the account-plan source of truth; leave the API usage-model field unchanged and do not set the legacy `bundled` value.
 
-The currently inspected Worker reported `usage_model: standard`. Cloudflare documents Standard as a Workers Paid-plan usage model. Do not change it to the legacy `bundled` value as a shortcut; Bundled is not the Workers Free plan. Do not continue to the deployment step until Billing confirms the Workers Free plan and the Worker no longer appears to use the Paid-only Standard model.
+Cloudflare API access can read Worker configuration and versions but the connected OAuth integration receives HTTP 403 for `/accounts/{account_id}/subscriptions` because that endpoint requires Billing Read/Write API-token permission. No billing or subscription change was made.
 
-Official references: [Workers pricing and Free limits](https://developers.cloudflare.com/workers/platform/pricing/), [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), and [cancel or downgrade subscriptions](https://developers.cloudflare.com/billing/manage/cancel-subscription/).
+Official references: [Workers pricing and Free limits](https://developers.cloudflare.com/workers/platform/pricing/) and [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
 
 ## 1. Get the repository and validate the code
 
@@ -28,7 +28,7 @@ npm run test:cloudflare-gateway
 npx --yes wrangler@4.158.0 deploy --dry-run --config cloudflare/wrangler.jsonc
 ```
 
-The Worker CPU cap is explicitly `limits.cpu_ms: 10`. The Worker has no D1/KV/R2/Queue/DO bindings. The dry run validates packaging only; it does not prove that the API origin is ready.
+Workers Free enforces its 10 ms CPU ceiling automatically; this project does not set `limits.cpu_ms`, because custom Wrangler `limits` are documented for the Standard usage model. The Worker has no D1/KV/R2/Queue/DO bindings. The dry run validates packaging only; it does not prove that the API origin is ready.
 
 ## 2. Prepare the original ORBIT origin
 
@@ -46,13 +46,15 @@ bash deploy/production/free-stack.sh start
 
 ## 3. Deploy the Worker code and its private settings
 
+Current Cloudflare inspection (November 6, 2026): account subdomain `pooyagame141` exists; the `orbit-runtime` workers.dev route is currently disabled; no Worker secret is attached yet. The next deployment uses `workers_dev: true`, so it will turn on the public route. Keep API routes fail-closed until the origin hostname and gateway secret are supplied by the deployment script.
+
 Run this from the same repository checkout on a machine that has access to `.env.production` and is authenticated to the correct Cloudflare account with Wrangler:
 
 ```bash
 bash deploy/production/configure-cloudflare-worker.sh
 ```
 
-The script pins Wrangler 4.158.0, asks for explicit confirmation that Workers Free is active, reads the API hostname and gateway secret from `.env.production`, and deploys `cloudflare/wrangler.jsonc`. It passes the secret through a temporary mode-600 file and deletes that file on exit. It does not print the secret.
+The script pins Wrangler 4.158.0, asks for explicit confirmation that Workers Free is active, reads the API hostname and gateway secret from `.env.production`, and deploys `cloudflare/wrangler.jsonc`. Its `workers_dev: true` setting enables the Worker's `workers.dev` route during deployment. It passes the secret through a temporary mode-600 file and deletes that file on exit. It does not print the secret.
 
 Do not paste `ORBIT_WORKER_GATEWAY_SECRET` into the dashboard's plain-text variables, GitHub Actions variables, GitHub Pages, browser code, URLs, or chat. The deployment script installs it as a Worker secret.
 
@@ -88,7 +90,7 @@ These are public browser configuration values. Never add the Worker gateway secr
 
 - [ ] Cloudflare Billing shows Workers Free; no Workers Paid subscription is active.
 - [ ] Worker settings do not show the Paid-only Standard usage model; if they do, stop and resolve the account-plan mismatch before continuing.
-- [ ] Worker version has `limits.cpu_ms: 10` and no unexpected bindings.
+- [ ] Worker uses the Workers Free platform CPU limit (10 ms by default) and has no unexpected bindings or custom Standard-only CPU override.
 - [ ] `/health/live` returns 200 and `/health/ready` reflects origin readiness.
 - [ ] Direct Caddy API access without the gateway secret returns 403.
 - [ ] Browser login uses the existing Keycloak PKCE client and the browser sends API traffic only to the Worker URL.
