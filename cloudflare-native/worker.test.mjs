@@ -267,7 +267,6 @@ test("creating a workspace provisions explicitly labeled demo services, incident
     assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO incidents")).length, 2);
     assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO incident_timeline_events")).length, 2);
     assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO alert_rules")).length, 2);
-    const seedLabels = batchStatements.flatMap((item) => item.values || []).filter((value) => value === "demo_seed");
-    assert.ok(seedLabels.length >= 4);
+    assert.equal(batchStatements.filter((item) => item.sql.includes("\'demo_seed\'")).length, 7);
   });
 });
