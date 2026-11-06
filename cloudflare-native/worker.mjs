@@ -261,7 +261,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       FROM workspaces w
       JOIN workspace_memberships m ON m.workspace_id = w.id
       WHERE m.user_issuer = ? AND m.user_subject = ?
-      ORDER BY w.created_at ASC, w.id ASC
+      ORDER BY w.name ASC, w.id ASC LIMIT 100
     `).bind(principal.issuer, principal.subject).all();
     return response({ data: result.results || [] }, 200, origin, env, id);
   }
@@ -285,8 +285,11 @@ async function handleApi(request, env, url, origin, id, principal) {
           .bind(workspaceId, principal.issuer, principal.subject, auditId, now),
         auditStatement(env.DB, workspaceId, principal, "workspace.created", "workspace", workspaceId, id, {}, now)
       ]);
-    } catch {
-      return fail(409, "workspace_slug_conflict", "That workspace slug is already in use or the workspace could not be created.", origin, env, id);
+    } catch (error) {
+      if (/UNIQUE constraint failed: workspaces\\.slug/i.test(String(error))) {
+        return fail(409, "workspace_slug_conflict", "That workspace slug is already in use.", origin, env, id);
+      }
+      return fail(503, "workspace_create_failed", "The workspace could not be created.", origin, env, id);
     }
     return response({ data: { id: workspaceId, name: name.trim(), slug, created_at: now, updated_at: now } }, 201, origin, env, id);
   }
@@ -424,10 +427,10 @@ async function handleApi(request, env, url, origin, id, principal) {
         `).bind(crypto.randomUUID(), workspaceId, incidentId, principal.issuer, principal.subject, eventType, existing.status, status, comment, id, now),
         env.DB.prepare(`
           INSERT INTO workspace_audit_events
-            (id, workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, request_id, details, created_at)
-          SELECT ?, ?, ?, ?, ?, 'incident', ?, ?, ?, ?
+            (id, workspace_id, actor_issuer, actor_subject, actor_role, action, resource_type, resource_id, request_id, details, created_at)
+          SELECT ?, ?, ?, ?, ?, ?, 'incident', ?, ?, ?, ?
           WHERE changes() = 1
-        `).bind(crypto.randomUUID(), workspaceId, principal.issuer, principal.subject, eventType, incidentId, id,
+        `).bind(crypto.randomUUID(), workspaceId, principal.issuer, principal.subject, principal.role, eventType, incidentId, id,
           JSON.stringify({ from_status: existing.status, to_status: status, comment }), now)
       ]);
       if (!transitionResults[0]?.meta?.changes) {
