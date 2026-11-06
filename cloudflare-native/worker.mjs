@@ -808,6 +808,8 @@ export {
   incidentTransitionAllowed,
   parseBearer,
   roleAtLeast,
+  validAccessTokenClaims,
   validIssuer,
+  validUUID,
   validWorkspaceSlug
 };
