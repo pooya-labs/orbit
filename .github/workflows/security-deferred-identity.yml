@@ -81,11 +81,11 @@ jobs:
                       if item not in seen:
                           seen.add(item)
                           metadata = {
-                    key: package.get(key)
-                    for key in ("Name", "Version", "SrcName", "SrcVersion", "Release", "Epoch", "PkgIdentifier", "PkgType", "PkgPath")
-                    if key in package
-                }
-                print("PACKAGE_METADATA " + json.dumps(metadata, sort_keys=True))
+                              key: package.get(key)
+                              for key in ("Name", "Version", "SrcName", "SrcVersion", "Release", "Epoch", "PkgIdentifier", "PkgType", "PkgPath")
+                              if key in package
+                          }
+                          print("PACKAGE_METADATA " + json.dumps(metadata, sort_keys=True))
               for vuln in result.get("Vulnerabilities") or []:
                   vuln_id = str(vuln.get("VulnerabilityID") or "")
                   if vuln_id in {"CVE-2026-91403", "CVE-2026-119373", "CVE-2026-119586", "CVE-2026-102554"}:
