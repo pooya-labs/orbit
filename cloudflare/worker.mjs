@@ -96,6 +96,7 @@ function buildUpstreamHeaders(request, env, id) {
     headers.set("X-ORBIT-Client-IP", clientIp);
   }
   headers.set("X-ORBIT-Gateway-Secret", env.ORBIT_GATEWAY_SECRET);
+  headers.set("Cache-Control", "no-store");
   headers.set("X-Request-ID", id);
   return headers;
 }
