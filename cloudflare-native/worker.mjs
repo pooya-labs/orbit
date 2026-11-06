@@ -81,7 +81,7 @@ async function getVerifier(env) {
   const cacheKey = issuer + "|" + audience;
   if (!VERIFIER_CACHE.has(cacheKey)) {
     const pending = (async () => {
-      const discoveryUrl = issuer + "/.well-known/openid-configuration";
+      const discoveryUrl = issuer.replace(/\\/+$/, "") + "/.well-known/openid-configuration";
       const discoveryResponse = await fetch(discoveryUrl, { headers: { accept: "application/json" }, redirect: "error", signal: AbortSignal.timeout(5000) });
       if (!discoveryResponse.ok) throw new Error("OIDC discovery is unavailable.");
       const discovery = await discoveryResponse.json();
@@ -89,7 +89,7 @@ async function getVerifier(env) {
         throw new Error("OIDC discovery issuer is invalid.");
       }
       const jwksUrl = new URL(discovery.jwks_uri);
-      if (jwksUrl.protocol !== "https:" || jwksUrl.username || jwksUrl.password || jwksUrl.hash) {
+      if (jwksUrl.protocol !== "https:" || jwksUrl.username || jwksUrl.password || jwksUrl.search || jwksUrl.hash) {
         throw new Error("OIDC JWKS endpoint must be HTTPS and contain no credentials.");
       }
       return {
@@ -117,7 +117,7 @@ async function authenticate(request, env) {
     });
     if (typeof payload.sub !== "string" || !payload.sub || payload.sub.length > 512 ||
         typeof payload.iss !== "string" || payload.iss !== verifier.issuer ||
-        !Number.isInteger(payload.exp)) {
+        !Number.isFinite(payload.exp) || payload.exp <= (Date.now() / 1000) - 60) {
       return { error: "The access token is missing required claims." };
     }
     return { principal: { issuer: payload.iss, subject: payload.sub } };
