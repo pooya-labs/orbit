@@ -223,6 +223,12 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Test Cloudflare-native D1 runtime foundation
+        run: |
+          node --check cloudflare-native/worker.mjs
+          npm run test:cloudflare-native
+          python3 scripts/cloudflare_native_schema_smoke.py
+
       - name: Typecheck
         run: npm run typecheck
 
