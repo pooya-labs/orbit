@@ -14,6 +14,34 @@ function fail(status, code, message, requestId) {
   return json({ error: { code, message, request_id: requestId } }, status);
 }
 function requestId() { return crypto.randomUUID(); }
+function cors(response, env) {
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", env.ALLOWED_ORIGIN || "https://pooya-labs.github.io");
+  headers.set("access-control-allow-methods", "GET,POST,OPTIONS");
+  headers.set("access-control-allow-headers", "authorization,content-type");
+  headers.set("vary", "origin");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+let jwksCache = { issuer: "", expiresAt: 0, document: null };
+async function readBoundedBody(request, maxBytes) {
+  const declared = Number(request.headers.get("content-length") || 0);
+  if (declared > maxBytes) throw Object.assign(new Error("OTLP request exceeds 1 MiB"), { status: 413 });
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) { await reader.cancel(); throw Object.assign(new Error("OTLP request exceeds 1 MiB"), { status: 413 }); }
+    chunks.push(value);
+  }
+  const joined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { joined.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(joined);
+}
 function bearer(request) {
   const value = request.headers.get("authorization") || "";
   return value.startsWith("Bearer ") ? value.slice(7) : "";
@@ -31,6 +59,7 @@ function equal(a, b) {
   return diff === 0;
 }
 async function jwks(env, issuer) {
+  if (jwksCache.issuer === issuer && jwksCache.expiresAt > Date.now() && jwksCache.document) return jwksCache.document;
   const discoveryUrl = issuer.replace(/\/$/, "") + "/.well-known/openid-configuration";
   const discovery = await fetch(discoveryUrl, { headers: { accept: "application/json" } });
   if (!discovery.ok) throw new Error("OIDC discovery unavailable");
@@ -38,10 +67,13 @@ async function jwks(env, issuer) {
   if (config.issuer !== issuer || typeof config.jwks_uri !== "string") throw new Error("OIDC issuer mismatch");
   const response = await fetch(config.jwks_uri, { headers: { accept: "application/json" } });
   if (!response.ok) throw new Error("OIDC signing keys unavailable");
-  return response.json();
+  const document = await response.json();
+  jwksCache = { issuer, expiresAt: Date.now() + 5 * 60 * 1000, document };
+  return document;
 }
-async function verifyJwt(token, env) {
+async function verifyJwt(token, env, expectedAudience = env.OIDC_AUDIENCE) {
   if (!env.OIDC_ISSUER || !env.OIDC_AUDIENCE) throw new Error("OIDC is not configured");
+  if (token.length > 16384) throw new Error("Bearer token is too large");
   const parts = token.split(".");
   if (parts.length !== 3) throw new Error("Invalid bearer token");
   const header = decodePart(parts[0]);
@@ -61,7 +93,7 @@ async function verifyJwt(token, env) {
   );
   const now = Math.floor(Date.now() / 1000);
   const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (!valid || claims.iss !== env.OIDC_ISSUER || !audience.includes(env.OIDC_AUDIENCE) ||
+  if (!valid || claims.iss !== env.OIDC_ISSUER || !audience.includes(expectedAudience) ||
       !claims.sub || !Number.isFinite(claims.exp) || claims.exp <= now ||
       (claims.nbf && claims.nbf > now) || (claims.iat && claims.iat > now + 60)) {
     throw new Error("Bearer token validation failed");
@@ -126,11 +158,10 @@ async function queryTelemetry(request, env, workspaceId, kind, url) {
   return { data: toArray(result).map(row => ({ trace_id: row.trace_id, span_id: row.span_id, parent_span_id: row.parent_span_id, service: row.service_name, name: row.operation_name, start_time: new Date(row.start_time_ms).toISOString(), end_time: new Date(row.end_time_ms).toISOString(), status: row.status_code, attributes: JSON.parse(row.attributes_json) })), source: "cloudflare-d1", queried_at: new Date().toISOString() };
 }
 async function ingestOtlp(request, env, signal) {
-  const bodyText = await request.text();
-  if (bytes(bodyText).length > MAX_BODY_BYTES) throw Object.assign(new Error("OTLP request exceeds 1 MiB"), { status: 413 });
+  const bodyText = await readBoundedBody(request, MAX_BODY_BYTES);
   let payload;
   try { payload = JSON.parse(bodyText); } catch { throw Object.assign(new Error("This endpoint currently accepts OTLP/HTTP JSON encoding"), { status: 415 }); }
-  const claims = await verifyJwt(bearer(request), env);
+  const claims = await verifyJwt(bearer(request), env, env.WORKLOAD_OIDC_AUDIENCE || env.OIDC_AUDIENCE);
   const grant = await env.DB.prepare(
     "SELECT workspace_id FROM workload_grants WHERE issuer=? AND subject=? AND signal=? AND active=1"
   ).bind(claims.iss, claims.sub, signal).first();
@@ -185,27 +216,27 @@ export default {
     const id = requestId();
     const url = new URL(request.url);
     try {
-      if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "access-control-allow-origin": env.ALLOWED_ORIGIN || "https://pooya-labs.github.io", "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "authorization,content-type" } });
-      if (url.pathname === "/health/live") return json({ status: "ok", request_id: id });
+      if (request.method === "OPTIONS") return cors(new Response(null, { status: 204 }), env);
+      if (url.pathname === "/health/live") return cors(json({ status: "ok", request_id: id }), env);
       if (url.pathname === "/health/ready") {
         await env.DB.prepare("SELECT 1").first();
-        return json({ status: "ready", storage: "cloudflare-d1", request_id: id });
+        return cors(json({ status: "ready", storage: "cloudflare-d1", request_id: id }), env);
       }
-      if (url.pathname === API_PREFIX + "/meta") return json({ name: "ORBIT Cloudflare Runtime", version: "0.1.0", runtime: "cloudflare-workers", capabilities: ["oidc","workspace-isolation","otlp-http-json","metrics","logs","traces"], request_id: id });
+      if (url.pathname === API_PREFIX + "/meta") return cors(json({ name: "ORBIT Cloudflare Runtime", version: "0.1.0", runtime: "cloudflare-workers", capabilities: ["oidc","workspace-isolation","otlp-http-json","metrics","logs","traces"], request_id: id }), env);
       const otlp = url.pathname.match(/^\/v1\/otlp\/(metrics|logs|traces)$/);
-      if (request.method === "POST" && otlp) return await ingestOtlp(request, env, otlp[1]);
+      if (request.method === "POST" && otlp) return cors(await ingestOtlp(request, env, otlp[1]), env);
       const match = url.pathname.match(/^\/api\/v1\/workspaces\/([a-f0-9-]{36})\/telemetry\/(services|metrics|logs|traces)$/i);
       if (request.method === "GET" && match) {
         const [, workspaceId, kind] = match;
         await requireMember(request, env, workspaceId);
         const result = kind === "services" ? await listServices(env, workspaceId) : await queryTelemetry(request, env, workspaceId, kind, url);
-        return json({ ...result, request_id: id }, 200, { "access-control-allow-origin": env.ALLOWED_ORIGIN || "https://pooya-labs.github.io", "vary": "origin" });
+        return cors(json({ ...result, request_id: id }), env);
       }
-      return fail(404, "route_not_found", "The requested ORBIT Cloudflare route was not found.", id);
+      return cors(fail(404, "route_not_found", "The requested ORBIT Cloudflare route was not found.", id), env);
     } catch (error) {
       const status = error.status || 500;
       if (status === 500) console.error(JSON.stringify({ event: "orbit_runtime_error", request_id: id, message: String(error.message || "unknown") }));
-      return fail(status, status === 401 ? "unauthorized" : status === 403 ? "forbidden" : status === 400 ? "invalid_request" : status === 413 ? "payload_too_large" : "runtime_error", status >= 500 ? "The ORBIT Cloudflare runtime could not complete the request." : error.message, id);
+      return cors(fail(status, status === 401 ? "unauthorized" : status === 403 ? "forbidden" : status === 400 ? "invalid_request" : status === 413 ? "payload_too_large" : "runtime_error", status >= 500 ? "The ORBIT Cloudflare runtime could not complete the request." : error.message, id), env);
     }
   }
 };
