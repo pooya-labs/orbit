@@ -2,8 +2,8 @@
   "@context": "https://openvex.dev/ns/v0.2.0",
   "@id": "https://github.com/pooya-labs/orbit/blob/main/security/vex/keycloak-26.8.2-openjdk-system-ca.openvex.json",
   "author": "ORBIT maintainers",
-  "timestamp": "2026-11-06T14:15:00Z",
-  "version": 1,
+  "timestamp": "2026-11-06T14:45:00Z",
+  "version": 2,
   "statements": [
     {
       "vulnerability": {
@@ -11,12 +11,31 @@
       },
       "products": [
         {
-          "@id": "pkg:rpm/redhat/java-21-openjdk-headless@21.0.13.0.9-1.2.el9?arch=x86_64&distro=redhat-9.8&epoch=1"
+          "@id": "pkg:oci/keycloak@sha256:4340d05ee7d15be34293868d495ac772d61f1a4d0e43d53bae2e75e2f05de185?repository_url=quay.io/keycloak/keycloak",
+          "subcomponents": [
+            {
+              "@id": "pkg:rpm/redhat/java-21-openjdk-headless@21.0.13.0.9-1.2.el9?arch=x86_64&distro=redhat-9.8&epoch=1"
+            },
+            {
+              "@id": "pkg:rpm/redhat/ca-certificates@2026.2.92_v9.0.319-90.3.el9_8?arch=noarch&distro=redhat-9.8"
+            }
+          ]
+        },
+        {
+          "@id": "pkg:oci/keycloak@sha256:1beace43eb563942a05fdea24fc04898e1a182797397f97a63fdb6c421aede44?repository_url=quay.io/keycloak/keycloak",
+          "subcomponents": [
+            {
+              "@id": "pkg:rpm/redhat/java-21-openjdk-headless@21.0.13.0.9-1.2.el9?arch=aarch64&distro=redhat-9.8&epoch=1"
+            },
+            {
+              "@id": "pkg:rpm/redhat/ca-certificates@2026.2.92_v9.0.319-90.3.el9_8?arch=noarch&distro=redhat-9.8"
+            }
+          ]
         }
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "Narrowly scoped to the exact Red Hat OpenJDK RPM PURL and version observed in quay.io/keycloak/keycloak:26.8.2. Red Hat states that RHEL OpenJDK RPMs do not contain a private CA bundle and use the system ca-certificates package; Red Hat does not issue an OpenJDK fix for CVE-2026-91403 because the attempted upstream intermediate-certificate blocklist was insufficient. The actual system trust-store removal is tracked as CVE-2026-114406. This image contains ca-certificates 2026.2.92_v9.0.319-90.3.el9_8, the exact RHEL 9 package published in RHSA-2026:88459. A keytool inventory of the JRE cacerts in this image showed only emsignrootca-g1 among the matching aliases; the compromised Comodo AAA Services and emSign ECC Root CA G3 roots listed in the Red Hat bulletin were not present. This statement does not cover Red Hat build-of-OpenJDK products that bundle their own trust store, other Java builds, or other image versions. Evidence: CI run 42231828253 package inventory and Java trust-store inspection; https://access.redhat.com/security/cve/cve-2026-91403; https://access.redhat.com/security/cve/cve-2026-114406; https://access.redhat.com/errata/RHSA-2026:88459; https://access.redhat.com/security/vulnerabilities/RHSB-2026-012"
+      "impact_statement": "Scoped to the immutable AMD64 and ARM64 manifests of quay.io/keycloak/keycloak:26.8.2 and only the exact OpenJDK RPM and system CA bundle PURLs listed as subcomponents. Both platform inventories show ca-certificates 2026.2.92_v9.0.319-90.3.el9_8, the RHEL 9 package in RHSA-2026:88459. Red Hat states RHEL OpenJDK relies on the system CA bundle; the original CVE-2026-91403 is the insufficient upstream Java-side blocklist, and trust-store root removal is tracked separately as CVE-2026-114406. The AMD64 JRE cacerts inspection found no compromised Comodo AAA Services or emSign ECC Root CA G3 aliases. This does not cover other tags, digests, Java builds, Red Hat build-of-OpenJDK distributions with bundled stores, or images outside these two Keycloak manifests. Evidence: CI package inventories and AMD64 trust-store check; https://access.redhat.com/security/cve/cve-2026-91403; https://access.redhat.com/security/cve/cve-2026-114406; https://access.redhat.com/errata/RHSA-2026:88459; https://access.redhat.com/security/vulnerabilities/RHSB-2026-012"
     }
   ]
 }
