@@ -41,7 +41,7 @@ The Apps Script restrictions remain intentional. Do not weaken its quotas, synth
 3. Complete compatibility for all existing API routes: services, incident lifecycle/timeline, alert CRUD/evaluation, notification channel management/delivery attempts, deployment annotations/comparison, SLO budgets, audit search, trace detail, and resource-attribute catalog.
 4. Real webhook/email delivery with the existing HTTPS/host allowlist, DNS/public-address, redirect, timeout, retry, and idempotency protections.
 5. OTLP/HTTP protobuf and OTLP/gRPC. The first Worker slice accepts OTLP/HTTP JSON only.
-6. Frontend runtime selector and GitHub Pages build configuration for the Cloudflare endpoint.
+6. Complete frontend/API parity and GitHub Pages build configuration; an explicit `?orbitRuntime=cloudflare` entry point now pre-fills the Worker URL and opens the source panel, but does not imply that all dashboard routes are implemented yet.
 7. Live clean-browser smoke tests, cross-workspace negative tests, ingestion-to-query tests, retention/cleanup, load/capacity, and backup/recovery acceptance.
 8. Cost/limit review for all Cloudflare services before enabling ongoing ingestion or scheduled work.
 
