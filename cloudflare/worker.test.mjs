@@ -158,3 +158,45 @@ test("requests without an Origin header do not receive a permissive CORS grant",
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), null);
 });
+
+test("readiness is proxied through the protected origin rather than reported locally", async () => {
+  const originalFetch = globalThis.fetch;
+  let target;
+  globalThis.fetch = async request => {
+    target = request;
+    return new Response(JSON.stringify({ status: "ready" }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+  try {
+    const response = await gateway.fetch(
+      new Request("https://orbit-runtime.workers.dev/health/ready", { headers: { origin: ORIGIN } }),
+      env()
+    );
+    assert.equal(response.status, 200);
+    assert.equal(new URL(target.url).pathname, "/health/ready");
+    assert.equal(target.headers.get("x-orbit-gateway-secret"), SECRET);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("authenticated API requests explicitly opt out of upstream caches", async () => {
+  const originalFetch = globalThis.fetch;
+  let upstreamHeaders;
+  globalThis.fetch = async request => {
+    upstreamHeaders = request.headers;
+    return new Response("{}", { status: 200 });
+  };
+  try {
+    await gateway.fetch(
+      new Request("https://orbit-runtime.workers.dev/api/v1/meta", { headers: { origin: ORIGIN } }),
+      env()
+    );
+    assert.equal(upstreamHeaders.get("cache-control"), "no-store");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
