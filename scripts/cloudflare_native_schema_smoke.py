@@ -58,6 +58,11 @@ db.execute(
 )
 expect_integrity_error("UPDATE workspace_audit_events SET action = 'tampered' WHERE id = 'audit-a'")
 expect_integrity_error("DELETE FROM workspace_audit_events WHERE id = 'audit-a'")
+actor = db.execute(
+    "SELECT actor_ref FROM workspace_audit_actors WHERE workspace_id = ? AND actor_issuer = ? AND actor_subject = ?",
+    ("workspace-a", "https://id.example", "user-a"),
+).fetchone()
+assert actor is not None and actor["actor_ref"] == "audit-a"
 
 
 # An incident transition and its history/audit entries commit as one batch.
