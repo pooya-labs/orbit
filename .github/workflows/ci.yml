@@ -205,7 +205,20 @@ jobs:
         run: npm run test:trace-correlation
 
       - name: Test Cloudflare edge gateway contract
-        run: npm run test:cloudflare-gateway
+        run: |
+          node --check cloudflare/worker.mjs
+          npm run test:cloudflare-gateway
+
+      - name: Validate Cloudflare Worker deployment bundle
+        run: |
+          secret_file="$(mktemp)"
+          trap 'rm -f "$secret_file"' EXIT
+          printf 'ORBIT_GATEWAY_SECRET=%064d\\n' 0 > "$secret_file"
+          npx --yes wrangler@4.158.0 deploy \\
+            --config cloudflare/wrangler.jsonc \\
+            --var ORBIT_API_ORIGIN:https://api.example.test \\
+            --secrets-file "$secret_file" \\
+            --dry-run
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
