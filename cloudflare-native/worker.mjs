@@ -308,7 +308,8 @@ async function handleApi(request, env, url, origin, id, principal) {
     const parsed = await readJson(request, 8 * 1024);
     if (parsed.error) return fail(400, "invalid_workspace", parsed.error, origin, env, id);
     const { name, slug } = parsed.value;
-    if (typeof name !== "string" || name.trim().length < 1 || name.trim().length > 120 || !validWorkspaceSlug(slug)) {
+    const normalizedSlug = typeof slug === "string" ? slug.trim().toLowerCase() : "";
+    if (typeof name !== "string" || name.trim().length < 1 || name.trim().length > 120 || !validWorkspaceSlug(normalizedSlug)) {
       return fail(400, "invalid_workspace", "Workspace name or slug is invalid.", origin, env, id);
     }
     const workspaceId = crypto.randomUUID();
@@ -332,7 +333,7 @@ async function handleApi(request, env, url, origin, id, principal) {
     try {
       const statements = [
         env.DB.prepare("INSERT INTO workspaces (id, name, slug, created_by_issuer, created_by_subject, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-          .bind(workspaceId, name.trim(), slug, principal.issuer, principal.subject, now, now),
+          .bind(workspaceId, name.trim(), normalizedSlug, principal.issuer, principal.subject, now, now),
         env.DB.prepare("INSERT INTO workspace_memberships (workspace_id, user_issuer, user_subject, role, created_at, updated_at) VALUES (?, ?, ?, 'owner', ?, ?)")
           .bind(workspaceId, principal.issuer, principal.subject, now, now),
         env.DB.prepare("INSERT INTO workspace_audit_actors (workspace_id, actor_issuer, actor_subject, actor_ref, created_at) VALUES (?, ?, ?, ?, ?)")
@@ -362,7 +363,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       }
       return fail(503, "workspace_create_failed", "The workspace could not be created.", origin, env, id);
     }
-    return response({ data: { id: workspaceId, name: name.trim(), slug, created_at: now, updated_at: now, demo_seeded: true } }, 201, origin, env, id);
+    return response({ data: { id: workspaceId, name: name.trim(), slug: normalizedSlug, created_at: now, updated_at: now, demo_seeded: true } }, 201, origin, env, id);
   }
 
   if (path.startsWith("/api/v1/telemetry/")) {
