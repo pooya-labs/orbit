@@ -538,7 +538,8 @@ This is a separate no-VPS runtime profile approved for implementation. It does *
 - [ ] Implement SLO error budgets only after a trustworthy live request-metrics source is available.
 - [x] Implement notification channel metadata CRUD using environment-backed secret references; no webhook secrets or URLs are stored in D1.
 - [ ] Implement delivery evaluation/dispatch, bounded retries and attempt history after the alert evaluator and scheduled execution model are complete.
-- [ ] Decide the compatible hosted OIDC issuer and API audience; configure it without placing private credentials in the Pages bundle.
+- [x] Research and document Auth0 Free as the recommended compatible OIDC provider, with PKCE, RS256, the exact Pages callback/origin and a URI API audience.
+- [ ] Create/configure the Auth0 SPA and API tenant, test an issued access token against the Worker, then add only the public issuer/client/audience build values and Worker issuer/audience variables.
 - [x] Make unsupported telemetry query routes fail explicitly with `telemetry_source_unavailable`; do not claim Prometheus/Loki/Tempo or OTLP parity.
 - [ ] Define a separate native telemetry view using Workers runtime observability and clearly labelled synthetic samples.
 - [ ] Test every current frontend API-client method against the native runtime; only then introduce a guarded Pages API-origin switch.
