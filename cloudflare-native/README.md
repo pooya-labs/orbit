@@ -19,6 +19,21 @@ This is a staged foundation, not a claim of feature parity or a deployable v1. L
 
 The Worker API returns the direct `ApiMetadata` object at `/api/v1/meta` and uses the same `{ data: ... }` envelopes for collection/resource routes as the current typed client. The frontend still uses its existing OIDC Authorization Code + PKCE flow. The Worker validates the resulting Bearer access token against a configured HTTPS OIDC issuer and API audience, including the same `iat`, `exp`, `sub`, `typ`, `kid`, signing-algorithm and configurable role-claim checks as the Go verifier. No identity provider is bundled or hosted by this Worker. A compatible issuer and audience must be selected and configured before the API can be activated.
 
+## Recommended free OIDC configuration
+
+The implementation is designed to reuse the frontend's existing Authorization Code + PKCE client. The recommended no-cost issuer for the first hosted demo is an Auth0 Free tenant using its default `*.auth0.com` domain (not a paid/custom domain). Auth0 advertises a Free tier with up to 25,000 monthly active users and no credit card required to sign up. Custom-domain activation can require card verification, so do not configure one for this profile.
+
+1. Create an Auth0 **Single Page Application** and an API resource.
+2. Set the API identifier to exactly `https://pooya-labs.github.io/orbit-api` and set its signing algorithm to **RS256**.
+3. In the SPA settings, allow this callback URL: `https://pooya-labs.github.io/orbit/auth/callback/`.
+4. Set the allowed web origin to `https://pooya-labs.github.io` and the allowed logout URL to `https://pooya-labs.github.io/orbit/`.
+5. Keep the tenant's default Auth0 domain. Set the issuer to its exact HTTPS URL with the trailing slash, for example `https://YOUR-TENANT.REGION.auth0.com/`.
+6. Use the same values for the frontend build and Worker: `NEXT_PUBLIC_ORBIT_OIDC_ISSUER` / `ORBIT_OIDC_ISSUER` = the exact issuer; `NEXT_PUBLIC_ORBIT_OIDC_CLIENT_ID` = the SPA client ID; `NEXT_PUBLIC_ORBIT_OIDC_AUDIENCE` / `ORBIT_OIDC_AUDIENCE` = `https://pooya-labs.github.io/orbit-api`; and `NEXT_PUBLIC_ORBIT_OIDC_SCOPE` = `openid profile email`.
+
+The SPA client ID is public and belongs in the Pages build configuration. Do **not** put an Auth0 client secret in the browser bundle. The Worker does not need a client secret; it verifies the signed access token against the issuer's public JWKS. Workspace roles continue to come from D1 memberships, not from user-editable profile metadata.
+
+This is a recommendation only. No Auth0 tenant, Cloudflare secret, D1 database, Worker route or Pages environment variable has been created or changed by this branch.
+
 ## Deployment safety
 
 - `workers_dev` is false until the account's D1 binding and OIDC configuration have been verified.
