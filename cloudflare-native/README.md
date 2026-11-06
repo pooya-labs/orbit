@@ -32,7 +32,7 @@ The implementation is designed to reuse the frontend's existing Authorization Co
 
 The SPA client ID is public and belongs in the Pages build configuration. Do **not** put an Auth0 client secret in the browser bundle. The Worker does not need a client secret; it verifies the signed access token against the issuer's public JWKS. Workspace roles continue to come from D1 memberships, not from user-editable profile metadata.
 
-This is a recommendation only. No Auth0 tenant, Cloudflare secret, D1 database, Worker route or Pages environment variable has been created or changed by this branch.
+This is a recommendation only. No Auth0 tenant, Cloudflare secret, D1 database, Worker route or Pages environment variable has been created or changed by this branch. For reference, see the [Auth0 Free plan](https://auth0.com/pricing), [Auth0 SPA guidance](https://developer.auth0.com/resources/get-started/spa), and [Auth0 API audience guidance](https://support.auth0.com/center/s/article/value-of-the-audience-attribute-in-access-token-requests-and-its-significance).
 
 ## Deployment safety
 
