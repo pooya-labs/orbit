@@ -129,10 +129,40 @@ async function authenticate(request, env) {
 async function readJson(request, maxBytes = MAX_BODY_BYTES) {
   const declaredLength = Number(request.headers.get("content-length") || 0);
   if (declaredLength > maxBytes) return { error: "Request body is too large." };
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > maxBytes) return { error: "Request body is too large." };
+  if (!request.body) return { error: "Request body must be a JSON object." };
+
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return { error: "Request body is too large." };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { error: "Request body could not be read." };
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
   let value;
-  try { value = JSON.parse(raw); } catch { return { error: "Request body must be valid JSON." }; }
+  try {
+    const raw = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    value = JSON.parse(raw);
+  } catch {
+    return { error: "Request body must be valid UTF-8 JSON." };
+  }
   if (!value || Array.isArray(value) || typeof value !== "object") return { error: "Request body must be a JSON object." };
   return { value };
 }
