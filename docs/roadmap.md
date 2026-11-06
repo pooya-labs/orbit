@@ -531,11 +531,15 @@ This is a separate no-VPS runtime profile approved for implementation. It does *
 - [x] Implement the foundation routes for health, metadata, workspace creation/listing, memberships, audit history, services and incident lifecycle.
 - [x] Add CI coverage for native Worker policy helpers and a SQLite schema/tenant-isolation smoke test.
 - [ ] Complete the D1 schema smoke test in GitHub Actions and review its result before deployment.
-- [ ] Migrate alert rule CRUD and alert evaluation to bounded Worker execution; define a safe retry/cron model within Workers Free limits.
-- [ ] Implement deployment annotations and SLO CRUD; define an honest error-budget source instead of pretending D1 replaces Prometheus.
-- [ ] Implement notification delivery with protected webhook-secret storage, retry limits and delivery-attempt history.
+- [x] Migrate workspace-scoped alert-rule CRUD with role checks, validation, uniqueness constraints and append-only audit events.
+- [ ] Implement alert evaluation only after a trustworthy live request-metrics source is available; define a bounded retry/cron model within Workers Free limits.
+- [x] Implement workspace-scoped deployment annotation CRUD/list/compare and SLO-definition CRUD with audit events.
+- [ ] Implement SLO error budgets only after a trustworthy live request-metrics source is available.
+- [x] Implement notification channel metadata CRUD using environment-backed secret references; no webhook secrets or URLs are stored in D1.
+- [ ] Implement delivery evaluation/dispatch, bounded retries and attempt history after the alert evaluator and scheduled execution model are complete.
 - [ ] Decide the compatible hosted OIDC issuer and API audience; configure it without placing private credentials in the Pages bundle.
-- [ ] Define the native telemetry view using Workers runtime observability and clearly labelled synthetic samples; do not claim Prometheus/Loki/Tempo or OTLP parity.
+- [x] Make unsupported telemetry query routes fail explicitly with `telemetry_source_unavailable`; do not claim Prometheus/Loki/Tempo or OTLP parity.
+- [ ] Define a separate native telemetry view using Workers runtime observability and clearly labelled synthetic samples.
 - [ ] Test every current frontend API-client method against the native runtime; only then introduce a guarded Pages API-origin switch.
 - [ ] Create the dedicated D1 database, apply migrations, configure issuer/audience, enable the Worker route and deploy after the complete acceptance matrix passes.
 
