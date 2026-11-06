@@ -216,6 +216,7 @@ async function ingestOtlp(request, env, signal) {
       }
     }
   }
+  if (batch.length > 1000) throw Object.assign(new Error("OTLP request exceeds the 1000-record ingestion limit"), { status: 413 });
   for (let i = 0; i < batch.length; i += 100) await env.DB.batch(batch.slice(i, i + 100));
   return json({ partialSuccess: {}, accepted: batch.length });
 }
