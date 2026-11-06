@@ -261,7 +261,7 @@ test("creating a workspace provisions explicitly labeled demo services, incident
     });
     const response = await worker.fetch(request, { ...env, DB });
     assert.equal(response.status, 201);
-    assert.equal((await response.json()).demo_seeded, true);
+    assert.equal((await response.json()).data.demo_seeded, true);
     assert.equal(batchStatements.length, 16);
     assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO services")).length, 5);
     assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO incidents")).length, 2);
