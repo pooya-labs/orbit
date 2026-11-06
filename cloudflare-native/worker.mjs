@@ -358,17 +358,29 @@ async function handleApi(request, env, url, origin, id, principal) {
         return fail(409, "incident_transition_conflict", "The requested incident status transition is not allowed.", origin, env, id);
       }
       const resolvedAt = status === "resolved" ? now : null;
-      const updated = await env.DB.prepare(`
-        UPDATE incidents SET status = ?, updated_at = ?, resolved_at = ?
-        WHERE id = ? AND workspace_id = ? AND status = ?
-      `).bind(status, now, resolvedAt, incidentId, workspaceId, existing.status).run();
-      if (!updated.meta?.changes) return fail(409, "incident_transition_conflict", "The incident changed before this update could be applied.", origin, env, id);
       const eventType = existing.status === "resolved" ? "incident.reopened" : "incident.status_changed";
-      await env.DB.batch([
-        env.DB.prepare("INSERT INTO incident_timeline_events (id, workspace_id, incident_id, actor_issuer, actor_subject, event_type, from_status, to_status, comment, request_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?)")
-          .bind(crypto.randomUUID(), workspaceId, incidentId, principal.issuer, principal.subject, eventType, existing.status, status, comment, id, now),
-        auditStatement(env.DB, workspaceId, principal, eventType, "incident", incidentId, id, { from_status: existing.status, to_status: status, comment }, now)
+      const transitionResults = await env.DB.batch([
+        env.DB.prepare(`
+          UPDATE incidents SET status = ?, updated_at = ?, resolved_at = ?
+          WHERE id = ? AND workspace_id = ? AND status = ?
+        `).bind(status, now, resolvedAt, incidentId, workspaceId, existing.status),
+        env.DB.prepare(`
+          INSERT INTO incident_timeline_events
+            (id, workspace_id, incident_id, actor_issuer, actor_subject, event_type, from_status, to_status, comment, request_id, details, created_at)
+          SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?
+          WHERE changes() = 1
+        `).bind(crypto.randomUUID(), workspaceId, incidentId, principal.issuer, principal.subject, eventType, existing.status, status, comment, id, now),
+        env.DB.prepare(`
+          INSERT INTO workspace_audit_events
+            (id, workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, request_id, details, created_at)
+          SELECT ?, ?, ?, ?, ?, 'incident', ?, ?, ?, ?
+          WHERE changes() = 1
+        `).bind(crypto.randomUUID(), workspaceId, principal.issuer, principal.subject, eventType, incidentId, id,
+          JSON.stringify({ from_status: existing.status, to_status: status, comment }), now)
       ]);
+      if (!transitionResults[0]?.meta?.changes) {
+        return fail(409, "incident_transition_conflict", "The incident changed before this update could be applied.", origin, env, id);
+      }
       return response({ data: { ...existing, status, updated_at: now, resolved_at: resolvedAt } }, 200, origin, env, id);
     }
 
