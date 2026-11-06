@@ -506,6 +506,7 @@ This is a post-v1 entry-point extension, not a reopening of the stable Apps Scri
 - [x] Generate the private gateway secret in the existing mode-600 `.env.production` setup; add a Wrangler deployment script that uses a temporary protected secrets file and never prints the secret.
 - [x] Add Worker contract tests and forwarded-client-IP tests to CI; validate the configuration/deployment shell script with `bash -n`.
 - [x] Preserve exact-origin CORS headers on JSON error responses and cap Worker CPU at the 10 ms Workers Free limit.
+- [x] Require an explicit Workers Free confirmation before the Worker deployment script can publish, and add a full Cloudflare Free deployment runbook.
 - [x] Replace the deployed prototype Worker with the canonical edge-gateway module; Cloudflare settings confirm `bindings: []` and Worker version 0.2.3 is the active upload.
 - [x] Delete the prototype D1 database after verifying the Worker had no D1 binding; the deleted database ID returns HTTP 404. Other account D1 resources were left untouched.
 - [ ] Switch/confirm the Cloudflare Worker is on the Workers Free plan in the dashboard. The deployed script currently reports `usage_model: standard` (documented as Workers Paid), and the connected API token cannot read billing details. Do not route origin traffic until the dashboard shows the no-cost Free plan; do not use legacy `bundled` as a substitute.
