@@ -50,6 +50,16 @@ Existing Go API — canonical auth, role and workspace policy
 
 There is no D1 binding, no duplicated workspace/application data, and no Worker-owned identity or notification system in the accepted architecture.
 
+## Live Cloudflare account check — 2026-11-06
+
+The owner-provided Billing → Subscriptions dashboard shows **Workers Free — Active**, with **Upgrade to Workers Paid** and **No payment method on file**. No billing changes were made.
+
+Cloudflare API inspection confirms the account workers.dev subdomain is `pooyagame141`, but the `orbit-runtime` workers.dev route is currently disabled (`enabled: false`). The branch's Wrangler config intentionally has `workers_dev: true`; the next guarded deployment should re-enable the route. If it remains off afterwards, enable it manually under **Workers & Pages → orbit-runtime → Settings → Domains & Routes → workers.dev**.
+
+The deployed Worker is version `0.2.3` (version 8). Logs and Traces are enabled with 10% sampling. The current Worker has no resource bindings and no Worker secrets; `ORBIT_GATEWAY_SECRET` is not yet installed. This is intentional until the original Go/Caddy origin and private `.env.production` are ready. Keep API routes fail-closed until then.
+
+The Worker API metadata still returns `usage_model: standard`; leave it unchanged. The connected Cloudflare OAuth integration can read Worker configuration, versions, subdomain state and secret names, but cannot read account subscription records (HTTP 403 on `/accounts/{account_id}/subscriptions`). The supplied Billing dashboard is the confirmed account-plan evidence.
+
 ## Request paths
 
 Browser dashboard requests go to the Worker at `/api/v1/*`, `/health/live`, or `/health/ready`. The Worker accepts only the configured GitHub Pages origin for browser CORS, forwards the user's Authorization Bearer token unchanged, and adds a private gateway secret and Cloudflare-derived client IP. It never selects an arbitrary upstream host.

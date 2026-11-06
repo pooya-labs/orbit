@@ -52,9 +52,11 @@ The existing Go gateways remain responsible for the separate workload-token audi
 
 ## Actual Cloudflare account state
 
-The connected Cloudflare account has a workers.dev subdomain, but no zones, Cloudflare Tunnels or Hyperdrive configs were present during inspection. R2 was not enabled. The design therefore uses the existing DuckDNS/Caddy API hostname as the origin and does not assume a Cloudflare-managed zone or private network connector.
+The connected Cloudflare account has the workers.dev subdomain `pooyagame141`, but no zones, Cloudflare Tunnels or Hyperdrive configs were present during inspection. R2 was not enabled. The design therefore uses the existing DuckDNS/Caddy API hostname as the origin and does not assume a Cloudflare-managed zone or private network connector.
 
-The Worker is deployed on workers.dev (version 0.2.3) with Workers Logs and Traces enabled at 10% sampling. Remote settings confirm no resource bindings. Its API origin and gateway secret deliberately remain unset until the original origin deployment is configured; API routes fail closed with 503 meanwhile. A request to the workers.dev hostname could not be exercised from the current verification network, which blocks that destination, so a live external HTTP smoke is not claimed.
+The owner-provided Billing → Subscriptions view confirms **Workers Free — Active**, with an option to upgrade to Workers Paid and no payment method on file. No billing changes were made. The deployed Worker is version `0.2.3` (version 8), with Logs and Traces enabled at 10% sampling. Its workers.dev route is currently disabled even though the branch's Wrangler config sets `workers_dev: true`; the next guarded deployment is expected to re-enable it. If it remains disabled, enable it under **Workers & Pages → orbit-runtime → Settings → Domains & Routes → workers.dev**.
+
+Remote settings confirm no resource bindings and no Worker secrets are attached yet; the secret list is empty. The private API origin and `ORBIT_GATEWAY_SECRET` are intentionally not configured until the original Go/Caddy origin is ready. API routes therefore remain fail-closed. The per-Worker API metadata returns `usage_model: standard`, which is left unchanged; the dashboard subscription view is the evidence for the active account plan. Cloudflare API read access covers Worker configuration, versions, subdomain state and secret names, but the OAuth integration receives HTTP 403 when reading account subscription records.
 
 ## Configuration
 
