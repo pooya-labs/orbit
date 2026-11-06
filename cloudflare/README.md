@@ -83,3 +83,8 @@ Keep the existing $0/month hard budget. If the account's free Worker allowance b
 The repository CI includes a Worker contract test for liveness, fail-closed origin configuration, path allowlisting, exact-origin preflight, Bearer-token forwarding, gateway-secret/IP-header replacement, streamed mutation bodies, query preservation, and safe handling of upstream cookies/redirects. CI also checks the Caddy ingress configuration and Go request-IP behavior. The existing Go/PostgreSQL and observability jobs remain authoritative for real API auth/roles, workload identity, OTLP/HTTP+gRPC, workspace A/B isolation, durable outbox, webhook safety, retention/cardinality, Prometheus/Loki/Tempo and recovery.
 
 A successful Worker deployment is not proof that the remote origin, DNS/TLS, Keycloak, or end-to-end flows are ready. These still require owner-origin smoke tests described in the deployment runbook.
+
+
+## Billing verification gate
+
+The Cloudflare API reports `usage_model: standard` for the deployed Worker. Cloudflare documents the Standard usage model as a Workers Paid-plan capability. The connected API credential cannot read the account's subscription/billing usage endpoint (HTTP 403), so the account's current billing plan is **not verified** by this integration. No billing plan, subscription, or usage model has been changed by this work. Before routing real traffic, verify in Cloudflare Dashboard → Workers & Pages → Usage Model / Billing that this Worker is on the intended no-cost plan. Do not assume 10% sampling by itself guarantees zero cost, and do not change to a paid plan to unblock deployment.
