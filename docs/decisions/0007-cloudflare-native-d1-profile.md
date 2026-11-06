@@ -32,7 +32,7 @@ The existing raw OTLP ingestion path and Prometheus/Loki/Tempo querying are not 
 
 ## Consequences
 
-- A compatible OIDC provider remains a prerequisite; this decision does not host identity or issue user tokens.
+- A compatible OIDC provider remains a prerequisite; this decision does not host identity or issue user tokens. Auth0 Free is the documented recommendation for the initial demo, but a tenant has not been created or configured.
 - PostgreSQL SQL, pgx repositories and server-side Go code are not reused directly. D1 migrations use SQLite-compatible SQL and the Worker uses the D1 binding API.
 - D1's Free-plan daily row read/write and storage limits become operational constraints. Queries need tenant-leading indexes, bounded result sets and explicit handling when quotas are reached.
 - The native Worker is a separate deployment and can be rolled back without affecting the existing gateway, Pages site or Apps Script demo.
