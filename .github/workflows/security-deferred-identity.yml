@@ -54,6 +54,23 @@ jobs:
                 echo "SQLITE_LINKED_BINARY=$binary"
               fi
             done
+            echo "== Java executable SQLite linkage =="
+            java_bin="$(command -v java)"
+            java_real="$(readlink -f "$java_bin")"
+            echo "JAVA_EXECUTABLE=$java_real"
+            if ldd "$java_real" 2>/dev/null | grep -q "libsqlite3"; then
+              echo "SQLITE_LINKED_JAVA_EXECUTABLE=$java_real"
+            else
+              echo "Java executable is not dynamically linked to libsqlite3"
+            fi
+            echo "== Shared objects linked to SQLite =="
+            for binary in $(find /usr/lib64 /usr/lib/jvm /opt/keycloak -type f -name "*.so*" 2>/dev/null); do
+              if ldd "$binary" 2>/dev/null | grep -q "libsqlite3"; then
+                echo "SQLITE_LINKED_SHARED_OBJECT=$binary"
+              fi
+            done
+            echo "== SQLite text in Keycloak application libraries =="
+            grep -R -a -l -i "sqlite" /opt/keycloak/lib 2>/dev/null || echo "No SQLite references found in Keycloak application libraries"
             echo "== Guava jar paths =="
             find /opt/keycloak/lib -type f -iname "*guava*" -print 2>/dev/null || true
             echo "== Guava module references =="
