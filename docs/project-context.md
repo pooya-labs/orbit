@@ -1061,7 +1061,16 @@ remain deferred until after the portfolio v1 release, as previously requested.
   CVE-2026-102554 findings. It was not suppressed, broadly VEXed or silently
   marked green. The production image and deferred scan are now pinned to 26.8.2;
   its exact-image Trivy scan and linux/arm64 manifest verification must pass before
-  production identity deployment. No clean result is claimed yet.
+  production identity deployment. The first exact-image scan of 26.8.2
+  [42225793814](https://github.com/pooya-labs/orbit/actions/runs/42225793814)
+  passed the ARM64 manifest check but failed Trivy with three HIGH findings:
+  OpenJDK CVE-2026-91403 (Red Hat status: will_not_fix), SQLite
+  CVE-2026-119373 / CVE-2026-119586, and Guava CVE-2026-102554
+  (installed 33.6.0-jre; upstream fix 33.7.2). A follow-up package-inspection
+  step now records the base CA bundle, SQLite CLI and package dependencies to
+  distinguish a real runtime exposure from a scanner/package-mapping issue.
+  Do not add blanket ignores or call the image clean; the production identity
+  gate remains open until every finding has a documented, evidence-based disposition.
 - Keep the scan enabled weekly, on relevant pull requests, and for changes to
   the identity deployment paths. Resolve findings only with a real vendor patch
   or evidence-based mitigation before production identity rollout.
