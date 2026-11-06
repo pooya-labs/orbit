@@ -1064,13 +1064,37 @@ remain deferred until after the portfolio v1 release, as previously requested.
   production identity deployment. The first exact-image scan of 26.8.2
   [42225793814](https://github.com/pooya-labs/orbit/actions/runs/42225793814)
   passed the ARM64 manifest check but failed Trivy with three HIGH findings:
-  OpenJDK CVE-2026-91403 (Red Hat status: will_not_fix), SQLite
-  CVE-2026-119373 / CVE-2026-119586, and Guava CVE-2026-102554
-  (installed 33.6.0-jre; upstream fix 33.7.2). A follow-up package-inspection
-  step now records the base CA bundle, SQLite CLI and package dependencies to
-  distinguish a real runtime exposure from a scanner/package-mapping issue.
-  Do not add blanket ignores or call the image clean; the production identity
-  gate remains open until every finding has a documented, evidence-based disposition.
+  OpenJDK CVE-2026-91403, SQLite CVE-2026-119373 / CVE-2026-119586, and
+  Guava CVE-2026-102554. The package inventory in
+  [run 42227758708](https://github.com/pooya-labs/orbit/actions/runs/42227758708)
+  gives the following exact package data:
+  - `ca-certificates` version `2026.2.92_v9.0.319`, release
+    `90.3.el9_8`; this full version matches Red Hat's fixed RHEL 9 package
+    `2026.2.92_v9.0.319-90.3.el9_8` for the eMudhra trust-store update
+    ([RHSA-2026:88459](https://access.redhat.com/errata/RHSA-2026:88459)).
+    Red Hat explains that RHEL OpenJDK uses the system `ca-certificates`
+    package for this issue and does not publish a separate Java fix for
+    CVE-2026-91403
+    ([CVE details](https://access.redhat.com/security/cve/cve-2026-91403)).
+    Trivy still reports the Java package as `will_not_fix`; keep that
+    scanner result visible until any future VEX is narrowly scoped to this
+    exact package/image evidence.
+  - `sqlite-libs` is `3.34.1-11.el9_8`; the `sqlite3` CLI is absent.
+    CVE-2026-119586 concerns SQLite CLI `.recover`; the Red Hat CSAF
+    product mapping identifies the `sqlite` package, not this image's
+    `sqlite-libs`-only runtime. This is a candidate package-mapping
+    non-applicability, not yet a suppressed finding
+    ([Red Hat VEX data](https://vulnerability.circl.lu/vuln/cve/CVE-2026-119586)).
+  - CVE-2026-119373 affects SQLite FTS5 under specific application/table/query
+    preconditions. The image still contains `sqlite-libs`; no proof has yet
+    established whether any runtime consumer invokes the vulnerable FTS5 path
+    ([Red Hat CVE details](https://access.redhat.com/security/cve/cve-2026-119373)).
+  - Guava remains `33.6.0-jre`; Trivy identifies `33.7.2` as fixed.
+    This dependency remains unresolved in Keycloak 26.8.2
+    ([advisory](https://advisories.gitlab.io/maven/com.google.guava/guava/CVE-2026-102554/)).
+  No findings are suppressed or called clean. Keep production identity blocked
+  until every remaining finding has an evidence-based disposition and the
+  exact-image scan passes.
 - Keep the scan enabled weekly, on relevant pull requests, and for changes to
   the identity deployment paths. Resolve findings only with a real vendor patch
   or evidence-based mitigation before production identity rollout.
