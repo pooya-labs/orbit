@@ -10,6 +10,14 @@ on:
       - ".github/workflows/security-deferred-identity.yml"
       - "deploy/identity/**"
       - "deploy/keycloak/**"
+      - "deploy/production/compose.ingress.yaml"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/security-deferred-identity.yml"
+      - "deploy/identity/**"
+      - "deploy/keycloak/**"
+      - "deploy/production/compose.ingress.yaml"
 
 permissions:
   contents: read
@@ -20,10 +28,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - name: Verify the pinned Keycloak image includes linux/arm64
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect quay.io/keycloak/keycloak:26.8.2 | tee /tmp/keycloak-image-manifest.txt
+          grep -Eq 'Platform: linux/arm64([[:space:]]|$)' /tmp/keycloak-image-manifest.txt
+
       - name: Scan the pinned Keycloak image for high and critical vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: quay.io/keycloak/keycloak:26.8.1
+          image-ref: quay.io/keycloak/keycloak:26.8.2
           version: v0.76.1
           trivy-config: trivy.yaml
           vuln-type: os,library
@@ -39,7 +54,7 @@ jobs:
       - name: Generate Keycloak CycloneDX SBOM
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: quay.io/keycloak/keycloak:26.8.1
+          image-ref: quay.io/keycloak/keycloak:26.8.2
           version: v0.76.1
           trivy-config: trivy.yaml
           format: cyclonedx
