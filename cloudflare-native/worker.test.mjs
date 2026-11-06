@@ -294,3 +294,47 @@ test("OIDC metadata and JWKS bodies are bounded during streaming reads", async (
   }));
   await assert.rejects(readBoundedResponseBytes(oversizedStream), /size limit/);
 });
+
+test("workspace viewer membership can read but cannot perform operator mutations", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174000";
+    let queryCount = 0;
+    const DB = {
+      prepare(sql) {
+        assert.match(sql, /FROM workspace_memberships/);
+        return {
+          bind(...values) {
+            return {
+              first: async () => {
+                queryCount += 1;
+                assert.deepEqual(values, [workspaceId, env.ORBIT_OIDC_ISSUER, "native-api-test-user"]);
+                return {
+                  workspace_id: workspaceId,
+                  role: "viewer",
+                  created_at: "2026-11-06T12:00:00.000Z",
+                  updated_at: "2026-11-06T12:00:00.000Z"
+                };
+              }
+            };
+          }
+        };
+      }
+    };
+    const readResponse = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/membership`, token), { ...env, DB });
+    assert.equal(readResponse.status, 200);
+    assert.equal((await readResponse.json()).data.role, "viewer");
+
+    const writeResponse = await worker.fetch(new Request(`https://native.example/api/v1/workspaces/${workspaceId}/incidents`, {
+      method: "POST",
+      headers: {
+        origin: "https://pooya-labs.github.io",
+        authorization: "Bearer " + token,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ title: "Forbidden write", description: "", service_id: "123e4567-e89b-12d3-a456-426614174001", severity: "low" })
+    }), { ...env, DB });
+    assert.equal(writeResponse.status, 403);
+    assert.equal((await writeResponse.json()).error.code, "workspace_role_forbidden");
+    assert.equal(queryCount, 2);
+  });
+});
