@@ -4,6 +4,9 @@
   "main": "worker.mjs",
   "compatibility_date": "2026-11-06",
   "workers_dev": true,
+  "limits": {
+    "cpu_ms": 10
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.1,
