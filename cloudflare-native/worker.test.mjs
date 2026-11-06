@@ -234,3 +234,40 @@ test("global incident inventory applies the requested status and membership filt
     assert.deepEqual(bindings, [env.ORBIT_OIDC_ISSUER, "native-api-test-user", "monitoring"]);
   });
 });
+
+test("creating a workspace provisions explicitly labeled demo services, incidents and alert rules atomically", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    let batchStatements = [];
+    const DB = {
+      prepare(sql) {
+        return {
+          sql,
+          bind(...values) { return { sql, values }; }
+        };
+      },
+      async batch(statements) {
+        batchStatements = statements;
+        return statements.map(() => ({ meta: { changes: 1 } }));
+      }
+    };
+    const request = new Request("https://native.example/api/v1/workspaces", {
+      method: "POST",
+      headers: {
+        origin: "https://pooya-labs.github.io",
+        authorization: "Bearer " + token,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ name: "ORBIT demo", slug: "orbit-demo" })
+    });
+    const response = await worker.fetch(request, { ...env, DB });
+    assert.equal(response.status, 201);
+    assert.equal((await response.json()).demo_seeded, true);
+    assert.equal(batchStatements.length, 16);
+    assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO services")).length, 5);
+    assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO incidents")).length, 2);
+    assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO incident_timeline_events")).length, 2);
+    assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO alert_rules")).length, 2);
+    const seedLabels = batchStatements.flatMap((item) => item.values || []).filter((value) => value === "demo_seed");
+    assert.ok(seedLabels.length >= 4);
+  });
+});
