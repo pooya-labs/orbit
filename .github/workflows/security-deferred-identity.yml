@@ -109,6 +109,21 @@ jobs:
           list-all-pkgs: true
           timeout: 10m
 
+      - name: Export Keycloak ARM64 package inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          trivy image --platform linux/arm64 --config="" \
+            --vuln-type os,library \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+            --ignore-unfixed=false \
+            --exit-code 0 \
+            --format json \
+            --output /tmp/keycloak-arm64-trivy.json \
+            --list-all-pkgs \
+            --timeout 10m \
+            quay.io/keycloak/keycloak:26.8.2
+
       - name: Report package versions relevant to current findings
         shell: bash
         run: |
@@ -116,30 +131,40 @@ jobs:
           import json
           from pathlib import Path
 
-          report = json.loads(Path("/tmp/keycloak-trivy.json").read_text())
+          scans = (
+              ("amd64", Path("/tmp/keycloak-trivy.json")),
+              ("arm64", Path("/tmp/keycloak-arm64-trivy.json")),
+          )
           needles = ("ca-certificates", "sqlite", "openjdk", "guava")
           seen = set()
-          for result in report.get("Results") or []:
-              for package in result.get("Packages") or []:
+          for platform, report_path in scans:
+              report = json.loads(report_path.read_text())
+              packages = [package for result in report.get("Results") or [] for package in result.get("Packages") or []]
+              for package in packages:
                   name = str(package.get("Name") or "")
                   if any(needle in name.lower() for needle in needles):
-                      item = (name, str(package.get("Version") or ""), str(package.get("PkgType") or ""))
+                      item = (platform, str(package.get("Identifier", {}).get("PURL") or ""), str(package.get("Version") or ""))
                       if item not in seen:
                           seen.add(item)
-                          print("PACKAGE_FULL " + json.dumps(package, sort_keys=True))
-              for vuln in result.get("Vulnerabilities") or []:
-                  vuln_id = str(vuln.get("VulnerabilityID") or "")
-                  if vuln_id in {"CVE-2026-91403", "CVE-2026-119373", "CVE-2026-119586", "CVE-2026-102554"}:
-                      print(
-                          "FINDING",
-                          vuln_id,
-                          "package=", vuln.get("PkgName"),
-                          "installed=", vuln.get("InstalledVersion"),
-                          "fixed=", vuln.get("FixedVersion"),
-                          "status=", vuln.get("Status"),
-                      )
+                          print("PACKAGE_PLATFORM", platform, "PACKAGE_FULL", json.dumps(package, sort_keys=True))
+                  for dependency in package.get("DependsOn") or []:
+                      if dependency.startswith("sqlite-libs@"):
+                          print("SQLITE_RPM_DEPENDENT", platform, package.get("Name"), dependency)
+              for result in report.get("Results") or []:
+                  for vuln in result.get("Vulnerabilities") or []:
+                      vuln_id = str(vuln.get("VulnerabilityID") or "")
+                      if vuln_id in {"CVE-2026-91403", "CVE-2026-119373", "CVE-2026-119586", "CVE-2026-102554"}:
+                          print(
+                              "FINDING",
+                              platform,
+                              vuln_id,
+                              "package=", vuln.get("PkgName"),
+                              "installed=", vuln.get("InstalledVersion"),
+                              "fixed=", vuln.get("FixedVersion"),
+                              "status=", vuln.get("Status"),
+                          )
           if not seen:
-              print("No matching packages were present in Trivy's package inventory; retain the full scan as the security gate.")
+              print("No matching packages were present in either Trivy package inventory; retain the full scan as the security gate.")
           PY
 
       - name: Scan the pinned Keycloak image for high and critical vulnerabilities
