@@ -59,6 +59,42 @@ db.execute(
 expect_integrity_error("UPDATE workspace_audit_events SET action = 'tampered' WHERE id = 'audit-a'")
 expect_integrity_error("DELETE FROM workspace_audit_events WHERE id = 'audit-a'")
 
+
+# An incident transition and its history/audit entries commit as one batch.
+db.execute(
+    "INSERT INTO incidents (id, workspace_id, title, description, service_id, severity, status, started_at, updated_at, source) "
+    "VALUES (?, ?, ?, '', ?, 'high', 'open', ?, ?, 'live')",
+    ("incident-a", "workspace-a", "Service degradation", "service-a", now, now),
+)
+result = db.execute(
+    "UPDATE incidents SET status = 'investigating', updated_at = ? WHERE id = ? AND workspace_id = ? AND status = 'open'",
+    (now, "incident-a", "workspace-a"),
+)
+assert result.rowcount == 1
+db.execute(
+    "INSERT INTO incident_timeline_events (id, workspace_id, incident_id, actor_issuer, actor_subject, event_type, from_status, to_status, comment, request_id, details, created_at) "
+    "SELECT 'timeline-a', 'workspace-a', 'incident-a', 'https://id.example', 'user-a', 'incident.status_changed', 'open', 'investigating', '', 'req-a', '{}', ? WHERE changes() = 1",
+    (now,),
+)
+db.execute(
+    "INSERT INTO workspace_audit_events (id, workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, request_id, details, created_at) "
+    "SELECT 'audit-transition-a', 'workspace-a', 'https://id.example', 'user-a', 'incident.status_changed', 'incident', 'incident-a', 'req-a', '{}', ? WHERE changes() = 1",
+    (now,),
+)
+assert db.execute("SELECT COUNT(*) FROM incident_timeline_events WHERE incident_id = 'incident-a'").fetchone()[0] == 1
+assert db.execute("SELECT COUNT(*) FROM workspace_audit_events WHERE resource_id = 'incident-a'").fetchone()[0] == 1
+
+# A stale status update must not append a misleading timeline or audit record.
+db.execute(
+    "UPDATE incidents SET status = 'resolved' WHERE id = 'incident-a' AND status = 'open'"
+)
+db.execute(
+    "INSERT INTO incident_timeline_events (id, workspace_id, incident_id, actor_issuer, actor_subject, event_type, from_status, to_status, comment, request_id, details, created_at) "
+    "SELECT 'timeline-stale', 'workspace-a', 'incident-a', 'https://id.example', 'user-a', 'incident.status_changed', 'open', 'resolved', '', 'req-stale', '{}', ? WHERE changes() = 1",
+    (now,),
+)
+assert db.execute("SELECT COUNT(*) FROM incident_timeline_events WHERE incident_id = 'incident-a'").fetchone()[0] == 1
+
 # Tenant queries return only the current workspace's rows.
 rows = db.execute("SELECT id FROM services WHERE workspace_id = ?", ("workspace-b",)).fetchall()
 assert rows == [], rows
