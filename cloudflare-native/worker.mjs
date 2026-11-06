@@ -48,7 +48,27 @@ function validIssuer(value) {
 }
 
 function validWorkspaceSlug(value) {
-  return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/.test(value);
+  return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])$/.test(value);
+}
+
+function validUUID(value) {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function validAccessTokenClaims(payload, header, issuer) {
+  if (!payload || !header || typeof header !== "object") return false;
+  if (["jku", "jwk", "x5u", "crit", "b64"].some((key) => Object.hasOwn(header, key))) return false;
+  if (typeof header.kid !== "string" || !header.kid || header.kid.length > 256) return false;
+  if (header.typ !== undefined && !["JWT", "at+JWT", "at+jwt"].includes(header.typ)) return false;
+  const subject = payload.sub;
+  const issuedAt = payload.iat;
+  const expiresAt = payload.exp;
+  if (typeof subject !== "string" || !subject.trim() || subject.length > 512) return false;
+  if (payload.iss !== issuer || !Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) || expiresAt <= issuedAt) return false;
+  const rolesClaim = payload.roles;
+  if (rolesClaim !== undefined &&
+      !(typeof rolesClaim === "string" || (Array.isArray(rolesClaim) && rolesClaim.every((role) => typeof role === "string")))) return false;
+  return true;
 }
 
 function incidentTransitionAllowed(from, to) {
@@ -109,16 +129,14 @@ async function authenticate(request, env) {
   if (!token) return { error: "A Bearer access token is required." };
   try {
     const verifier = await getVerifier(env);
-    const { payload } = await jwtVerify(token, verifier.jwks, {
+    const { payload, protectedHeader } = await jwtVerify(token, verifier.jwks, {
       issuer: verifier.issuer,
       audience: verifier.audience,
       algorithms: ["RS256", "ES256"],
       clockTolerance: 60
     });
-    if (typeof payload.sub !== "string" || !payload.sub || payload.sub.length > 512 ||
-        typeof payload.iss !== "string" || payload.iss !== verifier.issuer ||
-        !Number.isFinite(payload.exp) || payload.exp <= (Date.now() / 1000) - 60) {
-      return { error: "The access token is missing required claims." };
+    if (!validAccessTokenClaims(payload, protectedHeader, verifier.issuer)) {
+      return { error: "The access token is missing required claims or has an unsupported JWT header." };
     }
     return { principal: { issuer: payload.iss, subject: payload.sub } };
   } catch {
@@ -319,7 +337,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       const serviceId = input.service_id;
       if (!title || title.length > 160 || description.length > 8000 ||
           !["critical", "high", "medium", "low"].includes(severity) ||
-          typeof serviceId !== "string" || !/^[0-9a-f-]{36}$/i.test(serviceId)) {
+          typeof serviceId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(serviceId)) {
         return fail(400, "invalid_incident", "Incident fields are invalid.", origin, env, id);
       }
       const service = await env.DB.prepare("SELECT name FROM services WHERE id = ? AND workspace_id = ?").bind(serviceId, workspaceId).first();
