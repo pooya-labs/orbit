@@ -1,0 +1,22 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/pooya-labs/orbit/blob/main/security/vex/keycloak-26.8.2-openjdk-system-ca.openvex.json",
+  "author": "ORBIT maintainers",
+  "timestamp": "2026-11-06T14:15:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-91403"
+      },
+      "products": [
+        {
+          "@id": "pkg:rpm/redhat/java-21-openjdk-headless@21.0.13.0.9-1.2.el9?arch=x86_64&distro=redhat-9.8&epoch=1"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Narrowly scoped to the exact Red Hat OpenJDK RPM PURL and version observed in quay.io/keycloak/keycloak:26.8.2. Red Hat states that RHEL OpenJDK RPMs do not contain a private CA bundle and use the system ca-certificates package; Red Hat does not issue an OpenJDK fix for CVE-2026-91403 because the attempted upstream intermediate-certificate blocklist was insufficient. The actual system trust-store removal is tracked as CVE-2026-114406. This image contains ca-certificates 2026.2.92_v9.0.319-90.3.el9_8, the exact RHEL 9 package published in RHSA-2026:88459. A keytool inventory of the JRE cacerts in this image showed only emsignrootca-g1 among the matching aliases; the compromised Comodo AAA Services and emSign ECC Root CA G3 roots listed in the Red Hat bulletin were not present. This statement does not cover Red Hat build-of-OpenJDK products that bundle their own trust store, other Java builds, or other image versions. Evidence: CI run 42231828253 package inventory and Java trust-store inspection; https://access.redhat.com/security/cve/cve-2026-91403; https://access.redhat.com/security/cve/cve-2026-114406; https://access.redhat.com/errata/RHSA-2026:88459; https://access.redhat.com/security/vulnerabilities/RHSB-2026-012"
+    }
+  ]
+}
