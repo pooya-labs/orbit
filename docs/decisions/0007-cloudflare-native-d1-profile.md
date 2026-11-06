@@ -26,7 +26,7 @@ Build a second, isolated Cloudflare runtime profile using Workers + D1:
 
 Workers + D1 can host the dashboard's transactional state and API logic without a VPS. It does not supply a drop-in replacement for PostgreSQL or the existing Prometheus, Loki and Tempo services.
 
-The first profile therefore migrates workspace, service, incident, audit, alert-definition/state, notification metadata, deployment annotation and SLO-definition records. Alert evaluation and notification delivery require separate bounded Worker execution and retry design. Webhook secrets must not be stored in plaintext D1 rows.
+The profile therefore migrates workspace, service, incident, audit, alert-definition/state, notification metadata, deployment annotation and SLO-definition records, and exposes member-filtered global service/incident inventory for the existing frontend. Alert evaluation and notification delivery require separate bounded Worker execution and retry design. Webhook secrets must not be stored in plaintext D1 rows.
 
 The existing raw OTLP ingestion path and Prometheus/Loki/Tempo querying are not represented as completed by D1. Any telemetry shown by the native profile must be labelled according to its actual source (for example, Workers runtime observability or explicitly synthetic demo data). It must not be presented as real production telemetry.
 
@@ -40,7 +40,7 @@ The existing raw OTLP ingestion path and Prometheus/Loki/Tempo querying are not 
 
 ## Implementation gates
 
-1. Foundation: schema, JWT verification, tenant isolation, workspace/service/incident APIs and tests.
+1. Foundation: schema, JWT verification parity, tenant isolation, frontend-compatible metadata and global/workspace service/incident APIs with signed-token and SQLite contract tests.
 2. Operations: alert CRUD/evaluation, deployment annotations, SLO CRUD/budget strategy, audit completeness.
 3. Notifications: encrypted webhook secrets, bounded retries, delivery attempts and abuse protections.
 4. Telemetry: honest source model, data retention and query quotas; no fake Prometheus/Loki/Tempo parity.
