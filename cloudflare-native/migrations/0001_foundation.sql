@@ -3,7 +3,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE workspaces (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
-  slug TEXT NOT NULL UNIQUE CHECK (slug GLOB '[a-z0-9]*' AND length(slug) BETWEEN 1 AND 48),
+  slug TEXT NOT NULL UNIQUE CHECK (length(slug) BETWEEN 1 AND 48 AND substr(slug, 1, 1) GLOB '[a-z0-9]' AND substr(slug, -1, 1) GLOB '[a-z0-9]' AND slug NOT GLOB '*[^a-z0-9-]*'),
   created_by_issuer TEXT NOT NULL CHECK (length(created_by_issuer) BETWEEN 1 AND 512),
   created_by_subject TEXT NOT NULL CHECK (length(created_by_subject) BETWEEN 1 AND 512),
   created_at TEXT NOT NULL,
@@ -37,8 +37,8 @@ CREATE TABLE workspace_audit_events (
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
   actor_issuer TEXT NOT NULL,
   actor_subject TEXT NOT NULL,
-  action TEXT NOT NULL CHECK (action GLOB '[a-z]*' AND length(action) <= 96),
-  resource_type TEXT NOT NULL CHECK (length(resource_type) BETWEEN 1 AND 64),
+  action TEXT NOT NULL CHECK (length(action) BETWEEN 1 AND 96 AND substr(action, 1, 1) GLOB '[a-z]' AND action NOT GLOB '*[^a-z0-9_.:-]*'),
+  resource_type TEXT NOT NULL CHECK (length(resource_type) BETWEEN 1 AND 64 AND substr(resource_type, 1, 1) GLOB '[a-z]' AND resource_type NOT GLOB '*[^a-z0-9_.:-]*'),
   resource_id TEXT NOT NULL DEFAULT '' CHECK (length(resource_id) <= 256),
   request_id TEXT NOT NULL DEFAULT '' CHECK (length(request_id) <= 128),
   details TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(details) AND json_type(details) = 'object' AND length(details) <= 16384),
@@ -127,7 +127,8 @@ CREATE TABLE alert_rules (
   updated_by_issuer TEXT NOT NULL,
   updated_by_subject TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  UNIQUE (id, workspace_id)
 );
 CREATE UNIQUE INDEX alert_rules_workspace_name_unique
   ON alert_rules (workspace_id, lower(name));
@@ -155,7 +156,7 @@ CREATE TABLE alert_instances (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE (id, workspace_id),
-  FOREIGN KEY (alert_rule_id) REFERENCES alert_rules(id) ON DELETE RESTRICT
+  FOREIGN KEY (alert_rule_id, workspace_id) REFERENCES alert_rules(id, workspace_id) ON DELETE RESTRICT
 );
 CREATE INDEX alert_instances_workspace_status_idx ON alert_instances (workspace_id, status, updated_at DESC);
 
@@ -167,7 +168,9 @@ CREATE TABLE alert_instance_events (
   event_type TEXT NOT NULL CHECK (event_type IN ('alert.pending', 'alert.firing', 'alert.resolved', 'alert.pending_cancelled', 'alert.rule_updated', 'alert.rule_disabled', 'alert.rule_deleted')),
   details TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(details) AND json_type(details) = 'object' AND length(details) <= 16384),
   created_at TEXT NOT NULL,
-  FOREIGN KEY (alert_instance_id, workspace_id) REFERENCES alert_instances(id, workspace_id) ON DELETE RESTRICT
+  UNIQUE (id, workspace_id),
+  FOREIGN KEY (alert_instance_id, workspace_id) REFERENCES alert_instances(id, workspace_id) ON DELETE RESTRICT,
+  FOREIGN KEY (alert_rule_id, workspace_id) REFERENCES alert_rules(id, workspace_id) ON DELETE RESTRICT
 );
 
 CREATE TABLE alert_notification_channels (
@@ -175,7 +178,7 @@ CREATE TABLE alert_notification_channels (
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
   name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 80),
   adapter TEXT NOT NULL DEFAULT 'webhook' CHECK (adapter = 'webhook'),
-  secret_ref TEXT NOT NULL CHECK (secret_ref GLOB '[A-Z]*' AND length(secret_ref) <= 64),
+  secret_ref TEXT NOT NULL CHECK (length(secret_ref) BETWEEN 1 AND 64 AND substr(secret_ref, 1, 1) GLOB '[A-Z]' AND secret_ref NOT GLOB '*[^A-Z0-9_]*'),
   enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
   created_by_issuer TEXT NOT NULL,
   created_by_subject TEXT NOT NULL,
@@ -205,6 +208,7 @@ CREATE TABLE alert_notification_deliveries (
   UNIQUE (id, workspace_id),
   UNIQUE (alert_instance_event_id, channel_id),
   FOREIGN KEY (alert_instance_id, workspace_id) REFERENCES alert_instances(id, workspace_id) ON DELETE RESTRICT,
+  FOREIGN KEY (alert_instance_event_id, workspace_id) REFERENCES alert_instance_events(id, workspace_id) ON DELETE RESTRICT,
   FOREIGN KEY (channel_id, workspace_id) REFERENCES alert_notification_channels(id, workspace_id) ON DELETE RESTRICT
 );
 CREATE INDEX alert_notification_deliveries_due_idx
