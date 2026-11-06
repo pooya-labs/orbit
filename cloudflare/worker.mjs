@@ -1,5 +1,5 @@
 const API_PREFIX = "/api/v1/";
-const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
 const ALLOWED_HEADERS = new Set(["authorization", "content-type", "x-request-id", "traceparent", "tracestate"]);
 const HOP_BY_HOP_HEADERS = [
   "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
