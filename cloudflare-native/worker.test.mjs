@@ -257,11 +257,13 @@ test("creating a workspace provisions explicitly labeled demo services, incident
         authorization: "Bearer " + token,
         "content-type": "application/json"
       },
-      body: JSON.stringify({ name: "ORBIT demo", slug: "orbit-demo" })
+      body: JSON.stringify({ name: "ORBIT demo", slug: " ORBIT-DEMO " })
     });
     const response = await worker.fetch(request, { ...env, DB });
     assert.equal(response.status, 201);
-    assert.equal((await response.json()).data.demo_seeded, true);
+    const payload = await response.json();
+    assert.equal(payload.data.demo_seeded, true);
+    assert.equal(payload.data.slug, "orbit-demo");
     assert.equal(batchStatements.length, 16);
     assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO services")).length, 5);
     assert.equal(batchStatements.filter((item) => item.sql.includes("INSERT INTO incidents")).length, 2);
