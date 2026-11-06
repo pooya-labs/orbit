@@ -35,6 +35,19 @@ jobs:
           docker buildx imagetools inspect quay.io/keycloak/keycloak:26.8.2 | tee /tmp/keycloak-image-manifest.txt
           grep -Eq 'Platform:[[:space:]]+linux/arm64([[:space:]]|$)' /tmp/keycloak-image-manifest.txt
 
+      - name: Inspect runtime packages related to the flagged findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint /bin/sh quay.io/keycloak/keycloak:26.8.2 -ec '
+            echo "== Runtime package versions =="
+            rpm -q ca-certificates java-21-openjdk-headless sqlite-libs || true
+            echo "== SQLite command availability =="
+            if command -v sqlite3 >/dev/null 2>&1; then sqlite3 --version; else echo "sqlite3 CLI is absent"; fi
+            echo "== Packages requiring sqlite-libs =="
+            rpm -q --whatrequires sqlite-libs || true
+          '
+
       - name: Scan the pinned Keycloak image for high and critical vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
