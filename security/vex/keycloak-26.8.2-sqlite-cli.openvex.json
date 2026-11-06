@@ -2,8 +2,8 @@
   "@context": "https://openvex.dev/ns/v0.2.0",
   "@id": "https://github.com/pooya-labs/orbit/blob/main/security/vex/keycloak-26.8.2-sqlite-cli.openvex.json",
   "author": "ORBIT maintainers",
-  "timestamp": "2026-11-06T14:45:00Z",
-  "version": 2,
+  "timestamp": "2026-11-06T14:50:00Z",
+  "version": 3,
   "statements": [
     {
       "vulnerability": {
@@ -11,25 +11,15 @@
       },
       "products": [
         {
-          "@id": "pkg:oci/keycloak@sha256:4340d05ee7d15be34293868d495ac772d61f1a4d0e43d53bae2e75e2f05de185?repository_url=quay.io/keycloak/keycloak",
-          "subcomponents": [
-            {
-              "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=x86_64&distro=redhat-9.8"
-            }
-          ]
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=x86_64&distro=redhat-9.8"
         },
         {
-          "@id": "pkg:oci/keycloak@sha256:1beace43eb563942a05fdea24fc04898e1a182797397f97a63fdb6c421aede44?repository_url=quay.io/keycloak/keycloak",
-          "subcomponents": [
-            {
-              "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=aarch64&distro=redhat-9.8"
-            }
-          ]
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=aarch64&distro=redhat-9.8"
         }
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_present",
-      "impact_statement": "Scoped to sqlite-libs 3.34.1-11.el9_8 in the immutable AMD64 and ARM64 manifests of quay.io/keycloak/keycloak:26.8.2. CVE-2026-119586 is in the SQLite command-line shell .recover command; the affected shell implementation is not part of sqlite-libs. Both platform inventories show the sqlite3 executable is absent and only shared library files are installed. On ARM64 nss-softokn declares a dependency on sqlite-libs, so this statement does not claim the library is unused; it is limited solely to the CLI .recover vulnerability. It does not cover the CLI package, other images/digests, or CVE-2026-119373 affecting FTS5 in sqlite-libs, which remains open."
+      "impact_statement": "Exact sqlite-libs 3.34.1-11.el9_8 RPM version and architecture in Keycloak 26.8.2 only. CVE-2026-119586 affects the SQLite command-line shell .recover command; the affected shell implementation is not part of sqlite-libs. Both platform inventories show the sqlite3 executable is absent and only shared-library files are installed. On ARM64 nss-softokn declares a dependency on sqlite-libs, so this statement does not claim that the library is unused; it is limited solely to the CLI .recover vulnerability. This statement is loaded only by trivy-keycloak.yaml for the Keycloak 26.8.2 multi-architecture scan. It does not cover the CLI package, other products or CVE-2026-119373 affecting FTS5 in sqlite-libs, which remains open."
     }
   ]
 }
