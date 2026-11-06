@@ -83,7 +83,6 @@ test("API proxy preserves bearer auth and query but replaces spoofable gateway m
         "x-orbit-client-ip": "203.0.113.99"
       }
     });
-    Object.defineProperty(request, "cf", { value: { country: "BE" } });
     const wrapped = new Request(request);
     // Cloudflare supplies this header at the edge; a caller-supplied value is not forwarded.
     const headers = new Headers(wrapped.headers);
@@ -95,6 +94,7 @@ test("API proxy preserves bearer auth and query but replaces spoofable gateway m
     assert.equal(new URL(captured.url).pathname, "/api/v1/meta");
     assert.equal(new URL(captured.url).search, "?source=cloudflare");
     assert.equal(captured.headers.get("authorization"), "Bearer user-access-token");
+    assert.equal(captured.headers.get("origin"), ORIGIN);
     assert.equal(captured.headers.get("x-orbit-gateway-secret"), SECRET);
     assert.equal(captured.headers.get("x-orbit-client-ip"), "198.51.100.24");
     assert.match(captured.headers.get("x-request-id"), /^[0-9a-f-]{36}$/i);
@@ -113,4 +113,48 @@ test("origin must be HTTPS and must not contain a path or credentials", async ()
     );
     assert.equal(response.status, 503);
   }
+});
+
+test("mutating API requests stream their body and preserve the user access token", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedBody = "";
+  let capturedHeaders;
+  globalThis.fetch = async request => {
+    capturedHeaders = request.headers;
+    capturedBody = await request.text();
+    return new Response(JSON.stringify({ data: { id: "incident-1" } }), {
+      status: 201,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  try {
+    const payload = JSON.stringify({ title: "Gateway smoke", severity: "low" });
+    const response = await gateway.fetch(new Request("https://orbit-runtime.workers.dev/api/v1/workspaces/00000000-0000-4000-8000-000000000001/incidents", {
+      method: "POST",
+      headers: {
+        origin: ORIGIN,
+        authorization: "Bearer operator-access-token",
+        "content-type": "application/json"
+      },
+      body: payload
+    }), env());
+
+    assert.equal(response.status, 201);
+    assert.equal(capturedBody, payload);
+    assert.equal(capturedHeaders.get("authorization"), "Bearer operator-access-token");
+    assert.equal(capturedHeaders.get("origin"), ORIGIN);
+    assert.equal(capturedHeaders.get("x-orbit-gateway-secret"), SECRET);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("requests without an Origin header do not receive a permissive CORS grant", async () => {
+  const response = await gateway.fetch(
+    new Request("https://orbit-runtime.workers.dev/health/live"),
+    env()
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("access-control-allow-origin"), null);
 });
