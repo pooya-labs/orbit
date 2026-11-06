@@ -22,5 +22,11 @@
   },
   "vars": {
     "ALLOWED_ORIGIN": "https://pooya-labs.github.io"
+  },
+  "account_id": "593f6245708f02254aa8ed0f1417f739",
+  "secrets": {
+    "required": [
+      "ORBIT_GATEWAY_SECRET"
+    ]
   }
 }
