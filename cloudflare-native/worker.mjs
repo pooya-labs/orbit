@@ -313,8 +313,24 @@ async function handleApi(request, env, url, origin, id, principal) {
     }
     const workspaceId = crypto.randomUUID();
     const auditId = crypto.randomUUID();
+    const seededServices = [
+      { name: "api-gateway", description: "Edge request router", environment: "production", region: "eu-central-1", status: "operational", latency: 42, errorRate: 0.0003 },
+      { name: "identity-core", description: "Authentication service", environment: "production", region: "eu-central-1", status: "operational", latency: 68, errorRate: 0.0008 },
+      { name: "billing-engine", description: "Payments and invoicing", environment: "production", region: "eu-west-1", status: "degraded", latency: 184, errorRate: 0.0142 },
+      { name: "event-stream", description: "Asynchronous event processing", environment: "production", region: "eu-central-1", status: "operational", latency: 31, errorRate: 0.0001 },
+      { name: "search-indexer", description: "Search indexing pipeline", environment: "production", region: "us-east-1", status: "incident", latency: null, errorRate: null }
+    ].map((service) => ({ ...service, id: crypto.randomUUID() }));
+    const serviceByName = Object.fromEntries(seededServices.map((service) => [service.name, service]));
+    const seededIncidents = [
+      { title: "Search indexing stalled", description: "The indexing queue stopped advancing after a shard rebalance. Synthetic demo data.", serviceName: "search-indexer", severity: "critical", status: "investigating", startedAt: new Date(Date.now() - 14 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 3 * 60 * 1000).toISOString(), comment: "Incident opened from the seeded demo scenario." },
+      { title: "Elevated payment latency", description: "Payment API latency is above its normal baseline. Synthetic demo data.", serviceName: "billing-engine", severity: "medium", status: "monitoring", startedAt: new Date(Date.now() - 38 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 7 * 60 * 1000).toISOString(), comment: "Incident opened from the seeded demo scenario." }
+    ].map((incident) => ({ ...incident, id: crypto.randomUUID(), service: serviceByName[incident.serviceName] }));
+    const seededRules = [
+      { name: "API error rate elevated", description: "Illustrative threshold for the demo API gateway. No live evaluator is configured in this runtime.", service_name: "api-gateway", metric: "request_rate", operator: "gt", threshold: 120, window_seconds: 300, pending_seconds: 120, severity: "high" },
+      { name: "Billing traffic anomaly", description: "Illustrative rule for billing-engine traffic. No live evaluator is configured in this runtime.", service_name: "billing-engine", metric: "request_rate", operator: "gt", threshold: 80, window_seconds: 300, pending_seconds: 60, severity: "medium" }
+    ].map((rule) => ({ ...rule, id: crypto.randomUUID() }));
     try {
-      await env.DB.batch([
+      const statements = [
         env.DB.prepare("INSERT INTO workspaces (id, name, slug, created_by_issuer, created_by_subject, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
           .bind(workspaceId, name.trim(), slug, principal.issuer, principal.subject, now, now),
         env.DB.prepare("INSERT INTO workspace_memberships (workspace_id, user_issuer, user_subject, role, created_at, updated_at) VALUES (?, ?, ?, 'owner', ?, ?)")
@@ -322,14 +338,31 @@ async function handleApi(request, env, url, origin, id, principal) {
         env.DB.prepare("INSERT INTO workspace_audit_actors (workspace_id, actor_issuer, actor_subject, actor_ref, created_at) VALUES (?, ?, ?, ?, ?)")
           .bind(workspaceId, principal.issuer, principal.subject, auditId, now),
         auditStatement(env.DB, workspaceId, principal, "workspace.created", "workspace", workspaceId, id, {}, now)
-      ]);
+      ];
+      for (const service of seededServices) {
+        statements.push(env.DB.prepare("INSERT INTO services (id, workspace_id, name, description, environment, region, status, latency_p95_ms, error_rate, last_seen_at, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'demo_seed', ?, ?)")
+          .bind(service.id, workspaceId, service.name, service.description, service.environment, service.region, service.status, service.latency, service.errorRate, now, now, now));
+      }
+      for (const incident of seededIncidents) {
+        statements.push(env.DB.prepare("INSERT INTO incidents (id, workspace_id, title, description, service_id, severity, status, started_at, updated_at, resolved_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'demo_seed')")
+          .bind(incident.id, workspaceId, incident.title, incident.description, incident.service.id, incident.severity, incident.status, incident.startedAt, incident.updatedAt));
+        statements.push(env.DB.prepare("INSERT INTO incident_timeline_events (id, workspace_id, incident_id, actor_issuer, actor_subject, event_type, from_status, to_status, comment, request_id, details, created_at) VALUES (?, ?, ?, ?, ?, 'incident.created', NULL, ?, ?, 'demo-seed', ?, ?)")
+          .bind(crypto.randomUUID(), workspaceId, incident.id, principal.issuer, principal.subject, incident.status, incident.comment, JSON.stringify({ source: "demo_seed" }), incident.startedAt));
+      }
+      for (const rule of seededRules) {
+        statements.push(env.DB.prepare("INSERT INTO alert_rules (id, workspace_id, name, description, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity, enabled, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)")
+          .bind(rule.id, workspaceId, rule.name, rule.description, rule.service_name, rule.metric, rule.operator, rule.threshold, rule.window_seconds, rule.pending_seconds, rule.severity, principal.issuer, principal.subject, principal.issuer, principal.subject, now, now));
+      }
+      statements.push(auditStatement(env.DB, workspaceId, principal, "workspace.demo_seeded", "workspace", workspaceId, id,
+        { source: "demo_seed", services: seededServices.length, incidents: seededIncidents.length, alert_rules: seededRules.length }, now));
+      await env.DB.batch(statements);
     } catch (error) {
       if (/UNIQUE constraint failed: workspaces[.]slug/i.test(String(error))) {
         return fail(409, "workspace_slug_conflict", "That workspace slug is already in use.", origin, env, id);
       }
       return fail(503, "workspace_create_failed", "The workspace could not be created.", origin, env, id);
     }
-    return response({ data: { id: workspaceId, name: name.trim(), slug, created_at: now, updated_at: now } }, 201, origin, env, id);
+    return response({ data: { id: workspaceId, name: name.trim(), slug, created_at: now, updated_at: now, demo_seeded: true } }, 201, origin, env, id);
   }
 
   if (path.startsWith("/api/v1/telemetry/")) {
