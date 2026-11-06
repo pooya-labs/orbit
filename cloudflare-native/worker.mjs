@@ -93,6 +93,44 @@ function parseBearer(request) {
   return value.slice(7).trim();
 }
 
+const MAX_OIDC_DOCUMENT_BYTES = 1024 * 1024;
+
+async function readBoundedResponseBytes(response, maxBytes = MAX_OIDC_DOCUMENT_BYTES) {
+  const declaredLength = response.headers.get("content-length");
+  if (declaredLength !== null) {
+    const parsedLength = Number(declaredLength);
+    if (!Number.isSafeInteger(parsedLength) || parsedLength < 0 || parsedLength > maxBytes) {
+      throw new Error("Remote OIDC document exceeds the configured size limit.");
+    }
+  }
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error("Remote OIDC document exceeds the configured size limit.");
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    try { await reader.cancel(); } catch {}
+    throw error;
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
 async function readOIDCJSON(url) {
   const response = await fetch(url, {
     headers: { accept: "application/json" },
@@ -100,21 +138,20 @@ async function readOIDCJSON(url) {
     signal: AbortSignal.timeout(5000)
   });
   if (!response.ok) throw new Error("OIDC metadata endpoint is unavailable.");
-  const declaredLength = Number(response.headers.get("content-length") || 0);
-  if (declaredLength > 1024 * 1024) throw new Error("OIDC metadata exceeds one MiB.");
-  const raw = await response.text();
-  if (new TextEncoder().encode(raw).byteLength > 1024 * 1024) throw new Error("OIDC metadata exceeds one MiB.");
+  const bytes = await readBoundedResponseBytes(response);
+  const raw = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   return JSON.parse(raw);
 }
 
 async function boundedJWKSFetch(url, options) {
   const response = await fetch(url, { ...options, redirect: "error" });
   if (response.status !== 200) return response;
-  const declaredLength = Number(response.headers.get("content-length") || 0);
-  if (declaredLength > 1024 * 1024) return new Response(null, { status: 413 });
-  const bytes = await response.arrayBuffer();
-  if (bytes.byteLength > 1024 * 1024) return new Response(null, { status: 413 });
-  return new Response(bytes, { status: response.status, headers: response.headers });
+  try {
+    const bytes = await readBoundedResponseBytes(response);
+    return new Response(bytes, { status: response.status, headers: response.headers });
+  } catch {
+    return new Response(null, { status: 413 });
+  }
 }
 
 async function getVerifier(env) {
@@ -886,6 +923,7 @@ export default {
 export {
   incidentTransitionAllowed,
   parseBearer,
+  readBoundedResponseBytes,
   roleAtLeast,
   validAccessTokenClaims,
   validIssuer,
