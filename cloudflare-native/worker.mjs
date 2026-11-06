@@ -397,6 +397,304 @@ async function handleApi(request, env, url, origin, id, principal) {
       const events = result.results || [];
       return response({ data: events.map((event) => ({ ...event, details: typeof event.details === "string" ? JSON.parse(event.details) : (event.details || {}) })) }, 200, origin, env, id);
     }
+
+    if (suffix === "alert-rules" && request.method === "GET") {
+      const limit = limitFromUrl(url);
+      if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
+      const result = await env.DB.prepare("SELECT id, workspace_id, name, description, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity, enabled, created_at, updated_at FROM alert_rules WHERE workspace_id = ? ORDER BY enabled DESC, updated_at DESC, id DESC LIMIT ?").bind(workspaceId, limit).all();
+      return response({ data: (result.results || []).map((row) => ({ ...row, enabled: Boolean(row.enabled) })) }, 200, origin, env, id);
+    }
+
+    if (suffix === "alert-rules" && request.method === "POST") {
+      const parsed = await readJson(request);
+      if (parsed.error) return fail(400, "invalid_alert_rule", parsed.error, origin, env, id);
+      const input = parsed.value;
+      const name = typeof input.name === "string" ? input.name.trim() : "";
+      const description = typeof input.description === "string" ? input.description.trim() : "";
+      const serviceName = typeof input.service_name === "string" ? input.service_name.trim() : "";
+      const { metric, operator, threshold, window_seconds: windowSeconds, pending_seconds: pendingSeconds, severity } = input;
+      if (!name || name.length > 120 || description.length > 4000 ||
+          (serviceName && !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(serviceName)) ||
+          metric !== "request_rate" || !["gt", "gte", "lt", "lte"].includes(operator) ||
+          typeof threshold !== "number" || !Number.isFinite(threshold) || threshold <= 0 || threshold > 1000000000 ||
+          ![60, 300, 900].includes(windowSeconds) ||
+          !Number.isInteger(pendingSeconds) || pendingSeconds < 0 || pendingSeconds > 3600 ||
+          !["critical", "high", "medium", "low"].includes(severity)) {
+        return fail(400, "invalid_alert_rule", "Alert rule fields are invalid.", origin, env, id);
+      }
+      const ruleId = crypto.randomUUID();
+      const details = { name, description, service_name: serviceName, metric, operator, threshold, window_seconds: windowSeconds, pending_seconds: pendingSeconds, severity, enabled: true };
+      try {
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO alert_rules (id, workspace_id, name, description, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity, enabled, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)")
+            .bind(ruleId, workspaceId, name, description, serviceName, metric, operator, threshold, windowSeconds, pendingSeconds, severity, principal.issuer, principal.subject, principal.issuer, principal.subject, now, now),
+          auditStatement(env.DB, workspaceId, principal, "alert_rule.created", "alert_rule", ruleId, id, details, now)
+        ]);
+      } catch (error) {
+        if (/unique constraint/i.test(String(error))) return fail(409, "alert_rule_name_conflict", "An alert rule with that name already exists in this workspace.", origin, env, id);
+        throw error;
+      }
+      return response({ data: { id: ruleId, workspace_id: workspaceId, ...details, created_at: now, updated_at: now } }, 201, origin, env, id);
+    }
+
+    const ruleMatch = suffix.match(/^alert-rules\/([0-9a-f-]{36})(?:\/(enabled))?$/i);
+    if (ruleMatch) {
+      const ruleId = ruleMatch[1];
+      if (ruleMatch[2] === "enabled" && request.method === "PATCH") {
+        const parsed = await readJson(request);
+        if (parsed.error || typeof parsed.value?.enabled !== "boolean") return fail(400, "invalid_alert_rule_state", "enabled must be a boolean.", origin, env, id);
+        const current = await env.DB.prepare("SELECT id, enabled FROM alert_rules WHERE id = ? AND workspace_id = ?").bind(ruleId, workspaceId).first();
+        if (!current) return fail(404, "alert_rule_not_found", "The workspace or alert rule was not found.", origin, env, id);
+        if (Boolean(current.enabled) === parsed.value.enabled) return fail(409, "alert_rule_no_change", "The alert rule already has the requested state.", origin, env, id);
+        await env.DB.batch([
+          env.DB.prepare("UPDATE alert_rules SET enabled = ?, updated_by_issuer = ?, updated_by_subject = ?, updated_at = ? WHERE id = ? AND workspace_id = ?")
+            .bind(parsed.value.enabled ? 1 : 0, principal.issuer, principal.subject, now, ruleId, workspaceId),
+          auditStatement(env.DB, workspaceId, principal, parsed.value.enabled ? "alert_rule.enabled" : "alert_rule.disabled", "alert_rule", ruleId, id, { enabled: parsed.value.enabled }, now)
+        ]);
+        const updated = await env.DB.prepare("SELECT id, workspace_id, name, description, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity, enabled, created_at, updated_at FROM alert_rules WHERE id = ? AND workspace_id = ?").bind(ruleId, workspaceId).first();
+        return response({ data: { ...updated, enabled: Boolean(updated.enabled) } }, 200, origin, env, id);
+      }
+      if (request.method === "PUT" && !ruleMatch[2]) {
+        const parsed = await readJson(request);
+        if (parsed.error) return fail(400, "invalid_alert_rule", parsed.error, origin, env, id);
+        const input = parsed.value;
+        const name = typeof input.name === "string" ? input.name.trim() : "";
+        const description = typeof input.description === "string" ? input.description.trim() : "";
+        const serviceName = typeof input.service_name === "string" ? input.service_name.trim() : "";
+        const { metric, operator, threshold, window_seconds: windowSeconds, pending_seconds: pendingSeconds, severity } = input;
+        if (!name || name.length > 120 || description.length > 4000 ||
+            (serviceName && !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(serviceName)) ||
+            metric !== "request_rate" || !["gt", "gte", "lt", "lte"].includes(operator) ||
+            typeof threshold !== "number" || !Number.isFinite(threshold) || threshold <= 0 || threshold > 1000000000 ||
+            ![60, 300, 900].includes(windowSeconds) ||
+            !Number.isInteger(pendingSeconds) || pendingSeconds < 0 || pendingSeconds > 3600 ||
+            !["critical", "high", "medium", "low"].includes(severity)) return fail(400, "invalid_alert_rule", "Alert rule fields are invalid.", origin, env, id);
+        const current = await env.DB.prepare("SELECT id FROM alert_rules WHERE id = ? AND workspace_id = ?").bind(ruleId, workspaceId).first();
+        if (!current) return fail(404, "alert_rule_not_found", "The workspace or alert rule was not found.", origin, env, id);
+        const details = { name, description, service_name: serviceName, metric, operator, threshold, window_seconds: windowSeconds, pending_seconds: pendingSeconds, severity };
+        try {
+          await env.DB.batch([
+            env.DB.prepare("UPDATE alert_rules SET name = ?, description = ?, service_name = ?, metric = ?, operator = ?, threshold = ?, window_seconds = ?, pending_seconds = ?, severity = ?, updated_by_issuer = ?, updated_by_subject = ?, updated_at = ? WHERE id = ? AND workspace_id = ?")
+              .bind(name, description, serviceName, metric, operator, threshold, windowSeconds, pendingSeconds, severity, principal.issuer, principal.subject, now, ruleId, workspaceId),
+            auditStatement(env.DB, workspaceId, principal, "alert_rule.updated", "alert_rule", ruleId, id, details, now)
+          ]);
+        } catch (error) {
+          if (/unique constraint/i.test(String(error))) return fail(409, "alert_rule_name_conflict", "An alert rule with that name already exists in this workspace.", origin, env, id);
+          throw error;
+        }
+        const updated = await env.DB.prepare("SELECT id, workspace_id, name, description, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity, enabled, created_at, updated_at FROM alert_rules WHERE id = ? AND workspace_id = ?").bind(ruleId, workspaceId).first();
+        return response({ data: { ...updated, enabled: Boolean(updated.enabled) } }, 200, origin, env, id);
+      }
+      if (request.method === "DELETE" && !ruleMatch[2]) {
+        const current = await env.DB.prepare("SELECT id, name FROM alert_rules WHERE id = ? AND workspace_id = ?").bind(ruleId, workspaceId).first();
+        if (!current) return fail(404, "alert_rule_not_found", "The workspace or alert rule was not found.", origin, env, id);
+        const references = await env.DB.prepare("SELECT COUNT(*) AS count FROM alert_instances WHERE alert_rule_id = ? AND workspace_id = ?").bind(ruleId, workspaceId).first();
+        if (Number(references?.count || 0) > 0) return fail(409, "alert_rule_in_use", "The alert rule has alert history and cannot be deleted.", origin, env, id);
+        await env.DB.batch([
+          env.DB.prepare("DELETE FROM alert_rules WHERE id = ? AND workspace_id = ?").bind(ruleId, workspaceId),
+          auditStatement(env.DB, workspaceId, principal, "alert_rule.deleted", "alert_rule", ruleId, id, { name: current.name }, now)
+        ]);
+        return new Response(null, { status: 204, headers: { ...cors(origin, env), "x-request-id": id } });
+      }
+    }
+
+    if (suffix === "alerts" && request.method === "GET") {
+      const limit = limitFromUrl(url);
+      if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
+      const status = url.searchParams.get("status") || "";
+      if (status && !["pending", "firing", "resolved", "cancelled"].includes(status)) return fail(400, "invalid_alert_status", "Alert status filter is invalid.", origin, env, id);
+      return fail(503, "alert_evaluator_unavailable", "Alert rules are stored, but live evaluation requires a real telemetry source that is not configured for this Cloudflare-only runtime.", origin, env, id);
+    }
+
+    if (suffix === "deployments" && request.method === "GET") {
+      const limit = limitFromUrl(url, 100);
+      if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
+      const serviceId = url.searchParams.get("service_id") || "";
+      if (serviceId && !/^[0-9a-f-]{36}$/i.test(serviceId)) return fail(400, "invalid_deployment_filter", "Service identifier is invalid.", origin, env, id);
+      const result = await env.DB.prepare("SELECT id, workspace_id, service_id, service_name, environment, version, commit_sha, change_reference, release_notes, deployed_at, created_at FROM deployment_annotations WHERE workspace_id = ? AND (? = '' OR service_id = ?) ORDER BY deployed_at DESC, id DESC LIMIT ?").bind(workspaceId, serviceId, serviceId, limit).all();
+      return response({ data: result.results || [] }, 200, origin, env, id);
+    }
+
+    if (suffix === "deployments" && request.method === "POST") {
+      const parsed = await readJson(request);
+      if (parsed.error) return fail(400, "invalid_deployment_annotation", parsed.error, origin, env, id);
+      const input = parsed.value;
+      const serviceId = input.service_id;
+      const version = typeof input.version === "string" ? input.version.trim() : "";
+      const commitSha = typeof input.commit_sha === "string" ? input.commit_sha.trim().toLowerCase() : "";
+      const changeReference = typeof input.change_reference === "string" ? input.change_reference.trim() : "";
+      const releaseNotes = typeof input.release_notes === "string" ? input.release_notes.trim() : "";
+      const deployedTimestamp = typeof input.deployed_at === "string" ? Date.parse(input.deployed_at) : (input.deployed_at === undefined ? Date.now() : NaN);
+      if (typeof serviceId !== "string" || !/^[0-9a-f-]{36}$/i.test(serviceId) ||
+          !/^[A-Za-z0-9][A-Za-z0-9.+_:/-]{0,127}$/.test(version) ||
+          (commitSha && !/^[0-9a-f]{7,64}$/.test(commitSha)) ||
+          (changeReference && !/^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,255}$/.test(changeReference)) ||
+          releaseNotes.length > 4000 || !Number.isFinite(deployedTimestamp) || deployedTimestamp > Date.now() + 300000) return fail(400, "invalid_deployment_annotation", "Deployment annotation fields are invalid.", origin, env, id);
+      const service = await env.DB.prepare("SELECT name, environment FROM services WHERE id = ? AND workspace_id = ?").bind(serviceId, workspaceId).first();
+      if (!service) return fail(404, "deployment_annotation_service_not_found", "The workspace service was not found.", origin, env, id);
+      const deploymentId = crypto.randomUUID();
+      const at = new Date(deployedTimestamp).toISOString();
+      const details = { service_id: serviceId, service_name: service.name, environment: service.environment, version, commit_sha: commitSha, change_reference: changeReference, deployed_at: at };
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO deployment_annotations (id, workspace_id, service_id, service_name, environment, version, commit_sha, change_reference, release_notes, deployed_at, created_by_issuer, created_by_subject, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(deploymentId, workspaceId, serviceId, service.name, service.environment, version, commitSha, changeReference, releaseNotes, at, principal.issuer, principal.subject, now),
+        auditStatement(env.DB, workspaceId, principal, "deployment.annotation_created", "deployment_annotation", deploymentId, id, details, now)
+      ]);
+      return response({ data: { id: deploymentId, workspace_id: workspaceId, service_id: serviceId, service_name: service.name, environment: service.environment, version, commit_sha: commitSha, change_reference: changeReference, release_notes: releaseNotes, deployed_at: at, created_at: now } }, 201, origin, env, id);
+    }
+
+    if (suffix === "deployments/compare" && request.method === "GET") {
+      const fromId = url.searchParams.get("from_id") || "";
+      const toId = url.searchParams.get("to_id") || "";
+      if (!/^[0-9a-f-]{36}$/i.test(fromId) || !/^[0-9a-f-]{36}$/i.test(toId) || fromId === toId) return fail(400, "invalid_deployment_comparison", "Compare two different deployment annotations.", origin, env, id);
+      const [from, to] = await Promise.all([
+        env.DB.prepare("SELECT id, workspace_id, service_id, service_name, environment, version, commit_sha, change_reference, release_notes, deployed_at, created_at FROM deployment_annotations WHERE id = ? AND workspace_id = ?").bind(fromId, workspaceId).first(),
+        env.DB.prepare("SELECT id, workspace_id, service_id, service_name, environment, version, commit_sha, change_reference, release_notes, deployed_at, created_at FROM deployment_annotations WHERE id = ? AND workspace_id = ?").bind(toId, workspaceId).first()
+      ]);
+      if (!from || !to || from.service_id !== to.service_id || Date.parse(from.deployed_at) >= Date.parse(to.deployed_at)) return fail(400, "invalid_deployment_comparison", "Compare two deployments of the same service in chronological order.", origin, env, id);
+      return response({ from, to, elapsed_seconds: Math.floor((Date.parse(to.deployed_at) - Date.parse(from.deployed_at)) / 1000), version_changed: from.version !== to.version, commit_changed: from.commit_sha !== to.commit_sha }, 200, origin, env, id);
+    }
+
+    if (suffix === "slos" && request.method === "GET") {
+      const limit = limitFromUrl(url, 100);
+      if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
+      const serviceId = url.searchParams.get("service_id") || "";
+      if (serviceId && !/^[0-9a-f-]{36}$/i.test(serviceId)) return fail(400, "invalid_slo_filter", "Service identifier is invalid.", origin, env, id);
+      const result = await env.DB.prepare("SELECT slo.id, slo.workspace_id, slo.service_id, services.name AS service_name, services.environment, slo.name, slo.route, slo.target, slo.rolling_window_days, slo.enabled, slo.created_at, slo.updated_at FROM service_level_objectives slo JOIN services ON services.id = slo.service_id AND services.workspace_id = slo.workspace_id WHERE slo.workspace_id = ? AND (? = '' OR slo.service_id = ?) ORDER BY slo.enabled DESC, slo.updated_at DESC, slo.id DESC LIMIT ?").bind(workspaceId, serviceId, serviceId, limit).all();
+      return response({ data: (result.results || []).map((row) => ({ ...row, enabled: Boolean(row.enabled) })) }, 200, origin, env, id);
+    }
+
+    if (suffix === "slos" && request.method === "POST") {
+      const parsed = await readJson(request);
+      if (parsed.error) return fail(400, "invalid_slo", parsed.error, origin, env, id);
+      const input = parsed.value;
+      const serviceId = input.service_id;
+      const name = typeof input.name === "string" ? input.name.trim() : "";
+      const route = typeof input.route === "string" ? input.route.trim() : "";
+      const target = input.target;
+      const windowDays = input.rolling_window_days;
+      if (typeof serviceId !== "string" || !/^[0-9a-f-]{36}$/i.test(serviceId) ||
+          !name || name.length > 120 || !/^\/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$/.test(route) || route.includes("//") ||
+          typeof target !== "number" || !Number.isFinite(target) || target < 0.90 || target > 0.9999 || ![1, 3, 7].includes(windowDays)) return fail(400, "invalid_slo", "SLO fields are invalid.", origin, env, id);
+      const service = await env.DB.prepare("SELECT name, environment FROM services WHERE id = ? AND workspace_id = ?").bind(serviceId, workspaceId).first();
+      if (!service) return fail(404, "slo_service_not_found", "The workspace service was not found.", origin, env, id);
+      const sloId = crypto.randomUUID();
+      const details = { service_id: serviceId, service_name: service.name, environment: service.environment, name, route, target, rolling_window_days: windowDays, enabled: true };
+      try {
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO service_level_objectives (id, workspace_id, service_id, name, route, target, rolling_window_days, enabled, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)")
+            .bind(sloId, workspaceId, serviceId, name, route, target, windowDays, principal.issuer, principal.subject, principal.issuer, principal.subject, now, now),
+          auditStatement(env.DB, workspaceId, principal, "slo.created", "slo_definition", sloId, id, details, now)
+        ]);
+      } catch (error) {
+        if (/unique constraint/i.test(String(error))) return fail(409, "slo_name_conflict", "An SLO with that name already exists for this service.", origin, env, id);
+        throw error;
+      }
+      return response({ data: { id: sloId, workspace_id: workspaceId, service_id: serviceId, service_name: service.name, environment: service.environment, name, route, target, rolling_window_days: windowDays, enabled: true, created_at: now, updated_at: now } }, 201, origin, env, id);
+    }
+
+    const sloMatch = suffix.match(/^slos\/([0-9a-f-]{36})(?:\/(enabled|budget))?$/i);
+    if (sloMatch) {
+      const sloId = sloMatch[1];
+      if (sloMatch[2] === "budget" && request.method === "GET") return fail(503, "slo_telemetry_unavailable", "SLO definitions are stored, but error budgets require real request telemetry that is not configured for this Cloudflare-only runtime.", origin, env, id);
+      if (sloMatch[2] === "enabled" && request.method === "PATCH") {
+        const parsed = await readJson(request);
+        if (parsed.error || typeof parsed.value?.enabled !== "boolean") return fail(400, "invalid_slo_state", "enabled must be provided as a boolean.", origin, env, id);
+        const current = await env.DB.prepare("SELECT id, enabled FROM service_level_objectives WHERE id = ? AND workspace_id = ?").bind(sloId, workspaceId).first();
+        if (!current) return fail(404, "slo_not_found", "The workspace or SLO was not found.", origin, env, id);
+        if (Boolean(current.enabled) === parsed.value.enabled) return fail(409, "slo_no_change", "The SLO already has the requested state.", origin, env, id);
+        await env.DB.batch([
+          env.DB.prepare("UPDATE service_level_objectives SET enabled = ?, updated_by_issuer = ?, updated_by_subject = ?, updated_at = ? WHERE id = ? AND workspace_id = ?").bind(parsed.value.enabled ? 1 : 0, principal.issuer, principal.subject, now, sloId, workspaceId),
+          auditStatement(env.DB, workspaceId, principal, parsed.value.enabled ? "slo.enabled" : "slo.disabled", "slo_definition", sloId, id, { enabled: parsed.value.enabled }, now)
+        ]);
+        const updated = await env.DB.prepare("SELECT slo.id, slo.workspace_id, slo.service_id, services.name AS service_name, services.environment, slo.name, slo.route, slo.target, slo.rolling_window_days, slo.enabled, slo.created_at, slo.updated_at FROM service_level_objectives slo JOIN services ON services.id = slo.service_id AND services.workspace_id = slo.workspace_id WHERE slo.id = ? AND slo.workspace_id = ?").bind(sloId, workspaceId).first();
+        return response({ data: { ...updated, enabled: Boolean(updated.enabled) } }, 200, origin, env, id);
+      }
+      if (request.method === "PUT" && !sloMatch[2]) {
+        const parsed = await readJson(request);
+        if (parsed.error) return fail(400, "invalid_slo", parsed.error, origin, env, id);
+        const input = parsed.value;
+        const name = typeof input.name === "string" ? input.name.trim() : "";
+        const route = typeof input.route === "string" ? input.route.trim() : "";
+        const target = input.target;
+        const windowDays = input.rolling_window_days;
+        if (!name || name.length > 120 || !/^\/[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$/.test(route) || route.includes("//") ||
+            typeof target !== "number" || !Number.isFinite(target) || target < 0.90 || target > 0.9999 || ![1, 3, 7].includes(windowDays)) return fail(400, "invalid_slo", "SLO fields are invalid.", origin, env, id);
+        const current = await env.DB.prepare("SELECT id FROM service_level_objectives WHERE id = ? AND workspace_id = ?").bind(sloId, workspaceId).first();
+        if (!current) return fail(404, "slo_not_found", "The workspace or SLO was not found.", origin, env, id);
+        try {
+          await env.DB.batch([
+            env.DB.prepare("UPDATE service_level_objectives SET name = ?, route = ?, target = ?, rolling_window_days = ?, updated_by_issuer = ?, updated_by_subject = ?, updated_at = ? WHERE id = ? AND workspace_id = ?").bind(name, route, target, windowDays, principal.issuer, principal.subject, now, sloId, workspaceId),
+            auditStatement(env.DB, workspaceId, principal, "slo.updated", "slo_definition", sloId, id, { name, route, target, rolling_window_days: windowDays }, now)
+          ]);
+        } catch (error) {
+          if (/unique constraint/i.test(String(error))) return fail(409, "slo_name_conflict", "An SLO with that name already exists for this service.", origin, env, id);
+          throw error;
+        }
+        const updated = await env.DB.prepare("SELECT slo.id, slo.workspace_id, slo.service_id, services.name AS service_name, services.environment, slo.name, slo.route, slo.target, slo.rolling_window_days, slo.enabled, slo.created_at, slo.updated_at FROM service_level_objectives slo JOIN services ON services.id = slo.service_id AND services.workspace_id = slo.workspace_id WHERE slo.id = ? AND slo.workspace_id = ?").bind(sloId, workspaceId).first();
+        return response({ data: { ...updated, enabled: Boolean(updated.enabled) } }, 200, origin, env, id);
+      }
+      if (request.method === "DELETE" && !sloMatch[2]) {
+        const current = await env.DB.prepare("SELECT id, name FROM service_level_objectives WHERE id = ? AND workspace_id = ?").bind(sloId, workspaceId).first();
+        if (!current) return fail(404, "slo_not_found", "The workspace or SLO was not found.", origin, env, id);
+        await env.DB.batch([
+          env.DB.prepare("DELETE FROM service_level_objectives WHERE id = ? AND workspace_id = ?").bind(sloId, workspaceId),
+          auditStatement(env.DB, workspaceId, principal, "slo.deleted", "slo_definition", sloId, id, { name: current.name }, now)
+        ]);
+        return new Response(null, { status: 204, headers: { ...cors(origin, env), "x-request-id": id } });
+      }
+    }
+
+    if (suffix === "alert-notification-channels" && request.method === "GET") {
+      const limit = limitFromUrl(url);
+      if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
+      const result = await env.DB.prepare("SELECT id, workspace_id, name, adapter, secret_ref, enabled, created_at, updated_at FROM alert_notification_channels WHERE workspace_id = ? ORDER BY enabled DESC, created_at DESC, id DESC LIMIT ?").bind(workspaceId, limit).all();
+      const channels = (result.results || []).map((row) => ({ id: row.id, workspace_id: row.workspace_id, name: row.name, adapter: row.adapter, enabled: Boolean(row.enabled), secret_configured: typeof env[row.secret_ref] === "string" && env[row.secret_ref].length > 0, created_at: row.created_at, updated_at: row.updated_at }));
+      return response({ data: channels }, 200, origin, env, id);
+    }
+
+    if (suffix === "alert-notification-channels" && request.method === "POST") {
+      const parsed = await readJson(request);
+      if (parsed.error) return fail(400, "invalid_alert_notification", parsed.error, origin, env, id);
+      const name = typeof parsed.value.name === "string" ? parsed.value.name.trim() : "";
+      const secretRef = typeof parsed.value.secret_ref === "string" ? parsed.value.secret_ref.trim() : "";
+      if (!name || name.length > 80 || !/^[A-Z][A-Z0-9_]{0,63}$/.test(secretRef)) return fail(400, "invalid_alert_notification", "Channel name or secret reference is invalid.", origin, env, id);
+      const channelId = crypto.randomUUID();
+      try {
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO alert_notification_channels (id, workspace_id, name, adapter, secret_ref, enabled, created_by_issuer, created_by_subject, updated_by_issuer, updated_by_subject, created_at, updated_at) VALUES (?, ?, ?, 'webhook', ?, 1, ?, ?, ?, ?, ?, ?)")
+            .bind(channelId, workspaceId, name, secretRef, principal.issuer, principal.subject, principal.issuer, principal.subject, now, now),
+          auditStatement(env.DB, workspaceId, principal, "alert_notification_channel.created", "alert_notification_channel", channelId, id, { name, adapter: "webhook" }, now)
+        ]);
+      } catch (error) {
+        if (/unique constraint/i.test(String(error))) return fail(409, "alert_notification_channel_conflict", "A notification channel with that name already exists.", origin, env, id);
+        throw error;
+      }
+      return response({ data: { id: channelId, workspace_id: workspaceId, name, adapter: "webhook", enabled: true, secret_configured: typeof env[secretRef] === "string" && env[secretRef].length > 0, created_at: now, updated_at: now } }, 201, origin, env, id);
+    }
+
+    const channelState = suffix.match(/^alert-notification-channels\/([0-9a-f-]{36})\/enabled$/i);
+    if (channelState && request.method === "PATCH") {
+      const parsed = await readJson(request);
+      if (parsed.error || typeof parsed.value?.enabled !== "boolean") return fail(400, "invalid_alert_notification_state", "enabled must be provided as a boolean.", origin, env, id);
+      const channelId = channelState[1];
+      const current = await env.DB.prepare("SELECT id, name, enabled FROM alert_notification_channels WHERE id = ? AND workspace_id = ?").bind(channelId, workspaceId).first();
+      if (!current) return fail(404, "alert_notification_resource_not_found", "The workspace or notification channel was not found.", origin, env, id);
+      if (Boolean(current.enabled) === parsed.value.enabled) return fail(409, "alert_notification_no_change", "The notification channel already has the requested state.", origin, env, id);
+      await env.DB.batch([
+        env.DB.prepare("UPDATE alert_notification_channels SET enabled = ?, updated_by_issuer = ?, updated_by_subject = ?, updated_at = ? WHERE id = ? AND workspace_id = ?").bind(parsed.value.enabled ? 1 : 0, principal.issuer, principal.subject, now, channelId, workspaceId),
+        auditStatement(env.DB, workspaceId, principal, parsed.value.enabled ? "alert_notification_channel.enabled" : "alert_notification_channel.disabled", "alert_notification_channel", channelId, id, { enabled: parsed.value.enabled, name: current.name }, now)
+      ]);
+      const updated = await env.DB.prepare("SELECT id, workspace_id, name, adapter, secret_ref, enabled, created_at, updated_at FROM alert_notification_channels WHERE id = ? AND workspace_id = ?").bind(channelId, workspaceId).first();
+      return response({ data: { id: updated.id, workspace_id: updated.workspace_id, name: updated.name, adapter: updated.adapter, enabled: Boolean(updated.enabled), secret_configured: typeof env[updated.secret_ref] === "string" && env[updated.secret_ref].length > 0, created_at: updated.created_at, updated_at: updated.updated_at } }, 200, origin, env, id);
+    }
+
+    if (suffix === "alert-notification-deliveries" && request.method === "GET") return fail(503, "alert_delivery_unavailable", "Notification channel settings are stored, but deliveries require live alert evaluation and a configured delivery worker.", origin, env, id);
+    if (/^alert-notification-deliveries\/[0-9a-f-]{36}\/attempts$/i.test(suffix) && request.method === "GET") {
+      const limit = limitFromUrl(url);
+      if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
+      return fail(503, "alert_delivery_unavailable", "Delivery attempts are unavailable until the notification delivery worker is configured.", origin, env, id);
+    }
   }
 
   return fail(404, "route_not_found", "The requested ORBIT API route was not found in the Cloudflare-native runtime.", origin, env, id);
