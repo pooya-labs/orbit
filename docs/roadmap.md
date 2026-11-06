@@ -284,9 +284,14 @@ identity, health, and tenant-isolation smoke checks pass.
   reported HIGH OpenJDK/SQLite/Guava findings on the superseded
   `quay.io/keycloak/keycloak:26.8.1` image. The production Compose file and
   deferred scan now pin Keycloak 26.8.2, with pull-request scanning and an explicit
-  linux/arm64 manifest check. The 26.8.2 exact-image Trivy result is still a blocking
-  production gate; no clean result is claimed until that scan succeeds. Keycloak
-  is not used by the Pages + Apps Script demo and remains outside the v1 release gate.
+  linux/arm64 manifest check. The first exact-image scan
+  [42225793814](https://github.com/pooya-labs/orbit/actions/runs/42225793814)
+  failed Trivy with three HIGH findings (OpenJDK CVE-2026-91403, SQLite
+  CVE-2026-119373 / CVE-2026-119586, and Guava CVE-2026-102554). A follow-up
+  package-inspection step is being added to document the affected runtime
+  components. This is still a blocking production gate; no clean result is
+  claimed. Keycloak is not used by the Pages + Apps Script demo and remains
+  outside the v1 release gate.
 - The release does not claim formal WCAG conformance. Human TalkBack/VoiceOver
   device acceptance and broad sustained-load/capacity benchmarking remain
   post-v1 work.
