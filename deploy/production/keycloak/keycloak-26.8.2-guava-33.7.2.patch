@@ -1,0 +1,29 @@
+diff --git a/pom.xml b/pom.xml
+--- a/pom.xml
++++ b/pom.xml
+@@
+             <dependency>
+                 <groupId>org.infinispan</groupId>
+                 <artifactId>infinispan-bom</artifactId>
+                 <version>${infinispan.version}</version>
+                 <type>pom</type>
+                 <scope>import</scope>
+             </dependency>
++            <!-- Security override: the Quarkus 3.40.1.1 BOM otherwise pins
++                 Guava 33.6.0-jre, which is affected by CVE-2026-102554.
++                 Import this BOM before Quarkus so Maven selects the fixed
++                 33.7.2-jre line for the complete Keycloak distribution. -->
++            <dependency>
++                <groupId>com.google.guava</groupId>
++                <artifactId>guava-bom</artifactId>
++                <version>33.7.2-jre</version>
++                <type>pom</type>
++                <scope>import</scope>
++            </dependency>
+             <dependency>
+                 <groupId>io.quarkus.platform</groupId>
+                 <artifactId>quarkus-bom</artifactId>
+                 <version>${quarkus.version}</version>
+                 <type>pom</type>
+                 <scope>import</scope>
+             </dependency>
