@@ -1,0 +1,41 @@
+# ORBIT Cloudflare-native runtime (separate deployment profile)
+
+This is a new, independent Cloudflare runtime profile. It does not replace the existing `orbit-runtime` edge gateway, the Go/PostgreSQL reference implementation, the GitHub Pages build, or the Apps Script demo.
+
+## What is included in the first increment
+
+- A separate Worker named `orbit-native-runtime`; it is deliberately not exposed on `workers.dev` yet.
+- D1 schema for workspace data, memberships, immutable audit events, services, incidents and timelines, alerting, notification records, deployment annotations and SLO definitions.
+- OIDC access-token verification using the same issuer/audience model as the existing browser PKCE client and Go API.
+- Workspace role checks and tenant-scoped reads/writes for workspace, membership, audit, service and incident endpoints.
+- Exact Pages-origin CORS, request IDs, bounded JSON bodies, fail-closed database/auth configuration, and tests for core policy helpers.
+
+## What is not ready yet
+
+This is a staged foundation, not a claim of feature parity or a deployable v1. Alert evaluation, webhook delivery, deployment/SLO endpoints, API rate limiting and telemetry query routes are subsequent implementation milestones. In particular, D1 does not replace the current Prometheus/Loki/Tempo telemetry pipeline. The Cloudflare-native profile must either present clearly labelled D1/Workers runtime events and demo samples, or retain a separately hosted telemetry source; it must not label synthetic samples as real telemetry.
+
+The frontend still uses its existing OIDC Authorization Code + PKCE flow. The Worker validates the resulting Bearer access token against a configured HTTPS OIDC issuer and API audience. No identity provider is bundled or hosted by this Worker. A compatible issuer and audience must be selected and configured before the API can be activated.
+
+## Deployment safety
+
+- `workers_dev` is false until the account's D1 binding and OIDC configuration have been verified.
+- The D1 database ID is an explicit placeholder and must be replaced only after the intended database has been created.
+- Do not run remote migrations or deploy this profile until the database and OIDC settings have been reviewed.
+- No database, binding, secret, route, or billing setting has been changed in the Cloudflare account by this source commit.
+- The existing Apps Script runtime remains independent and unchanged.
+
+## Local checks
+
+From the repository root:
+
+```sh
+node --test cloudflare-native/worker.test.mjs
+```
+
+Apply migrations only after creating the matching D1 database:
+
+```sh
+npx wrangler d1 migrations apply orbit-native --remote --config cloudflare-native/wrangler.jsonc
+```
+
+The current migration is only the initial schema. Do not configure the GitHub Pages API URL to this Worker until subsequent milestones are complete and the end-to-end acceptance matrix passes.
