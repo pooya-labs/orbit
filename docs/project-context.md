@@ -892,8 +892,12 @@ Repository: `pooya-labs/orbit`; default branch: `main`.
 - The OCI free deployment uses one 2-OCPU / 12-GB Ampere A1 instance, GitHub
   Pages, DuckDNS, self-hosted PostgreSQL/Keycloak, Caddy, Collector, Prometheus,
   Loki and Tempo. This is single-node and has no HA.
-- Keycloak is pinned to 26.8.1 (not 26.7.3); 26.8.1 fixes security issues
-  affecting 26.7.3, including the documented PAR single-use bypass.
+- Keycloak is pinned to 26.8.2 in the production Compose stack and the deferred
+  identity scan. Upstream published 26.8.2 on 2026-11-05 with additional security
+  fixes; see the [official Keycloak release](https://github.com/keycloak/keycloak/releases/tag/26.8.2).
+  The earlier 26.8.1 scan failure below is retained as historical evidence; the
+  26.8.2 image must pass the exact-image Trivy gate and ARM64 manifest check before
+  any production identity deployment.
 - `deploy/production/backup-to-oci.sh` uses the VM's OCI instance principal,
   a dedicated private bucket, an age public recipient whose private identity is
   kept offline, and a 16-GB maximum bucket budget. It backs up all PostgreSQL
@@ -1052,14 +1056,15 @@ remain deferred until after the portfolio v1 release, as previously requested.
   the separate scheduled/manual deferred identity workflow.
 - The separate Keycloak run
   [42032403489](https://github.com/pooya-labs/orbit/actions/runs/42032403489)
-  is red on the known HIGH OpenJDK CVE-2026-91403, SQLite
-  CVE-2026-119373 / CVE-2026-119586 and Guava CVE-2026-102554 findings in
-  `quay.io/keycloak/keycloak:26.8.1`. It was not suppressed, broadly VEXed or
-  silently marked green. This is an open production-identity-path task, not
-  a v1 portfolio-demo release blocker.
-- Keep that scan enabled weekly and for changes to the identity deployment
-  paths. Resolve findings only with a real vendor patch or evidence-based
-  mitigation before production identity rollout.
+  failed on the historical `quay.io/keycloak/keycloak:26.8.1` image with HIGH
+  OpenJDK CVE-2026-91403, SQLite CVE-2026-119373 / CVE-2026-119586 and Guava
+  CVE-2026-102554 findings. It was not suppressed, broadly VEXed or silently
+  marked green. The production image and deferred scan are now pinned to 26.8.2;
+  its exact-image Trivy scan and linux/arm64 manifest verification must pass before
+  production identity deployment. No clean result is claimed yet.
+- Keep the scan enabled weekly, on relevant pull requests, and for changes to
+  the identity deployment paths. Resolve findings only with a real vendor patch
+  or evidence-based mitigation before production identity rollout.
 
 ### Owner-supplied Apps Script URL — live verification boundary
 
