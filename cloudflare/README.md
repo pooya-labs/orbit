@@ -1,0 +1,108 @@
+# ORBIT Cloudflare edge runtime
+
+The Cloudflare Worker is the public edge entry point for the existing ORBIT backend. It is deliberately **not a second application backend**.
+
+## Canonical architecture
+
+```text
+Browser — GitHub Pages dashboard
+        |
+        | HTTPS + user OIDC access token
+        v
+Cloudflare Worker: orbit-runtime
+  - exact Pages-origin CORS
+  - explicit API path allowlist
+  - request ID and trusted Cloudflare client IP
+  - private Worker-to-origin gateway secret
+  - no authenticated response cache
+        |
+        | HTTPS + private gateway secret
+        v
+Caddy — existing API hostname / origin
+  - rejects API traffic without Worker secret
+  - strips gateway secret before Go API
+  - forwards verified edge client IP
+        |
+        v
+Existing Go API — canonical auth, role and workspace policy
+        |
+        +---- PostgreSQL — authoritative workspace and operations data
+        |
+        +---- authenticated OTLP/HTTP + OTLP/gRPC gateways
+                  |
+                  v
+             private OTel Collector
+                  |
+             +----+----+
+             |    |    |
+          Prom. Loki Tempo
+          metrics logs traces
+```
+
+## Resources
+
+- Worker: `orbit-runtime`
+- Public edge URL: https://orbit-runtime.pooyagame141.workers.dev
+- Browser origin: `https://pooya-labs.github.io`
+- API origin: the existing `ORBIT_API_DOMAIN` DuckDNS hostname behind Caddy; never point the browser directly at it.
+- Identity provider: existing self-hosted Keycloak configuration in the original zero-cost deployment runbook.
+- Source of truth: existing Go API + PostgreSQL + Collector + Prometheus/Loki/Tempo.
+
+There is no D1 binding, no duplicated workspace/application data, and no Worker-owned identity or notification system in the accepted architecture.
+
+## Live Cloudflare account check — 2026-11-06
+
+The owner-provided Billing → Subscriptions dashboard shows **Workers Free — Active**, with **Upgrade to Workers Paid** and **No payment method on file**. No billing changes were made.
+
+Cloudflare API inspection confirms the account workers.dev subdomain is `pooyagame141`, but the `orbit-runtime` workers.dev route is currently disabled (`enabled: false`). The branch's Wrangler config intentionally has `workers_dev: true`; the next guarded deployment should re-enable the route. If it remains off afterwards, enable it manually under **Workers & Pages → orbit-runtime → Settings → Domains & Routes → workers.dev**.
+
+The deployed Worker is version `0.2.3` (version 8). Logs and Traces are enabled with 10% sampling. The current Worker has no resource bindings and no Worker secrets; `ORBIT_GATEWAY_SECRET` is not yet installed. This is intentional until the original Go/Caddy origin and private `.env.production` are ready. Keep API routes fail-closed until then.
+
+The Worker API metadata still returns `usage_model: standard`; leave it unchanged. The connected Cloudflare OAuth integration can read Worker configuration, versions, subdomain state and secret names, but cannot read account subscription records (HTTP 403 on `/accounts/{account_id}/subscriptions`). The supplied Billing dashboard is the confirmed account-plan evidence.
+
+## Request paths
+
+Browser dashboard requests go to the Worker at `/api/v1/*`, `/health/live`, or `/health/ready`. The Worker accepts only the configured GitHub Pages origin for browser CORS, forwards the user's Authorization Bearer token unchanged, and adds a private gateway secret and Cloudflare-derived client IP. It never selects an arbitrary upstream host.
+
+Caddy requires the Worker gateway secret for `/api/v1/*` and `/health/ready`, strips the secret, and forwards requests to the existing Go API. The Go API remains responsible for OIDC/JWKS validation, roles, workspace membership, response contracts, shared PostgreSQL rate limits, and all business operations.
+
+The Worker does not proxy OTLP or gRPC. Workloads continue to use the separate authenticated OTLP/HTTP and OTLP/gRPC ingress hostnames in the original Caddy setup. The Go gateway enforces the dedicated workload-token audience, an explicit workspace/signal grant, canonical tenant attribution, reserved-attribute rejection, the reviewed attribute allowlist, shared rate limits, payload limits, concurrency admission, timeout and backpressure before forwarding to the private Collector.
+
+## Local configuration and deployment
+
+Read [the step-by-step Workers Free deployment runbook](../docs/deployment/cloudflare-free-worker.md) first. It begins with the billing/usage-model gate and then walks through origin setup, Worker deployment, Pages configuration and acceptance checks.
+
+The API hostname remains a public HTTPS transport endpoint, but Caddy protects all API and readiness routes with the Worker-only gateway secret; it is not a browser-facing API URL:
+
+1. Configure the original zero-cost origin stack from [the free deployment runbook](../docs/deployment/free-only-orbit.md). This is the same Go/PostgreSQL/Keycloak/Collector/Prometheus/Loki/Tempo deployment, not a replacement.
+2. The existing `deploy/production/free-stack.sh prepare` generates the private `.env.production` file, including a random `ORBIT_WORKER_GATEWAY_SECRET`. Keep that file mode 600 and out of Git.
+3. Start the origin stack, confirm DNS/TLS and Keycloak/API health.
+4. The script uses Wrangler 4.158.0 pinned in the repository and the account selected by `account_id` in `cloudflare/wrangler.jsonc`; run it from the existing deployment environment:
+   `bash deploy/production/configure-cloudflare-worker.sh`
+5. The script reads the origin and secret from `.env.production`, writes a temporary mode-600 secrets file, deploys `cloudflare/wrangler.jsonc`, then deletes the temporary file. It does not print the secret.
+6. Build GitHub Pages with `NEXT_PUBLIC_ORBIT_API_URL=https://orbit-runtime.pooyagame141.workers.dev` and the same existing Keycloak issuer, public client ID and API audience used by the origin deployment. Open the dashboard's Connect a source panel and test the Worker URL.
+
+Never store the gateway secret in GitHub Pages variables, browser code, URL query parameters, or public documentation. The browser only receives its own short-lived user access token.
+
+## Free-tier and service choices
+
+The Worker is a thin edge proxy with no resource bindings. Workers Free enforces its **10 ms CPU limit per invocation** and **50 external subrequests per invocation** automatically. This repository deliberately does not set `limits.cpu_ms`: Cloudflare documents Wrangler's custom `limits` settings as supported only for the Standard usage model, so a custom CPU override is unnecessary for the Free plan. Workers Free currently allows **100,000 requests per day**; exceeding that daily request allowance causes requests to fail until the UTC reset.
+
+Workers Logs are included on Free. Until November 30, 2026, the documented Free allowance is 200,000 log events per day with three-day retention. Beginning December 1, 2026, Workers Logs and Workers Traces move to the shared Cloudflare Observability allowance: **0.5 GB ingestion per day with seven-day retention included**. On Free, Cloudflare stops ingesting additional telemetry when the daily allowance is reached; it does not continue metered ingestion. The Worker keeps 10% head sampling for logs and traces to conserve that allowance. Sampling reduces volume but is not itself a billing-plan switch.
+
+No D1, R2, Hyperdrive, Durable Objects, Queues, Cloudflare Tunnel, Workers AI, or paid add-on is required. The Go/PostgreSQL/Keycloak/Collector origin remains separate and must stay within its own $0/month hosting budget.
+
+The owner-provided Cloudflare Billing → Subscriptions view confirms **Workers Free — Active**, with the page offering an upgrade to Workers Paid and no payment method on file. That dashboard subscription status is the account-plan evidence for this deployment. The Worker settings API separately returns `usage_model: standard`; leave this per-Worker field unchanged rather than forcing the legacy `bundled` value. The connected Cloudflare OAuth integration cannot read `/accounts/{account_id}/subscriptions` (HTTP 403; the endpoint requires Billing Read/Write API-token permission), so the screenshot—not the API—is the confirmed plan source. No billing, subscription, or usage-model change was made.
+
+Keep the existing $0/month hard budget. If the Free request or Observability allowance is exhausted, allow Cloudflare's Free-plan limit behavior to stop requests/telemetry rather than enabling paid billing or weakening the security boundary.
+
+## Verification
+
+The repository CI includes a Worker contract test for liveness, fail-closed origin configuration, path allowlisting, exact-origin preflight, Bearer-token forwarding, gateway-secret/IP-header replacement, streamed mutation bodies, query preservation, and safe handling of upstream cookies/redirects. CI also checks the Caddy ingress configuration and Go request-IP behavior. The existing Go/PostgreSQL and observability jobs remain authoritative for real API auth/roles, workload identity, OTLP/HTTP+gRPC, workspace A/B isolation, durable outbox, webhook safety, retention/cardinality, Prometheus/Loki/Tempo and recovery.
+
+A successful Worker deployment is not proof that the remote origin, DNS/TLS, Keycloak, or end-to-end flows are ready. These still require owner-origin smoke tests described in the deployment runbook.
+
+
+## Billing verification gate
+
+The owner-provided Cloudflare Dashboard → Manage Account → Billing → Subscriptions view confirms **Workers Free — Active**, with the Paid upgrade option and no payment method on file. The account is therefore confirmed on the intended no-cost Workers plan. The Worker Settings API separately reports `usage_model: standard`; this is left unchanged, and the legacy `bundled` value is not used as a workaround. The OAuth API connection cannot read the subscription endpoint (HTTP 403; Billing Read/Write API-token permission required), but no further billing change is needed based on the supplied dashboard state. No billing plan, subscription, payment method, or usage-model setting was changed.

@@ -153,6 +153,12 @@ func (l *requestRateLimiter) allow(keys []string, now time.Time) bool {
 }
 
 func requestIP(r *http.Request) string {
+	// The production Caddy API route only forwards this header after validating
+	// the Cloudflare Worker gateway secret. The Worker replaces any client
+	// supplied value with Cloudflare's edge-provided CF-Connecting-IP.
+	if forwarded := net.ParseIP(strings.TrimSpace(r.Header.Get("X-ORBIT-Client-IP"))); forwarded != nil {
+		return forwarded.String()
+	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || host == "" {
 		return r.RemoteAddr

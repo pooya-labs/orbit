@@ -8,7 +8,27 @@
 	header {
 		Strict-Transport-Security "max-age=31536000"
 	}
-	reverse_proxy api:8080
+	@worker_api {
+		path /api/v1/* /health/ready
+		header X-ORBIT-Gateway-Secret {$ORBIT_WORKER_GATEWAY_SECRET}
+	}
+	handle @worker_api {
+		reverse_proxy api:8080 {
+			header_up -X-ORBIT-Gateway-Secret
+			header_up X-ORBIT-Client-IP {http.request.header.X-ORBIT-Client-IP}
+		}
+	}
+	@blocked_api path /api/v1/* /health/ready
+	handle @blocked_api {
+		respond "Forbidden" 403
+	}
+	@liveness path /health/live
+	handle @liveness {
+		reverse_proxy api:8080
+	}
+	handle {
+		respond "Not Found" 404
+	}
 }
 
 {$ORBIT_AUTH_DOMAIN} {

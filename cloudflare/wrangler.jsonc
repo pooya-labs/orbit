@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orbit-runtime",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-06",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 0.1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1,
+      "persist": true
+    },
+    "redact_query_string": true
+  },
+  "vars": {
+    "ALLOWED_ORIGIN": "https://pooya-labs.github.io"
+  },
+  "account_id": "593f6245708f02254aa8ed0f1417f739",
+  "secrets": {
+    "required": [
+      "ORBIT_GATEWAY_SECRET"
+    ]
+  }
+}

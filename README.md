@@ -161,6 +161,7 @@ The public portfolio demo is stable for its stated synthetic, low-volume purpose
 - [PostgreSQL backup and restore runbook](docs/postgres-backup-restore.md)
 - [Deployment and operations runbook](docs/operations-runbook.md)
 - [OpenAPI 3.1 contract](docs/openapi.yaml)
+- [Cloudflare dual-runtime expansion](docs/cloudflare-runtime.md)
 
 ## Quality checks
 
