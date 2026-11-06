@@ -8,9 +8,9 @@ This runbook deploys the repository's Cloudflare edge gateway on the Workers Fre
 2. Open **Manage Account → Billing → Subscriptions**.
 3. Inspect the Workers subscription. If a **Workers Paid** subscription is active, use **Change** and choose **Free**, or use **Cancel** and select **Free** when that is the offered downgrade path.
 4. Confirm the effective date. Cloudflare applies cancellations/downgrades at the end of the current billing period; paid features remain available until then. Make the change at least 24 hours before the renewal date.
-5. Open **Workers & Pages → Overview → orbit-runtime → Settings → Usage Model** and confirm the account/Worker is on the intended Free configuration before deploying real traffic.
+5. After that effective date, return to **Manage Account → Billing → Subscriptions** and confirm Workers Paid is no longer active. Then inspect **Workers & Pages → Overview → orbit-runtime → Settings → Usage Model**. If it still explicitly reports `standard`, stop and resolve the discrepancy with Cloudflare Billing before deploying real traffic; do not try to switch it to legacy `bundled`.
 
-The currently inspected Worker reported `usage_model: standard`. Cloudflare documents Standard as a Workers Paid-plan usage model. Do not change it to the legacy `bundled` value as a shortcut; Bundled is not the Workers Free plan. Do not continue to the deployment step until Billing and the Worker settings confirm Free.
+The currently inspected Worker reported `usage_model: standard`. Cloudflare documents Standard as a Workers Paid-plan usage model. Do not change it to the legacy `bundled` value as a shortcut; Bundled is not the Workers Free plan. Do not continue to the deployment step until Billing confirms the Workers Free plan and the Worker no longer appears to use the Paid-only Standard model.
 
 Official references: [Workers pricing and Free limits](https://developers.cloudflare.com/workers/platform/pricing/), [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), and [cancel or downgrade subscriptions](https://developers.cloudflare.com/billing/manage/cancel-subscription/).
 
@@ -87,7 +87,7 @@ These are public browser configuration values. Never add the Worker gateway secr
 ## 6. Acceptance checks
 
 - [ ] Cloudflare Billing shows Workers Free; no Workers Paid subscription is active.
-- [ ] Worker Settings do not show the Paid-only Standard usage model.
+- [ ] Worker settings do not show the Paid-only Standard usage model; if they do, stop and resolve the account-plan mismatch before continuing.
 - [ ] Worker version has `limits.cpu_ms: 10` and no unexpected bindings.
 - [ ] `/health/live` returns 200 and `/health/ready` reflects origin readiness.
 - [ ] Direct Caddy API access without the gateway secret returns 403.
