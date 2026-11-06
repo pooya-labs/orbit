@@ -83,3 +83,8 @@ The Worker is a thin streaming proxy and is expected to stay within the Workers 
 - Existing Go/PostgreSQL CI remains authoritative for API auth/roles, workspace isolation, durable outbox concurrency, webhook SSRF protection, SLO semantics, and audit immutability.
 - Existing observability E2E remains authoritative for OTLP/HTTP + gRPC, workspace A/B write-to-query isolation, Prometheus scrape, Collector routing, and PostgreSQL recovery.
 - Deployment acceptance still requires a real origin, Keycloak PKCE smoke, API source connection through the Worker, full workspace/role tests, HTTP+gRPC ingestion, and a clean A/B tenant-isolation smoke.
+
+
+## Account billing verification gate
+
+The deployed Worker settings currently report `usage_model: standard`. Cloudflare's pricing documentation associates Standard usage with Workers Paid. The connected API credential cannot read the account subscription information (read-only billing endpoint returned HTTP 403), so the account plan remains unverified. No billing subscription or usage model was changed. Do not connect the production API origin or route customer traffic until the account owner verifies the intended no-cost plan/usage model in the dashboard. If the account is on a paid plan, this PR does not authorize or request a billing change.
