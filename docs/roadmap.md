@@ -286,12 +286,21 @@ identity, health, and tenant-isolation smoke checks pass.
   deferred scan now pin Keycloak 26.8.2, with pull-request scanning and an explicit
   linux/arm64 manifest check. The first exact-image scan
   [42225793814](https://github.com/pooya-labs/orbit/actions/runs/42225793814)
-  failed Trivy with three HIGH findings (OpenJDK CVE-2026-91403, SQLite
-  CVE-2026-119373 / CVE-2026-119586, and Guava CVE-2026-102554). A follow-up
-  package-inspection step is being added to document the affected runtime
-  components. This is still a blocking production gate; no clean result is
-  claimed. Keycloak is not used by the Pages + Apps Script demo and remains
-  outside the v1 release gate.
+  failed Trivy with three HIGH findings. The completed package inventory in
+  [run 42227758708](https://github.com/pooya-labs/orbit/actions/runs/42227758708)
+  confirms the CA package's full RPM version is
+  `2026.2.92_v9.0.319-90.3.el9_8`, the Red Hat fixed RHEL 9 release for the
+  eMudhra trust-store issue ([RHSA-2026:88459](https://access.redhat.com/errata/RHSA-2026:88459)).
+  Trivy still flags Java CVE-2026-91403 as `will_not_fix`, so retain the
+  evidence and only consider a narrowly scoped VEX after review. The image
+  contains `sqlite-libs` but no `sqlite3` CLI; CVE-2026-119586 is a CLI
+  `.recover` issue and remains a candidate package-mapping non-applicability,
+  not yet suppressed. SQLite FTS5 CVE-2026-119373 remains unresolved because
+  runtime use of that vulnerable path has not been ruled out. Guava remains
+  `33.6.0-jre` while Trivy identifies `33.7.2` as fixed. No VEX/ignore
+  suppressions have been added and no clean result is claimed. This remains
+  a blocking production gate. Keycloak is not used by the Pages + Apps Script
+  demo and remains outside the v1 release gate.
 - The release does not claim formal WCAG conformance. Human TalkBack/VoiceOver
   device acceptance and broad sustained-load/capacity benchmarking remain
   post-v1 work.
