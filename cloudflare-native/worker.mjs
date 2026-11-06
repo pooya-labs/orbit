@@ -170,10 +170,10 @@ async function readJson(request, maxBytes = MAX_BODY_BYTES) {
 function auditStatement(db, workspaceId, actor, action, resourceType, resourceId, requestIdValue, details, now) {
   return db.prepare(`
     INSERT INTO workspace_audit_events
-      (id, workspace_id, actor_issuer, actor_subject, action, resource_type, resource_id, request_id, details, created_at)
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      (id, workspace_id, actor_issuer, actor_subject, actor_role, action, resource_type, resource_id, request_id, details, created_at)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE changes() = 1
-  `).bind(crypto.randomUUID(), workspaceId, actor.issuer, actor.subject, action, resourceType, resourceId || "", requestIdValue, JSON.stringify(details || {}), now);
+  `).bind(crypto.randomUUID(), workspaceId, actor.issuer, actor.subject, actor.role || "owner", action, resourceType, resourceId || "", requestIdValue, JSON.stringify(details || {}), now);
 }
 
 async function membership(db, workspaceId, principal) {
@@ -265,12 +265,10 @@ async function handleApi(request, env, url, origin, id, principal) {
       const result = await env.DB.prepare(`
         SELECT id, workspace_id, actor_ref, actor_role, action, resource_type, resource_id, request_id, details, created_at
         FROM (
-          SELECT e.id, e.workspace_id, a.actor_ref, m.role AS actor_role, e.action, e.resource_type, e.resource_id, e.request_id, e.details, e.created_at
+          SELECT e.id, e.workspace_id, a.actor_ref, e.actor_role, e.action, e.resource_type, e.resource_id, e.request_id, e.details, e.created_at
           FROM workspace_audit_events e
           LEFT JOIN workspace_audit_actors a
             ON a.workspace_id = e.workspace_id AND a.actor_issuer = e.actor_issuer AND a.actor_subject = e.actor_subject
-          LEFT JOIN workspace_memberships m
-            ON m.workspace_id = e.workspace_id AND m.user_issuer = e.actor_issuer AND m.user_subject = e.actor_subject
           WHERE e.workspace_id = ?
           ORDER BY e.created_at DESC, e.id DESC
           LIMIT ?
