@@ -510,6 +510,7 @@ This is a post-v1 entry-point extension, not a reopening of the stable Apps Scri
 - [x] Replace the deployed prototype Worker with the canonical edge-gateway module; Cloudflare settings confirm `bindings: []` and Worker version 0.2.3 is the active upload.
 - [x] Delete the prototype D1 database after verifying the Worker had no D1 binding; the deleted database ID returns HTTP 404. Other account D1 resources were left untouched.
 - [x] Confirm the account Billing → Subscriptions page displays Workers Free — Active (owner-provided dashboard evidence); leave the per-Worker API `usage_model: standard` field unchanged and do not use legacy `bundled`.
+- [x] Align the Cloudflare Free deployment acceptance and stop conditions with the account-level Billing evidence; do not mistake the per-Worker `usage_model: standard` metadata default for a Paid subscription.
 - [ ] Provision and verify the original Go/PostgreSQL/Keycloak/Caddy origin. No origin VM, domain or identity-provider configuration is claimed as provisioned by this handoff.
 - [ ] Run the Worker deployment script against the provisioned origin; verify Caddy rejects direct API bypass without the Worker secret.
 - [ ] Build Pages using the Worker URL and the exact same Keycloak PKCE issuer/client/audience; test every existing typed API-client route through the Worker.
@@ -517,3 +518,37 @@ This is a post-v1 entry-point extension, not a reopening of the stable Apps Scri
 - [ ] Complete clean-browser dual-runtime acceptance; Apps Script remains synthetic-only and unchanged.
 
 Do not introduce D1/Queues/Redis/NATS, duplicate JWT verification, raw telemetry storage in the Worker, or paid Cloudflare services to satisfy this milestone. Existing CI for Go/PostgreSQL, security, backup/restore, telemetry end-to-end and workspace isolation remains authoritative.
+
+
+## Post-v1 CF02 — Cloudflare-native D1 runtime (staged draft PR #140, 2026-11-07)
+
+This is a separate Workers + D1 profile proposed to provide a no-VPS Cloudflare-hosted demo. It does **not** replace CF01's orbit-runtime edge gateway, the Go/PostgreSQL engineering core, GitHub Pages, or the Apps Script demo. The implementation currently exists on the draft [PR #140](https://github.com/pooya-labs/orbit/pull/140) branch and has not been merged or deployed.
+
+- [x] Add the isolated cloudflare-native Worker and initial SQLite/D1 schema for workspace membership, service/incident data, immutable audit/timeline records, alert rules, notification metadata, deployments and SLO definitions.
+- [x] Add OIDC discovery/JWKS verification for RS256/ES256 access tokens, exact issuer/audience, standard claim validation and D1-backed workspace-role checks.
+- [x] Implement the first workspace, service, incident, alert-rule, deployment, SLO-definition and notification-metadata routes with tenant scoping and audit records.
+- [x] Map the 42 current typed API-client methods to native routes or explicit unsupported responses; unavailable telemetry/evaluation/budget/delivery functions return honest 503 responses.
+- [x] Add 19 Worker tests plus SQLite/D1 schema and tenant-isolation smoke coverage. Draft PR CI and Security checks pass on head f695f0cd87f9.
+- [ ] Implement a trustworthy native telemetry source and a dedicated UI that distinguishes runtime telemetry from synthetic samples.
+- [ ] Implement alert evaluation and bounded scheduled execution within Workers Free limits.
+- [ ] Implement SLO error-budget calculation using a trustworthy request-metrics source.
+- [ ] Implement delivery dispatch, bounded retries and immutable notification-attempt history.
+- [ ] Add rate limiting and prove quota/abuse behavior for D1 and Worker requests.
+- [ ] Configure and test a real compatible OIDC tenant; no Auth0 tenant or issuer has been created.
+- [ ] Exercise every frontend API-client method against the native profile and complete role, workspace-isolation, browser and accessibility acceptance.
+- [ ] Create the dedicated D1 database, apply remote migrations, configure secrets/variables, deploy the Worker, and only then consider a guarded Pages API-origin switch.
+
+**Release boundary:** PR #140 is a staged foundation, not feature parity and not a deployable v1. No D1 database, OIDC tenant, Worker route or Pages API switch has been provisioned. Keep Apps Script unchanged and preserve CF01 as the separate canonical-Go edge profile.
+
+
+## Post-v1 Security 01 — Go x/net advisory response (2026-11-07)
+
+- [x] Record CVE-2026-78661 / GO-2026-6860 and CVE-2026-97045 / GO-2026-6866 in [issue #141](https://github.com/pooya-labs/orbit/issues/141).
+- [x] Raise the ORBIT API and telemetry-demo module floors and lockfiles to `golang.org/x/net v0.62.0`; align `golang.org/x/text v0.43.0`.
+- [x] Patch the custom Caddy and Tempo source builds to the fixed module floor.
+- [x] Upgrade the custom OpenTelemetry Collector distribution to v0.165.0 and revalidate its resolved modules.
+- [x] Replace the vulnerable prebuilt Prometheus/Loki images with pinned upstream source builds (Prometheus v3.16.0; Loki v3.7.9) that embed and verify `x/net v0.62.0`.
+- [x] Refresh the Security workflow dependency floors and lockfiles while retaining Trivy HIGH/CRITICAL gates, non-zero exit behavior and `ignore-unfixed: false`.
+- [x] Rebuild and scan all affected images; pass Go tests, backup/restore, telemetry end-to-end, workspace isolation, Prometheus scrape, PostgreSQL recovery and full Security CI before merge.
+
+**Result:** PR [#142](https://github.com/pooya-labs/orbit/pull/142) was squash-merged as `1caed65d11bbf9b5d419e4da5429115c98ebe3ac`. Exact PR-head CI [42396679559](https://github.com/pooya-labs/orbit/actions/runs/42396679559) passed 4/4 jobs, including the complete local telemetry stack; Security [42396679567](https://github.com/pooya-labs/orbit/actions/runs/42396679567) passed 13/13 jobs. All 11 CycloneDX SBOM workflow artifacts were uploaded and remained unexpired at verification. Issue #141 is closed. No HIGH/CRITICAL scanner threshold or VEX/ignore policy was weakened.

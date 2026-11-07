@@ -1098,3 +1098,56 @@ the stated portfolio-demo scope. Do not recreate the completed browser bridge,
 hydration fixes, version alignment, CI, telemetry, recovery, accessibility
 automation, Security scan or stable release workflow. Start future work only
 from a new issue, measured regression, or explicitly requested post-v1 item.
+
+
+## 18. Post-v1 Cloudflare runtime handoff — 2026-11-07
+
+### Stable baseline — do not recreate
+
+- ORBIT v1.0.0 is published at [the stable release](https://github.com/pooya-labs/orbit/releases/tag/v1.0.0). Its agreed zero-cost Apps Script portfolio-demo scope is complete; keep the v1.0.0 tag immutable.
+- Canonical repository: pooya-labs/orbit; default branch: main.
+- Main head at this handoff: 1caed65d11bbf9b5d419e4da5429115c98ebe3ac (squash merge of security PR #142; PR #136 remains the earlier Cloudflare edge-gateway merge).
+- The pre-security CF01 baseline at `268017365cd22f7db9dd8895fb59fbccc76c9b8f` passed its exact-main CI, Security and Pages checks. Security maintenance PR #142 was then tested on exact head `c3a17cba1d03e041c3598a11fad41842806893f3` (CI 4/4; Security 13/13) and squash-merged as `1caed65d11bbf9b5d419e4da5429115c98ebe3ac`. Post-merge main CI/Security/Pages workflows were triggered against the new main head; verify their run conclusions before claiming post-merge deployment acceptance.
+- The requested footer ordering is already present in app/page.tsx: “Created and maintained by” the repository link appears before the “Project owner” profile link. Do not reapply the old footer fix branch.
+- M01–M06 repository-level engineering, telemetry, security automation, recovery, and v1 release tasks must not be recreated. Human TalkBack/VoiceOver/device acceptance and measured target-environment capacity remain separate post-v1 work.
+
+### CF01 — canonical Cloudflare edge gateway
+
+- PR #136 is merged into main. The orbit-runtime Worker is a narrow edge proxy to the existing Go API; it does not own JWT verification, workspace authorization, application data, telemetry ingestion or business logic.
+- Keep Go + PostgreSQL + Keycloak + Caddy + private Collector/Prometheus/Loki/Tempo as the canonical full-stack architecture. Apps Script remains the independent synthetic-only public demo and its deployment/Spreadsheet are unchanged.
+- The frontend contains an orbitRuntime=cloudflare query-driven runtime branch, but a frontend path is not proof of a live Cloudflare deployment.
+- Last inspected Cloudflare account state (2026-11-06): Worker version 0.2.3; workers.dev route disabled; no Worker bindings or gateway secret; original Go/Caddy origin not provisioned. Keep API routes fail-closed. The repository's Wrangler config sets workers_dev: true, but no guarded redeployment has yet completed against a verified origin.
+- Workers Free is confirmed by the owner-provided Billing → Subscriptions view. Treat that account-level page as plan evidence; leave the per-Worker usage_model: standard field unchanged and do not set legacy bundled.
+- Full path still requires a genuine $0/Always-Free origin, healthy Keycloak, secret-protected Caddy ingress, Worker deployment, Pages API configuration, all client routes, viewer/operator/admin checks, workspace A/B isolation, OTLP/HTTP + OTLP/gRPC, and clean-browser dual-runtime acceptance. Follow docs/deployment/cloudflare-free-worker.md; no paid fallback is authorized.
+
+### CF02 — isolated Cloudflare-native D1 profile (draft PR #140)
+
+- PR [#140](https://github.com/pooya-labs/orbit/pull/140) is a draft, not merged and not deployed. It adds cloudflare-native/orbit-native-runtime separately from the CF01 orbit-runtime gateway and preserves both Apps Script and the Go/PostgreSQL reference stack.
+- The draft adds the first D1 schema, OIDC/JWKS verification, workspace membership/role checks, tenant-scoped service/incident/audit/alert/deployment/SLO-definition/notification-metadata routes, and explicit unsupported responses for unfinished capability areas.
+- It maps the current 42 typed API-client operations to Worker routes or explicit 503 responses and adds 19 Worker tests plus a SQLite/D1 schema-isolation smoke test. On head f695f0cd87f9, PR CI [42253824551](https://github.com/pooya-labs/orbit/actions/runs/42253824551) and Security [42253824325](https://github.com/pooya-labs/orbit/actions/runs/42253824325) passed.
+- The passing checks validate code in the draft branch; they do not establish a deployed D1 database, real issuer, production feature parity or a live Cloudflare demo. workers_dev is intentionally false, the D1 ID is a placeholder, no remote migration was applied, no Auth0 tenant was created, and Pages was not switched.
+- Remaining gaps: real telemetry view/source; alert evaluation and bounded scheduling; SLO budgets over trusted metrics; dispatch/retry/attempt history; rate limiting and quota behavior; actual OIDC tenant/token validation; end-to-end tests for every API-client method; full role/workspace/browser/accessibility acceptance; then create D1, apply migrations and deploy. Do not claim Prometheus/Loki/Tempo or raw OTLP parity from D1.
+
+### Other open pull requests and gates
+
+- PR #137 carries the consolidated Cloudflare runbook, README, roadmap and project-handoff corrections, including the billing clarification first proposed in PR #139. PR #139 is already closed as superseded; keep one authoritative runbook and roadmap entry.
+- PR #139 is docs-only and has been closed as superseded by the consolidated PR #137; do not maintain two competing billing-gate edits.
+- PR [#138](https://github.com/pooya-labs/orbit/pull/138) updates the deferred Keycloak origin to 26.8.2. Its exact-image scan still reports unresolved HIGH findings (including SQLite FTS5 and Guava; the Java CA finding needs narrow vendor-evidence disposition). Its deferred production-identity security jobs are not clean. Keep the production identity/origin gate blocked; do not suppress findings or call this scan green.
+- PR #140 remains active draft work; do not merge or deploy on the basis of the green generic CI/Security workflows alone.
+- [Issue #141](https://github.com/pooya-labs/orbit/issues/141) tracked CVE-2026-78661 / GO-2026-6860 and CVE-2026-97045 / GO-2026-6866. It was resolved by PR #142, squash-merged as `1caed65d11bbf9b5d419e4da5429115c98ebe3ac`. First-party Go module locks now use `golang.org/x/net v0.62.0`; the Caddy/Tempo builds, Collector v0.165.0, and source-built Prometheus v3.16.0/Loki v3.7.9 were rebuilt and scanned. Exact PR-head CI passed 4/4, Security passed 13/13, and 11 non-expired CycloneDX SBOM artifacts were uploaded. The Trivy HIGH/CRITICAL gate, non-zero exit behavior and `ignore-unfixed: false` remain enabled; no broad VEX or scanner suppression was added.
+
+### Next continuation order
+
+1. Finish the D1 runtime gaps in PR #140, especially truthful telemetry, alert evaluation, SLO budget semantics, notification dispatch/history and rate limiting.
+2. Test every current frontend API-client method against the native Worker, including viewer/operator/administrator behavior and cross-workspace denial. Keep unsupported operations explicit until implemented.
+3. Resolve the OIDC provider decision, create/configure a compatible free tenant only when necessary settings and callback URLs are reviewed, and validate real issued tokens without exposing client secrets.
+4. Run the full browser and quota acceptance matrix before creating the D1 database, applying remote migrations, enabling any route or switching the Pages API origin.
+5. Separately, if using CF01, complete the original Go/Keycloak/Caddy origin and its security gates, then deploy the thin Worker and test it end to end. Never confuse CF01 with the D1 profile.
+6. Test Apps Script and the selected Cloudflare profile in separate clean browser profiles; keep Apps Script synthetic-only and do not alter its existing owner deployment.
+
+### Continuity safeguards
+
+- Keep the monthly budget at $0. Do not enable Workers Paid, automatic overages, paid databases, or paid hosting.
+- Never publish Worker gateway secrets, OIDC client secrets, private Apps Script URLs, spreadsheet IDs or production environment files.
+- Never describe synthetic demo records as observed telemetry.
+- Do not move the immutable v1.0.0 tag, change the existing Apps Script runtime, or re-run completed v1 work without a measured regression.
