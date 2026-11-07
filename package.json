@@ -8,7 +8,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:trace-correlation": "node --test scripts/trace-correlation.test.mjs",
-    "test:cloudflare-gateway": "node --test cloudflare/worker.test.mjs"
+    "test:cloudflare-gateway": "node --test cloudflare/worker.test.mjs",
+    "test:cloudflare-native": "node --test cloudflare-native/worker.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.65.0",
