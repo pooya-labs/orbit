@@ -817,8 +817,11 @@ export default function TelemetryWorkspace({
     view === "Logs" ? logs?.queried_at :
     traces?.queried_at;
   const backend =
-    view === "Metrics" ? "PROMETHEUS" :
-    view === "Logs" ? "LOKI" : "TEMPO";
+    view === "Metrics"
+      ? metrics?.source === "workers-analytics-engine" || !useLegacyDevelopmentReads
+        ? "WORKERS ANALYTICS ENGINE"
+        : "PROMETHEUS"
+      : view === "Logs" ? "LOKI" : "TEMPO";
   const count =
     view === "Metrics" ? metricSamples.length :
     view === "Logs" ? logRows.length : traceRows.length;
