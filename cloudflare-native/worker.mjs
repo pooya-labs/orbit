@@ -5,6 +5,20 @@ const METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
 const ALLOWED_HEADERS = new Set(["authorization", "content-type", "x-request-id"]);
 const MAX_BODY_BYTES = 16 * 1024;
 const VERIFIER_CACHE = new Map();
+const ANALYTICS_METRICS_CACHE = new Map();
+const ANALYTICS_METRICS_CACHE_TTL_MS = 60_000;
+const TELEMETRY_SERVICE_NAME = "orbit-native-runtime";
+const TELEMETRY_WINDOWS = {
+  "15m": { seconds: 15 * 60, bucketMinutes: 1 },
+  "1h": { seconds: 60 * 60, bucketMinutes: 1 },
+  "6h": { seconds: 6 * 60 * 60, bucketMinutes: 5 },
+  "24h": { seconds: 24 * 60 * 60, bucketMinutes: 15 }
+};
+const TELEMETRY_GROUP_FIELDS = {
+  instance: "blob4",
+  service_version: "blob5",
+  deployment_environment: "blob6"
+};
 
 function json(payload, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(payload), {
@@ -299,6 +313,223 @@ function limitFromUrl(url, defaultValue = 50) {
   return [10, 25, 50, 100].includes(value) ? value : 0;
 }
 
+async function telemetryIndexKey(value) {
+  const bytes = new TextEncoder().encode(`orbit-native-telemetry:${value}`);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(digest, (part) => part.toString(16).padStart(2, "0")).join("");
+}
+
+function telemetryRouteTemplate(path) {
+  const workspace = path.match(/^\/api\/v1\/workspaces\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/(.*))?$/i);
+  if (path === "/health/live" || path === "/health/ready" || path === "/api/v1/meta") return path;
+  if (workspace) {
+    const suffix = workspace[1] || "";
+    const known = new Set([
+      "membership", "services", "incidents", "audit-events", "deployments",
+      "slos", "alerts", "alert-notification-channels",
+      "telemetry/services", "telemetry/metrics", "telemetry/metrics/catalog",
+      "telemetry/logs", "telemetry/traces"
+    ]);
+    return known.has(suffix) ? `/api/v1/workspaces/:workspace/${suffix}` : "/api/v1/workspaces/:workspace/other";
+  }
+  if (path.startsWith("/api/v1/")) return "/api/v1/other";
+  return "/other";
+}
+
+async function recordRequestTelemetry(request, result, env, startedAt) {
+  const dataset = env.ORBIT_REQUEST_EVENTS;
+  if (!dataset || typeof dataset.writeDataPoint !== "function" || request.method === "OPTIONS") return;
+
+  try {
+    const url = new URL(request.url);
+    const status = result.status;
+    const workspaceMatch = url.pathname.match(/^\/api\/v1\/workspaces\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i);
+    // Only attribute to a workspace after the request has passed authentication and
+    // membership lookup. A 404/401/429 must not let an unauthorised caller poison
+    // another tenant's telemetry partition.
+    const attributedWorkspace = workspaceMatch && status >= 200 && status < 500 &&
+      status !== 401 && status !== 404 && status !== 429
+      ? workspaceMatch[1]
+      : "global";
+    const index = await telemetryIndexKey(attributedWorkspace);
+    const elapsedMs = Math.max(0, Date.now() - startedAt);
+    const serviceVersion = typeof env.ORBIT_VERSION === "string" && env.ORBIT_VERSION.length <= 64
+      ? env.ORBIT_VERSION
+      : "0.2.0";
+    const deploymentEnvironment = typeof env.ORBIT_ENVIRONMENT === "string" && env.ORBIT_ENVIRONMENT.length <= 64
+      ? env.ORBIT_ENVIRONMENT
+      : "cloudflare";
+
+    // Keep request telemetry intentionally low-cardinality and non-sensitive:
+    // no query string, request body, authorization header, user subject or raw workspace ID.
+    dataset.writeDataPoint({
+      indexes: [index],
+      blobs: [
+        TELEMETRY_SERVICE_NAME,
+        telemetryRouteTemplate(url.pathname),
+        request.method,
+        "cloudflare-worker",
+        serviceVersion,
+        deploymentEnvironment
+      ],
+      doubles: [status, elapsedMs]
+    });
+  } catch {
+    // Telemetry is best-effort and must never change the API response.
+  }
+}
+
+function analyticsBucketSeconds(bucketMinutes) {
+  return bucketMinutes * 60;
+}
+
+function analyticsTimestampSeconds(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value > 1_000_000_000_000 ? value / 1000 : value;
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed / 1000 : Number.NaN;
+}
+
+function getCachedAnalyticsMetrics(key) {
+  const cached = ANALYTICS_METRICS_CACHE.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    ANALYTICS_METRICS_CACHE.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function setCachedAnalyticsMetrics(key, value) {
+  ANALYTICS_METRICS_CACHE.delete(key);
+  ANALYTICS_METRICS_CACHE.set(key, {
+    expiresAt: Date.now() + ANALYTICS_METRICS_CACHE_TTL_MS,
+    value
+  });
+  while (ANALYTICS_METRICS_CACHE.size > 256) {
+    const oldest = ANALYTICS_METRICS_CACHE.keys().next().value;
+    if (oldest === undefined) break;
+    ANALYTICS_METRICS_CACHE.delete(oldest);
+  }
+}
+
+async function queryWorkspaceRequestMetrics(env, workspaceId, url, origin, id) {
+  const windowName = url.searchParams.get("window") || "1h";
+  const windowConfig = TELEMETRY_WINDOWS[windowName];
+  if (!windowConfig) return fail(400, "invalid_telemetry_window", "window must be 15m, 1h, 6h, or 24h.", origin, env, id);
+
+  const service = url.searchParams.get("service") || TELEMETRY_SERVICE_NAME;
+  if (service !== TELEMETRY_SERVICE_NAME) {
+    return fail(404, "telemetry_service_not_found", "The requested Workers Analytics Engine service was not found.", origin, env, id);
+  }
+
+  const metric = url.searchParams.get("metric") || "request_rate";
+  const metricFields = {
+    request_rate: "request_count",
+    successful_request_rate: "successful_request_count",
+    failed_request_rate: "failed_request_count"
+  };
+  if (!Object.hasOwn(metricFields, metric)) {
+    return fail(400, "invalid_telemetry_metric", "metric must be request_rate, successful_request_rate, or failed_request_rate.", origin, env, id);
+  }
+
+  const rawGroupBy = url.searchParams.get("group_by") || "instance,service_version,deployment_environment";
+  const groupBy = rawGroupBy === "none" ? [] : rawGroupBy.split(",").map((item) => item.trim()).filter(Boolean);
+  if (groupBy.some((item) => !Object.hasOwn(TELEMETRY_GROUP_FIELDS, item)) ||
+      new Set(groupBy).size !== groupBy.length) {
+    return fail(400, "invalid_telemetry_group_by", "group_by may contain instance, service_version, and deployment_environment.", origin, env, id);
+  }
+
+  if (!env.ANALYTICS_SQL || typeof env.ANALYTICS_SQL.query !== "function") {
+    return fail(503, "analytics_sql_not_configured", "The Workers Analytics SQL binding is not configured for this runtime.", origin, env, id);
+  }
+
+  let workspaceKey;
+  try {
+    workspaceKey = await telemetryIndexKey(workspaceId);
+  } catch {
+    return fail(503, "telemetry_partition_unavailable", "The workspace telemetry partition could not be resolved.", origin, env, id);
+  }
+
+  const cacheKey = JSON.stringify([workspaceKey, windowName, groupBy]);
+  const cached = getCachedAnalyticsMetrics(cacheKey);
+  if (cached) {
+    return response(cached, 200, origin, env, id);
+  }
+
+  const selectedColumns = groupBy.map((name) => `${TELEMETRY_GROUP_FIELDS[name]} AS ${name}`);
+  const groupedColumns = groupBy.map((name) => TELEMETRY_GROUP_FIELDS[name]);
+  const selectGroupSql = selectedColumns.length ? `, ${selectedColumns.join(", ")}` : "";
+  const groupBySql = groupedColumns.length ? `, ${groupedColumns.join(", ")}` : "";
+  const bucketMinutes = windowConfig.bucketMinutes;
+  const start = new Date(Date.now() - windowConfig.seconds * 1000).toISOString();
+  const query = `
+    SELECT
+      toStartOfInterval(timestamp, INTERVAL ${bucketMinutes} MINUTE) AS bucket${selectGroupSql},
+      COUNT() AS request_count,
+      countIf(double1 >= 200 AND double1 < 400) AS successful_request_count,
+      countIf(double1 >= 400) AS failed_request_count
+    FROM events.analyticsEngine.orbit_native_requests
+    WHERE index1 = $workspace_key
+      AND blob1 = 'orbit-native-runtime'
+      AND timestamp >= $start
+    GROUP BY bucket${groupBySql}
+    ORDER BY bucket ASC
+    LIMIT 5000
+  `;
+
+  let result;
+  try {
+    result = await env.ANALYTICS_SQL.query({
+      query,
+      params: { workspace_key: workspaceKey, start }
+    });
+  } catch {
+    return fail(503, "telemetry_query_unavailable", "Workers Analytics Engine could not answer the request metrics query.", origin, env, id);
+  }
+
+  const seriesByKey = new Map();
+  const rows = Array.isArray(result?.data) ? result.data : [];
+  const bucketSeconds = analyticsBucketSeconds(bucketMinutes);
+  for (const row of rows) {
+    const timestamp = analyticsTimestampSeconds(row.bucket);
+    const count = Number(row[metricFields[metric]]);
+    if (!Number.isFinite(timestamp) || !Number.isFinite(count)) continue;
+
+    const dimensions = Object.fromEntries(groupBy.map((name) => [name, String(row[name] ?? "")]));
+    const seriesKey = JSON.stringify(dimensions);
+    let series = seriesByKey.get(seriesKey);
+    if (!series) {
+      series = {
+        metric: { service_name: TELEMETRY_SERVICE_NAME, ...dimensions },
+        values: []
+      };
+      seriesByKey.set(seriesKey, series);
+    }
+    const rate = Number((count / bucketSeconds).toFixed(6));
+    series.values.push([timestamp, String(rate)]);
+  }
+
+  const body = {
+    source: "workers-analytics-engine",
+    window: windowName,
+    queried_at: new Date().toISOString(),
+    query: `orbit_native_requests/${metric}`,
+    step: `${bucketMinutes}m`,
+    service: TELEMETRY_SERVICE_NAME,
+    group_by: groupBy,
+    metric,
+    sampling: "adaptive",
+    data: Array.from(seriesByKey.values()).map((series) => ({
+      ...series,
+      values: series.values.sort((a, b) => a[0] - b[0])
+    }))
+  };
+  setCachedAnalyticsMetrics(cacheKey, body);
+  return response(body, 200, origin, env, id);
+}
+
 async function handleApi(request, env, url, origin, id, principal) {
   if (!env.DB) return fail(503, "database_not_configured", "The Cloudflare D1 database is not bound to this Worker.", origin, env, id);
   const path = url.pathname;
@@ -432,8 +663,48 @@ async function handleApi(request, env, url, origin, id, principal) {
     if (access.error) return fail(access.error.status, access.error.code, access.error.message, origin, env, id);
     principal.role = access.membership.role;
 
-    if (suffix.startsWith("telemetry/")) {
-      return fail(503, "telemetry_source_unavailable", "This Cloudflare-native runtime does not have a Prometheus, Loki or Tempo source configured. The telemetry API remains in the Go/PostgreSQL profile.", origin, env, id);
+    if (suffix === "telemetry/services" && request.method === "GET") {
+      const limit = limitFromUrl(url, 50);
+      if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
+      const discoveredAt = new Date().toISOString();
+      const attributes = {
+        "service.name": [TELEMETRY_SERVICE_NAME],
+        "cloud.provider": ["cloudflare"],
+        "deployment.environment": ["cloudflare"]
+      };
+      return response({
+        data: [{
+          id: TELEMETRY_SERVICE_NAME,
+          name: TELEMETRY_SERVICE_NAME,
+          sources: ["workers-analytics-engine"],
+          last_discovered_at: discoveredAt,
+          resource_attributes: attributes,
+          resource_attribute_sources: {
+            "service.name": ["workers-analytics-engine"],
+            "cloud.provider": ["workers-analytics-engine"],
+            "deployment.environment": ["workers-analytics-engine"]
+          }
+        }]
+      }, 200, origin, env, id);
+    }
+
+    if (suffix === "telemetry/metrics/catalog" && request.method === "GET") {
+      const groupBy = ["instance", "service_version", "deployment_environment"];
+      return response({
+        data: [
+          { id: "request_rate", unit: "requests/second", description: "Observed HTTP requests handled by the Cloudflare-native Worker.", group_by: groupBy },
+          { id: "successful_request_rate", unit: "requests/second", description: "Observed HTTP 2xx and 3xx responses from the Cloudflare-native Worker.", group_by: groupBy },
+          { id: "failed_request_rate", unit: "requests/second", description: "Observed HTTP 4xx and 5xx responses from the Cloudflare-native Worker.", group_by: groupBy }
+        ]
+      }, 200, origin, env, id);
+    }
+
+    if (suffix === "telemetry/metrics" && request.method === "GET") {
+      return queryWorkspaceRequestMetrics(env, workspaceId, url, origin, id);
+    }
+
+    if (suffix.startsWith("telemetry/logs") || suffix.startsWith("telemetry/traces")) {
+      return fail(503, "telemetry_signal_unavailable", "This runtime currently collects request metrics only; Logs and Traces require a separately configured event or trace source.", origin, env, id);
     }
 
     if (suffix === "membership" && request.method === "GET") {
@@ -884,8 +1155,7 @@ async function handleApi(request, env, url, origin, id, principal) {
   return fail(404, "route_not_found", "The requested ORBIT API route was not found in the Cloudflare-native runtime.", origin, env, id);
 }
 
-export default {
-  async fetch(request, env) {
+async function handleWorkerRequest(request, env) {
     const id = requestId();
     const url = new URL(request.url);
     const origin = request.headers.get("origin") || "";
@@ -948,6 +1218,19 @@ export default {
     } catch {
       return fail(503, "api_operation_unavailable", "The ORBIT API operation is temporarily unavailable.", origin, env, id);
     }
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    const startedAt = Date.now();
+    const result = await handleWorkerRequest(request, env);
+    const telemetryTask = recordRequestTelemetry(request, result, env, startedAt);
+    if (ctx && typeof ctx.waitUntil === "function") {
+      try { ctx.waitUntil(telemetryTask); } catch {}
+    } else {
+      await telemetryTask;
+    }
+    return result;
   }
 };
 
