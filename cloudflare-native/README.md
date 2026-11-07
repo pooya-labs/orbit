@@ -12,12 +12,30 @@ This is a new, independent Cloudflare runtime profile. It does not replace the e
 - Alert-rule CRUD, deployment annotation list/create/compare, SLO-definition CRUD and notification-channel metadata endpoints.
 - Frontend-compatible global service/incident inventory filtered to workspaces where the caller is a member.
 - Exact Pages-origin CORS, request IDs, bounded JSON bodies, fail-closed database/auth configuration, and tests for core policy helpers.
+- Authenticated API read/write rate limits using Cloudflare Workers Rate Limiting bindings; hashed OIDC identities, distinct read/write budgets, and fail-closed behavior when a binding is missing or unavailable.
 
 ## What is not ready yet
 
-This is a staged foundation, not a claim of feature parity or a deployable v1. Live alert evaluation, webhook delivery, SLO error-budget calculation, API rate limiting and telemetry query routes are not implemented in this profile. In particular, D1 does not replace the current Prometheus/Loki/Tempo telemetry pipeline. The Cloudflare-native profile must either present clearly labelled D1/Workers runtime events and demo samples, or retain a separately hosted telemetry source; it must not label synthetic samples as real telemetry.
+This is a staged foundation, not a claim of feature parity or a deployable v1. Live alert evaluation, webhook delivery, SLO error-budget calculation and telemetry query routes are not implemented in this profile. In particular, D1 does not replace the current Prometheus/Loki/Tempo telemetry pipeline. The Cloudflare-native profile must either present clearly labelled D1/Workers runtime events and demo samples, or retain a separately hosted telemetry source; it must not label synthetic samples as real telemetry.
 
 The Worker API returns the direct `ApiMetadata` object at `/api/v1/meta` and uses the same `{ data: ... }` envelopes for collection/resource routes as the current typed client. The frontend still uses its existing OIDC Authorization Code + PKCE flow. The Worker validates the resulting Bearer access token against a configured HTTPS OIDC issuer and API audience, including the same `iat`, `exp`, `sub`, `typ`, `kid`, signing-algorithm and configurable role-claim checks as the Go verifier. No identity provider is bundled or hosted by this Worker. A compatible issuer and audience must be selected and configured before the API can be activated.
+
+## Authenticated API rate limits
+
+The Worker uses two native Workers Rate Limiting bindings after successful OIDC authentication and before any D1 operation:
+
+| Binding | Budget | Scope |
+|---|---:|---|
+| `ORBIT_READ_LIMITER` | 120 requests / 60 seconds | Per authenticated subject |
+| `ORBIT_WRITE_LIMITER` | 30 requests / 60 seconds | Per authenticated subject |
+
+The key is a SHA-256 hash of the OIDC issuer and subject tuple. Raw issuer/subject values are not sent to the rate-limit binding. Read requests (`GET`/ `HEAD`) use the read budget; other API methods use the write budget. A rejected request returns `429 rate_limit_exceeded` with `Retry-After: 60` and does not reach D1.
+
+These limits are an abuse/burst guard, **not a strict global quota**. Cloudflare applies Workers Rate Limiting counters approximately per Cloudflare location, and updates are eventually consistent; requests can exceed a configured threshold during propagation. They do not enforce an exact cross-region limit and do not replace the Workers Free daily request cap or D1 daily row-read/row-write limits. Unauthenticated OIDC discovery/JWKS work occurs before the authenticated API limiter and needs separate edge/WAF controls if exposed to untrusted traffic.
+
+The two positive integer `namespace_id` values in `wrangler.jsonc` must be unique within the Cloudflare account. Confirm that they are unused before the first deployment; change them if the account already has a collision. No rate-limit namespace has been provisioned by this source change.
+
+For strict cross-location quotas, Cloudflare recommends a Durable Object-backed limiter. This profile does not add one: it would introduce stateful storage/compute and additional quota considerations. Revisit only if measured traffic requires a strict global cap.
 
 ## Recommended free OIDC configuration
 
