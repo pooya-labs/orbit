@@ -520,26 +520,29 @@ This is a post-v1 entry-point extension, not a reopening of the stable Apps Scri
 Do not introduce D1/Queues/Redis/NATS, duplicate JWT verification, raw telemetry storage in the Worker, or paid Cloudflare services to satisfy this milestone. Existing CI for Go/PostgreSQL, security, backup/restore, telemetry end-to-end and workspace isolation remains authoritative.
 
 
-## Post-v1 CF02 — Cloudflare-native D1 runtime (staged draft PR #140, 2026-11-07)
+## Post-v1 CF02 — Cloudflare-native D1 runtime (separate draft PR #140, updated 2026-11-07)
 
-This is a separate Workers + D1 profile proposed to provide a no-VPS Cloudflare-hosted demo. It does **not** replace CF01's orbit-runtime edge gateway, the Go/PostgreSQL engineering core, GitHub Pages, or the Apps Script demo. The implementation currently exists on the draft [PR #140](https://github.com/pooya-labs/orbit/pull/140) branch and has not been merged or deployed.
+This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-runtime` edge gateway, the Go/PostgreSQL engineering core, GitHub Pages, or the Apps Script demo. PR #140 remains a draft and has not been deployed.
 
-- [x] Add the isolated cloudflare-native Worker and initial SQLite/D1 schema for workspace membership, service/incident data, immutable audit/timeline records, alert rules, notification metadata, deployments and SLO definitions.
+- [x] Add the isolated `cloudflare-native` Worker and initial SQLite/D1 schema for workspace membership, service/incident data, immutable audit/timeline records, alert rules, notification metadata, deployments and SLO definitions.
 - [x] Add OIDC discovery/JWKS verification for RS256/ES256 access tokens, exact issuer/audience, standard claim validation and D1-backed workspace-role checks.
 - [x] Implement the first workspace, service, incident, alert-rule, deployment, SLO-definition and notification-metadata routes with tenant scoping and audit records.
 - [x] Map the 42 current typed API-client methods to native routes or explicit unsupported responses; unavailable telemetry/evaluation/budget/delivery functions return honest 503 responses.
-- [x] Add 19 Worker tests plus SQLite/D1 schema and tenant-isolation smoke coverage. Draft PR CI and Security checks pass on head f695f0cd87f9.
+- [x] Add SQLite/D1 schema and tenant-isolation smoke coverage plus signed-token, role-policy and bounded OIDC-document tests.
+- [x] Add two authenticated Workers Rate Limiting bindings: 120 reads/60s and 30 writes/60s per pseudonymous OIDC subject; checks run before D1 and fail closed when a binding is missing or unavailable.
+- [x] Add tests for read/write limiter selection, 429 responses, pseudonymous keys, missing-binding fail-closed and provider-failure behavior. Exact-head CI remains the acceptance gate.
+- [ ] Verify the Wrangler configuration against the deployment account and confirm the two rate-limit namespace IDs are unused before any first deployment.
 - [ ] Implement a trustworthy native telemetry source and a dedicated UI that distinguishes runtime telemetry from synthetic samples.
 - [ ] Implement alert evaluation and bounded scheduled execution within Workers Free limits.
 - [ ] Implement SLO error-budget calculation using a trustworthy request-metrics source.
 - [ ] Implement delivery dispatch, bounded retries and immutable notification-attempt history.
-- [ ] Add rate limiting and prove quota/abuse behavior for D1 and Worker requests.
 - [ ] Configure and test a real compatible OIDC tenant; no Auth0 tenant or issuer has been created.
 - [ ] Exercise every frontend API-client method against the native profile and complete role, workspace-isolation, browser and accessibility acceptance.
 - [ ] Create the dedicated D1 database, apply remote migrations, configure secrets/variables, deploy the Worker, and only then consider a guarded Pages API-origin switch.
 
-**Release boundary:** PR #140 is a staged foundation, not feature parity and not a deployable v1. No D1 database, OIDC tenant, Worker route or Pages API switch has been provisioned. Keep Apps Script unchanged and preserve CF01 as the separate canonical-Go edge profile.
+**Rate-limit boundary:** Workers Rate Limiting is approximate, per Cloudflare location and eventually consistent. It is an abuse/burst guard, not a strict cross-region quota and not a substitute for Workers Free daily requests or D1 row-read/write limits. Strict global limits would need a separately reviewed Durable Object design.
 
+**Release boundary:** PR #140 is a staged foundation, not feature parity and not a deployable v1. No D1 database, OIDC tenant, Worker route or Pages API switch has been provisioned. Keep Apps Script unchanged and preserve CF01 as the separate canonical-Go edge profile.
 
 ## Post-v1 Security 01 — Go x/net advisory response (2026-11-07)
 
