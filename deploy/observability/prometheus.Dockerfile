@@ -11,7 +11,7 @@ RUN git init . \
     && test "$(git rev-parse "refs/tags/${PROMETHEUS_VERSION}^{commit}")" = "${PROMETHEUS_COMMIT}" \
     && git checkout --detach "refs/tags/${PROMETHEUS_VERSION}"
 RUN node --version \
-    && npm install --global pnpm@10.9.0
+    && npm install --global pnpm@10.26.0
 RUN go mod edit -require=golang.org/x/net@v0.62.0 \
     && go mod tidy \
     && go mod verify \
