@@ -2,6 +2,7 @@
 FROM golang:1.27-alpine AS build
 RUN apk add --no-cache git make nodejs npm
 WORKDIR /src
+ARG TARGETARCH
 ARG PROMETHEUS_VERSION=v3.16.0
 ARG PROMETHEUS_COMMIT=e2e28adeee2c5883d000fc82aca6008cfbf7e96d
 RUN git init . \
@@ -10,7 +11,7 @@ RUN git init . \
     && test "$(git rev-parse "refs/tags/${PROMETHEUS_VERSION}^{commit}")" = "${PROMETHEUS_COMMIT}" \
     && git checkout --detach "refs/tags/${PROMETHEUS_VERSION}" \
     && test "$(git describe --tags --exact-match)" = "${PROMETHEUS_VERSION}"
-RUN node --version | grep -E '^v(22|23|24)\\.' \
+RUN node --version \
     && npm install --global pnpm@10.9.0
 RUN go mod edit -require=golang.org/x/net@v0.62.0 \
     && go mod tidy \
