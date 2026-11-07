@@ -517,3 +517,33 @@ This is a post-v1 entry-point extension, not a reopening of the stable Apps Scri
 - [ ] Complete clean-browser dual-runtime acceptance; Apps Script remains synthetic-only and unchanged.
 
 Do not introduce D1/Queues/Redis/NATS, duplicate JWT verification, raw telemetry storage in the Worker, or paid Cloudflare services to satisfy this milestone. Existing CI for Go/PostgreSQL, security, backup/restore, telemetry end-to-end and workspace isolation remains authoritative.
+
+
+## Post-v1 CF02 — Cloudflare-native D1 runtime (2026-11-06)
+
+This is a separate no-VPS runtime profile approved for implementation. It does **not** replace the existing `orbit-runtime` edge gateway, the Go/PostgreSQL engineering core, or the Apps Script demo.
+
+- [x] Inspect the existing typed API client, OIDC Authorization Code + PKCE flow, workspace membership/role model, tenant-scoped incident lifecycle and PostgreSQL schema.
+- [x] Record the separate Worker + D1 profile and its explicit limits in ADR 0007; keep the existing CF01 gateway architecture intact.
+- [x] Create an isolated `cloudflare-native/` Worker profile; keep `workers_dev` disabled until account configuration and acceptance are complete.
+- [x] Add the first SQLite/D1 migration for workspace-scoped services, incidents, append-only audit/timeline records, alerts, notification metadata, deployments and SLO definitions.
+- [x] Add generic OIDC discovery/JWKS verification for RS256/ES256 access tokens, exact issuer/audience, `iat`/`exp`/`sub`/`typ`/`kid` validation, configurable role-claim validation and D1-backed workspace role authorization.
+- [x] Implement the foundation routes for health, metadata, workspace creation/listing, memberships, audit history, services and incident lifecycle, including the same clearly tagged five-service/two-incident demo seed used by ORBIT's other demo profile.
+- [x] Implement frontend-compatible global `/services` and `/incidents` inventory routes, filtered by the caller's workspace memberships.
+- [x] Add CI coverage for native Worker policy helpers, signed OIDC/API-contract tests, streamed OIDC document-size tests, viewer-role enforcement, honest 503 tests for unavailable telemetry/evaluation, and a SQLite schema/tenant-isolation smoke test.
+- [x] Map all 42 current typed API-client operations to native Worker routes or explicit unsupported 503 responses; live telemetry/evaluation/budget/delivery remain intentionally unavailable.
+- [x] Complete the SQLite/D1 schema smoke test in GitHub Actions, including append-only audit, stable actor attribution, cross-workspace foreign keys and notification-channel uniqueness.
+- [x] Migrate workspace-scoped alert-rule CRUD with role checks, validation, uniqueness constraints and append-only audit events.
+- [ ] Implement alert evaluation only after a trustworthy live request-metrics source is available; define a bounded retry/cron model within Workers Free limits.
+- [x] Implement workspace-scoped deployment annotation CRUD/list/compare and SLO-definition CRUD with audit events.
+- [ ] Implement SLO error budgets only after a trustworthy live request-metrics source is available.
+- [x] Implement notification channel metadata CRUD using environment-backed secret references; no webhook secrets or URLs are stored in D1.
+- [ ] Implement delivery evaluation/dispatch, bounded retries and attempt history after the alert evaluator and scheduled execution model are complete.
+- [x] Research and document Auth0 Free as the recommended compatible OIDC provider, with PKCE, RS256, the exact Pages callback/origin and a URI API audience.
+- [ ] Create/configure the Auth0 SPA and API tenant, test an issued access token against the Worker, then add only the public issuer/client/audience build values and Worker issuer/audience variables.
+- [x] Make unsupported telemetry query routes fail explicitly with `telemetry_source_unavailable`; do not claim Prometheus/Loki/Tempo or OTLP parity.
+- [ ] Define a separate native telemetry view using Workers runtime observability and clearly labelled synthetic samples.
+- [ ] Test every current frontend API-client method against the native runtime; only then introduce a guarded Pages API-origin switch.
+- [ ] Create the dedicated D1 database, apply migrations, configure issuer/audience, enable the Worker route and deploy after the complete acceptance matrix passes.
+
+**Important boundary:** this milestone is a staged foundation, not feature parity or a deployable v1. The full Prometheus/Loki/Tempo and raw OTLP pipeline remains available only in the separate Go/PostgreSQL reference profile until a genuinely supported zero-cost telemetry host is selected. Apps Script is unchanged.
