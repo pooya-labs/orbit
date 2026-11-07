@@ -17,7 +17,7 @@ RUN go mod edit -require=golang.org/x/net@v0.62.0 \
     && go mod verify \
     && make build \
     && go version -m .build/linux-${TARGETARCH}/prometheus | tee /tmp/prometheus-build-info \
-    && grep -F "golang.org/x/net v0.62.0" /tmp/prometheus-build-info
+    && grep -E 'golang.org/x/net[[:space:]]+v0\\.62\\.0' /tmp/prometheus-build-info
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata \
