@@ -928,18 +928,22 @@ export default {
     const auth = await authenticate(request, env);
     if (!auth.principal) return fail(401, "unauthorized", auth.error || "Authentication is required.", origin, env, id);
 
+    let rateLimit;
     try {
-      const rateLimit = await rateLimitDecision(env, auth.principal, request.method);
-      if (!rateLimit.configured) {
-        return fail(503, "rate_limit_not_configured", "The Cloudflare rate-limit bindings are not configured.", origin, env, id);
-      }
-      if (!rateLimit.allowed) {
-        if (rateLimit.configured) {
-          return json({
-            error: { code: "rate_limit_exceeded", message: "The request rate limit was exceeded.", request_id: id }
-          }, 429, { ...cors(origin, env), "x-request-id": id, "retry-after": "60" });
-        }
-      }
+      rateLimit = await rateLimitDecision(env, auth.principal, request.method);
+    } catch {
+      return fail(503, "rate_limit_unavailable", "The Cloudflare rate-limit service is temporarily unavailable.", origin, env, id);
+    }
+    if (!rateLimit.configured) {
+      return fail(503, "rate_limit_not_configured", "The Cloudflare rate-limit bindings are not configured.", origin, env, id);
+    }
+    if (!rateLimit.allowed) {
+      return json({
+        error: { code: "rate_limit_exceeded", message: "The request rate limit was exceeded.", request_id: id }
+      }, 429, { ...cors(origin, env), "x-request-id": id, "retry-after": "60" });
+    }
+
+    try {
       return await handleApi(request, env, url, origin, id, auth.principal);
     } catch {
       return fail(503, "api_operation_unavailable", "The ORBIT API operation is temporarily unavailable.", origin, env, id);
