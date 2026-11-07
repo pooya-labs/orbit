@@ -1,7 +1,22 @@
 #!/usr/bin/env python3
 """Exercise the Cloudflare-native D1 foundation migration with SQLite."""
 from pathlib import Path
+import json
 import sqlite3
+
+config = json.loads(Path("cloudflare-native/wrangler.jsonc").read_text(encoding="utf-8"))
+assert config["workers_dev"] is False
+rate_limits = {item["name"]: item for item in config.get("ratelimits", [])}
+assert set(rate_limits) == {"ORBIT_READ_LIMITER", "ORBIT_WRITE_LIMITER"}
+namespace_ids = []
+for name, expected_limit in (("ORBIT_READ_LIMITER", 120), ("ORBIT_WRITE_LIMITER", 30)):
+    item = rate_limits[name]
+    namespace_id = item["namespace_id"]
+    assert isinstance(namespace_id, str) and namespace_id.isdigit() and int(namespace_id) > 0
+    namespace_ids.append(namespace_id)
+    assert item["simple"] == {"limit": expected_limit, "period": 60}
+assert len(namespace_ids) == len(set(namespace_ids)), "Rate-limit namespace IDs must be unique"
+assert config["d1_databases"][0]["database_id"] == "REPLACE-WITH-CREATED-D1-DATABASE-ID"
 
 migration = Path("cloudflare-native/migrations/0001_foundation.sql").read_text(encoding="utf-8")
 db = sqlite3.connect(":memory:")
