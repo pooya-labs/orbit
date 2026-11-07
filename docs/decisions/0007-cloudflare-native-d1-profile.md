@@ -44,8 +44,8 @@ The existing raw OTLP ingestion path and Prometheus/Loki/Tempo querying are not 
 
 1. Foundation: schema, JWT verification parity, tenant isolation, frontend-compatible metadata and global/workspace service/incident APIs with signed-token and SQLite contract tests.
 2. Abuse protection: authenticated read/write rate-limit bindings, pseudonymous stable keys, fail-closed behavior and explicit tests for rejected requests before D1 access.
-2. Operations: alert CRUD/evaluation, deployment annotations, SLO CRUD/budget strategy, audit completeness.
-3. Notifications: encrypted webhook secrets, bounded retries, delivery attempts and abuse protections.
-4. Telemetry: honest source model, data retention and query quotas; no fake Prometheus/Loki/Tempo parity.
-5. Frontend: compatibility tests for every client method, safe API-origin switch, visual and role-based acceptance.
+3. Operations: alert CRUD/evaluation, deployment annotations, SLO CRUD/budget strategy, audit completeness.
+4. Notifications: encrypted webhook secrets, bounded retries, delivery attempts and abuse protections.
+5. Telemetry: honest source model, data retention and query quotas; no fake Prometheus/Loki/Tempo parity.
+6. Frontend: compatibility tests for every client method, safe API-origin switch, visual and role-based acceptance.
 6. Cloudflare account: create D1 database, apply migrations, configure OIDC issuer/audience, enable workers.dev only after acceptance, deploy.
