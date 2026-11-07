@@ -25,7 +25,7 @@ function cors(origin, env) {
   const headers = { "vary": "Origin", "cache-control": "no-store" };
   if (origin && origin === env.ALLOWED_ORIGIN) {
     headers["access-control-allow-origin"] = origin;
-    headers["access-control-expose-headers"] = "X-Request-ID";
+    headers["access-control-expose-headers"] = "X-Request-ID, Retry-After";
   }
   return headers;
 }
