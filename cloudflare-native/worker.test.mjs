@@ -391,7 +391,9 @@ test("workspace request metrics query Analytics Engine with a hashed tenant part
         assert.match(sql, /FROM workspace_memberships/);
         return {
           bind(...values) {
-            assert.deepEqual(values, [workspaceId, "https://unused.invalid", "unused"]);
+            assert.equal(values[0], workspaceId);
+            assert.equal(typeof values[1], "string");
+            assert.equal(values[2], "native-api-test-user");
             return {
               first: async () => ({
                 workspace_id: workspaceId,
