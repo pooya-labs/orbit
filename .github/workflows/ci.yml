@@ -223,6 +223,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Validate Cloudflare-native Wrangler Analytics bindings
+        run: npx --yes wrangler@4.158.0 types /tmp/orbit-native-worker-configuration.d.ts --config cloudflare-native/wrangler.jsonc --env-interface CloudflareNativeEnv
+
       - name: Test Cloudflare-native D1 runtime foundation
         run: |
           node --check cloudflare-native/worker.mjs
