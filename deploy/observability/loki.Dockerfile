@@ -1,6 +1,6 @@
 # Build the pinned Loki v3.7.9 source with the fixed golang.org/x/net release.
 FROM golang:1.27-alpine AS build
-RUN apk add --no-cache git make
+RUN apk add --no-cache bash git make
 WORKDIR /src/loki
 ARG LOKI_VERSION=v3.7.9
 ARG LOKI_COMMIT=d3b4a2f76bfc5625abee7ceb00b8896fa3c31549
