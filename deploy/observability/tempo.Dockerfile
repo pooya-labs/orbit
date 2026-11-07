@@ -10,7 +10,7 @@ RUN git init . \
     && test "$(git rev-parse "refs/tags/${TEMPO_VERSION}^{commit}")" = "${TEMPO_COMMIT}" \
     && git checkout --detach "refs/tags/${TEMPO_VERSION}" \
     && test "$(git describe --tags --exact-match)" = "${TEMPO_VERSION}"
-RUN go mod edit -require=github.com/go-jose/go-jose/v4@v4.1.7 \
+RUN go mod edit -require=github.com/go-jose/go-jose/v4@v4.1.7 -require=golang.org/x/net@v0.62.0 \
     && go mod tidy \
     && go mod verify
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -trimpath \
