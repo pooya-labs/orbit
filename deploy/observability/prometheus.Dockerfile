@@ -1,6 +1,6 @@
 # Build the pinned Prometheus v3.16.0 source with the fixed golang.org/x/net release.
 FROM golang:1.27-alpine AS build
-RUN apk add --no-cache bash git make nodejs npm
+RUN apk add --no-cache bash curl git make nodejs npm
 WORKDIR /src
 ARG TARGETARCH
 ARG PROMETHEUS_VERSION=v3.16.0
