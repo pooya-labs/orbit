@@ -186,6 +186,7 @@ jobs:
           go mod tidy
           go get golang.org/x/net@v0.62.0
           go mod download golang.org/x/net@v0.62.0
+          go mod tidy
           test "$(go list -m -f '{{.Version}}' golang.org/x/net)" = "v0.62.0"
           go mod verify
 
