@@ -355,7 +355,7 @@ export interface WorkspaceTelemetryService {
   sources: TelemetryServiceSource[];
   first_seen_at?: string;
   last_seen_at?: string;
-  last_discovered_at: string;
+  last_discovered_at?: string;
   resource_attributes: Record<string, unknown[]>;
   resource_attribute_sources: Record<string, TelemetryServiceSource[]>;
 }
