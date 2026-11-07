@@ -155,7 +155,14 @@ async function withSignedAccessToken(run) {
       .setIssuedAt()
       .setExpirationTime("5m")
       .sign(privateKey);
-    await run(token, { ALLOWED_ORIGIN: "https://pooya-labs.github.io", ORBIT_OIDC_ISSUER: issuer, ORBIT_OIDC_AUDIENCE: audience });
+    const allowRateLimit = { limit: async () => ({ success: true }) };
+    await run(token, {
+      ALLOWED_ORIGIN: "https://pooya-labs.github.io",
+      ORBIT_OIDC_ISSUER: issuer,
+      ORBIT_OIDC_AUDIENCE: audience,
+      ORBIT_READ_LIMITER: allowRateLimit,
+      ORBIT_WRITE_LIMITER: allowRateLimit
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -370,5 +377,109 @@ test("unavailable real telemetry and evaluation routes return explicit 503 respo
     const budget = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/slos/123e4567-e89b-12d3-a456-426614174001/budget`, token), { ...env, DB });
     assert.equal(budget.status, 503);
     assert.equal((await budget.json()).error.code, "slo_telemetry_unavailable");
+  });
+});
+
+
+test("authenticated reads use the read limiter and stop before D1 when the budget is exceeded", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const keys = [];
+    let databaseTouched = false;
+    const response = await worker.fetch(authorizedRequest("/api/v1/workspaces", token), {
+      ...env,
+      ORBIT_READ_LIMITER: {
+        async limit({ key }) {
+          keys.push(key);
+          return { success: false };
+        }
+      },
+      ORBIT_WRITE_LIMITER: { async limit() { throw new Error("write limiter must not be used"); } },
+      DB: {
+        prepare() {
+          databaseTouched = true;
+          throw new Error("D1 must not be touched after a rejected rate-limit decision");
+        }
+      }
+    });
+
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get("retry-after"), "60");
+    assert.equal((await response.json()).error.code, "rate_limit_exceeded");
+    assert.equal(keys.length, 1);
+    assert.match(keys[0], /^[0-9a-f]{64}$/);
+    assert.equal(keys[0].includes("native-api-test-user"), false);
+    assert.equal(databaseTouched, false);
+  });
+});
+
+test("authenticated writes use the write limiter and stop before D1 when the budget is exceeded", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    let readChecks = 0;
+    let databaseTouched = false;
+    const request = new Request("https://native.example/api/v1/workspaces", {
+      method: "POST",
+      headers: {
+        origin: "https://pooya-labs.github.io",
+        authorization: "Bearer " + token,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ name: "Rate limited", slug: "rate-limited" })
+    });
+    const response = await worker.fetch(request, {
+      ...env,
+      ORBIT_READ_LIMITER: { async limit() { readChecks += 1; return { success: true }; } },
+      ORBIT_WRITE_LIMITER: { async limit({ key }) { assert.match(key, /^[0-9a-f]{64}$/); return { success: false }; } },
+      DB: {
+        prepare() {
+          databaseTouched = true;
+          throw new Error("D1 must not be touched after a rejected rate-limit decision");
+        }
+      }
+    });
+
+    assert.equal(response.status, 429);
+    assert.equal((await response.json()).error.code, "rate_limit_exceeded");
+    assert.equal(readChecks, 0);
+    assert.equal(databaseTouched, false);
+  });
+});
+
+test("protected API requests fail closed when a rate-limit binding is absent", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    let databaseTouched = false;
+    const response = await worker.fetch(authorizedRequest("/api/v1/workspaces", token), {
+      ...env,
+      ORBIT_READ_LIMITER: undefined,
+      DB: {
+        prepare() {
+          databaseTouched = true;
+          throw new Error("D1 must not be touched without a rate-limit binding");
+        }
+      }
+    });
+
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).error.code, "rate_limit_not_configured");
+    assert.equal(databaseTouched, false);
+  });
+});
+
+test("a rate-limit provider failure fails closed without reaching D1", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    let databaseTouched = false;
+    const response = await worker.fetch(authorizedRequest("/api/v1/workspaces", token), {
+      ...env,
+      ORBIT_READ_LIMITER: { async limit() { throw new Error("rate limit unavailable"); } },
+      DB: {
+        prepare() {
+          databaseTouched = true;
+          throw new Error("D1 must not be touched when the rate-limit provider fails");
+        }
+      }
+    });
+
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).error.code, "rate_limit_unavailable");
+    assert.equal(databaseTouched, false);
   });
 });
