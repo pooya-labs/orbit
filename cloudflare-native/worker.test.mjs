@@ -346,13 +346,237 @@ test("workspace viewer membership can read but cannot perform operator mutations
   });
 });
 
-test("unavailable real telemetry and evaluation routes return explicit 503 responses without fabricated data", async () => {
+test("workspace telemetry discovery and metric catalogue describe only the native runtime source", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174000";
+    const DB = {
+      prepare(sql) {
+        assert.match(sql, /FROM workspace_memberships/);
+        return {
+          bind() {
+            return {
+              first: async () => ({
+                workspace_id: workspaceId,
+                role: "viewer",
+                created_at: "2026-11-06T12:00:00.000Z",
+                updated_at: "2026-11-06T12:00:00.000Z"
+              })
+            };
+          }
+        };
+      }
+    };
+
+    const services = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/telemetry/services?limit=50`, token), { ...env, DB });
+    assert.equal(services.status, 200);
+    const service = (await services.json()).data[0];
+    assert.equal(service.name, "orbit-native-runtime");
+    assert.deepEqual(service.sources, ["workers-analytics-engine"]);
+    assert.equal(service.resource_attributes["service.name"][0], "orbit-native-runtime");
+
+    const catalog = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/telemetry/metrics/catalog`, token), { ...env, DB });
+    assert.equal(catalog.status, 200);
+    assert.deepEqual((await catalog.json()).data.map((item) => item.id), [
+      "request_rate", "successful_request_rate", "failed_request_rate"
+    ]);
+  });
+});
+
+test("workspace request metrics query Analytics Engine with a hashed tenant partition and return rates", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174000";
+    const queries = [];
+    const DB = {
+      prepare(sql) {
+        assert.match(sql, /FROM workspace_memberships/);
+        return {
+          bind(...values) {
+            assert.deepEqual(values, [workspaceId, "https://unused.invalid", "unused"]);
+            return {
+              first: async () => ({
+                workspace_id: workspaceId,
+                role: "viewer",
+                created_at: "2026-11-06T12:00:00.000Z",
+                updated_at: "2026-11-06T12:00:00.000Z"
+              })
+            };
+          }
+        };
+      }
+    };
+    const ANALYTICS_SQL = {
+      async query(request) {
+        queries.push(request);
+        return {
+          data: [{
+            bucket: new Date(Math.floor(Date.now() / 60_000) * 60_000).toISOString(),
+            instance: "cloudflare-worker",
+            service_version: "0.2.0",
+            deployment_environment: "cloudflare",
+            request_count: 120,
+            successful_request_count: 114,
+            failed_request_count: 6
+          }],
+          rows: 1,
+          statistics: { elapsed_ms: 3, rows_read: 1, bytes_read: 128 }
+        };
+      }
+    };
+
+    const response = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/telemetry/metrics?window=1h&service=orbit-native-runtime&group_by=instance,service_version,deployment_environment&metric=request_rate`,
+      token
+    ), { ...env, DB, ANALYTICS_SQL });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.source, "workers-analytics-engine");
+    assert.equal(payload.window, "1h");
+    assert.equal(payload.step, "1m");
+    assert.equal(payload.metric, "request_rate");
+    assert.equal(payload.sampling, "adaptive");
+    assert.equal(payload.data.length, 1);
+    assert.deepEqual(payload.data[0].metric, {
+      service_name: "orbit-native-runtime",
+      instance: "cloudflare-worker",
+      service_version: "0.2.0",
+      deployment_environment: "cloudflare"
+    });
+    assert.equal(Number(payload.data[0].values[0][1]), 2);
+
+    assert.equal(queries.length, 1);
+    assert.match(queries[0].query, /events\.analyticsEngine\.orbit_native_requests/);
+    assert.match(queries[0].query, /index1 = \$workspace_key/);
+    assert.match(queries[0].query, /timestamp >= \$start/);
+    assert.doesNotMatch(queries[0].query, new RegExp(workspaceId));
+    assert.match(queries[0].params.workspace_key, /^[0-9a-f]{64}$/);
+    assert.notEqual(queries[0].params.workspace_key, workspaceId);
+    assert.equal(typeof queries[0].params.start, "string");
+  });
+});
+
+test("workspace metrics can select successful and failed request rates from the same event schema", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174001";
+    const DB = {
+      prepare() {
+        return {
+          bind() {
+            return {
+              first: async () => ({ workspace_id: workspaceId, role: "viewer" })
+            };
+          }
+        };
+      }
+    };
+    const ANALYTICS_SQL = {
+      async query() {
+        return {
+          data: [{
+            bucket: "2026-11-08T00:00:00.000Z",
+            request_count: 120,
+            successful_request_count: 114,
+            failed_request_count: 6
+          }],
+          rows: 1,
+          statistics: { elapsed_ms: 1, rows_read: 1, bytes_read: 64 }
+        };
+      }
+    };
+    const successful = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/telemetry/metrics?metric=successful_request_rate&group_by=none`, token
+    ), { ...env, DB, ANALYTICS_SQL });
+    const failed = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/telemetry/metrics?metric=failed_request_rate&group_by=none`, token
+    ), { ...env, DB, ANALYTICS_SQL });
+    assert.equal(Number((await successful.json()).data[0].values[0][1]), 1.9);
+    assert.equal(Number((await failed.json()).data[0].values[0][1]), 0.1);
+  });
+});
+
+test("workspace telemetry metrics fail closed when Analytics SQL is not configured or fails", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174002";
+    const DB = {
+      prepare() {
+        return {
+          bind() {
+            return { first: async () => ({ workspace_id: workspaceId, role: "viewer" }) };
+          }
+        };
+      }
+    };
+    const missing = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/telemetry/metrics`, token
+    ), { ...env, DB });
+    assert.equal(missing.status, 503);
+    assert.equal((await missing.json()).error.code, "analytics_sql_not_configured");
+
+    const unavailable = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/telemetry/metrics`, token
+    ), { ...env, DB, ANALYTICS_SQL: { async query() { throw new Error("private account failure"); } } });
+    assert.equal(unavailable.status, 503);
+    const payload = await unavailable.json();
+    assert.equal(payload.error.code, "telemetry_query_unavailable");
+    assert.doesNotMatch(payload.error.message, /private account failure/);
+  });
+});
+
+test("request telemetry writes one pseudonymous event without leaking path IDs, query strings or tokens", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174003";
+    const points = [];
+    const DB = {
+      prepare(sql) {
+        assert.match(sql, /FROM workspace_memberships/);
+        return {
+          bind() {
+            return {
+              first: async () => ({ workspace_id: workspaceId, role: "viewer" })
+            };
+          }
+        };
+      }
+    };
+    const response = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/membership?private=query-value`, token
+    ), {
+      ...env,
+      DB,
+      ORBIT_REQUEST_EVENTS: { writeDataPoint(point) { points.push(point); } }
+    });
+    assert.equal(response.status, 200);
+    assert.equal(points.length, 1);
+    assert.match(points[0].indexes[0], /^[0-9a-f]{64}$/);
+    assert.notEqual(points[0].indexes[0], workspaceId);
+    assert.equal(points[0].blobs[0], "orbit-native-runtime");
+    assert.equal(points[0].blobs[1], "/api/v1/workspaces/:workspace/membership");
+    assert.equal(points[0].blobs[2], "GET");
+    assert.equal(points[0].blobs.includes(workspaceId), false);
+    assert.equal(points[0].blobs.includes("query-value"), false);
+    assert.equal(points[0].blobs.includes(token), false);
+    assert.equal(points[0].doubles[0], 200);
+    assert.ok(points[0].doubles[1] >= 0);
+  });
+});
+
+test("Analytics Engine write failures never change the API response", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const response = await worker.fetch(authorizedRequest("/health/live", token), {
+      ...env,
+      ORBIT_REQUEST_EVENTS: { writeDataPoint() { throw new Error("analytics unavailable"); } }
+    });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).runtime, "cloudflare-native");
+  });
+});
+
+test("global telemetry, Logs and Traces remain explicitly unavailable without a real source", async () => {
   await withSignedAccessToken(async (token, env) => {
     const globalTelemetry = await worker.fetch(authorizedRequest("/api/v1/telemetry/metrics?window=1h", token), { ...env, DB: {} });
     assert.equal(globalTelemetry.status, 503);
     assert.equal((await globalTelemetry.json()).error.code, "telemetry_source_unavailable");
 
-    const workspaceId = "123e4567-e89b-12d3-a456-426614174000";
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174004";
     const DB = {
       prepare(sql) {
         assert.match(sql, /FROM workspace_memberships/);
@@ -370,6 +594,13 @@ test("unavailable real telemetry and evaluation routes return explicit 503 respo
         };
       }
     };
+    const logs = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/telemetry/logs`, token), { ...env, DB });
+    assert.equal(logs.status, 503);
+    assert.equal((await logs.json()).error.code, "telemetry_signal_unavailable");
+    const traces = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/telemetry/traces`, token), { ...env, DB });
+    assert.equal(traces.status, 503);
+    assert.equal((await traces.json()).error.code, "telemetry_signal_unavailable");
+
     const alerts = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/alerts?limit=50`, token), { ...env, DB });
     assert.equal(alerts.status, 503);
     assert.equal((await alerts.json()).error.code, "alert_evaluator_unavailable");
