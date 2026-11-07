@@ -404,6 +404,7 @@ test("authenticated reads use the read limiter and stop before D1 when the budge
 
     assert.equal(response.status, 429);
     assert.equal(response.headers.get("retry-after"), "60");
+    assert.match(response.headers.get("access-control-expose-headers") || "", /Retry-After/i);
     assert.equal((await response.json()).error.code, "rate_limit_exceeded");
     assert.equal(keys.length, 1);
     assert.match(keys[0], /^[0-9a-f]{64}$/);
