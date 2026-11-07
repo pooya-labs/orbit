@@ -182,12 +182,13 @@ jobs:
           set -euo pipefail
           # Preserve dependency upgrades requested by Dependabot; pin only
           # dependencies with a reviewed security floor or known advisory.
-          go get golang.org/x/text@v0.42.0
+          go get golang.org/x/text@v0.43.0
           go mod tidy
           go get golang.org/x/net@v0.62.0
           go mod download golang.org/x/net@v0.62.0
           go mod tidy
           test "$(go list -m -f '{{.Version}}' golang.org/x/net)" = "v0.62.0"
+          test "$(go list -m -f '{{.Version}}' golang.org/x/text)" = "v0.43.0"
           go mod verify
 
       - name: Refresh telemetry demo Go dependencies on same-repository pull requests
@@ -199,6 +200,7 @@ jobs:
           go get google.golang.org/grpc@v1.83.2
           go mod tidy
           test "$(go list -m -f '{{.Version}}' golang.org/x/net)" = "v0.62.0"
+          test "$(go list -m -f '{{.Version}}' golang.org/x/text)" = "v0.43.0"
           test "$(go list -m -f '{{.Version}}' google.golang.org/grpc)" = "v1.83.2"
           go mod verify
 
