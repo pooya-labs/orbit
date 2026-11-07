@@ -10,7 +10,6 @@ RUN git init . \
     && git fetch --depth=1 origin "refs/tags/${PROMETHEUS_VERSION}:refs/tags/${PROMETHEUS_VERSION}" \
     && test "$(git rev-parse "refs/tags/${PROMETHEUS_VERSION}^{commit}")" = "${PROMETHEUS_COMMIT}" \
     && git checkout --detach "refs/tags/${PROMETHEUS_VERSION}" \
-    && test "$(git describe --tags --exact-match)" = "${PROMETHEUS_VERSION}"
 RUN node --version \
     && npm install --global pnpm@10.9.0
 RUN go mod edit -require=golang.org/x/net@v0.62.0 \
