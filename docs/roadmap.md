@@ -520,7 +520,7 @@ This is a post-v1 entry-point extension, not a reopening of the stable Apps Scri
 Do not introduce D1/Queues/Redis/NATS, duplicate JWT verification, raw telemetry storage in the Worker, or paid Cloudflare services to satisfy this milestone. Existing CI for Go/PostgreSQL, security, backup/restore, telemetry end-to-end and workspace isolation remains authoritative.
 
 
-## Post-v1 CF02 — Cloudflare-native D1 runtime (separate draft PR #140, updated 2026-11-07)
+## Post-v1 CF02 — Cloudflare-native D1 runtime (merged foundation, PR #140, updated 2026-11-08)
 
 This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-runtime` edge gateway, the Go/PostgreSQL engineering core, GitHub Pages, or the Apps Script demo. PR #140 remains a draft and has not been deployed.
 
@@ -530,7 +530,7 @@ This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-r
 - [x] Map the 42 current typed API-client methods to native routes or explicit unsupported responses; unavailable telemetry/evaluation/budget/delivery functions return honest 503 responses.
 - [x] Add SQLite/D1 schema and tenant-isolation smoke coverage plus signed-token, role-policy and bounded OIDC-document tests.
 - [x] Add two authenticated Workers Rate Limiting bindings: 120 reads/60s and 30 writes/60s per pseudonymous OIDC subject; checks run before D1 and fail closed when a binding is missing or unavailable.
-- [x] Add tests for read/write limiter selection, 429 responses, pseudonymous keys, missing-binding fail-closed and provider-failure behavior. Exact-head CI remains the acceptance gate.
+- [x] Add tests for read/write limiter selection, 429 responses, pseudonymous keys, missing-binding fail-closed and provider-failure behavior; the browser can read `Retry-After` through CORS.
 - [ ] Verify the Wrangler configuration against the deployment account and confirm the two rate-limit namespace IDs are unused before any first deployment.
 - [ ] Implement a trustworthy native telemetry source and a dedicated UI that distinguishes runtime telemetry from synthetic samples.
 - [ ] Implement alert evaluation and bounded scheduled execution within Workers Free limits.
@@ -542,7 +542,9 @@ This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-r
 
 **Rate-limit boundary:** Workers Rate Limiting is approximate, per Cloudflare location and eventually consistent. It is an abuse/burst guard, not a strict cross-region quota and not a substitute for Workers Free daily requests or D1 row-read/write limits. Strict global limits would need a separately reviewed Durable Object design.
 
-**Release boundary:** PR #140 is a staged foundation, not feature parity and not a deployable v1. No D1 database, OIDC tenant, Worker route or Pages API switch has been provisioned. Keep Apps Script unchanged and preserve CF01 as the separate canonical-Go edge profile.
+**Verification:** exact PR-head CI [42401556604](https://github.com/pooya-labs/orbit/actions/runs/42401556604) passed 4/4 jobs; Security [42401556495](https://github.com/pooya-labs/orbit/actions/runs/42401556495) passed 13/13 jobs. This includes 23 Worker tests, D1/Wrangler config smoke, the complete OTLP pipeline, Prometheus scrape, workspace isolation, PostgreSQL recovery, browser/a11y tests, and all image/security scans.
+
+**Release boundary:** PR #140 merged a staged foundation, not feature parity and not a deployable v1. No D1 database, OIDC tenant, Worker route or Pages API switch has been provisioned. Keep Apps Script unchanged and preserve CF01 as the separate canonical-Go edge profile.
 
 ## Post-v1 Security 01 — Go x/net advisory response (2026-11-07)
 
