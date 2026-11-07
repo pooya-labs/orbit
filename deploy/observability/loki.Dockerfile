@@ -12,6 +12,7 @@ RUN git init . \
     && test "$(git describe --tags --exact-match)" = "${LOKI_VERSION}"
 RUN go mod edit -require=golang.org/x/net@v0.62.0 \
     && go mod tidy \
+    && go mod vendor \
     && go mod verify \
     && make clean \
     && make BUILD_IN_CONTAINER=false IMAGE_TAG=${LOKI_VERSION} loki \
