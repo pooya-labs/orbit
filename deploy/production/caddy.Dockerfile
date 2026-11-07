@@ -6,7 +6,7 @@ RUN git init . \
     && git remote add origin https://github.com/caddyserver/caddy.git \
     && git fetch --depth=1 origin "${CADDY_COMMIT}" \
     && git checkout --detach FETCH_HEAD
-RUN go get golang.org/x/net@v0.60.0 github.com/go-jose/go-jose/v4@v4.1.7 \
+RUN go get golang.org/x/net@v0.62.0 github.com/go-jose/go-jose/v4@v4.1.7 \
     && go mod tidy \
     && go mod verify
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -trimpath \
