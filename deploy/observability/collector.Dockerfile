@@ -1,5 +1,5 @@
 FROM golang:1.27-alpine AS build
-RUN go install go.opentelemetry.io/collector/cmd/builder@v0.164.0
+RUN go install go.opentelemetry.io/collector/cmd/builder@v0.165.0
 WORKDIR /build
 COPY deploy/observability/collector-builder.yaml ./builder.yaml
 RUN builder --config=builder.yaml
