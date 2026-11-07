@@ -4,6 +4,18 @@
   "main": "worker.mjs",
   "compatibility_date": "2026-11-06",
   "workers_dev": false,
+  "ratelimits": [
+    {
+      "name": "ORBIT_READ_LIMITER",
+      "namespace_id": "20261107140",
+      "simple": { "limit": 120, "period": 60 }
+    },
+    {
+      "name": "ORBIT_WRITE_LIMITER",
+      "namespace_id": "20261107141",
+      "simple": { "limit": 30, "period": 60 }
+    }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.1,
