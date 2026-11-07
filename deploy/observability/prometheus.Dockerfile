@@ -17,7 +17,7 @@ RUN go mod edit -require=golang.org/x/net@v0.62.0 \
     && go mod tidy \
     && go mod verify \
     && make build \
-    && go version -m .build/linux-amd64/prometheus | tee /tmp/prometheus-build-info \
+    && go version -m .build/linux-${TARGETARCH}/prometheus | tee /tmp/prometheus-build-info \
     && grep -F "golang.org/x/net v0.62.0" /tmp/prometheus-build-info
 
 FROM alpine:3.22
