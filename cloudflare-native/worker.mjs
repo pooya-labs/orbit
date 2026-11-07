@@ -452,7 +452,7 @@ async function queryWorkspaceRequestMetrics(env, workspaceId, url, origin, id) {
     return fail(503, "telemetry_partition_unavailable", "The workspace telemetry partition could not be resolved.", origin, env, id);
   }
 
-  const cacheKey = JSON.stringify([workspaceKey, windowName, groupBy]);
+  const cacheKey = JSON.stringify([workspaceKey, windowName, groupBy, metric]);
   const cached = getCachedAnalyticsMetrics(cacheKey);
   if (cached) {
     return response(cached, 200, origin, env, id);
