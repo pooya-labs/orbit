@@ -10,8 +10,8 @@
 
 ORBIT is an engineering-focused observability workspace for exploring service health, incidents, operational workflows, and distributed telemetry across metrics, logs, and traces.
 
-> **Project status: COMPLETE — v1.0.0 stable portfolio-demo scope.**  
-> The v1.0.0 release is published, its release gates passed, and there are no remaining implementation tasks for the agreed zero-cost portfolio-demo scope. This does not mean that every repository component is deployed as a production service. The public demo, local engineering stack, and deferred production path are deliberately separate; their boundaries are documented below.
+> **Release status: v1.0.0 stable portfolio-demo scope is complete. Post-v1 Cloudflare expansion is in progress.**  
+> The immutable v1.0.0 release gates passed. The Cloudflare edge gateway is merged into main, but it is not yet connected to a live Go/Keycloak origin; a separate Workers + D1 profile is under development in draft [PR #140](https://github.com/pooya-labs/orbit/pull/140) and is not deployed. Apps Script remains unchanged and synthetic-only. Do not interpret either Cloudflare code path as a production-ready or live dual-runtime deployment.
 
 ## Start here
 
@@ -43,18 +43,26 @@ The workspace includes the following views and workflows:
 
 The metric catalog is intentionally small and server-owned. The browser cannot submit arbitrary PromQL, metric names, label matchers, or query expressions. Trace and log detail requests are workspace-authorized; high-cardinality trace IDs are not used as Loki index labels.
 
-## Two execution modes — intentionally different
+## Runtime profiles — intentionally separate
 
-ORBIT contains a zero-cost public portfolio demo and a more complete local engineering stack. They share the dashboard and API contracts, but they do not share the same data guarantees.
+ORBIT has three established execution profiles shown below. A fourth, separate Cloudflare-native Workers + D1 profile is being developed in draft PR #140; it is not merged or deployed and is documented separately below. These paths share the dashboard/API contract where applicable, but their deployment state and data guarantees are different.
 
-| Capability | Public portfolio demo | Local engineering stack |
-| --- | --- | --- |
-| Frontend | Static dashboard hosted on GitHub Pages; embedded by the Apps Script Web App for the interactive demo | Same dashboard, served with the local development server |
-| Persistence | Private Google Spreadsheet owned by the demo deployer; synthetic records only | PostgreSQL with versioned migrations and repository-backed data |
-| Identity and isolation | Pseudonymous browser-profile workspaces with bounded demo sessions; not production identity or tenant security | OIDC/role and workspace authorization paths, workload identities, signal grants, and authenticated workspace-scoped APIs |
-| Metrics, logs, traces | Bounded synthetic demo data | Real local OTLP/HTTP and OTLP/gRPC ingestion through the Collector into Prometheus, Loki, and Tempo |
-| Notifications | Simulated delivery history; no outbound requests | Backend delivery/retry implementation for local engineering and test scenarios |
-| Hosting | GitHub Pages plus the owner's Google Apps Script deployment | Docker Compose on the developer's machine; not a hosted production service |
+| Capability | Apps Script portfolio demo | Cloudflare edge profile (post-v1; not live yet) | Local engineering stack |
+| --- | --- | --- | --- |
+| Frontend | GitHub Pages embedded by the owner-deployed Apps Script Web App | Same static Pages dashboard, configured to send API traffic through orbit-runtime | Same dashboard, served by the local development server |
+| Persistence | Private owner-owned Google Spreadsheet; synthetic records only | Canonical Go API + PostgreSQL origin; no application database in the Worker | PostgreSQL with versioned migrations and repository-backed data |
+| Identity and isolation | Pseudonymous browser-profile workspaces and bounded demo sessions; not production identity | Existing Keycloak OIDC/PKCE and Go-side workspace authorization, once the origin is deployed | OIDC/role and workspace authorization, workload identities and signal grants |
+| Metrics, logs, traces | Bounded synthetic demo data | Existing private Collector → Prometheus/Loki/Tempo pipeline, once the origin is deployed | Real local OTLP/HTTP and OTLP/gRPC ingestion through the Collector |
+| Notifications | Simulated delivery history; no outbound requests | Canonical Go outbox/attempt history, once the origin is deployed | Backend delivery/retry implementation for local engineering and test scenarios |
+| Hosting | GitHub Pages plus the owner's Google Apps Script deployment | GitHub Pages + Cloudflare Worker + separately hosted Go/Caddy origin; not yet connected end to end | Docker Compose on the developer's machine; not a hosted production service |
+
+### Cloudflare deployment state
+
+The canonical orbit-runtime edge gateway was merged through PR #136. The last inspected Cloudflare state (November 6, 2026) showed Worker version 0.2.3, but its workers.dev route was disabled, no Worker bindings or gateway secret were attached, and the Go/Caddy origin was not provisioned. The Worker therefore remains fail-closed; this repository does not claim that the Cloudflare runtime is live.
+
+A separate Workers + D1 implementation is being developed in draft [PR #140](https://github.com/pooya-labs/orbit/pull/140). It is a different runtime profile, not an upgrade to the thin edge gateway. It currently lacks live telemetry, alert evaluation, SLO budget calculation, notification delivery/attempt history, rate limiting and complete frontend acceptance. Do not deploy it or point Pages at it until those gates pass.
+
+
 
 ### Public demo safety and quotas
 
