@@ -17,11 +17,15 @@ RUN go mod edit -require=golang.org/x/net@v0.62.0 \
     && make clean \
     && make BUILD_IN_CONTAINER=false IMAGE_TAG=${LOKI_VERSION} loki \
     && go version -m cmd/loki/loki | tee /tmp/loki-build-info \
-    && grep -F "golang.org/x/net v0.62.0" /tmp/loki-build-info
+    && grep -F "golang.org/x/net v0.62.0" /tmp/loki-build-info \
+    && mkdir -p /out/loki/chunks /out/loki/rules /out/loki/compactor /out/etc/loki \
+    && chown -R 10001:10001 /out/loki /out/etc/loki
 
 FROM gcr.io/distroless/static:nonroot
 COPY --from=build /src/loki/cmd/loki/loki /usr/bin/loki
 COPY --from=build /src/loki/cmd/loki/loki-docker-config.yaml /etc/loki/local-config.yaml
+COPY --from=build --chown=10001:10001 /out/loki /loki
+COPY --from=build --chown=10001:10001 /out/etc/loki /etc/loki
 USER 10001
 WORKDIR /
 EXPOSE 3100
