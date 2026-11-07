@@ -92,7 +92,10 @@ services:
         condition: service_started
 
   prometheus:
-    image: prom/prometheus:v3.15.1
+    image: orbit-prometheus:local
+    build:
+      context: .
+      dockerfile: deploy/observability/prometheus.Dockerfile
     profiles: ["observability"]
     restart: unless-stopped
     command:
@@ -110,7 +113,10 @@ services:
         condition: service_started
 
   loki:
-    image: grafana/loki:3.7.9
+    image: orbit-loki:local
+    build:
+      context: .
+      dockerfile: deploy/observability/loki.Dockerfile
     profiles: ["observability"]
     restart: unless-stopped
     command: ["-config.file=/etc/loki/local-config.yaml"]
