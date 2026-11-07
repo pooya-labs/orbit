@@ -220,7 +220,7 @@ async function rateLimitDecision(env, principal, method) {
   }
 
   // Do not send raw OIDC subjects or issuer values to the rate-limit service.
-  const identity = new TextEncoder().encode(`${principal.issuer}\\0${principal.subject}`);
+  const identity = new TextEncoder().encode(JSON.stringify([principal.issuer, principal.subject]));
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", identity));
   const key = Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
   const decision = await binding.limit({ key });
