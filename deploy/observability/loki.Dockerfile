@@ -17,7 +17,7 @@ RUN go mod edit -require=golang.org/x/net@v0.62.0 \
     && make clean \
     && make BUILD_IN_CONTAINER=false IMAGE_TAG=${LOKI_VERSION} loki \
     && go version -m cmd/loki/loki | tee /tmp/loki-build-info \
-    && grep -E 'golang.org/x/net[[:space:]]+v0\\.62\\.0' /tmp/loki-build-info \
+    && grep -E 'golang.org/x/net[[:space:]]+v0\.62\.0' /tmp/loki-build-info \
     && mkdir -p /out/loki/chunks /out/loki/rules /out/loki/compactor /out/etc/loki \
     && chown -R 10001:10001 /out/loki /out/etc/loki
 
