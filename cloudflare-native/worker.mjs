@@ -211,6 +211,22 @@ async function authenticate(request, env) {
   }
 }
 
+async function rateLimitDecision(env, principal, method) {
+  const binding = method === "GET" || method === "HEAD"
+    ? env.ORBIT_READ_LIMITER
+    : env.ORBIT_WRITE_LIMITER;
+  if (!binding || typeof binding.limit !== "function") {
+    return { configured: false, allowed: false };
+  }
+
+  // Do not send raw OIDC subjects or issuer values to the rate-limit service.
+  const identity = new TextEncoder().encode(`${principal.issuer}\\0${principal.subject}`);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", identity));
+  const key = Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
+  const decision = await binding.limit({ key });
+  return { configured: true, allowed: decision?.success === true };
+}
+
 async function readJson(request, maxBytes = MAX_BODY_BYTES) {
   const declaredLength = Number(request.headers.get("content-length") || 0);
   if (declaredLength > maxBytes) return { error: "Request body is too large." };
@@ -913,6 +929,17 @@ export default {
     if (!auth.principal) return fail(401, "unauthorized", auth.error || "Authentication is required.", origin, env, id);
 
     try {
+      const rateLimit = await rateLimitDecision(env, auth.principal, request.method);
+      if (!rateLimit.configured) {
+        return fail(503, "rate_limit_not_configured", "The Cloudflare rate-limit bindings are not configured.", origin, env, id);
+      }
+      if (!rateLimit.allowed) {
+        if (rateLimit.configured) {
+          return json({
+            error: { code: "rate_limit_exceeded", message: "The request rate limit was exceeded.", request_id: id }
+          }, 429, { ...cors(origin, env), "x-request-id": id, "retry-after": "60" });
+        }
+      }
       return await handleApi(request, env, url, origin, id, auth.principal);
     } catch {
       return fail(503, "api_operation_unavailable", "The ORBIT API operation is temporarily unavailable.", origin, env, id);
