@@ -8,12 +8,18 @@
     {
       "name": "ORBIT_READ_LIMITER",
       "namespace_id": "20261107140",
-      "simple": { "limit": 120, "period": 60 }
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
     },
     {
       "name": "ORBIT_WRITE_LIMITER",
       "namespace_id": "20261107141",
-      "simple": { "limit": 30, "period": 60 }
+      "simple": {
+        "limit": 30,
+        "period": 60
+      }
     }
   ],
   "observability": {
@@ -45,5 +51,14 @@
       "database_id": "REPLACE-WITH-CREATED-D1-DATABASE-ID",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "analytics_engine_datasets": [
+    {
+      "binding": "ORBIT_REQUEST_EVENTS",
+      "dataset": "orbit_native_requests"
+    }
+  ],
+  "analytics": {
+    "binding": "ANALYTICS_SQL"
+  }
 }
