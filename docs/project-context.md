@@ -1217,3 +1217,17 @@ from a new issue, measured regression, or explicitly requested post-v1 item.
 - Never publish Worker gateway secrets, OIDC client secrets, private Apps Script URLs, spreadsheet IDs or production environment files.
 - Never describe synthetic demo records as observed telemetry.
 - Do not move the immutable v1.0.0 tag, change the existing Apps Script runtime, or re-run completed v1 work without a measured regression.
+
+
+## Latest continuation — Keycloak 26.8.2 security track (2026-11-09)
+
+PR [#138](https://github.com/pooya-labs/orbit/pull/138) remains open and CI-only. Keep production Compose on the published upstream Keycloak 26.8.2 image until the patched candidate is verified on both architectures; no production identity deployment or image publication has occurred.
+
+- The exact Red Hat NSS source RPM, `nss-3.124.0-5.el9_6.src.rpm`, is SHA-256 verified (`54413db2daff5780009e38d8e2ed0501b4e7a671302e09160de7f1990c52b4fe`) and its RPM signature is valid under the official release key fingerprint `567E347AD0044ADE55BA8A5F199E2F91FD431D51`. The actual downstream patches were applied before source inspection.
+- Patched NSS `lib/softoken` has no FTS5, `CREATE VIRTUAL TABLE`, `MATCH` or SQLite dynamic-extension-loading references. Its SQLite call sites use ordinary tables and parameterized operations.
+- Native linux/amd64 and linux/arm64 Keycloak 26.8.2 runtime probes both passed readiness and OIDC discovery. Both process-map checks found no `libsqlite3.so` or `libsoftokn3.so` loaded by any process in the container.
+- The CVE-2026-119373 OpenVEX statement is limited to the exact `sqlite-libs 3.34.1-11.el9_8` PURLs for x86_64 and aarch64 in this Keycloak 26.8.2 scan, with justification `vulnerable_code_not_in_execute_path`. It explicitly does not claim FTS5 is absent from the library.
+- Deferred scan [run 42525414926](https://github.com/pooya-labs/orbit/actions/runs/42525414926) applied the narrow VEX to the OS-package findings on both architectures; the only remaining HIGH in the upstream image is Guava 33.6.0-jre (fixed upstream package version 33.7.2-jre). The HIGH/CRITICAL threshold and `ignore-unfixed: false` are unchanged.
+- The updated deferred identity workflow [run 42526131111](https://github.com/pooya-labs/orbit/actions/runs/42526131111) repeats the signed NSS audit and ARM64 runtime probe. The patched source-build workflow [run 42526131049](https://github.com/pooya-labs/orbit/actions/runs/42526131049) is still in progress at this handoff.
+
+Next: complete the Guava-patched candidate build, then validate the candidate on native ARM64 as well as amd64, preserve raw-scan visibility, run readiness/OIDC and exact-image strict scans, and only then reassess any production-image change. Never change production Compose, publish the candidate, or close PR #138 before those gates pass.
