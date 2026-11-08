@@ -16,8 +16,18 @@ permissions:
 
 jobs:
   patched-keycloak:
-    name: Build, run and scan patched Keycloak
-    runs-on: ubuntu-latest
+    name: Build, run and scan patched Keycloak (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     env:
       MAVEN_OPTS: -Xms512m -Xmx4g -XX:+ExitOnOutOfMemoryError
@@ -111,8 +121,9 @@ jobs:
           COPY --chown=1000:0 keycloak-26.8.2/ /opt/keycloak/
           USER 1000
           DOCKERFILE
-          docker build --pull -t orbit-keycloak:26.8.2-guava-33.7.2 .keycloak-patched-context
-          docker run --rm --entrypoint /opt/keycloak/bin/kc.sh orbit-keycloak:26.8.2-guava-33.7.2 --version
+          image="orbit-keycloak:26.8.2-guava-33.7.2-${{ matrix.arch }}"
+          docker build --pull --platform "${{ matrix.platform }}" -t "$image" .keycloak-patched-context
+          docker run --rm --platform "${{ matrix.platform }}" --entrypoint /opt/keycloak/bin/kc.sh "$image" --version
 
       - name: Start patched Keycloak and verify readiness plus OIDC discovery
         shell: bash
@@ -125,7 +136,7 @@ jobs:
             -e KC_BOOTSTRAP_ADMIN_PASSWORD=ci-placeholder-password \
             -e KC_HEALTH_ENABLED=true -e KC_METRICS_ENABLED=true \
             -e KC_HTTP_ENABLED=true -e KC_HOSTNAME_STRICT=false \
-            orbit-keycloak:26.8.2-guava-33.7.2 start-dev --http-port=8080
+            "orbit-keycloak:26.8.2-guava-33.7.2-${{ matrix.arch }}" start-dev --http-port=8080
           ready=0
           for _ in $(seq 1 90); do
             if curl --fail --silent http://127.0.0.1:9000/health/ready >/tmp/keycloak-ready.json; then ready=1; break; fi
@@ -138,6 +149,26 @@ jobs:
           d=json.load(open('/tmp/keycloak-oidc.json'))
           assert d.get('issuer', '').endswith('/realms/master'), d.get('issuer')
           print('OIDC discovery issuer:', d['issuer'])
+          PY
+
+      - name: Verify FTS5 compile option in the ${{ matrix.arch }} SQLite library
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="orbit-keycloak:26.8.2-guava-33.7.2-${{ matrix.arch }}"
+          container="$(docker create --platform "${{ matrix.platform }}" "$image")"
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker cp "$container:/usr/lib64/libsqlite3.so.0.8.6" /tmp/keycloak-libsqlite3.so
+          python3 - <<'PY'
+          import ctypes
+          lib = ctypes.CDLL("/tmp/keycloak-libsqlite3.so")
+          lib.sqlite3_compileoption_used.argtypes = [ctypes.c_char_p]
+          lib.sqlite3_compileoption_used.restype = ctypes.c_int
+          enabled = lib.sqlite3_compileoption_used(b"ENABLE_FTS5")
+          print("SQLITE_ENABLE_FTS5=" + str(enabled))
+          if not enabled:
+              raise SystemExit("Expected FTS5 compile option in this platform SQLite library.")
           PY
 
       - name: Verify Keycloak runtime does not map SQLite or NSS softoken
@@ -160,7 +191,7 @@ jobs:
       - name: Scan candidate without VEX to preserve raw findings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: orbit-keycloak:26.8.2-guava-33.7.2
+          image-ref: orbit-keycloak:26.8.2-guava-33.7.2-${{ matrix.arch }}
           version: v0.76.1
           trivy-config: trivy-keycloak-raw.yaml
           vuln-type: os,library
@@ -174,7 +205,7 @@ jobs:
       - name: Scan patched candidate image with scoped VEX
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: orbit-keycloak:26.8.2-guava-33.7.2
+          image-ref: orbit-keycloak:26.8.2-guava-33.7.2-${{ matrix.arch }}
           version: v0.76.1
           trivy-config: trivy-keycloak.yaml
           vuln-type: os,library
