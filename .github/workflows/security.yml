@@ -13,8 +13,55 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: orbit-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  scope:
+    name: Detect security-relevant changes
+    runs-on: ubuntu-latest
+    outputs:
+      scan: ${{ steps.detect.outputs.scan }}
+    steps:
+      - name: Checkout full history for path comparison
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Decide whether full security scans are needed
+        id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          scan=false
+          if [[ "$EVENT_NAME" == "schedule" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            scan=true
+          else
+            if [[ -z "${BASE_SHA}" || "${BASE_SHA}" =~ ^0+$ ]] || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+              changed="$(git ls-files)"
+            else
+              changed="$(git diff --name-only "${BASE_SHA}" "${GITHUB_SHA}")"
+            fi
+
+            while IFS= read -r path; do
+              [[ -z "$path" ]] && continue
+              case "$path" in
+                server/*|examples/*|deploy/*|cloudflare/*|cloudflare-native/*|Dockerfile|**/Dockerfile|**/*.Dockerfile|docker-compose*.yml|package.json|package-lock.json|*/package.json|*/package-lock.json|trivy.yaml|.trivyignore|go.work|go.work.sum|*/go.mod|*/go.sum)
+                  scan=true
+                  break
+                  ;;
+              esac
+            done <<< "$changed"
+          fi
+          echo "Full security scan required: $scan"
+          echo "scan=$scan" >> "$GITHUB_OUTPUT"
+
   container-image:
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
     name: Build and scan the ORBIT API image
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -137,6 +184,8 @@ jobs:
           retention-days: 30
 
   secrets:
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
     name: Full-history secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -154,6 +203,8 @@ jobs:
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
 
   dependencies:
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
     name: Dependency vulnerability checks
     permissions:
       contents: write
@@ -257,6 +308,8 @@ jobs:
           fail-on-severity: high
 
   compose-images:
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
     name: Scan Compose image (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -318,6 +371,8 @@ jobs:
           retention-days: 30
 
   prometheus-image:
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
     name: Build and scan patched Prometheus image
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -364,6 +419,8 @@ jobs:
           retention-days: 30
 
   loki-image:
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
     name: Build and scan patched Loki image
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -410,6 +467,8 @@ jobs:
           retention-days: 30
 
   tempo-image:
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
     name: Build and scan patched Tempo image
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -456,6 +515,8 @@ jobs:
           retention-days: 30
 
   otel-collector-image:
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
     name: Build and scan minimal ORBIT Collector image
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -502,6 +563,8 @@ jobs:
           retention-days: 30
 
   caddy-image:
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
     name: Build and scan patched Caddy ingress image
     runs-on: ubuntu-latest
     timeout-minutes: 35

@@ -868,10 +868,10 @@ test("creator and repository credits use the right destinations and order", asyn
   await expect(repositoryCredit).toHaveAttribute("href", "https://github.com/pooya-labs/orbit");
   await expect(repositoryCredit).toHaveText("Created and maintained by");
   await expect(footerCredit.locator("strong")).toHaveText("PROJECT OWNER:");
-  await expect(footerProfile).toHaveAttribute("href", "https://github.com/pooya-labs/pooya-labs-platform");
+  await expect(footerProfile).toHaveAttribute("href", "https://pooya-labs.github.io/pooya-labs-platform/");
   await expect(footerProfile).toHaveText("Pooya Labs Platform");
   await expect(footerProfile.locator("img")).toBeVisible();
-  await expect(footerProfile.locator("img")).toHaveAttribute("src", "/brand/pooya-monogram.webp");
+  await expect(footerProfile.locator("img")).toHaveAttribute("src", /(?:\/orbit)?\/brand\/pooya-monogram\.webp$/);
 
   const englishOrder = await footerCredit.innerText();
   expect(englishOrder.indexOf("Created and maintained by")).toBeLessThan(englishOrder.indexOf("PROJECT OWNER:"));

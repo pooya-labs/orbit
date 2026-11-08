@@ -258,13 +258,28 @@ public static class OrbitWin32Cursor {
 
   $headingTargets = @("OBSERVE", "INVESTIGATE", "DELIVER")
   foreach ($heading in $headingTargets) {
-    $beforeHeading = Get-SpeechText
-    Invoke-WinApp -Arguments @("ui", "send-keys", "h", "-a", "msedge", "--via", "send-input") | Write-Host
-    $headingSpeech = Wait-SpeechDelta -Before $beforeHeading -ExpectedPattern ([regex]::Escape($heading)) -TimeoutSeconds 8
+    $headingSpeech = ""
+    # Do not assume the first document heading is OBSERVE: the page may expose
+    # an H1 or other legitimate heading before the navigation group headings.
+    # Advance through real H quick-navigation targets until the requested
+    # heading is reached, with a bounded number of attempts to avoid cycling.
+    for ($headingAttempt = 0; $headingAttempt -lt 12; $headingAttempt++) {
+      $beforeHeading = Get-SpeechText
+      Invoke-WinApp -Arguments @("ui", "send-keys", "h", "-a", "msedge", "--via", "send-input") | Write-Host
+      $headingSpeech = Wait-SpeechDelta -Before $beforeHeading -ExpectedPattern ([regex]::Escape($heading)) -TimeoutSeconds 8
+      Write-Host ("NVDA H candidate for " + $heading + " : " + $headingSpeech)
+
+      if ($headingSpeech -match [regex]::Escape($heading)) {
+        break
+      }
+      if ($headingSpeech -match "(?i)No next heading") {
+        break
+      }
+    }
     Write-Host ("NVDA H -> " + $heading + " : " + $headingSpeech)
 
     if ($headingSpeech -notmatch [regex]::Escape($heading)) {
-      throw ("NVDA H did not reach '" + $heading + "'. Speech Viewer reported: " + $headingSpeech)
+      throw ("NVDA H did not reach '" + $heading + "' within 12 heading targets. Last Speech Viewer output: " + $headingSpeech)
     }
     if ($headingSpeech -notmatch "(?i)heading") {
       throw ("NVDA announced '" + $heading + "' without identifying it as a heading: " + $headingSpeech)

@@ -826,7 +826,7 @@ export default function Home() {
             </>
           )}
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><a href="https://github.com/pooya-labs/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a> <span>·</span> <strong>{tr("projectOwner")}:</strong> <a className="owner-github-link" href="https://github.com/pooya-labs/pooya-labs-platform" target="_blank" rel="noreferrer" aria-label="Pooya Labs Platform on GitHub"><img className="owner-brand-mark-footer" src="/brand/pooya-monogram.webp" alt="" width={16} height={16} /><GitHubMark size={12} /><span>Pooya Labs Platform</span></a></span></footer>
+          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><a href="https://github.com/pooya-labs/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a> <span>·</span> <strong>{tr("projectOwner")}:</strong> <a className="owner-github-link" href="https://pooya-labs.github.io/pooya-labs-platform/" target="_blank" rel="noreferrer" aria-label="Open Pooya Labs Platform website"><img className="owner-brand-mark-footer" src={ownerMonogramSrc} alt="" width={16} height={16} /><GitHubMark size={12} /><span>Pooya Labs Platform</span></a></span></footer>
         </main>
       </section>
       {utilityDialog && (
