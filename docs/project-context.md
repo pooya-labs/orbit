@@ -1098,14 +1098,24 @@ remain deferred until after the portfolio v1 release, as previously requested.
     `sqlite-libs` PURL not affected by CVE-2026-119586. It does not cover the
     SQLite CLI package or the separate FTS5 CVE.
   - CVE-2026-119373 affects SQLite FTS5 under specific application/table/query
-    preconditions. Red Hat's current statement rates the issue Important and
-    explains that affected applications must expose FTS5 with the relevant
-    `detail=none`, negative-rowid and prefix-query conditions. The exact
-    `sqlite-libs 3.34.1-11.el9_8` remains reported affected; upstream SQLite's
-    fix is recorded in [commit e1c9934](https://github.com/sqlite/sqlite/commit/e1c9934f9f11a499029abb020ea715a08970da80).
-    We have not established that this vendor RPM contains the fix or proved
-    that every runtime path is unable to reach it, so no VEX is issued and the
-    finding remains blocking.
+    preconditions. Red Hat's statement says exploitation requires exposed FTS5
+    virtual full-text indexing with suppressed detail storage, negative row
+    values and targeted prefix MATCH expressions. FTS5 is compiled into this
+    image's SQLite library; do not describe the vulnerable library code as
+    absent. A narrow OpenVEX statement now marks only the exact
+    `sqlite-libs 3.34.1-11.el9_8` x86_64/aarch64 PURLs in Keycloak 26.8.2 as
+    `not_affected` / `vulnerable_code_not_in_execute_path`. The exact Red Hat
+    NSS source RPM `nss-3.124.0-5.el9_6.src.rpm` was downloaded, checksum
+    recorded and prepared with all declared downstream patches using
+    `rpmbuild -bp`. The resulting `lib/softoken` code has no FTS5, virtual
+    table, MATCH or extension-loading path; it uses regular table/index CRUD
+    and bound parameters. Runtime package/linkage inventory found no SQLite
+    CLI or Java SQLite driver and only `libsoftokn3.so` linked to
+    `libsqlite3`. The source audit evidence is retained as a CI artifact;
+    the separate candidate checks compare raw Trivy detection with the
+    package-scoped VEX-filtered result. This disposition is specific to the
+    exact image/package set and does not generalize to other SQLite consumers.
+    ([Red Hat CVE details](https://access.redhat.com/security/cve/cve-2026-119373)).
   - The 2026-11-08 isolated Keycloak source-build experiment applied a narrow Guava BOM override before the Quarkus BOM. Maven effective-POM verification and the complete Keycloak core/Quarkus build passed; the generated distribution contains only `com.google.guava.guava-33.7.2-jre.jar` (not 33.6.0). Candidate workflow [run 42520290804](https://github.com/pooya-labs/orbit/actions/runs/42520290804) passed all 12 steps: candidate image build, `kc.sh --version`, readiness, OIDC discovery, and pinned Trivy scan. The assertion confirms CVE-2026-102554 is absent in the CI-only linux/amd64 candidate while SQLite FTS5 CVE-2026-119373 remains present and visible. The earlier false failure (`trivy: command not found`, exit 127) was a CI tooling problem and has been corrected by using the pinned Trivy Action. The Dockerfile removes the complete upstream `/opt/keycloak` tree before copying the generated distribution so an old Guava JAR cannot survive in merged image layers. This does not produce or publish a production image, does not validate arm64, and does not resolve FTS5. The published upstream image strict scan [run 42520290899](https://github.com/pooya-labs/orbit/actions/runs/42520290899) still fails on both amd64 and arm64.
     ([advisory](https://advisories.gitlab.io/maven/com.google.guava/guava/CVE-2026-102554/)).
   The two VEX statements are package-version-specific and evidence-backed; no
@@ -1188,7 +1198,7 @@ from a new issue, measured regression, or explicitly requested post-v1 item.
 
 - PR #137 carries the consolidated Cloudflare runbook, README, roadmap and project-handoff corrections, including the billing clarification first proposed in PR #139. PR #139 is already closed as superseded; keep one authoritative runbook and roadmap entry.
 - PR #139 is docs-only and has been closed as superseded by the consolidated PR #137; do not maintain two competing billing-gate edits.
-- PR [#138](https://github.com/pooya-labs/orbit/pull/138) updates the deferred Keycloak origin to 26.8.2. It remains the only open PR in the repository as of 2026-11-08; the latest merged PR is #151. Candidate workflow [run 42520290804](https://github.com/pooya-labs/orbit/actions/runs/42520290804) now passes all 12 steps, including patched Guava 33.7.2, Keycloak readiness, OIDC discovery and Trivy confirmation that Guava CVE-2026-102554 is absent while SQLite FTS5 remains visible. This candidate is CI-only and linux/amd64. The published upstream image's strict multi-architecture scan [run 42520290899](https://github.com/pooya-labs/orbit/actions/runs/42520290899) still fails on SQLite FTS5 and upstream Guava on both architectures. CVE-2026-119586 remains separately covered only by the exact-package CLI `.recover` VEX statement. Keep production identity/origin blocked until FTS5 is resolved and a reproducible patched multi-architecture image passes.
+- PR [#138](https://github.com/pooya-labs/orbit/pull/138) updates the deferred Keycloak origin to 26.8.2. It remains the only open PR in the repository; the latest merged PR is #151. The exact Red Hat NSS downstream source audit and runtime linkage inventory support a narrowly scoped FTS5 VEX for only the exact sqlite-libs PURLs in Keycloak 26.8.2. Deferred identity scan [run 42525007580](https://github.com/pooya-labs/orbit/actions/runs/42525007580) applies that VEX on both amd64 and arm64; only upstream Guava 33.6.0-jre remains HIGH. The CI-only patched Keycloak candidate is not yet published or validated on both architectures. Keep production Compose on the upstream pin until the multi-architecture patched image is built, tested, published and scanned.
 - PR #140 is merged as a staged foundation. Continue from `main`; do not deploy or switch the API origin on the basis of source-level CI/Security alone.
 - [Issue #141](https://github.com/pooya-labs/orbit/issues/141) tracked CVE-2026-78661 / GO-2026-6860 and CVE-2026-97045 / GO-2026-6866. It was resolved by PR #142, squash-merged as `1caed65d11bbf9b5d419e4da5429115c98ebe3ac`. First-party Go module locks now use `golang.org/x/net v0.62.0`; the Caddy/Tempo builds, Collector v0.165.0, and source-built Prometheus v3.16.0/Loki v3.7.9 were rebuilt and scanned. Exact PR-head CI passed 4/4, Security passed 13/13, and 11 non-expired CycloneDX SBOM artifacts were uploaded. The Trivy HIGH/CRITICAL gate, non-zero exit behavior and `ignore-unfixed: false` remain enabled; no broad VEX or scanner suppression was added.
 
