@@ -69,7 +69,9 @@ jobs:
         run: python3 scripts/check_workflow_action_pins.py
 
   api:
-    needs: scope\n    if: needs.scope.outputs.api == 'true'\n    name: Go API tests and build
+    needs: scope
+    if: needs.scope.outputs.api == 'true'
+    name: Go API tests and build
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -127,7 +129,9 @@ jobs:
             postgres:17-alpine sh /workspace/scripts/postgres_backup_restore_smoke.sh
 
   observability:
-    needs: scope\n    if: needs.scope.outputs.observability == 'true'\n    name: Local telemetry pipeline end-to-end smoke test
+    needs: scope
+    if: needs.scope.outputs.observability == 'true'
+    name: Local telemetry pipeline end-to-end smoke test
     runs-on: ubuntu-latest
     timeout-minutes: 18
     env:
