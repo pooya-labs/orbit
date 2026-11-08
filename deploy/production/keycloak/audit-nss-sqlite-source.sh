@@ -34,11 +34,11 @@ if [[ "$actual_fingerprint" != "$expected_fingerprint" ]]; then
 fi
 sudo rpm --import "$redhat_key_file"
 signature_output="$(rpm -Kv "$workdir/srpm/$srpm_name" 2>&1)" || {
-  printf '%s\\n' "$signature_output" >&2
+  printf '%s\n' "$signature_output" >&2
   exit 1
 }
 if ! grep -Eqi 'signature, key ID 199e2f91fd431d51: OK' <<< "$signature_output"; then
-  printf '%s\\n' "$signature_output" >&2
+  printf '%s\n' "$signature_output" >&2
   echo "The NSS source RPM signature did not verify with the pinned Red Hat release key." >&2
   exit 1
 fi
@@ -57,7 +57,7 @@ fi
   echo "Red Hat release key fingerprint: $actual_fingerprint"
   echo
   echo "== Verified RPM signature metadata =="
-  printf '%s\\n' "$signature_output"
+  printf '%s\n' "$signature_output"
 } > "$report"
 
 (
