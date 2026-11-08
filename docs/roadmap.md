@@ -279,12 +279,38 @@ identity, health, and tenant-isolation smoke checks pass.
   Spreadsheet remains private; no customer data, production secrets, real
   telemetry, outbound webhooks, email or messaging calls are allowed.
 - The deferred production Keycloak identity image is scanned independently
-  by `.github/workflows/security-deferred-identity.yml`. Its separate scan
-  reported the known HIGH OpenJDK/SQLite/Guava findings on
-  `quay.io/keycloak/keycloak:26.8.1` in run
-  [42032403489](https://github.com/pooya-labs/orbit/actions/runs/42032403489).
-  This image is not used by the Pages + Apps Script demo and was intentionally
-  excluded from the v1 release gate; it was not suppressed or VEX-exempted.
+  by `.github/workflows/security-deferred-identity.yml`. Historical run
+  [42032403489](https://github.com/pooya-labs/orbit/actions/runs/42032403489)
+  reported HIGH OpenJDK/SQLite/Guava findings on the superseded
+  `quay.io/keycloak/keycloak:26.8.1` image. The production Compose file and
+  deferred scan now pin Keycloak 26.8.2, with pull-request scanning and an explicit
+  linux/arm64 manifest check. The first exact-image scan
+  [42225793814](https://github.com/pooya-labs/orbit/actions/runs/42225793814)
+  failed Trivy with three HIGH findings. The completed package inventory in
+  [run 42227758708](https://github.com/pooya-labs/orbit/actions/runs/42227758708)
+  confirms the CA package's full RPM version is
+  `2026.2.92_v9.0.319-90.3.el9_8`, the RHEL 9 update in
+  [RHSA-2026:88459](https://access.redhat.com/errata/RHSA-2026:88459).
+  Red Hat explains that RHEL OpenJDK uses the system CA bundle; the original
+  CVE-2026-91403 was an insufficient upstream mitigation, while root removal
+  is tracked under CVE-2026-114406 / CVE-2026-114820
+  ([CVE-2026-91403](https://access.redhat.com/security/cve/cve-2026-91403),
+  [CVE-2026-114406](https://access.redhat.com/security/cve/cve-2026-114406)).
+  The Java trust-store inventory confirmed the compromised Comodo AAA Services
+  and emSign ECC Root CA G3 aliases are absent. A narrowly scoped OpenVEX now
+  addresses only the exact RHEL OpenJDK package in this image.
+  The image contains `sqlite-libs` but no `sqlite3` CLI; no inspected
+  executable links to the shared library and no SQLite JAR exists in Keycloak's
+  application path. CVE-2026-119586 is specifically in the CLI `.recover`
+  implementation, so a package-version-specific OpenVEX addresses only the
+  `sqlite-libs` false match. No VEX is issued for SQLite FTS5
+  CVE-2026-119373, which remains unresolved. Guava remains `33.6.0-jre`
+  while Trivy identifies `33.7.2` as fixed; this remains unresolved too.
+  The two VEX records are narrow, package-specific and evidence-backed; no
+  blanket ignore or image-wide exception was added. The production identity
+  gate remains blocked until the remaining findings are resolved and the
+  exact-image scan succeeds. Keycloak is not used by the Pages + Apps Script
+  demo and remains outside the v1 release gate.
 - The release does not claim formal WCAG conformance. Human TalkBack/VoiceOver
   device acceptance and broad sustained-load/capacity benchmarking remain
   post-v1 work.
@@ -510,6 +536,7 @@ This is a post-v1 entry-point extension, not a reopening of the stable Apps Scri
 - [x] Replace the deployed prototype Worker with the canonical edge-gateway module; Cloudflare settings confirm `bindings: []` and Worker version 0.2.3 is the active upload.
 - [x] Delete the prototype D1 database after verifying the Worker had no D1 binding; the deleted database ID returns HTTP 404. Other account D1 resources were left untouched.
 - [x] Confirm the account Billing → Subscriptions page displays Workers Free — Active (owner-provided dashboard evidence); leave the per-Worker API `usage_model: standard` field unchanged and do not use legacy `bundled`.
+- [ ] Pass the exact-image Trivy HIGH/CRITICAL scan and linux/arm64 manifest check for pinned Keycloak 26.8.2 before provisioning production identity; keep findings visible and do not blanket-suppress them.
 - [x] Align the Cloudflare Free deployment acceptance and stop conditions with the account-level Billing evidence; do not mistake the per-Worker `usage_model: standard` metadata default for a Paid subscription.
 - [ ] Provision and verify the original Go/PostgreSQL/Keycloak/Caddy origin. No origin VM, domain or identity-provider configuration is claimed as provisioned by this handoff.
 - [ ] Run the Worker deployment script against the provisioned origin; verify Caddy rejects direct API bypass without the Worker secret.
