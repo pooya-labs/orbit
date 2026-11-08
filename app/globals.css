@@ -1542,7 +1542,7 @@ html[data-theme="light"] .audit-filter.active { background: rgba(42,159,140,.1);
 .owner-github-link:hover { color: #d0f8ec; text-decoration: underline; text-underline-offset: 3px; }
 .profile-github-link svg,
 .owner-github-link svg { flex: 0 0 auto; }
-.owner-credit a { color: #9bdccc; text-decoration: none; }
+.owner-credit a { display: inline-flex; align-items: center; min-height: 24px; color: #9bdccc; text-decoration: none; }
 .owner-credit a:hover { color: #d0f8ec; text-decoration: underline; text-underline-offset: 3px; }
 
 .utility-dialog-backdrop {
