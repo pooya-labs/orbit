@@ -1,7 +1,7 @@
 diff --git a/pom.xml b/pom.xml
 --- a/pom.xml
 +++ b/pom.xml
-@@
+@@ -342,14 +342,25 @@
              <dependency>
                  <groupId>org.infinispan</groupId>
                  <artifactId>infinispan-bom</artifactId>
