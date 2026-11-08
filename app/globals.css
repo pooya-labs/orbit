@@ -73,7 +73,7 @@ button { cursor: pointer; }
 .nav-external { margin-left: auto; color: var(--subtle); }
 .profile-row { display: flex; gap: 9px; align-items: center; padding: 13px 7px 3px; margin-top: 9px; border-top: 1px solid var(--line-soft); }
 .profile-avatar { width: 29px; height: 29px; flex: 0 0 auto; overflow: hidden; border-radius: 7px; display: grid; place-items: center; background: #101820; border: 1px solid #2b3b43; }
-.profile-avatar img { display: block; width: 100%; height: 100%; padding: 3px; object-fit: contain; }
+.profile-avatar img { display: block; box-sizing: border-box; width: 100%; height: 100%; padding: 3px; object-fit: contain; }
 .owner-brand-mark-footer { display: block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; border-radius: 3px; }
 
 .main-panel { min-height: 100vh; margin-left: 246px; }
