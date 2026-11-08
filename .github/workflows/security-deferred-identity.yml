@@ -120,6 +120,26 @@ jobs:
               print("RESULT: SQLite FTS5 is compiled into the inspected amd64 shared library; investigate consumer reachability, do not suppress CVE-2026-119373.")
           PY
 
+      - name: Audit NSS softoken SQLite call path at immutable 3.124 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init /tmp/nss-source
+          git -C /tmp/nss-source remote add origin https://github.com/mozilla/nss.git
+          git -C /tmp/nss-source fetch --depth 1 origin 477c4533581f573eadfff1ea9050c9824d08f623
+          git -C /tmp/nss-source checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/nss-source rev-parse HEAD)" = "477c4533581f573eadfff1ea9050c9824d08f623"
+          source_file=/tmp/nss-source/lib/softoken/sdb.c
+          echo "NSS_SOURCE_COMMIT=$(git -C /tmp/nss-source rev-parse HEAD)"
+          echo "SQLite call-site source files under lib/softoken:"
+          grep -RIl "sqlite3_" /tmp/nss-source/lib/softoken --include='*.c' | sort
+          if grep -Eiq 'CREATE[[:space:]]+VIRTUAL[[:space:]]+TABLE|fts5|(^|[^[:alnum:]_])MATCH([^[:alnum:]_]|$)|sqlite3_(load|enable)_extension' "$source_file"; then
+            echo "The inspected NSS softoken SQLite source contains an FTS5/MATCH/extension-loading path; keep CVE-2026-119373 blocking."
+            exit 1
+          fi
+          echo "PASS: NSS 3.124 softoken SDB source uses no FTS5 virtual table, MATCH query or SQLite extension-loading API."
+          grep -En 'CREATE TABLE|CREATE TEMPORARY TABLE|CREATE INDEX|sqlite3_bind_(blob|int|text)' "$source_file" | head -n 35
+
       - name: Export Keycloak package inventory for security triage
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
