@@ -1,0 +1,25 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/pooya-labs/orbit/blob/main/security/vex/keycloak-26.8.2-sqlite-fts5-nss.openvex.json",
+  "author": "ORBIT maintainers",
+  "timestamp": "2026-11-08T21:18:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-119373"
+      },
+      "products": [
+        {
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=x86_64&distro=redhat-9.8"
+        },
+        {
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=aarch64&distro=redhat-9.8"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Narrow non-applicability statement for the exact sqlite-libs 3.34.1-11.el9_8 RPM and architecture in the quay.io/keycloak/keycloak:26.8.2 image only. FTS5 is compiled into the shared library (confirmed at runtime by sqlite3_compileoption_used("ENABLE_FTS5")); this statement does not claim the vulnerable library code is absent. The exact downstream Red Hat NSS source RPM nss-3.124.0-5.el9_6.src.rpm was retrieved from Red Hat's UBI 9 AppStream source repository, unpacked, and prepared with its declared patches using rpmbuild -bp. The prepared lib/softoken source reports FTS_SOURCE_REFERENCES_FOUND=0: no FTS5 reference, CREATE VIRTUAL TABLE, MATCH query, or SQLite extension-loading API in the only native shared object found linked to libsqlite3, libsoftokn3.so. Its SQLite operations are ordinary tables, temporary tables, regular indexes, and parameterized CRUD queries. Runtime inventory found no sqlite3 CLI or SQLite JDBC/application libraries, and the only inspected native shared object linked to libsqlite3 was libsoftokn3.so. Red Hat states exploitation requires an application exposing FTS5 virtual full-text indexing with suppressed detail storage, negative row values, and targeted prefix MATCH expressions; the NSS softoken consumer path in this exact Keycloak image does not issue such operations. Evidence is retained in CI artifact nss-sqlite-source-audit-42524142555-1 and reproduced by .github/workflows/security-deferred-identity.yml. Red Hat CVE statement: https://access.redhat.com/security/cve/cve-2026-119373. This statement applies only to the exact package PURLs above in the Keycloak 26.8.2 image; it does not apply to other products, versions, arbitrary SQLite consumers, or the SQLite CLI."
+    }
+  ]
+}
