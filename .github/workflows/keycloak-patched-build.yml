@@ -150,6 +150,19 @@ jobs:
           assert d.get('issuer', '').endswith('/realms/master'), d.get('issuer')
           print('OIDC discovery issuer:', d['issuer'])
           PY
+          # Inspect the live process before this step's EXIT trap removes the container.
+          docker exec -u 0 keycloak-patched sh -ec '
+            found=0
+            for maps in /proc/[0-9]*/maps; do
+              [ -r "$maps" ] || continue
+              if grep -E "/libsqlite3[.]so|/libsoftokn3[.]so" "$maps"; then
+                echo "Keycloak runtime mapped a SQLite/NSS softoken library: $maps" >&2
+                found=1
+              fi
+            done
+            if [ "$found" -ne 0 ]; then exit 1; fi
+            echo "KEYCLOAK_SQLITE_RUNTIME_MAP=none"
+          '
 
       - name: Verify FTS5 compile option in the ${{ matrix.arch }} SQLite library
         shell: bash
@@ -170,23 +183,6 @@ jobs:
           if not enabled:
               raise SystemExit("Expected FTS5 compile option in this platform SQLite library.")
           PY
-
-      - name: Verify Keycloak runtime does not map SQLite or NSS softoken
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker exec keycloak-patched sh -ec '
-            found=0
-            for maps in /proc/[0-9]*/maps; do
-              [ -r "$maps" ] || continue
-              if grep -E "/libsqlite3[.]so|/libsoftokn3[.]so" "$maps"; then
-                echo "Keycloak runtime mapped a SQLite/NSS softoken library: $maps" >&2
-                found=1
-              fi
-            done
-            if [ "$found" -ne 0 ]; then exit 1; fi
-            echo "KEYCLOAK_SQLITE_RUNTIME_MAP=none"
-          '
 
       - name: Scan candidate without VEX to preserve raw findings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
