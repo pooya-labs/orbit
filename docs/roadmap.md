@@ -311,16 +311,20 @@ identity, health, and tenant-isolation smoke checks pass.
   [commit e1c9934](https://github.com/sqlite/sqlite/commit/e1c9934f9f11a499029abb020ea715a08970da80);
   do not assume that upstream fix is present in the older Red Hat RPM without
   package-source or vendor backport evidence.
-  The 2026-11-08 patched-source experiment successfully built Keycloak 26.8.2,
-  verified the generated distribution contains only Guava `33.7.2-jre`,
-  built a candidate image, started it, passed readiness and OIDC discovery.
-  Its first follow-up scan did not actually run: the shell step failed with
-  `trivy: command not found` (exit 127). CI now uses the pinned Trivy Action
-  for this scan and replaces the complete upstream `/opt/keycloak` tree before
-  copying the patched distribution, preventing an old Guava JAR from surviving
-  in merged image layers. Re-run and inspect the generated SBOM and scan result;
-  do not claim the candidate scan is green until the Guava finding is absent
-  and SQLite FTS5 remains visible as the unresolved blocker.
+  The 2026-11-08 candidate workflow run
+  [42520290804](https://github.com/pooya-labs/orbit/actions/runs/42520290804)
+  passed all 12 steps. It builds the immutable Keycloak 26.8.2 source with
+  Guava `33.7.2-jre`, verifies the generated distribution has no 33.6.0 JAR,
+  replaces the complete upstream `/opt/keycloak` tree, starts the candidate,
+  passes readiness and OIDC discovery, and scans the local candidate with the
+  pinned Trivy Action. The report assertion confirms CVE-2026-102554 is absent
+  while CVE-2026-119373 remains visible. This is a CI-only linux/amd64 candidate,
+  not a published or production image; it does not establish a linux/arm64 build.
+  The separate strict scan of the published upstream image in
+  [run 42520290899](https://github.com/pooya-labs/orbit/actions/runs/42520290899)
+  still fails on both amd64 and arm64 for SQLite FTS5 and upstream Guava.
+  Keep production Compose on the upstream pin and the identity gate blocked
+  until FTS5 is resolved and a reproducible multi-architecture candidate passes.
   The two VEX records are narrow, package-specific and evidence-backed; no
   blanket ignore or image-wide exception was added. The production identity
   gate remains blocked until the remaining findings are resolved and the
