@@ -613,3 +613,16 @@ This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-r
 - [x] Rebuild and scan all affected images; pass Go tests, backup/restore, telemetry end-to-end, workspace isolation, Prometheus scrape, PostgreSQL recovery and full Security CI before merge.
 
 **Result:** PR [#142](https://github.com/pooya-labs/orbit/pull/142) was squash-merged as `1caed65d11bbf9b5d419e4da5429115c98ebe3ac`. Exact PR-head CI [42396679559](https://github.com/pooya-labs/orbit/actions/runs/42396679559) passed 4/4 jobs, including the complete local telemetry stack; Security [42396679567](https://github.com/pooya-labs/orbit/actions/runs/42396679567) passed 13/13 jobs. All 11 CycloneDX SBOM workflow artifacts were uploaded and remained unexpired at verification. Issue #141 is closed. No HIGH/CRITICAL scanner threshold or VEX/ignore policy was weakened.
+
+
+## Post-v1 Security — Keycloak 26.8.2 FTS5 and Guava follow-up (2026-11-09)
+
+- [x] Fetch the exact Red Hat NSS 3.124.0-5.el9_6 SRPM, verify SHA-256 and official Red Hat RPM signature, apply the package's declared downstream patches, and audit the prepared `lib/softoken` SQLite call path.
+- [x] Confirm the patched NSS Softoken source contains no FTS5, `CREATE VIRTUAL TABLE`, `MATCH`, or SQLite extension-loading API references.
+- [x] Run the published Keycloak 26.8.2 image on native amd64 and arm64 runners; both readiness and OIDC discovery checks passed, and neither architecture mapped `libsqlite3.so` or `libsoftokn3.so` in the running container.
+- [x] Strengthen the exact-package CVE-2026-119373 OpenVEX statement with the signed downstream-source and dual-architecture runtime evidence. The statement remains limited to the exact `sqlite-libs 3.34.1-11.el9_8` x86_64/aarch64 PURLs in the Keycloak 26.8.2 scan; it does not claim FTS5 code is absent.
+- [x] Preserve the strict HIGH/CRITICAL gate and `ignore-unfixed: false`. Deferred scan [42525414926](https://github.com/pooya-labs/orbit/actions/runs/42525414926) now filters the scoped SQLite OS-package findings on both architectures.
+- [ ] Rebuild upstream Keycloak 26.8.2 with Guava 33.7.2-jre, then validate the candidate on native amd64 and arm64 and prove the raw scan still detects upstream findings while the narrowly scoped VEX scan filters only the justified package.
+- [ ] Publish a reproducible multi-architecture candidate and run its exact-image strict scan before any production Compose switch or identity deployment.
+
+**Current blocker:** the published upstream image still contains Guava 33.6.0-jre; Trivy reports CVE-2026-102554 as HIGH with 33.7.2-jre as the fixed version. The CI-only patched source build is running in [42526131049](https://github.com/pooya-labs/orbit/actions/runs/42526131049), while deferred identity evidence is being refreshed in [42526131111](https://github.com/pooya-labs/orbit/actions/runs/42526131111). PR [#138](https://github.com/pooya-labs/orbit/pull/138) stays open. Production Compose remains on upstream Keycloak; no image has been published or deployed.
