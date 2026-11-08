@@ -72,6 +72,11 @@ button { cursor: pointer; }
 .sidebar-bottom > .nav-item { height: 33px; }
 .nav-external { margin-left: auto; color: var(--subtle); }
 .profile-row { display: flex; gap: 9px; align-items: center; min-height: 56px; padding: 12px 7px 9px; margin-top: 9px; border-top: 1px solid var(--line-soft); }
+.profile-brand-link { min-width: 0; display: inline-flex; align-items: center; gap: 9px; color: #f2f5f7; text-decoration: none; }
+.profile-brand-link:hover { color: #fff; }
+.profile-brand-link:focus-visible { outline: 2px solid var(--mint); outline-offset: 4px; border-radius: 8px; }
+.profile-brand-link .profile-copy { justify-content: center; }
+.profile-brand-link .profile-copy > span { color: inherit; font: 10px "DM Mono", monospace; }
 .profile-avatar { width: 36px; height: 36px; flex: 0 0 36px; overflow: hidden; border-radius: 8px; display: grid; place-items: center; background: #101820; border: 1px solid #2b3b43; }
 .profile-avatar img { display: block; box-sizing: border-box; width: 32px; height: 32px; max-width: 100%; max-height: 100%; padding: 1px; object-fit: contain; object-position: center; }
 .owner-brand-mark-footer { display: block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; border-radius: 3px; }
@@ -1658,7 +1663,7 @@ html[data-theme="light"] .audit-filter.active { background: rgba(42,159,140,.1);
 }
 
 
-html[data-theme="light"] .profile-github-link { color: #263b44; }
+html[data-theme="light"] .profile-brand-link { color: #263b44; }
 html[data-theme="light"] .owner-github-link,
 html[data-theme="light"] .owner-credit a { color: #107667; }
 html[data-theme="light"] .profile-github-link:hover,
