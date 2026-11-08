@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-tmp_root="\${RUNNER_TEMP:-/tmp}"
-workdir="\${tmp_root%/}/orbit-nss-source-audit"
+tmp_root="${RUNNER_TEMP:-/tmp}"
+workdir="${tmp_root%/}/orbit-nss-source-audit"
 srpm_name="nss-3.124.0-5.el9_6.src.rpm"
-srpm_url="https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/source/SRPMS/Packages/n/\${srpm_name}"
-report="\${tmp_root%/}/nss-sqlite-source-audit.txt"
+srpm_url="https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/source/SRPMS/Packages/n/${srpm_name}"
+report="${tmp_root%/}/nss-sqlite-source-audit.txt"
 
 rm -rf "$workdir"
 mkdir -p "$workdir/srpm" "$workdir/rpmbuild"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
@@ -38,7 +38,7 @@ fi
   rpm2cpio "$srpm_name" | cpio --extract --make-directories --no-absolute-filenames --quiet
 )
 
-spec_file="$(find "$workdir/srpm" -maxdepth 1 -type f -name 'nss.spec' -print -quit)"
+spec_file="$(find "$workdir/srpm" -maxdepth 1 -type f -name '*.spec' -print -quit)"
 if [[ -z "$spec_file" ]]; then
   echo "The exact source RPM did not contain nss.spec" | tee -a "$report" >&2
   exit 1
