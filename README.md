@@ -1,12 +1,14 @@
 # ORBIT
 
+<p align="center"><a href="https://github.com/pooya-labs/pooya-labs-platform"><img src="public/brand/pooya-monogram.webp" alt="Pooya Labs Platform" width="56" /></a></p>
+
 **Distributed Systems Intelligence & Observability**
 
 [![Stable release](https://img.shields.io/badge/release-v1.0.0-2ea44f)](https://github.com/pooya-labs/orbit/releases/tag/v1.0.0)
 [![CI](https://github.com/pooya-labs/orbit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pooya-labs/orbit/actions)
 [![Security](https://github.com/pooya-labs/orbit/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/pooya-labs/orbit/actions)
 
-**Project owner & maintainer:** [@pooya-labs](https://github.com/pooya-labs) · **Source:** [pooya-labs/orbit](https://github.com/pooya-labs/orbit)
+**Project owner & maintainer:** [Pooya Labs Platform](https://github.com/pooya-labs/pooya-labs-platform) · **Source:** [pooya-labs/orbit](https://github.com/pooya-labs/orbit)
 
 ORBIT is an engineering-focused observability workspace for exploring service health, incidents, operational workflows, and distributed telemetry across metrics, logs, and traces.
 

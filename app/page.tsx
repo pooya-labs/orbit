@@ -83,6 +83,7 @@ type IncidentRow = {
 };
 
 const serviceTones = ["blue", "violet", "amber", "teal", "rose"];
+const ownerMonogramSrc = `${process.env.NEXT_PUBLIC_ORBIT_BASE_PATH ?? ""}/brand/pooya-monogram.webp`;
 
 function mapApiService(item: ServiceSummary, index: number, language: Language): Service {
   const state: ServiceState =
@@ -593,8 +594,8 @@ export default function Home() {
           <button ref={settingsButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "settings"} onClick={() => setUtilityDialog("settings")}><Settings2 size={17} /><span>{tr("settings")}</span></button>
           <button ref={helpButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "help"} onClick={() => setUtilityDialog("help")}><CircleHelp size={17} /><span>{tr("helpSupport")}</span></button>
           <div className="profile-row">
-            <div className="profile-avatar" aria-hidden="true">P</div>
-            <div className="profile-copy"><strong>{tr("profileName")}</strong><a className="profile-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><GitHubMark size={13} /><span>@pooya-labs</span><ExternalLink size={10} aria-hidden="true" /></a></div>
+            <div className="profile-avatar" aria-hidden="true"><img src={ownerMonogramSrc} alt="" width={29} height={29} /></div>
+            <div className="profile-copy"><strong>{tr("profileName")}</strong><a className="profile-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer" aria-label="Pooya Labs Platform on GitHub"><GitHubMark size={13} /><span>Pooya Labs Platform</span><ExternalLink size={10} aria-hidden="true" /></a></div>
           </div>
         </div>
       </aside>
@@ -825,7 +826,7 @@ export default function Home() {
             </>
           )}
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><a href="https://github.com/pooya-labs/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a> <span>·</span> <strong>{tr("projectOwner")}:</strong> <a className="owner-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer"><GitHubMark size={12} /><span>@pooya-labs</span></a></span></footer>
+          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><a href="https://github.com/pooya-labs/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a> <span>·</span> <strong>{tr("projectOwner")}:</strong> <a className="owner-github-link" href="https://github.com/pooya-labs/pooya-labs-platform" target="_blank" rel="noreferrer" aria-label="Pooya Labs Platform on GitHub"><img className="owner-brand-mark-footer" src="/brand/pooya-monogram.webp" alt="" width={16} height={16} /><GitHubMark size={12} /><span>Pooya Labs Platform</span></a></span></footer>
         </main>
       </section>
       {utilityDialog && (

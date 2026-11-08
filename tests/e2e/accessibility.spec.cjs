@@ -104,7 +104,7 @@ test("mobile navigation hides closed controls and traps/restores keyboard focus"
   await expect(menu).toHaveAttribute("aria-expanded", "true");
 
   const close = page.getByRole("button", { name: "Close navigation" });
-  const profileLink = page.locator("aside.sidebar").getByRole("link", { name: "@pooya-labs" });
+  const profileLink = page.locator("aside.sidebar").getByRole("link", { name: "Pooya Labs Platform on GitHub" });
   await expect(close).toBeFocused();
 
   await page.keyboard.press("Shift+Tab");
@@ -856,8 +856,10 @@ test("Help dialog exposes useful project documentation and support destinations"
 test("creator and repository credits use the right destinations and order", async ({ page }) => {
   const sidebarProfile = page.locator(".profile-github-link");
   await expect(sidebarProfile).toHaveAttribute("href", "https://github.com/pooya-labs");
-  await expect(sidebarProfile).toHaveText("@pooya-labs");
+  await expect(sidebarProfile).toHaveText("Pooya Labs Platform");
   await expect(sidebarProfile.locator("svg").first()).toBeVisible();
+  await expect(page.locator(".profile-avatar img")).toBeVisible();
+  await expect(page.locator(".profile-avatar img")).toHaveAttribute("src", /(?:\/orbit)?\/brand\/pooya-monogram\.webp$/);
 
   const footerCredit = page.locator(".owner-credit");
   const repositoryCredit = footerCredit.locator("a").first();
@@ -866,9 +868,10 @@ test("creator and repository credits use the right destinations and order", asyn
   await expect(repositoryCredit).toHaveAttribute("href", "https://github.com/pooya-labs/orbit");
   await expect(repositoryCredit).toHaveText("Created and maintained by");
   await expect(footerCredit.locator("strong")).toHaveText("PROJECT OWNER:");
-  await expect(footerProfile).toHaveAttribute("href", "https://github.com/pooya-labs");
-  await expect(footerProfile).toHaveText("@pooya-labs");
-  await expect(footerProfile.locator("svg")).toBeVisible();
+  await expect(footerProfile).toHaveAttribute("href", "https://github.com/pooya-labs/pooya-labs-platform");
+  await expect(footerProfile).toHaveText("Pooya Labs Platform");
+  await expect(footerProfile.locator("img")).toBeVisible();
+  await expect(footerProfile.locator("img")).toHaveAttribute("src", "/brand/pooya-monogram.webp");
 
   const englishOrder = await footerCredit.innerText();
   expect(englishOrder.indexOf("Created and maintained by")).toBeLessThan(englishOrder.indexOf("PROJECT OWNER:"));

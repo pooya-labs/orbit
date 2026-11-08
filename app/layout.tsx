@@ -6,9 +6,9 @@ export const metadata: Metadata = {
   description:
     "An engineering-first observability workspace for distributed systems, available in English and Persian with right-to-left layout support.",
   applicationName: "ORBIT",
-  authors: [{ name: "Pooya (@pooya16pg-spec)", url: "https://github.com/pooya16pg-spec" }],
-  creator: "@pooya16pg-spec",
-  publisher: "ORBIT · @pooya16pg-spec",
+  authors: [{ name: "Pooya Labs Platform", url: "https://github.com/pooya-labs/pooya-labs-platform" }],
+  creator: "Pooya Labs Platform",
+  publisher: "ORBIT · Pooya Labs Platform",
 };
 
 export const viewport: Viewport = {

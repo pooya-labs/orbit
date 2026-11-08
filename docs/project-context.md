@@ -8,6 +8,13 @@ ORBIT is an engineering-first observability control plane for distributed servic
 
 It is not a generic dashboard filled with synthetic graphs, and it is not a replacement for Prometheus, Loki, Tempo, or an OpenTelemetry Collector. Those systems remain the telemetry pipeline and stores; ORBIT provides a cohesive operator workspace, bounded API, service catalog, and eventually controlled operations workflows.
 
+## Project ownership and brand placement
+
+- **Project owner:** [Pooya Labs Platform](https://github.com/pooya-labs/pooya-labs-platform).
+- **Canonical owner mark:** `public/brand/pooya-monogram.webp`, sourced unchanged from `pooya-labs/pooya-labs-platform` (`apps/platform/public/brand/pooya-monogram.webp`).
+- The mark appears in the dashboard profile identity and the page-footer owner credit; the repository README uses the same mark beside the owner attribution. Keep ORBIT product branding and navigation primary, and use the owner mark only as a compact attribution.
+- Next.js metadata and the creator/owner links must point to the current `pooya-labs` platform repository. Do not restore the retired `pooya16pg-spec` handle.
+
 ## 2. Project history reconstructed from the repository
 
 The repository documents the following progression:
