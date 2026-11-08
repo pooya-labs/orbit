@@ -1098,12 +1098,15 @@ remain deferred until after the portfolio v1 release, as previously requested.
     `sqlite-libs` PURL not affected by CVE-2026-119586. It does not cover the
     SQLite CLI package or the separate FTS5 CVE.
   - CVE-2026-119373 affects SQLite FTS5 under specific application/table/query
-    preconditions. The shared library remains installed; despite the lack of
-    discovered runtime consumers, we have not issued a VEX statement for this
-    finding. It remains a blocking HIGH finding pending stronger evidence or
-    a vendor-fixed package
-    ([Red Hat CVE details](https://access.redhat.com/security/cve/cve-2026-119373)).
-  - The 2026-11-08 isolated Keycloak source-build experiment applied a narrow Guava BOM override before the Quarkus BOM. Maven effective-POM verification passed, the complete Keycloak core/Quarkus build passed, and the generated distribution contains only `com.google.guava.guava-33.7.2-jre.jar` (not 33.6.0). The first isolated candidate image was created successfully, but its shell-based in-image check exited non-zero before readiness/OIDC tests; the check now invokes `/opt/keycloak/bin/kc.sh --version` directly and is being rerun. Until the new image starts, passes OIDC discovery and an exact-image multi-architecture scan confirms CVE-2026-102554 absent, do not mark Guava or the production identity gate resolved.
+    preconditions. Red Hat's current statement rates the issue Important and
+    explains that affected applications must expose FTS5 with the relevant
+    `detail=none`, negative-rowid and prefix-query conditions. The exact
+    `sqlite-libs 3.34.1-11.el9_8` remains reported affected; upstream SQLite's
+    fix is recorded in [commit e1c9934](https://github.com/sqlite/sqlite/commit/e1c9934f9f11a499029abb020ea715a08970da80).
+    We have not established that this vendor RPM contains the fix or proved
+    that every runtime path is unable to reach it, so no VEX is issued and the
+    finding remains blocking.
+  - The 2026-11-08 isolated Keycloak source-build experiment applied a narrow Guava BOM override before the Quarkus BOM. Maven effective-POM verification and the complete Keycloak core/Quarkus build passed; the generated distribution contains only `com.google.guava.guava-33.7.2-jre.jar` (not 33.6.0). The candidate image built, `kc.sh --version` ran, readiness passed, and OIDC discovery returned the expected issuer. Its follow-up scan initially did not run because the job lacked a Trivy binary (`trivy: command not found`, exit 127), not because a vulnerability was found. The workflow now invokes the same pinned `aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25` used by the main Security workflow and clears the entire upstream `/opt/keycloak` tree before copying in the patched distribution so that Guava 33.6.0 cannot remain in an overlay. The corrected candidate scan is pending; do not mark Guava resolved until Trivy proves 33.7.2 only, and keep SQLite FTS5 as a separate blocker.
     ([advisory](https://advisories.gitlab.io/maven/com.google.guava/guava/CVE-2026-102554/)).
   The two VEX statements are package-version-specific and evidence-backed; no
   broad image exception or blanket ignore was added. Keep production identity blocked
