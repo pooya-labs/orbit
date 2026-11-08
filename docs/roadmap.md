@@ -304,8 +304,12 @@ identity, health, and tenant-isolation smoke checks pass.
   application path. CVE-2026-119586 is specifically in the CLI `.recover`
   implementation, so a package-version-specific OpenVEX addresses only the
   `sqlite-libs` false match. No VEX is issued for SQLite FTS5
-  CVE-2026-119373, which remains unresolved. Guava remains `33.6.0-jre`
-  while Trivy identifies `33.7.2` as fixed; this remains unresolved too.
+  CVE-2026-119373, which remains unresolved. The 2026-11-08 patched-source experiment
+  successfully built Keycloak 26.8.2 and verified the generated distribution contains
+  only Guava `33.7.2-jre`; the first candidate-image smoke check then failed after
+  image creation, so the runtime validation was corrected to invoke `kc.sh --version`
+  directly and is being rerun. Do not claim the candidate image or its scan is green
+  until readiness, OIDC discovery and exact-image Trivy all pass.
   The two VEX records are narrow, package-specific and evidence-backed; no
   blanket ignore or image-wide exception was added. The production identity
   gate remains blocked until the remaining findings are resolved and the
