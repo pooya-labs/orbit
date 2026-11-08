@@ -209,6 +209,16 @@ No open-source license has been selected. All rights are reserved by default.
 
 ---
 
+## Latest project update — 8 November 2026
+
+The owner identity in the dashboard sidebar was consolidated into one clickable Pooya Labs link, and the visible platform label was enlarged and given stronger weight for readability. The stable v1.0.0 release scope remains complete. Post-v1 Cloudflare work must retain the distinction documented above: the edge gateway is not connected to a live Go/Keycloak origin, and the separate Workers + D1 draft is not deployed.
+
+## Project ownership
+
+<p align="center"><a href="https://pooya-labs.github.io/pooya-labs-platform/"><img src="https://raw.githubusercontent.com/pooya-labs/pooya-labs-platform/main/apps/platform/public/brand/pooya-monogram.webp" alt="Pooya Labs Platform monogram" width="64" /></a></p>
+
+**Owned and maintained by [Pooya Labs Platform](https://pooya-labs.github.io/pooya-labs-platform/).** Project direction and engineering: **Pooya Goodarzi**.
+
 ## راهنمای فارسی
 
 ### معرفی
@@ -265,3 +275,13 @@ go build ./cmd/orbit-api
 ### مستندات تکمیلی
 
 نقشهٔ راه، معماری، راهنمای استقرار، مدل تهدید امنیتی، راهنمای دسترس‌پذیری و قرارداد OpenAPI در پوشهٔ `docs/` و پیوندهای بخش انگلیسی README قرار دارند. وضعیت نسخهٔ پایدار و محدودهٔ کارهای پس از v1 نیز در همان مستندات ثبت شده است.
+
+### آخرین تغییرات — ۸ نوامبر ۲۰۲۶
+
+پیوند هویت مالک در نوار کناری داشبورد یکپارچه شد تا نشان و عنوان پویا لبز هر دو به‌صورت یک لینک قابل کلیک عمل کنند. اندازه و وزن عنوان نیز برای خوانایی بیشتر افزایش یافت. محدودهٔ نسخهٔ پایدار v1.0.0 تکمیل‌شده باقی می‌ماند؛ وضعیت توسعهٔ Cloudflare پس از نسخهٔ ۱ همان‌طور که در بخش انگلیسی توضیح داده شده، هنوز معادل یک استقرار تولیدی کامل نیست.
+
+### مالکیت و نگه‌داری
+
+<p align="center"><a href="https://pooya-labs.github.io/pooya-labs-platform/"><img src="https://raw.githubusercontent.com/pooya-labs/pooya-labs-platform/main/apps/platform/public/brand/pooya-monogram.webp" alt="نشان مونوگرام پویا لبز" width="64" /></a></p>
+
+**مالک و نگه‌دارنده: [پلتفرم پویا لبز](https://pooya-labs.github.io/pooya-labs-platform/)** · طراحی و توسعه: **پویا گودرزی**.
