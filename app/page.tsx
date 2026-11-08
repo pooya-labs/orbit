@@ -83,6 +83,7 @@ type IncidentRow = {
 };
 
 const serviceTones = ["blue", "violet", "amber", "teal", "rose"];
+const ownerMonogramSrc = `${process.env.NEXT_PUBLIC_ORBIT_BASE_PATH ?? ""}/brand/pooya-monogram.webp`;
 
 function mapApiService(item: ServiceSummary, index: number, language: Language): Service {
   const state: ServiceState =
@@ -593,7 +594,7 @@ export default function Home() {
           <button ref={settingsButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "settings"} onClick={() => setUtilityDialog("settings")}><Settings2 size={17} /><span>{tr("settings")}</span></button>
           <button ref={helpButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "help"} onClick={() => setUtilityDialog("help")}><CircleHelp size={17} /><span>{tr("helpSupport")}</span></button>
           <div className="profile-row">
-            <div className="profile-avatar" aria-hidden="true"><img src="/brand/pooya-monogram.webp" alt="" width={29} height={29} /></div>
+            <div className="profile-avatar" aria-hidden="true"><img src={ownerMonogramSrc} alt="" width={29} height={29} /></div>
             <div className="profile-copy"><strong>{tr("profileName")}</strong><a className="profile-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer" aria-label="Pooya Labs Platform on GitHub"><GitHubMark size={13} /><span>Pooya Labs Platform</span><ExternalLink size={10} aria-hidden="true" /></a></div>
           </div>
         </div>
