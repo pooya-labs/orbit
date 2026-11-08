@@ -20,10 +20,13 @@ curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-t
 # Verify the source RPM with the official Red Hat release key, not just its
 # transport digest. The fingerprint is published on Red Hat's signing-key page.
 redhat_key_url="https://security.access.redhat.com/data/fd431d51.txt"
+redhat_key_download="$workdir/srpm/RPM-GPG-KEY-redhat-release-2.txt"
 redhat_key_file="$workdir/srpm/RPM-GPG-KEY-redhat-release-2"
 expected_fingerprint="567E347AD0044ADE55BA8A5F199E2F91FD431D51"
 curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 120 \
-  "$redhat_key_url" --output "$redhat_key_file"
+  "$redhat_key_url" --output "$redhat_key_download"
+sed -n '/^-----BEGIN PGP PUBLIC KEY BLOCK-----/,/^-----END PGP PUBLIC KEY BLOCK-----/p' \
+  "$redhat_key_download" > "$redhat_key_file"
 actual_fingerprint="$(gpg --batch --show-keys --with-colons "$redhat_key_file" | awk -F: '$1 == "fpr" { print toupper($10); exit }')"
 if [[ "$actual_fingerprint" != "$expected_fingerprint" ]]; then
   echo "Unexpected Red Hat signing-key fingerprint: $actual_fingerprint" >&2
