@@ -299,32 +299,42 @@ identity, health, and tenant-isolation smoke checks pass.
   The Java trust-store inventory confirmed the compromised Comodo AAA Services
   and emSign ECC Root CA G3 aliases are absent. A narrowly scoped OpenVEX now
   addresses only the exact RHEL OpenJDK package in this image.
-  The image contains `sqlite-libs` but no `sqlite3` CLI; no inspected
-  executable links to the shared library and no SQLite JAR exists in Keycloak's
-  application path. CVE-2026-119586 is specifically in the CLI `.recover`
-  implementation, so a package-version-specific OpenVEX addresses only the
-  `sqlite-libs` false match. No VEX is issued for SQLite FTS5
-  CVE-2026-119373, which remains unresolved. Red Hat's CVE statement rates
-  the issue Important and describes the FTS5 preconditions; the exact RHEL
-  `sqlite-libs 3.34.1-11.el9_8` in the image is still reported affected.
-  Upstream SQLite's fix is recorded in
-  [commit e1c9934](https://github.com/sqlite/sqlite/commit/e1c9934f9f11a499029abb020ea715a08970da80);
-  do not assume that upstream fix is present in the older Red Hat RPM without
-  package-source or vendor backport evidence.
-  The 2026-11-08 candidate workflow run
-  [42520290804](https://github.com/pooya-labs/orbit/actions/runs/42520290804)
-  passed all 12 steps. It builds the immutable Keycloak 26.8.2 source with
-  Guava `33.7.2-jre`, verifies the generated distribution has no 33.6.0 JAR,
-  replaces the complete upstream `/opt/keycloak` tree, starts the candidate,
-  passes readiness and OIDC discovery, and scans the local candidate with the
-  pinned Trivy Action. The report assertion confirms CVE-2026-102554 is absent
-  while CVE-2026-119373 remains visible. This is a CI-only linux/amd64 candidate,
-  not a published or production image; it does not establish a linux/arm64 build.
-  The separate strict scan of the published upstream image in
-  [run 42520290899](https://github.com/pooya-labs/orbit/actions/runs/42520290899)
-  still fails on both amd64 and arm64 for SQLite FTS5 and upstream Guava.
-  Keep production Compose on the upstream pin and the identity gate blocked
-  until FTS5 is resolved and a reproducible multi-architecture candidate passes.
+  The image contains `sqlite-libs 3.34.1-11.el9_8` but no `sqlite3` CLI.
+  CVE-2026-119586 is specifically in the CLI `.recover` implementation; a
+  package-version-specific OpenVEX covers only that false match.
+  SQLite FTS5 is compiled into the library (confirmed by
+  `sqlite3_compileoption_used("ENABLE_FTS5")`), so the FTS5 code is present.
+  A separate exact-image, exact-package OpenVEX now covers CVE-2026-119373
+  with justification `vulnerable_code_not_in_execute_path`, only for the
+  x86_64 and aarch64 `sqlite-libs 3.34.1-11.el9_8` PURLs in Keycloak 26.8.2.
+  Evidence:
+  - The exact downstream Red Hat source RPM
+    `nss-3.124.0-5.el9_6.src.rpm` was downloaded from the official UBI 9
+    AppStream source repository (SHA-256 recorded in the CI audit artifact),
+    and its declared patches were applied with `rpmbuild -bp`.
+  - The prepared NSS `lib/softoken` code has no FTS5 references, no
+    `CREATE VIRTUAL TABLE`, no `MATCH` query and no SQLite extension-loading
+    API (`FTS_SOURCE_REFERENCES_FOUND=0`,
+    `SQLITE_DYNAMIC_EXTENSION_LOADING_FOUND=0`). Its SQLite call sites use
+    ordinary tables, temporary tables, regular indexes and parameterized
+    CRUD queries.
+  - Runtime inventory found no SQLite CLI or Keycloak SQLite JDBC/application
+    library. The only inspected native object linked to `libsqlite3` is
+    `libsoftokn3.so`, the NSS Softoken consumer audited above.
+  Red Hat says exploitation requires an application exposing FTS5 virtual
+  full-text indexing with suppressed detail storage, negative row values and
+  targeted prefix MATCH expressions. This VEX is limited to the exact package
+  PURLs and Keycloak 26.8.2 image; it is not a general SQLite exemption.
+  See [Red Hat's CVE statement](https://access.redhat.com/security/cve/cve-2026-119373).
+  The strict scan [run 42525007580](https://github.com/pooya-labs/orbit/actions/runs/42525007580)
+  now filters the narrowly covered SQLite findings and reports only the
+  upstream Guava 33.6.0-jre HIGH finding on both amd64 and arm64.
+  The patched-source candidate previously passed the amd64 source build,
+  image boot, readiness and OIDC discovery. The current workflow adds an
+  explicit runtime-map check plus raw/no-VEX versus VEX-filtered Trivy
+  assertions; a published multi-architecture image has not yet been created.
+  Keep production Compose on the upstream pin until the patched candidate is
+  validated on both architectures and published as a reproducible image.
   The two VEX records are narrow, package-specific and evidence-backed; no
   blanket ignore or image-wide exception was added. The production identity
   gate remains blocked until the remaining findings are resolved and the
