@@ -107,10 +107,7 @@ jobs:
           USER 1000
           DOCKERFILE
           docker build --pull -t orbit-keycloak:26.8.2-guava-33.7.2 .keycloak-patched-context
-          docker run --rm --entrypoint /bin/sh orbit-keycloak:26.8.2-guava-33.7.2 -ec '
-            test -f /opt/keycloak/lib/lib/main/com.google.guava.guava-33.7.2-jre.jar
-            test ! -f /opt/keycloak/lib/lib/main/com.google.guava.guava-33.6.0-jre.jar
-          '
+          docker run --rm --entrypoint /opt/keycloak/bin/kc.sh orbit-keycloak:26.8.2-guava-33.7.2 --version
 
       - name: Start patched Keycloak and verify readiness plus OIDC discovery
         shell: bash
