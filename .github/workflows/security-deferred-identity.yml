@@ -10,6 +10,7 @@ on:
       - ".github/workflows/security-deferred-identity.yml"
       - "deploy/identity/**"
       - "deploy/keycloak/**"
+      - "deploy/production/keycloak/**"
       - "deploy/production/compose.ingress.yaml"
   pull_request:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - ".github/workflows/security-deferred-identity.yml"
       - "deploy/identity/**"
       - "deploy/keycloak/**"
+      - "deploy/production/keycloak/**"
       - "deploy/production/compose.ingress.yaml"
 
 permissions:
@@ -120,36 +122,21 @@ jobs:
               print("RESULT: SQLite FTS5 is compiled into the inspected amd64 shared library; investigate consumer reachability, do not suppress CVE-2026-119373.")
           PY
 
-      - name: Audit Red Hat NSS source RPM SQLite call path
+      - name: Audit exact Red Hat NSS source with downstream patches applied
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y rpm2cpio cpio
-          source_rpm_url="https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/source/SRPMS/Packages/n/nss-3.124.0-5.el9_6.src.rpm"
-          curl --fail --location --retry 3 --retry-delay 2 "$source_rpm_url" -o /tmp/nss-3.124.0-5.el9_6.src.rpm
-          mkdir -p /tmp/nss-srpm
-          cd /tmp/nss-srpm
-          rpm2cpio /tmp/nss-3.124.0-5.el9_6.src.rpm | cpio --extract --make-directories --quiet
-          spec_file="$(find . -maxdepth 1 -type f -name '*.spec' -print -quit)"
-          test -n "$spec_file"
-          echo "NSS_SOURCE_SPEC=$spec_file"
-          grep -En '^(Name|Version|Release|Source[0-9]*|Patch[0-9]*):' "$spec_file" | sed -n '1,120p'
-          patch_dir=/tmp/nss-srpm
-          echo "Patch files that mention NSS SQLite/softoken code:"
-          grep -RInE 'lib/softoken/sdb\.c|sdb\.c|fts5|CREATE[[:space:]]+VIRTUAL[[:space:]]+TABLE|sqlite3_(load|enable)_extension' "$patch_dir" --include='*.patch' --include='*.diff' || true
-          source_tar="$(find . -maxdepth 1 -type f \( -name '*.tar.*' -o -name '*.tgz' \) -print -quit)"
-          test -n "$source_tar"
-          mkdir -p /tmp/nss-source
-          tar -xf "$source_tar" -C /tmp/nss-source
-          source_file="$(find /tmp/nss-source -path '*/lib/softoken/sdb.c' -print -quit)"
-          test -n "$source_file"
-          if grep -Eiq 'CREATE[[:space:]]+VIRTUAL[[:space:]]+TABLE|fts5|(^|[^[:alnum:]_])MATCH([^[:alnum:]_]|$)|sqlite3_(load|enable)_extension' "$source_file"; then
-            echo "The NSS source SDB implementation contains an FTS5/MATCH/extension-loading path; keep CVE-2026-119373 blocking."
-            exit 1
-          fi
-          echo "PASS: the Red Hat NSS 3.124 source SDB implementation uses no FTS5 virtual table, MATCH query or SQLite extension-loading API."
-          grep -En 'CREATE TABLE|CREATE TEMPORARY TABLE|CREATE INDEX|sqlite3_bind_(blob|int|text)' "$source_file" | head -n 35
+          bash -n deploy/production/keycloak/audit-nss-sqlite-source.sh
+          bash deploy/production/keycloak/audit-nss-sqlite-source.sh
+
+      - name: Upload exact NSS source audit evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nss-sqlite-source-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nss-sqlite-source-audit.txt
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Export Keycloak package inventory for security triage
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
