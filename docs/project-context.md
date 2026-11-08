@@ -899,8 +899,12 @@ Repository: `pooya-labs/orbit`; default branch: `main`.
 - The OCI free deployment uses one 2-OCPU / 12-GB Ampere A1 instance, GitHub
   Pages, DuckDNS, self-hosted PostgreSQL/Keycloak, Caddy, Collector, Prometheus,
   Loki and Tempo. This is single-node and has no HA.
-- Keycloak is pinned to 26.8.1 (not 26.7.3); 26.8.1 fixes security issues
-  affecting 26.7.3, including the documented PAR single-use bypass.
+- Keycloak is pinned to 26.8.2 in the production Compose stack and the deferred
+  identity scan. Upstream published 26.8.2 on 2026-11-05 with additional security
+  fixes; see the [official Keycloak release](https://github.com/keycloak/keycloak/releases/tag/26.8.2).
+  The earlier 26.8.1 scan failure below is retained as historical evidence; the
+  26.8.2 image must pass the exact-image Trivy gate and ARM64 manifest check before
+  any production identity deployment.
 - `deploy/production/backup-to-oci.sh` uses the VM's OCI instance principal,
   a dedicated private bucket, an age public recipient whose private identity is
   kept offline, and a 16-GB maximum bucket budget. It backs up all PostgreSQL
@@ -1059,14 +1063,58 @@ remain deferred until after the portfolio v1 release, as previously requested.
   the separate scheduled/manual deferred identity workflow.
 - The separate Keycloak run
   [42032403489](https://github.com/pooya-labs/orbit/actions/runs/42032403489)
-  is red on the known HIGH OpenJDK CVE-2026-91403, SQLite
-  CVE-2026-119373 / CVE-2026-119586 and Guava CVE-2026-102554 findings in
-  `quay.io/keycloak/keycloak:26.8.1`. It was not suppressed, broadly VEXed or
-  silently marked green. This is an open production-identity-path task, not
-  a v1 portfolio-demo release blocker.
-- Keep that scan enabled weekly and for changes to the identity deployment
-  paths. Resolve findings only with a real vendor patch or evidence-based
-  mitigation before production identity rollout.
+  failed on the historical `quay.io/keycloak/keycloak:26.8.1` image with HIGH
+  OpenJDK CVE-2026-91403, SQLite CVE-2026-119373 / CVE-2026-119586 and Guava
+  CVE-2026-102554 findings. It was not suppressed, broadly VEXed or silently
+  marked green. The production image and deferred scan are now pinned to 26.8.2;
+  its exact-image Trivy scan and linux/arm64 manifest verification must pass before
+  production identity deployment. The first exact-image scan of 26.8.2
+  [42225793814](https://github.com/pooya-labs/orbit/actions/runs/42225793814)
+  passed the ARM64 manifest check but failed Trivy with three HIGH findings:
+  OpenJDK CVE-2026-91403, SQLite CVE-2026-119373 / CVE-2026-119586, and
+  Guava CVE-2026-102554. The package inventory in
+  [run 42227758708](https://github.com/pooya-labs/orbit/actions/runs/42227758708)
+  gives the following exact package data:
+  - `ca-certificates` is `2026.2.92_v9.0.319-90.3.el9_8`, exactly the
+    RHEL 9 package in [RHSA-2026:88459](https://access.redhat.com/errata/RHSA-2026:88459).
+    Red Hat clarifies that CVE-2026-91403 was the insufficient first upstream
+    OpenJDK mitigation; RHEL OpenJDK RPMs rely on the system CA package, and the
+    later root-removal update is tracked under CVE-2026-114406 / upstream
+    CVE-2026-114820
+    ([CVE-2026-91403](https://access.redhat.com/security/cve/cve-2026-91403),
+    [CVE-2026-114406](https://access.redhat.com/security/cve/cve-2026-114406)).
+    CI inspected the actual Java trust store: the only matching alias was
+    `emsignrootca-g1`; the affected Comodo AAA Services and emSign ECC Root CA
+    G3 aliases were absent. A narrowly scoped OpenVEX statement now marks only
+    the exact RHEL `java-21-openjdk-headless` package PURL in this Keycloak
+    image not affected by CVE-2026-91403. It does not exempt other Java builds,
+    Red Hat build-of-OpenJDK, or other images.
+  - `sqlite-libs` is exactly `3.34.1-11.el9_8`; its installed files are the
+    shared library only. The `sqlite3` CLI is absent, no executable in the
+    inspected runtime paths links to `libsqlite3`, and no SQLite JAR exists
+    in the Keycloak/JVM application library path. CVE-2026-119586 is in the
+    SQLite command-line shell `.recover` implementation, not the shared
+    library. A narrowly scoped OpenVEX statement now marks only this exact
+    `sqlite-libs` PURL not affected by CVE-2026-119586. It does not cover the
+    SQLite CLI package or the separate FTS5 CVE.
+  - CVE-2026-119373 affects SQLite FTS5 under specific application/table/query
+    preconditions. The shared library remains installed; despite the lack of
+    discovered runtime consumers, we have not issued a VEX statement for this
+    finding. It remains a blocking HIGH finding pending stronger evidence or
+    a vendor-fixed package
+    ([Red Hat CVE details](https://access.redhat.com/security/cve/cve-2026-119373)).
+  - Guava remains `33.6.0-jre` inside Keycloak's application classpath;
+    Trivy identifies `33.7.2` as fixed. This is unresolved and must be fixed by
+    an upstream Keycloak image or a tested, reproducible rebuild before origin
+    deployment
+    ([advisory](https://advisories.gitlab.io/maven/com.google.guava/guava/CVE-2026-102554/)).
+  The two VEX statements are package-version-specific and evidence-backed; no
+  broad image exception or blanket ignore was added. Keep production identity blocked
+  until every remaining finding has an evidence-based disposition and the
+  exact-image scan passes.
+- Keep the scan enabled weekly, on relevant pull requests, and for changes to
+  the identity deployment paths. Resolve findings only with a real vendor patch
+  or evidence-based mitigation before production identity rollout.
 
 ### Owner-supplied Apps Script URL — live verification boundary
 
