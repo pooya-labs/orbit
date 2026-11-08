@@ -119,10 +119,16 @@ fi
     | sed -n '1,240p' || true
   echo
   echo "== Explicit dynamic extension loading references =="
-  grep -RInE --include='*.c' --include='*.h' \
-    'sqlite3_load_extension|sqlite3_enable_load_extension' "$softoken_dir" || true
+  if grep -RInE --include='*.c' --include='*.h' \
+    'sqlite3_load_extension|sqlite3_enable_load_extension' "$softoken_dir"; then
+    echo "SQLITE_DYNAMIC_EXTENSION_LOADING_FOUND=1"
+    echo "The NSS softoken consumer exposes SQLite extension loading; retain CVE-2026-119373 as blocking." >&2
+    exit 1
+  else
+    echo "SQLITE_DYNAMIC_EXTENSION_LOADING_FOUND=0"
+  fi
   echo
-  echo "This report is source-level evidence only. It does not establish runtime reachability or justify a VEX statement."
+  echo "This source-level report is scoped to the prepared Red Hat NSS 3.124 softoken code and must be read together with the exact-image runtime package/linkage inventory. It is not a general statement about SQLite or other consumers."
 } >> "$report"
 
 cat "$report"
