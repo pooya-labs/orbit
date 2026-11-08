@@ -48,7 +48,7 @@ button { cursor: pointer; }
 .workspace-switcher { margin: 18px 13px 10px; min-height: 58px; display: flex; align-items: center; text-align: left; gap: 10px; padding: 9px; border: 1px solid var(--line); background: #111a22; border-radius: 8px; }
 .workspace-switcher:hover { border-color: #34454f; }
 .workspace-avatar { width: 31px; height: 31px; flex: 0 0 auto; display: grid; place-items: center; color: #9bdccc; background: #19352f; border: 1px solid #285248; border-radius: 7px; font: 600 14px Manrope, sans-serif; }
-.workspace-copy, .profile-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.workspace-copy, .profile-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 0; }
 .workspace-copy strong, .profile-copy strong { font-size: 11px; font-weight: 600; color: #d9e1e7; }
 .workspace-copy span, .profile-copy span { font-size: 10px; color: var(--muted); }
 .muted-icon { color: var(--subtle); flex-shrink: 0; }
@@ -1538,7 +1538,7 @@ html[data-theme="light"] .audit-filter.active { background: rgba(42,159,140,.1);
   color: #9bdccc;
   text-decoration: none;
 }
-.profile-github-link { font: 9px "DM Mono", monospace; }
+.profile-github-link { min-height: 36px; font: 10px "DM Mono", monospace; color: #f2f5f7; }
 .profile-github-link:hover,
 .owner-github-link:hover { color: #d0f8ec; text-decoration: underline; text-underline-offset: 3px; }
 .profile-github-link svg,
@@ -1658,7 +1658,7 @@ html[data-theme="light"] .audit-filter.active { background: rgba(42,159,140,.1);
 }
 
 
-html[data-theme="light"] .profile-github-link,
+html[data-theme="light"] .profile-github-link { color: #263b44; }
 html[data-theme="light"] .owner-github-link,
 html[data-theme="light"] .owner-credit a { color: #107667; }
 html[data-theme="light"] .profile-github-link:hover,
