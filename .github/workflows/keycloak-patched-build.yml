@@ -103,6 +103,9 @@ jobs:
           cat > .keycloak-patched-context/Dockerfile <<'DOCKERFILE'
           FROM quay.io/keycloak/keycloak:26.8.2
           USER 0
+          # Replace the complete upstream distribution so its vulnerable Guava
+          # JAR cannot remain alongside the patched 33.7.2 distribution.
+          RUN rm -rf /opt/keycloak && mkdir -p /opt/keycloak && chown 1000:0 /opt/keycloak
           COPY --chown=1000:0 keycloak-26.8.2/ /opt/keycloak/
           USER 1000
           DOCKERFILE
