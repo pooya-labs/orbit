@@ -37,7 +37,8 @@ signature_output="$(rpm -Kv "$workdir/srpm/$srpm_name" 2>&1)" || {
   printf '%s\n' "$signature_output" >&2
   exit 1
 }
-if ! grep -Eqi 'signature, key ID 199e2f91fd431d51: OK' <<< "$signature_output"; then
+expected_fingerprint_lower="$(printf '%s' "$expected_fingerprint" | tr '[:upper:]' '[:lower:]')"
+if ! grep -Eqi "key fingerprint: ${expected_fingerprint_lower}: OK" <<< "$signature_output"; then
   printf '%s\n' "$signature_output" >&2
   echo "The NSS source RPM signature did not verify with the pinned Red Hat release key." >&2
   exit 1
