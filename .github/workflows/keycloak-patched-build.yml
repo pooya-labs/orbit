@@ -135,11 +135,24 @@ jobs:
           print('OIDC discovery issuer:', d['issuer'])
           PY
 
-      - name: Scan patched candidate image and confirm Guava finding is gone
+      - name: Scan patched candidate image for HIGH and CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-keycloak:26.8.2-guava-33.7.2
+          version: v0.76.1
+          trivy-config: trivy-keycloak.yaml
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "0"
+          format: json
+          output: /tmp/patched-keycloak-scan.json
+          timeout: 10m
+
+      - name: Assert Guava is fixed and SQLite FTS5 remains visible
         shell: bash
         run: |
           set -euo pipefail
-          trivy image --config trivy-keycloak.yaml --pkg-types os,library --severity HIGH,CRITICAL --ignore-unfixed=false --exit-code 0 --format json --output /tmp/patched-keycloak-scan.json orbit-keycloak:26.8.2-guava-33.7.2
           python3 - <<'PY'
           import json
           report=json.load(open('/tmp/patched-keycloak-scan.json'))
