@@ -104,7 +104,7 @@ test("mobile navigation hides closed controls and traps/restores keyboard focus"
   await expect(menu).toHaveAttribute("aria-expanded", "true");
 
   const close = page.getByRole("button", { name: "Close navigation" });
-  const profileLink = page.locator("aside.sidebar").getByRole("link", { name: "@pooya-labs" });
+  const profileLink = page.locator("aside.sidebar").getByRole("link", { name: "Pooya Labs Platform on GitHub" });
   await expect(close).toBeFocused();
 
   await page.keyboard.press("Shift+Tab");
@@ -859,7 +859,7 @@ test("creator and repository credits use the right destinations and order", asyn
   await expect(sidebarProfile).toHaveText("Pooya Labs Platform");
   await expect(sidebarProfile.locator("svg").first()).toBeVisible();
   await expect(page.locator(".profile-avatar img")).toBeVisible();
-  await expect(page.locator(".profile-avatar img")).toHaveAttribute("src", "/brand/pooya-monogram.webp");
+  await expect(page.locator(".profile-avatar img")).toHaveAttribute("src", /(?:\/orbit)?\/brand\/pooya-monogram\.webp$/);
 
   const footerCredit = page.locator(".owner-credit");
   const repositoryCredit = footerCredit.locator("a").first();
