@@ -75,6 +75,8 @@ button { cursor: pointer; }
 .profile-brand-link { min-width: 0; display: inline-flex; align-items: center; gap: 9px; color: #f2f5f7; text-decoration: none; }
 .profile-brand-link:hover { color: #fff; }
 .profile-brand-link:focus-visible { outline: 2px solid var(--mint); outline-offset: 4px; border-radius: 8px; }
+.profile-brand-link .profile-copy { justify-content: center; }
+.profile-brand-link .profile-copy > span { color: inherit; font: 10px "DM Mono", monospace; }
 .profile-avatar { width: 36px; height: 36px; flex: 0 0 36px; overflow: hidden; border-radius: 8px; display: grid; place-items: center; background: #101820; border: 1px solid #2b3b43; }
 .profile-avatar img { display: block; box-sizing: border-box; width: 32px; height: 32px; max-width: 100%; max-height: 100%; padding: 1px; object-fit: contain; object-position: center; }
 .owner-brand-mark-footer { display: block; width: 16px; height: 16px; flex: 0 0 auto; object-fit: contain; border-radius: 3px; }
