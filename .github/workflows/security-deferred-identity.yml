@@ -122,6 +122,63 @@ jobs:
               print("RESULT: SQLite FTS5 is compiled into the inspected amd64 shared library; investigate consumer reachability, do not suppress CVE-2026-119373.")
           PY
 
+      - name: Probe running upstream Keycloak for SQLite or NSS runtime mappings
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          report="${RUNNER_TEMP}/keycloak-runtime-sqlite-map.txt"
+          container="keycloak-upstream-runtime-probe"
+          cleanup() {
+            docker logs "$container" > "${RUNNER_TEMP}/keycloak-runtime-container.log" 2>&1 || true
+            docker rm -f "$container" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          : > "$report"
+          docker run -d --name "$container" -p 18080:8080 -p 19000:9000 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=ci-admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=ci-placeholder-password \
+            -e KC_HEALTH_ENABLED=true -e KC_METRICS_ENABLED=true \
+            -e KC_HTTP_ENABLED=true -e KC_HOSTNAME_STRICT=false \
+            quay.io/keycloak/keycloak:26.8.2 start-dev --http-port=8080
+          ready=0
+          for _ in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:19000/health/ready > "${RUNNER_TEMP}/keycloak-upstream-ready.json"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then
+            docker logs "$container" | tee -a "$report"
+            echo "UPSTREAM_KEYCLOAK_READINESS=failed" | tee -a "$report"
+            exit 1
+          fi
+          echo "UPSTREAM_KEYCLOAK_READINESS=ready" | tee -a "$report"
+          curl --fail --silent http://127.0.0.1:18080/realms/master/.well-known/openid-configuration \
+            > "${RUNNER_TEMP}/keycloak-upstream-oidc.json"
+          echo "UPSTREAM_KEYCLOAK_OIDC_DISCOVERY=passed" | tee -a "$report"
+          docker exec -u 0 "$container" sh -ec '
+            mapped=0
+            for maps in /proc/[0-9]*/maps; do
+              [ -r "$maps" ] || continue
+              if grep -E "/libsqlite3[.]so|/libsoftokn3[.]so" "$maps"; then
+                echo "RUNTIME_SQLITE_MAPPING=$maps"
+                mapped=1
+              fi
+            done
+            echo "KEYCLOAK_RUNTIME_SQLITE_CONSUMER_MAPPED=$mapped"
+          ' | tee -a "$report"
+
+      - name: Upload upstream Keycloak runtime reachability evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: keycloak-runtime-sqlite-map-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/keycloak-runtime-sqlite-map.txt
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Audit exact Red Hat NSS source with downstream patches applied
         shell: bash
         run: |
