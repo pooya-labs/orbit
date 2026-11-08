@@ -855,7 +855,7 @@ test("Help dialog exposes useful project documentation and support destinations"
 
 test("creator and repository credits use the right destinations and order", async ({ page }) => {
   const sidebarProfile = page.locator(".profile-github-link");
-  await expect(sidebarProfile).toHaveAttribute("href", "https://github.com/pooya-labs/pooya-labs-platform");
+  await expect(sidebarProfile).toHaveAttribute("href", "https://github.com/pooya-labs");
   await expect(sidebarProfile).toHaveText("Pooya Labs Platform");
   await expect(sidebarProfile.locator("svg").first()).toBeVisible();
   await expect(page.locator(".profile-avatar img")).toBeVisible();
