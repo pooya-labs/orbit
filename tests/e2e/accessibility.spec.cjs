@@ -104,7 +104,7 @@ test("mobile navigation hides closed controls and traps/restores keyboard focus"
   await expect(menu).toHaveAttribute("aria-expanded", "true");
 
   const close = page.getByRole("button", { name: "Close navigation" });
-  const profileLink = page.locator("aside.sidebar").getByRole("link", { name: "Pooya Labs Platform on GitHub" });
+  const profileLink = page.locator("aside.sidebar").getByRole("link", { name: "Open Pooya Labs Platform website" });
   await expect(close).toBeFocused();
 
   await page.keyboard.press("Shift+Tab");
@@ -854,10 +854,10 @@ test("Help dialog exposes useful project documentation and support destinations"
 });
 
 test("creator and repository credits use the right destinations and order", async ({ page }) => {
-  const sidebarProfile = page.locator(".profile-github-link");
-  await expect(sidebarProfile).toHaveAttribute("href", "https://github.com/pooya-labs");
+  const sidebarProfile = page.locator(".profile-brand-link");
+  await expect(sidebarProfile).toHaveAttribute("href", "https://pooya-labs.github.io/pooya-labs-platform/");
   await expect(sidebarProfile).toHaveText("Pooya Labs Platform");
-  await expect(sidebarProfile.locator("svg").first()).toBeVisible();
+  await expect(sidebarProfile).toHaveAttribute("aria-label", "Open Pooya Labs Platform website");
   await expect(page.locator(".profile-avatar img")).toBeVisible();
   await expect(page.locator(".profile-avatar img")).toHaveAttribute("src", /(?:\/orbit)?\/brand\/pooya-monogram\.webp$/);
 
