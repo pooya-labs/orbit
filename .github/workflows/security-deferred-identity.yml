@@ -134,7 +134,7 @@ jobs:
           spec_file="$(find . -maxdepth 1 -type f -name '*.spec' -print -quit)"
           test -n "$spec_file"
           echo "NSS_SOURCE_SPEC=$spec_file"
-          grep -En '^(Name|Version|Release|Source[0-9]*|Patch[0-9]*):' "$spec_file" | head -n 100
+          grep -En '^(Name|Version|Release|Source[0-9]*|Patch[0-9]*):' "$spec_file" | sed -n '1,120p'
           patch_dir=/tmp/nss-srpm
           echo "Patch files that mention NSS SQLite/softoken code:"
           grep -RInE 'lib/softoken/sdb\.c|sdb\.c|fts5|CREATE[[:space:]]+VIRTUAL[[:space:]]+TABLE|sqlite3_(load|enable)_extension' "$patch_dir" --include='*.patch' --include='*.diff' || true
