@@ -9,7 +9,56 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: orbit-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  scope:
+    name: Detect backend and observability changes
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.detect.outputs.api }}
+      observability: ${{ steps.detect.outputs.observability }}
+    steps:
+      - name: Checkout full history for path comparison
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Classify changed files
+        id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${BASE_SHA}" || "${BASE_SHA}" =~ ^0+$ ]] || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            changed="$(git ls-files)"
+          else
+            changed="$(git diff --name-only "${BASE_SHA}" "${GITHUB_SHA}")"
+          fi
+
+          api=false
+          observability=false
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            case "$path" in
+              server/*|scripts/postgres_backup_restore_smoke.sh)
+                api=true
+                ;;
+            esac
+            case "$path" in
+              server/*|deploy/*|examples/*|docker-compose.yml|docker-compose.*.yml|scripts/check_collector_network.py|scripts/check_observability_limits.py|scripts/check_resource_attribute_allowlist.py|scripts/postgres-restart-smoke.sh|scripts/postgres_backup_restore_smoke.sh)
+                observability=true
+                ;;
+            esac
+          done <<< "$changed"
+
+          echo "Changed files:"
+          printf '%s\n' "$changed"
+          echo "api=$api" >> "$GITHUB_OUTPUT"
+          echo "observability=$observability" >> "$GITHUB_OUTPUT"
+
   workflow-hygiene:
     name: Workflow action pin policy
     runs-on: ubuntu-latest
@@ -20,7 +69,7 @@ jobs:
         run: python3 scripts/check_workflow_action_pins.py
 
   api:
-    name: Go API tests and build
+    needs: scope\n    if: needs.scope.outputs.api == 'true'\n    name: Go API tests and build
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -78,7 +127,7 @@ jobs:
             postgres:17-alpine sh /workspace/scripts/postgres_backup_restore_smoke.sh
 
   observability:
-    name: Local telemetry pipeline end-to-end smoke test
+    needs: scope\n    if: needs.scope.outputs.observability == 'true'\n    name: Local telemetry pipeline end-to-end smoke test
     runs-on: ubuntu-latest
     timeout-minutes: 18
     env:
