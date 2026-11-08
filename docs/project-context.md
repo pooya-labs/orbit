@@ -1103,10 +1103,7 @@ remain deferred until after the portfolio v1 release, as previously requested.
     finding. It remains a blocking HIGH finding pending stronger evidence or
     a vendor-fixed package
     ([Red Hat CVE details](https://access.redhat.com/security/cve/cve-2026-119373)).
-  - Guava remains `33.6.0-jre` inside Keycloak's application classpath;
-    Trivy identifies `33.7.2` as fixed. This is unresolved and must be fixed by
-    an upstream Keycloak image or a tested, reproducible rebuild before origin
-    deployment
+  - The 2026-11-08 isolated Keycloak source-build experiment applied a narrow Guava BOM override before the Quarkus BOM. Maven effective-POM verification passed, the complete Keycloak core/Quarkus build passed, and the generated distribution contains only `com.google.guava.guava-33.7.2-jre.jar` (not 33.6.0). The first isolated candidate image was created successfully, but its shell-based in-image check exited non-zero before readiness/OIDC tests; the check now invokes `/opt/keycloak/bin/kc.sh --version` directly and is being rerun. Until the new image starts, passes OIDC discovery and an exact-image multi-architecture scan confirms CVE-2026-102554 absent, do not mark Guava or the production identity gate resolved.
     ([advisory](https://advisories.gitlab.io/maven/com.google.guava/guava/CVE-2026-102554/)).
   The two VEX statements are package-version-specific and evidence-backed; no
   broad image exception or blanket ignore was added. Keep production identity blocked
@@ -1188,7 +1185,7 @@ from a new issue, measured regression, or explicitly requested post-v1 item.
 
 - PR #137 carries the consolidated Cloudflare runbook, README, roadmap and project-handoff corrections, including the billing clarification first proposed in PR #139. PR #139 is already closed as superseded; keep one authoritative runbook and roadmap entry.
 - PR #139 is docs-only and has been closed as superseded by the consolidated PR #137; do not maintain two competing billing-gate edits.
-- PR [#138](https://github.com/pooya-labs/orbit/pull/138) updates the deferred Keycloak origin to 26.8.2. Its exact-image scan still reports unresolved HIGH findings (including SQLite FTS5 and Guava; the Java CA finding needs narrow vendor-evidence disposition). Its deferred production-identity security jobs are not clean. Keep the production identity/origin gate blocked; do not suppress findings or call this scan green.
+- PR [#138](https://github.com/pooya-labs/orbit/pull/138) updates the deferred Keycloak origin to 26.8.2. It remains the only open PR in the repository as of 2026-11-08; the latest merged PR is #151. The source-build experiment now proves the Guava 33.7.2 dependency override and full distribution build, but candidate-image runtime validation and exact-image scan are still pending. SQLite FTS5 CVE-2026-119373 remains an unresolved HIGH finding; CVE-2026-119586 is separately covered only by the exact-package CLI `.recover` VEX statement. Keep production identity/origin blocked until readiness, OIDC discovery and exact-image multi-architecture scanning pass.
 - PR #140 is merged as a staged foundation. Continue from `main`; do not deploy or switch the API origin on the basis of source-level CI/Security alone.
 - [Issue #141](https://github.com/pooya-labs/orbit/issues/141) tracked CVE-2026-78661 / GO-2026-6860 and CVE-2026-97045 / GO-2026-6866. It was resolved by PR #142, squash-merged as `1caed65d11bbf9b5d419e4da5429115c98ebe3ac`. First-party Go module locks now use `golang.org/x/net v0.62.0`; the Caddy/Tempo builds, Collector v0.165.0, and source-built Prometheus v3.16.0/Loki v3.7.9 were rebuilt and scanned. Exact PR-head CI passed 4/4, Security passed 13/13, and 11 non-expired CycloneDX SBOM artifacts were uploaded. The Trivy HIGH/CRITICAL gate, non-zero exit behavior and `ignore-unfixed: false` remain enabled; no broad VEX or scanner suppression was added.
 
