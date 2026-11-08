@@ -60,7 +60,9 @@ jobs:
           echo "scan=$scan" >> "$GITHUB_OUTPUT"
 
   container-image:
-    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan the ORBIT API image
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
+    name: Build and scan the ORBIT API image
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -182,7 +184,9 @@ jobs:
           retention-days: 30
 
   secrets:
-    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Full-history secret scan
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
+    name: Full-history secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -199,7 +203,9 @@ jobs:
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
 
   dependencies:
-    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Dependency vulnerability checks
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
+    name: Dependency vulnerability checks
     permissions:
       contents: write
       pull-requests: read
@@ -302,7 +308,9 @@ jobs:
           fail-on-severity: high
 
   compose-images:
-    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Scan Compose image (${{ matrix.name }})
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
+    name: Scan Compose image (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -363,7 +371,9 @@ jobs:
           retention-days: 30
 
   prometheus-image:
-    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan patched Prometheus image
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
+    name: Build and scan patched Prometheus image
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -409,7 +419,9 @@ jobs:
           retention-days: 30
 
   loki-image:
-    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan patched Loki image
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
+    name: Build and scan patched Loki image
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -455,7 +467,9 @@ jobs:
           retention-days: 30
 
   tempo-image:
-    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan patched Tempo image
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
+    name: Build and scan patched Tempo image
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -501,7 +515,9 @@ jobs:
           retention-days: 30
 
   otel-collector-image:
-    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan minimal ORBIT Collector image
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
+    name: Build and scan minimal ORBIT Collector image
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -547,7 +563,9 @@ jobs:
           retention-days: 30
 
   caddy-image:
-    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan patched Caddy ingress image
+    needs: scope
+    if: needs.scope.outputs.scan == 'true'
+    name: Build and scan patched Caddy ingress image
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
