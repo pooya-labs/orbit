@@ -304,12 +304,23 @@ identity, health, and tenant-isolation smoke checks pass.
   application path. CVE-2026-119586 is specifically in the CLI `.recover`
   implementation, so a package-version-specific OpenVEX addresses only the
   `sqlite-libs` false match. No VEX is issued for SQLite FTS5
-  CVE-2026-119373, which remains unresolved. The 2026-11-08 patched-source experiment
-  successfully built Keycloak 26.8.2 and verified the generated distribution contains
-  only Guava `33.7.2-jre`; the first candidate-image smoke check then failed after
-  image creation, so the runtime validation was corrected to invoke `kc.sh --version`
-  directly and is being rerun. Do not claim the candidate image or its scan is green
-  until readiness, OIDC discovery and exact-image Trivy all pass.
+  CVE-2026-119373, which remains unresolved. Red Hat's CVE statement rates
+  the issue Important and describes the FTS5 preconditions; the exact RHEL
+  `sqlite-libs 3.34.1-11.el9_8` in the image is still reported affected.
+  Upstream SQLite's fix is recorded in
+  [commit e1c9934](https://github.com/sqlite/sqlite/commit/e1c9934f9f11a499029abb020ea715a08970da80);
+  do not assume that upstream fix is present in the older Red Hat RPM without
+  package-source or vendor backport evidence.
+  The 2026-11-08 patched-source experiment successfully built Keycloak 26.8.2,
+  verified the generated distribution contains only Guava `33.7.2-jre`,
+  built a candidate image, started it, passed readiness and OIDC discovery.
+  Its first follow-up scan did not actually run: the shell step failed with
+  `trivy: command not found` (exit 127). CI now uses the pinned Trivy Action
+  for this scan and replaces the complete upstream `/opt/keycloak` tree before
+  copying the patched distribution, preventing an old Guava JAR from surviving
+  in merged image layers. Re-run and inspect the generated SBOM and scan result;
+  do not claim the candidate scan is green until the Guava finding is absent
+  and SQLite FTS5 remains visible as the unresolved blocker.
   The two VEX records are narrow, package-specific and evidence-backed; no
   blanket ignore or image-wide exception was added. The production identity
   gate remains blocked until the remaining findings are resolved and the
