@@ -13,9 +13,54 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: orbit-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  scope:
+    name: Detect security-relevant changes
+    runs-on: ubuntu-latest
+    outputs:
+      scan: ${{ steps.detect.outputs.scan }}
+    steps:
+      - name: Checkout full history for path comparison
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Decide whether full security scans are needed
+        id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          scan=false
+          if [[ "$EVENT_NAME" == "schedule" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            scan=true
+          else
+            if [[ -z "${BASE_SHA}" || "${BASE_SHA}" =~ ^0+$ ]] || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+              changed="$(git ls-files)"
+            else
+              changed="$(git diff --name-only "${BASE_SHA}" "${GITHUB_SHA}")"
+            fi
+
+            while IFS= read -r path; do
+              [[ -z "$path" ]] && continue
+              case "$path" in
+                server/*|examples/*|deploy/*|cloudflare/*|cloudflare-native/*|Dockerfile|**/Dockerfile|**/*.Dockerfile|docker-compose*.yml|package.json|package-lock.json|*/package.json|*/package-lock.json|trivy.yaml|.trivyignore|go.work|go.work.sum|*/go.mod|*/go.sum)
+                  scan=true
+                  break
+                  ;;
+              esac
+            done <<< "$changed"
+          fi
+          echo "Full security scan required: $scan"
+          echo "scan=$scan" >> "$GITHUB_OUTPUT"
+
   container-image:
-    name: Build and scan the ORBIT API image
+    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan the ORBIT API image
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -137,7 +182,7 @@ jobs:
           retention-days: 30
 
   secrets:
-    name: Full-history secret scan
+    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Full-history secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -154,7 +199,7 @@ jobs:
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
 
   dependencies:
-    name: Dependency vulnerability checks
+    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Dependency vulnerability checks
     permissions:
       contents: write
       pull-requests: read
@@ -257,7 +302,7 @@ jobs:
           fail-on-severity: high
 
   compose-images:
-    name: Scan Compose image (${{ matrix.name }})
+    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Scan Compose image (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -318,7 +363,7 @@ jobs:
           retention-days: 30
 
   prometheus-image:
-    name: Build and scan patched Prometheus image
+    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan patched Prometheus image
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -364,7 +409,7 @@ jobs:
           retention-days: 30
 
   loki-image:
-    name: Build and scan patched Loki image
+    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan patched Loki image
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -410,7 +455,7 @@ jobs:
           retention-days: 30
 
   tempo-image:
-    name: Build and scan patched Tempo image
+    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan patched Tempo image
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -456,7 +501,7 @@ jobs:
           retention-days: 30
 
   otel-collector-image:
-    name: Build and scan minimal ORBIT Collector image
+    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan minimal ORBIT Collector image
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -502,7 +547,7 @@ jobs:
           retention-days: 30
 
   caddy-image:
-    name: Build and scan patched Caddy ingress image
+    needs: scope\n    if: needs.scope.outputs.scan == 'true'\n    name: Build and scan patched Caddy ingress image
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
