@@ -19,7 +19,73 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: Reuse the latest passing screen-reader check when UI code is unchanged
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.detect.outputs.run }}
+    steps:
+      - name: Checkout full history for successful-run comparison
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Check whether UI files changed since the last passing run
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha || '' }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_tests=true
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs" -f branch="$HEAD_REF" -f event=pull_request -F per_page=100)"
+            previous_success="$(jq -r --arg pr "$PR_NUMBER" --arg head "$PR_HEAD" '
+              [.workflow_runs[]
+                | select(.event == "pull_request" and .conclusion == "success" and .head_sha != $head)
+                | select(any(.pull_requests[]?; (.number | tostring) == $pr))]
+              | sort_by(.run_started_at // .created_at // "")
+              | last
+              | .head_sha // ""
+            ' <<< "$runs")"
+
+            comparison_base="$previous_success"
+            if [[ -z "$comparison_base" ]]; then
+              comparison_base="$PR_BASE"
+            fi
+
+            if [[ -n "$comparison_base" ]] && git cat-file -e "$comparison_base^{commit}" 2>/dev/null; then
+              changed="$(git diff --name-only "$comparison_base" "$PR_HEAD")"
+            else
+              changed="$(git ls-files)"
+            fi
+
+            run_tests=false
+            while IFS= read -r path; do
+              [[ -z "$path" ]] && continue
+              case "$path" in
+                app/*|lib/*|next.config.ts|scripts/nvda-screen-reader-smoke.ps1)
+                  run_tests=true
+                  break
+                  ;;
+              esac
+            done <<< "$changed"
+
+            echo "NVDA UI-relevant changes since last passing run:"
+            printf '%s\n' "$changed"
+          fi
+
+          echo "Run real NVDA test: $run_tests"
+          echo "run=$run_tests" >> "$GITHUB_OUTPUT"
+
   nvda-screen-reader:
+    needs: scope
+    if: needs.scope.outputs.run == 'true'
     name: Real NVDA Browse Mode heading navigation
     runs-on: windows-latest
     timeout-minutes: 20
