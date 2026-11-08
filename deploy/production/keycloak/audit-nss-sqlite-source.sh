@@ -11,11 +11,34 @@ rm -rf "$workdir"
 mkdir -p "$workdir/srpm" "$workdir/rpmbuild"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 
 sudo apt-get update
-sudo apt-get install -y --no-install-recommends rpm rpm2cpio cpio
+sudo apt-get install -y --no-install-recommends rpm rpm2cpio cpio gnupg
 
 printf 'Downloading exact Red Hat NSS source RPM: %s\n' "$srpm_url"
 curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 900 \
   "$srpm_url" --output "$workdir/srpm/$srpm_name"
+
+# Verify the source RPM with the official Red Hat release key, not just its
+# transport digest. The fingerprint is published on Red Hat's signing-key page.
+redhat_key_url="https://security.access.redhat.com/data/fd431d51.txt"
+redhat_key_file="$workdir/srpm/RPM-GPG-KEY-redhat-release-2"
+expected_fingerprint="567E347AD0044ADE55BA8A5F199E2F91FD431D51"
+curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 120 \
+  "$redhat_key_url" --output "$redhat_key_file"
+actual_fingerprint="$(gpg --batch --show-keys --with-colons "$redhat_key_file" | awk -F: '$1 == "fpr" { print toupper($10); exit }')"
+if [[ "$actual_fingerprint" != "$expected_fingerprint" ]]; then
+  echo "Unexpected Red Hat signing-key fingerprint: $actual_fingerprint" >&2
+  exit 1
+fi
+sudo rpm --import "$redhat_key_file"
+signature_output="$(rpm -Kv "$workdir/srpm/$srpm_name" 2>&1)" || {
+  printf '%s\\n' "$signature_output" >&2
+  exit 1
+}
+if ! grep -Eqi 'signature, key ID 199e2f91fd431d51: OK' <<< "$signature_output"; then
+  printf '%s\\n' "$signature_output" >&2
+  echo "The NSS source RPM signature did not verify with the pinned Red Hat release key." >&2
+  exit 1
+fi
 
 actual_nevra="$(rpm -qp --qf '%{NAME}-%{VERSION}-%{RELEASE}' "$workdir/srpm/$srpm_name")"
 if [[ "$actual_nevra" != "nss-3.124.0-5.el9_6" ]]; then
@@ -28,9 +51,10 @@ fi
   echo "Source RPM: $actual_nevra"
   echo "Downloaded SHA-256: $(sha256sum "$workdir/srpm/$srpm_name" | awk '{print $1}')"
   echo "Source URL: $srpm_url"
+  echo "Red Hat release key fingerprint: $actual_fingerprint"
   echo
-  echo "== RPM signature metadata =="
-  rpm -Kv "$workdir/srpm/$srpm_name" 2>&1 || true
+  echo "== Verified RPM signature metadata =="
+  printf '%s\\n' "$signature_output"
 } > "$report"
 
 (
@@ -83,6 +107,8 @@ fi
   if grep -RInE --include='*.c' --include='*.h' --include='*.inc' \
     'fts5|CREATE[[:space:]]+VIRTUAL[[:space:]]+TABLE|[[:space:]]MATCH[[:space:]]' "$softoken_dir"; then
     echo "FTS_SOURCE_REFERENCES_FOUND=1"
+    echo "Review the FTS-related source references before treating NSS as an isolated SQLite consumer." >&2
+    exit 1
   else
     echo "FTS_SOURCE_REFERENCES_FOUND=0"
   fi
