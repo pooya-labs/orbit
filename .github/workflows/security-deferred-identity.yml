@@ -120,24 +120,35 @@ jobs:
               print("RESULT: SQLite FTS5 is compiled into the inspected amd64 shared library; investigate consumer reachability, do not suppress CVE-2026-119373.")
           PY
 
-      - name: Audit NSS softoken SQLite call path at immutable 3.124 source
+      - name: Audit Red Hat NSS source RPM SQLite call path
         shell: bash
         run: |
           set -euo pipefail
-          git init /tmp/nss-source
-          git -C /tmp/nss-source remote add origin https://github.com/mozilla/nss.git
-          git -C /tmp/nss-source fetch --depth 1 origin 477c4533581f573eadfff1ea9050c9824d08f623
-          git -C /tmp/nss-source checkout --detach FETCH_HEAD
-          test "$(git -C /tmp/nss-source rev-parse HEAD)" = "477c4533581f573eadfff1ea9050c9824d08f623"
-          source_file=/tmp/nss-source/lib/softoken/sdb.c
-          echo "NSS_SOURCE_COMMIT=$(git -C /tmp/nss-source rev-parse HEAD)"
-          echo "SQLite call-site source files under lib/softoken:"
-          grep -RIl "sqlite3_" /tmp/nss-source/lib/softoken --include='*.c' | sort
+          sudo apt-get update
+          sudo apt-get install -y rpm2cpio cpio
+          source_rpm_url="https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/source/SRPMS/Packages/n/nss-3.124.0-5.el9_6.src.rpm"
+          curl --fail --location --retry 3 --retry-delay 2 "$source_rpm_url" -o /tmp/nss-3.124.0-5.el9_6.src.rpm
+          mkdir -p /tmp/nss-srpm
+          cd /tmp/nss-srpm
+          rpm2cpio /tmp/nss-3.124.0-5.el9_6.src.rpm | cpio --extract --make-directories --quiet
+          spec_file="$(find . -maxdepth 1 -type f -name '*.spec' -print -quit)"
+          test -n "$spec_file"
+          echo "NSS_SOURCE_SPEC=$spec_file"
+          grep -En '^(Name|Version|Release|Source[0-9]*|Patch[0-9]*):' "$spec_file" | head -n 100
+          patch_dir=/tmp/nss-srpm
+          echo "Patch files that mention NSS SQLite/softoken code:"
+          grep -RInE 'lib/softoken/sdb\.c|sdb\.c|fts5|CREATE[[:space:]]+VIRTUAL[[:space:]]+TABLE|sqlite3_(load|enable)_extension' "$patch_dir" --include='*.patch' --include='*.diff' || true
+          source_tar="$(find . -maxdepth 1 -type f \( -name '*.tar.*' -o -name '*.tgz' \) -print -quit)"
+          test -n "$source_tar"
+          mkdir -p /tmp/nss-source
+          tar -xf "$source_tar" -C /tmp/nss-source
+          source_file="$(find /tmp/nss-source -path '*/lib/softoken/sdb.c' -print -quit)"
+          test -n "$source_file"
           if grep -Eiq 'CREATE[[:space:]]+VIRTUAL[[:space:]]+TABLE|fts5|(^|[^[:alnum:]_])MATCH([^[:alnum:]_]|$)|sqlite3_(load|enable)_extension' "$source_file"; then
-            echo "The inspected NSS softoken SQLite source contains an FTS5/MATCH/extension-loading path; keep CVE-2026-119373 blocking."
+            echo "The NSS source SDB implementation contains an FTS5/MATCH/extension-loading path; keep CVE-2026-119373 blocking."
             exit 1
           fi
-          echo "PASS: NSS 3.124 softoken SDB source uses no FTS5 virtual table, MATCH query or SQLite extension-loading API."
+          echo "PASS: the Red Hat NSS 3.124 source SDB implementation uses no FTS5 virtual table, MATCH query or SQLite extension-loading API."
           grep -En 'CREATE TABLE|CREATE TEMPORARY TABLE|CREATE INDEX|sqlite3_bind_(blob|int|text)' "$source_file" | head -n 35
 
       - name: Export Keycloak package inventory for security triage
