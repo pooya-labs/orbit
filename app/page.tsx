@@ -595,7 +595,7 @@ export default function Home() {
           <button ref={helpButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "help"} onClick={() => setUtilityDialog("help")}><CircleHelp size={17} /><span>{tr("helpSupport")}</span></button>
           <div className="profile-row">
             <div className="profile-avatar" aria-hidden="true"><img src={ownerMonogramSrc} alt="" width={29} height={29} /></div>
-            <div className="profile-copy"><strong>{tr("profileName")}</strong><a className="profile-github-link" href="https://github.com/pooya-labs" target="_blank" rel="noreferrer" aria-label="Pooya Labs Platform on GitHub"><GitHubMark size={13} /><span>Pooya Labs Platform</span><ExternalLink size={10} aria-hidden="true" /></a></div>
+            <div className="profile-copy"><strong>{tr("profileName")}</strong><a className="profile-github-link" href="https://pooya-labs.github.io/pooya-labs-platform/" target="_blank" rel="noreferrer" aria-label="Open Pooya Labs Platform website"><span>Pooya Labs Platform</span><ExternalLink size={10} aria-hidden="true" /></a></div>
           </div>
         </div>
       </aside>
@@ -826,7 +826,7 @@ export default function Home() {
             </>
           )}
 
-          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><a href="https://github.com/pooya-labs/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a> <span>·</span> <strong>{tr("projectOwner")}:</strong> <a className="owner-github-link" href="https://pooya-labs.github.io/pooya-labs-platform/" target="_blank" rel="noreferrer" aria-label="Open Pooya Labs Platform website"><img className="owner-brand-mark-footer" src={ownerMonogramSrc} alt="" width={16} height={16} /><GitHubMark size={12} /><span>Pooya Labs Platform</span></a></span></footer>
+          <footer className="page-footer"><span>ORBIT <b>·</b> {tr("systemsObservatory")}</span><span><Globe2 size={12} /> {sourceMode === "api" ? tr("inventoryFromApi") : tr("allIllustrative")} <i /> <span className="footer-version">v1.0.0</span></span><span className="owner-credit"><a href="https://github.com/pooya-labs/orbit" target="_blank" rel="noreferrer">{tr("createdMaintained")}</a> <span>·</span> <strong>{tr("projectOwner")}:</strong> <a className="owner-github-link" href="https://pooya-labs.github.io/pooya-labs-platform/" target="_blank" rel="noreferrer" aria-label="Open Pooya Labs Platform website"><img className="owner-brand-mark-footer" src={ownerMonogramSrc} alt="" width={16} height={16} /><span>Pooya Labs Platform</span></a></span></footer>
         </main>
       </section>
       {utilityDialog && (
