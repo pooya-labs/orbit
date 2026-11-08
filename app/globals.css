@@ -741,6 +741,7 @@ html[data-theme="light"] .usage-track span { background: linear-gradient(90deg, 
 html[data-theme="light"] .usage-card p { color: #52646e; }
 html[data-theme="light"] .profile-row { border-color: #e5ecef; }
 html[data-theme="light"] .profile-avatar { color: #ffffff; background: #101820; border-color: #2b3b43; }
+html[data-theme="light"] .owner-brand-mark-footer { box-sizing: border-box; padding: 2px; background: #101820; border: 1px solid #2b3b43; border-radius: 4px; }
 html[data-theme="light"] .muted-icon { color: #616d74; }
 
 html[data-theme="light"] .topbar {
