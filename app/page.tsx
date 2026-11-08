@@ -594,8 +594,10 @@ export default function Home() {
           <button ref={settingsButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "settings"} onClick={() => setUtilityDialog("settings")}><Settings2 size={17} /><span>{tr("settings")}</span></button>
           <button ref={helpButtonRef} type="button" className="nav-item" aria-haspopup="dialog" aria-expanded={utilityDialog === "help"} onClick={() => setUtilityDialog("help")}><CircleHelp size={17} /><span>{tr("helpSupport")}</span></button>
           <div className="profile-row">
-            <div className="profile-avatar" aria-hidden="true"><img src={ownerMonogramSrc} alt="" width={29} height={29} /></div>
-            <div className="profile-copy"><a className="profile-github-link" href="https://pooya-labs.github.io/pooya-labs-platform/" target="_blank" rel="noreferrer" aria-label="Open Pooya Labs Platform website"><span>Pooya Labs Platform</span></a></div>
+            <a className="profile-brand-link" href="https://pooya-labs.github.io/pooya-labs-platform/" target="_blank" rel="noreferrer" aria-label="Open Pooya Labs Platform website">
+              <span className="profile-avatar" aria-hidden="true"><img src={ownerMonogramSrc} alt="" width={29} height={29} /></span>
+              <span className="profile-copy"><span>Pooya Labs Platform</span></span>
+            </a>
           </div>
         </div>
       </aside>
