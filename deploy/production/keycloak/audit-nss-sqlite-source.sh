@@ -57,7 +57,7 @@ while IFS= read -r -d '' source_file; do
 done < <(find "$workdir/srpm" -maxdepth 1 -type f ! -name '*.spec' -print0)
 
 echo "Applying the exact source RPM's declared patches with rpmbuild -bp..."
-if ! rpmbuild --define "_topdir $topdir" -bp --nodeps "$topdir/SPECS/nss.spec" \
+if ! rpmbuild --define "_topdir $topdir" --define "__spec_prep_shell /bin/bash" -bp --nodeps "$topdir/SPECS/nss.spec" \
   > "$workdir/rpmbuild-prep.log" 2>&1; then
   {
     echo
