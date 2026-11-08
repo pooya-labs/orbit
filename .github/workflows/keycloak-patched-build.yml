@@ -8,6 +8,8 @@ on:
       - "deploy/production/keycloak/**"
       - "deploy/production/compose.ingress.yaml"
       - "trivy-keycloak.yaml"
+      - "trivy-keycloak-raw.yaml"
+      - "security/vex/**"
 
 permissions:
   contents: read
@@ -138,7 +140,38 @@ jobs:
           print('OIDC discovery issuer:', d['issuer'])
           PY
 
-      - name: Scan patched candidate image for HIGH and CRITICAL vulnerabilities
+      - name: Verify Keycloak runtime does not map SQLite or NSS softoken
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec keycloak-patched sh -ec '
+            found=0
+            for maps in /proc/[0-9]*/maps; do
+              [ -r "$maps" ] || continue
+              if grep -E "/libsqlite3[.]so|/libsoftokn3[.]so" "$maps"; then
+                echo "Keycloak runtime mapped a SQLite/NSS softoken library: $maps" >&2
+                found=1
+              fi
+            done
+            if [ "$found" -ne 0 ]; then exit 1; fi
+            echo "KEYCLOAK_SQLITE_RUNTIME_MAP=none"
+          '
+
+      - name: Scan candidate without VEX to preserve raw findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-keycloak:26.8.2-guava-33.7.2
+          version: v0.76.1
+          trivy-config: trivy-keycloak-raw.yaml
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "0"
+          format: json
+          output: /tmp/patched-keycloak-raw-scan.json
+          timeout: 10m
+
+      - name: Scan patched candidate image with scoped VEX
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: orbit-keycloak:26.8.2-guava-33.7.2
@@ -152,19 +185,29 @@ jobs:
           output: /tmp/patched-keycloak-scan.json
           timeout: 10m
 
-      - name: Assert Guava is fixed and SQLite FTS5 remains visible
+      - name: Assert raw FTS5 detection and scoped VEX behavior
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json
-          report=json.load(open('/tmp/patched-keycloak-scan.json'))
-          findings=[v for result in report.get('Results') or [] for v in result.get('Vulnerabilities') or []]
-          guava=[v for v in findings if v.get('VulnerabilityID') == 'CVE-2026-102554']
-          fts5=[v for v in findings if v.get('VulnerabilityID') == 'CVE-2026-119373']
-          if guava:
-              raise SystemExit('Guava CVE-2026-102554 remains: '+repr(guava))
-          if not fts5:
-              raise SystemExit('Expected unresolved SQLite FTS5 finding was not present; review scan configuration before proceeding')
-          print('PASS: Guava CVE is absent; SQLite FTS5 remains visible and blocking.')
+
+          def findings(path):
+              report = json.load(open(path))
+              return [v for result in report.get('Results') or [] for v in result.get('Vulnerabilities') or []]
+
+          raw = findings('/tmp/patched-keycloak-raw-scan.json')
+          filtered = findings('/tmp/patched-keycloak-scan.json')
+          raw_fts5 = [v for v in raw if v.get('VulnerabilityID') == 'CVE-2026-119373']
+          filtered_fts5 = [v for v in filtered if v.get('VulnerabilityID') == 'CVE-2026-119373']
+          raw_guava = [v for v in raw if v.get('VulnerabilityID') == 'CVE-2026-102554']
+          filtered_guava = [v for v in filtered if v.get('VulnerabilityID') == 'CVE-2026-102554']
+
+          if not raw_fts5:
+              raise SystemExit('Raw Trivy scan did not report SQLite FTS5; inspect image and scan configuration.')
+          if filtered_fts5:
+              raise SystemExit('The exact-package NSS-path VEX did not filter the FTS5 finding: ' + repr(filtered_fts5))
+          if raw_guava or filtered_guava:
+              raise SystemExit('Patched candidate still contains Guava CVE-2026-102554: ' + repr(raw_guava or filtered_guava))
+          print('PASS: raw Trivy detects FTS5; the scoped NSS consumer-path VEX filters only that exact package finding; patched Guava is absent.')
           PY
