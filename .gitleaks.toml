@@ -17,4 +17,16 @@ id = "generic-api-key"
     "58f948be49412567a1a84da9f753b08a21cb531e",
   ]
   paths = ['''^server/internal/observability/runtime_test\.go$''']
-  regexes = ['''^workspace-secret-123$''']
+  regexes = ['''^workspace-secret-123'']
+
+# The published Keycloak image tag includes this public source commit SHA.
+# It is not a credential. Scope the exception to the exact tag suffix and the
+# two documentation lines that publish it; do not exempt GHCR references broadly.
+[[rules.allowlists]]
+description = "Public commit SHA embedded in the immutable Keycloak image tag"
+condition = "AND"
+paths = [
+  '''^deploy/production/keycloak/README\.md'',
+  '''^deploy/production/keycloak/GHCR-PUBLISHING\.md'',
+]
+regexes = ['''^c4e45b9c1f0be4fd878c32366c7743a28d079227'']
