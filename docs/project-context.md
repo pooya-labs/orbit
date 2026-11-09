@@ -1264,3 +1264,22 @@ Next: complete PR-head CI, update the roadmap and handoff docs, and mark PR #138
 - Do not enable paid infrastructure, automatic overages, or paid hosting; maintain the $0 monthly budget.
 - Never publish credentials, gateway secrets, OIDC client secrets, private Apps Script URLs or spreadsheet identifiers.
 - Never call synthetic demo records live telemetry or claim an undeployed Cloudflare/Go/Keycloak origin as production.
+
+
+## 20. Current-scope closeout — 2026-11-10
+
+The owner chose to finish the existing v1.0.0 portfolio-demo scope and defer future production hosting/runtime work until explicitly requested.
+
+- The owner confirms the manual keyboard, mobile-device and assistive-technology acceptance item is complete. This is owner-provided acceptance evidence; do not claim formal WCAG conformance or certification.
+- PR [#138](https://github.com/pooya-labs/orbit/pull/138) merged into main as `3c8ebc56d34a4c9ed553338c7d8531bb1c4a0e20`.
+- Patched Keycloak 26.8.2 was published for linux/amd64 and linux/arm64. Immutable artifact: `ghcr.io/pooya-labs/orbit-keycloak@sha256:97cc4590f5abd77e23522d6d94c3fe77c82b91c44a4e7acef22aec28c61bf81d`. Exact-digest strict scans passed on both architectures; independent source rebuild and deferred identity scan passed.
+- The merge-triggered Security workflow [42720211486](https://github.com/pooya-labs/orbit/actions/runs/42720211486) detected the public source commit SHA embedded in the immutable image tag as a generic-api-key false positive. The follow-up applies an exact-value and exact-path allowlist only; never broaden it to arbitrary GHCR references, hashes or credentials.
+- The post-merge CI run [42720211588](https://github.com/pooya-labs/orbit/actions/runs/42720211588) was still active at this handoff snapshot. Record the final results from the dedicated closeout PR before claiming all current-head checks are green.
+- Main Pages deployment [42720211241](https://github.com/pooya-labs/orbit/actions/runs/42720211241) and stable-release verification [42720366585](https://github.com/pooya-labs/orbit/actions/runs/42720366585) succeeded after PR #138 merged. The immutable `v1.0.0` tag remains unchanged.
+- Production Compose remains pinned to Keycloak 26.8.1. The patched GHCR image is a validated artifact, not a production deployment. Do not change Compose, provision identity, enable tenant ingestion, alter DNS/routing, or change package visibility as part of this closeout.
+- No origin VM, live OIDC tenant, production DNS/ingress, D1 database deployment, live tenant traffic, or paid service is part of the current deliverable. The GitHub Pages + synthetic Apps Script portfolio demo remains the supported product.
+- Production backup scheduling and restore rehearsal, durable-history retention/archive policy, target-environment load/capacity measurements, RPO/RTO drills, and the Cloudflare/Go production runtime are explicitly deferred until a future owner request. Redis/NATS application integration also remains deferred unless measured need justifies it.
+
+### Continuation boundary
+
+Treat the current portfolio-demo scope as finished after the closeout PR's CI and Security checks pass. Do not reopen v1.0.0 or start the production checklist automatically. Future work requires a new, explicit owner request and must preserve the $0 monthly infrastructure constraint unless the owner changes it.
