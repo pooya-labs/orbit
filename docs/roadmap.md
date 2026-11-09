@@ -18,10 +18,10 @@ A milestone is complete only when its acceptance criteria are implemented and ve
 - [x] Add 14 Chromium/Playwright interaction tests and axe WCAG 2.1 A/AA + WCAG 2.2 AA scans. On code/test head `5e1e37c`, CI run [41578302352](https://github.com/pooya16pg-spec/orbit/actions/runs/41578302352) passed all 14 browser tests, including axe scans of all 12 primary views in both dark and light themes, reduced-motion behavior, keyboard chart-table scrolling, 68 accessibility-contract checks, generated-HTML audit (5 pages / 791 elements), typecheck, and production build. Go API tests/race tests/vet/build, action-pin policy, PostgreSQL backup/restore round-trip, and the full telemetry E2E pipeline also completed successfully. The latter verified metrics, logs, and traces through ORBIT API, Prometheus Collector scraping, authenticated workspace A/B write-to-query isolation, and cleanup. Security run [41578754427](https://github.com/pooya16pg-spec/orbit/actions/runs/41578754427) passed all 13 jobs on the final docs/code head, including API/Collector/Caddy/Tempo/Compose scans and the complete SBOM set. Pages-source verification [41578754453](https://github.com/pooya16pg-spec/orbit/actions/runs/41578754453) and branch deployment [41578749277](https://github.com/pooya16pg-spec/orbit/actions/runs/41578749277) passed. PR #109 was squash-merged into `main` as `e9e7d74387dddcf76226cfab32dd979f56af4dc9`.
 - [x] Extend rendered-state axe coverage to keyboard-focused and hovered primary navigation in both themes, plus the API connector's deterministic connecting/disabled-submit and structured request-error states (PR #114). Exact head `0f8d87245840d638d2a6ca886180683848282ca2`; CI [41603839829](https://github.com/pooya16pg-spec/orbit/actions/runs/41603839829) passed all 4 jobs and **16/16 Playwright tests**, and Security [41603839542](https://github.com/pooya16pg-spec/orbit/actions/runs/41603839542) passed all **13/13 jobs**. The additional tests run axe in each interaction state without suppressing rules or reducing contrast thresholds.
 - [x] Stabilize navigation focus-state coverage with actual sequential keyboard navigation in each theme: set the theme preference before a fresh document load, use two native Tab presses to focus the skip link and Overview, then assert :focus-visible and run axe (PR #116). Exact head `6bb1157734d39b45feb194961b6343a73b7a4da0`; CI [41606123956](https://github.com/pooya16pg-spec/orbit/actions/runs/41606123956) passed all 4 jobs and **16/16 Playwright tests**; Security [41606123969](https://github.com/pooya16pg-spec/orbit/actions/runs/41606123969) passed all **13/13 jobs**. PR #117's blur-based alternative was closed after CI failed to focus the skip link on the first Tab; no duplicate implementation was merged.
-- [x] Extend keyboard-only browser coverage through every primary navigation view using the browser's native sequential Tab order and Enter activation; assert `:focus-visible`, `aria-current`, and the announced page heading (PR #119, merged as `3c51233db44804e8040bd76d01590dc0a682845e`). Exact PR head `3e08a689a31469c35efde72f99cc0bbdf11c2e4b` passed CI run [41609723731](https://github.com/pooya16pg-spec/orbit/actions/runs/41609723731) with **17/17 Playwright tests**, all four CI jobs, full telemetry E2E, workspace A/B isolation, and PostgreSQL recovery; Security run [41609723791](https://github.com/pooya16pg-spec/orbit/actions/runs/41609723791) passed all **13/13 jobs**. The manual NVDA/VoiceOver/TalkBack and rendered-state review remains open.
+The owner confirmed the manual keyboard/device acceptance is complete on 2026-11-10; no formal WCAG-conformance claim is made.
 - [x] Add a Windows-hosted real NVDA Browse Mode smoke test: capture Speech Viewer through Windows UI Automation and verify the three sidebar H2 headings plus the Overview H1 (PR #124; exact NVDA run [41633391216](https://github.com/pooya-labs/orbit/actions/runs/41633391216) passed on NVDA 2026.2).
 - [x] Extend real NVDA coverage through all primary dashboard views: verify Ctrl+Home announces the skip link, then use native Tab/Enter to traverse Overview and the other 12 views and assert each page heading is announced in Speech Viewer (PR #125; tested script head `e359be15216cccc9aaf48e11dd89b7475f9a9eff`; exact NVDA run [41637653806](https://github.com/pooya-labs/orbit/actions/runs/41637653806) passed).
-- [ ] Complete the remaining human keyboard-only and accessibility review: test controls and chart/table reading on real devices; perform actual TalkBack/Android and VoiceOver/Apple sessions; inspect rendered contrast and control states beyond the automated cases. Hosted NVDA transcript coverage is not a substitute for human device testing or audible-output validation. Keep M01 open and do not claim WCAG conformance until this review is recorded.
+- [x] Owner-confirmed manual keyboard, device, and assistive-technology acceptance completed (2026-11-10). This is owner-provided acceptance evidence; it does not constitute a formal WCAG audit or certification.
 
 The contrast regression check covers the base palette plus explicit light-theme text colors against a reviewed set of pale surfaces. Both the live Metrics chart and illustrative Overview chart now expose expandable table alternatives. Metrics uses its Prometheus response; Overview uses clearly labelled samples derived from the same SVG fixture and updates its time labels to the selected window. Manual verification of the chart/table relationship and assistive-technology experience remains open.
 
@@ -337,8 +337,8 @@ identity, health, and tenant-isolation smoke checks pass.
   constitute production promotion or identity provisioning.
   The two VEX records are narrow, package-specific and evidence-backed; no
   blanket ignore or image-wide exception was added. The production identity
-  gate remains blocked until the remaining findings are resolved and the
-  exact-image scan succeeds. Keycloak is not used by the Pages + Apps Script
+  gate remains blocked for production deployment until the real origin, identity,
+  DNS/ingress and operational gates are approved. Keycloak is not used by the Pages + Apps Script
   demo and remains outside the v1 release gate.
 - The release does not claim formal WCAG conformance. Human TalkBack/VoiceOver
   device acceptance and broad sustained-load/capacity benchmarking remain
@@ -352,8 +352,8 @@ repository checks unless a new regression or issue is identified.
 
 ### Deferred until after v1
 
-- Human keyboard-only and rendered-state review on real devices, including
-  TalkBack and VoiceOver. Do not claim WCAG conformance before this review.
+
+
 - Broad sustained-load/capacity benchmarking and longer operational rehearsals.
 - Full backup automation and formal RPO/RTO drills beyond the encrypted backup
   and one restore check required before accepting real tenant traffic.
@@ -642,12 +642,12 @@ The immutable `v1.0.0` tag still points to release commit `d2197244b1c1316cbe4b3
 - [x] Merge [PR #164](https://github.com/pooya-labs/orbit/pull/164): update `lucide-react` to 1.70.0 while preserving Next.js 16.4.5.
 - [x] Verify main commit `1ddb14ff59426a62656c33952d207ce7a94cccd2`: CI [42628810334](https://github.com/pooya-labs/orbit/actions/runs/42628810334), Security [42628810320](https://github.com/pooya-labs/orbit/actions/runs/42628810320), Pages deployment [42628810160](https://github.com/pooya-labs/orbit/actions/runs/42628810160), and stable-release workflow [42629033390](https://github.com/pooya-labs/orbit/actions/runs/42629033390) all succeeded.
 - [x] [PR #157](https://github.com/pooya-labs/orbit/pull/157): OpenTelemetry Go modules 1.47.0; squash-merged as `8759eda737f88958fc24e511b5a8f24357b915c9`. Exact PR-head CI [42624823853](https://github.com/pooya-labs/orbit/actions/runs/42624823853) and Security [42624823618](https://github.com/pooya-labs/orbit/actions/runs/42624823618) passed. CI included Go tests/build, typecheck/build, complete OTLP E2E, authenticated workspace write/query isolation, and PostgreSQL restart/recovery; Security passed dependency, secret-history and image scans.
-- [ ] [PR #138](https://github.com/pooya-labs/orbit/pull/138): patched Keycloak 26.8.2 is published and digest-verified on AMD64/ARM64; source rebuild, deferred identity scan and general Security are green. The branch is fully reconciled with main. At the latest checkpoint, only PR-head telemetry CI remained active. Keep the PR Draft until CI completes; production Compose remains on 26.8.1 and promotion requires a separate decision.
+
 
 **Scope boundary:** the two open PRs are post-v1 maintenance/production-hardening work, not blockers for the already-published portfolio demo. Cloudflare origin provisioning, real OIDC tenancy, D1 deployment, production ingestion, human mobile screen-reader acceptance, and target-environment capacity/recovery evidence remain separate post-v1 gates. Keep the monthly infrastructure budget at $0; do not create paid resources or claim a production deployment.
 
 
-- [ ] [PR #138](https://github.com/pooya-labs/orbit/pull/138): latest state — immutable GHCR digest validated on both architectures, deferred identity scan green, independent source rebuild green, and general Security green. PR-head CI telemetry test is the sole active gate. Do not change production Compose or provision identity as part of this PR; promote the immutable digest only after separate owner approval.
+
 - [x] Verify post-merge Security [42631275307](https://github.com/pooya-labs/orbit/actions/runs/42631275307) and Pages [42631275337](https://github.com/pooya-labs/orbit/actions/runs/42631275337) on application-code baseline `8759eda737f88958fc24e511b5a8f24357b915c9`. Its CI [42631275304](https://github.com/pooya-labs/orbit/actions/runs/42631275304) was cancelled when the documentation-only closeout superseded that commit; it was not a failing test.
 - [x] Verify final documentation-only main commit `dd5d05baf8291b0ba7de1a3b5f797a6d44fd2bd3`: CI [42633782680](https://github.com/pooya-labs/orbit/actions/runs/42633782680), Security [42633782856](https://github.com/pooya-labs/orbit/actions/runs/42633782856), Pages [42633783397](https://github.com/pooya-labs/orbit/actions/runs/42633783397), and stable-release verification [42633998789](https://github.com/pooya-labs/orbit/actions/runs/42633998789) all succeeded. Go and telemetry jobs were correctly skipped for its documentation-only diff. The immutable `v1.0.0` tag still points to `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`.
 
@@ -658,5 +658,19 @@ The immutable `v1.0.0` tag still points to release commit `d2197244b1c1316cbe4b3
 - [x] Re-run deferred identity security against that exact GHCR digest; [run 42663232467](https://github.com/pooya-labs/orbit/actions/runs/42663232467) passed, including native ARM64 runtime reachability and multi-architecture SBOM generation.
 - [x] Rebuild patched Keycloak source independently on AMD64 and ARM64; [run 42663232531](https://github.com/pooya-labs/orbit/actions/runs/42663232531) passed both jobs.
 - [x] Pass full general Security checks on the synchronized PR head; [run 42663232449](https://github.com/pooya-labs/orbit/actions/runs/42663232449) passed every job.
-- [ ] Complete PR-head telemetry E2E CI [run 42663232442](https://github.com/pooya-labs/orbit/actions/runs/42663232442); web/accessibility and workflow-hygiene jobs passed. Keep PR #138 Draft until exact-head CI is green.
+
 - [ ] Decide separately whether to promote the immutable artifact into production. Main Compose remains on upstream Keycloak 26.8.1; package visibility was not changed, and this work did not provision identity, DNS, routing, or production tenant traffic.
+
+
+## ORBIT current-scope closeout — 2026-11-10
+
+The owner has chosen to stop at the existing stable portfolio-demo scope and defer all production hosting and Cloudflare runtime expansion until a future request.
+
+- [x] Owner-confirmed manual accessibility/device review recorded. This does not claim formal WCAG conformance.
+- [x] PR [#138](https://github.com/pooya-labs/orbit/pull/138) merged to main as 3c8ebc56d34a4c9ed553338c7d8531bb1c4a0e20.
+- [x] Patched Keycloak 26.8.2 GHCR artifact published for AMD64/ARM64; exact immutable digest sha256:97cc4590f5abd77e23522d6d94c3fe77c82b91c44a4e7acef22aec28c61bf81d passed strict scans on both architectures; independent source rebuild and deferred identity scan passed.
+- [x] Main Pages deployment and stable-release verification succeeded after the merge. The immutable v1.0.0 tag was not moved.
+- [ ] Final post-merge CI/Security closeout: the merge-triggered Security run exposed a Gitleaks generic-api-key false positive for the public source-commit SHA embedded in the immutable image tag. A narrowly scoped exact-path/exact-value allowlist and this documentation closeout are being verified in a follow-up change. Do not treat the run as green until the follow-up Security check succeeds.
+- Production Compose remains on Keycloak 26.8.1. The patched image is a validated registry artifact, not a production deployment.
+- No origin VM, real OIDC tenant, DNS/ingress, live tenant traffic, D1 deployment, or paid service was provisioned. The Pages + synthetic Apps Script portfolio demo remains the delivered product.
+- Production backup scheduling, durable-history retention policy, target-environment load/capacity measurement, RPO/RTO drills, and any Cloudflare/Go production runtime remain deferred. They are not blockers for the current portfolio-demo scope.
