@@ -1,0 +1,25 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/pooya-labs/orbit/blob/main/security/vex/keycloak-26.8.2-openjdk-system-ca.openvex.json",
+  "author": "ORBIT maintainers",
+  "timestamp": "2026-11-06T14:50:00Z",
+  "version": 3,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-91403"
+      },
+      "products": [
+        {
+          "@id": "pkg:rpm/redhat/java-21-openjdk-headless@21.0.13.0.9-1.2.el9?arch=x86_64&distro=redhat-9.8&epoch=1"
+        },
+        {
+          "@id": "pkg:rpm/redhat/java-21-openjdk-headless@21.0.13.0.9-1.2.el9?arch=aarch64&distro=redhat-9.8&epoch=1"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Exact Red Hat OpenJDK package version and architecture in Keycloak 26.8.2 only. Both images contain the same noarch ca-certificates RPM version 2026.2.92_v9.0.319-90.3.el9_8, the RHEL 9 package in RHSA-2026:88459. Red Hat states RHEL OpenJDK relies on the system CA bundle; the original CVE-2026-91403 is the insufficient upstream Java-side blocklist, and root removal is tracked separately as CVE-2026-114406. The AMD64 JRE cacerts check found no compromised Comodo AAA Services or emSign ECC Root CA G3 aliases. This statement is loaded only by trivy-keycloak.yaml for the Keycloak 26.8.2 multi-architecture scan; it does not apply to other products, versions or image workflows. Evidence: exact AMD64/ARM64 Trivy inventories and AMD64 trust-store check; https://access.redhat.com/security/cve/cve-2026-91403; https://access.redhat.com/security/cve/cve-2026-114406; https://access.redhat.com/errata/RHSA-2026:88459; https://access.redhat.com/security/vulnerabilities/RHSB-2026-012"
+    }
+  ]
+}

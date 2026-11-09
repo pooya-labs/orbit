@@ -1,0 +1,25 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/pooya-labs/orbit/blob/main/security/vex/keycloak-26.8.2-sqlite-fts5-secure-delete.openvex.json",
+  "author": "ORBIT maintainers",
+  "timestamp": "2026-11-09T15:15:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-119374"
+      },
+      "products": [
+        {
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=x86_64&distro=redhat-9.8"
+        },
+        {
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=aarch64&distro=redhat-9.8"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Strictly limited to the exact sqlite-libs 3.34.1-11.el9_8 x86_64/aarch64 PURLs in the published Keycloak 26.8.2 image and this repository's dedicated scan. SQLite is compiled with ENABLE_FTS5=1 on both architectures, so this statement does not claim FTS5 code is absent. CVE-2026-119374 is in the FTS5 secure-delete path and requires a corrupted FTS5 index to be modified while the FTS5 secure-delete option is active (SQLite fix reference: https://sqlite.org/src/info/9cd4f9e920; release containing the fix: https://sqlite.org/releaselog/3_54_0.html). The exact Red Hat NSS 3.124.0-5.el9_6 source RPM was downloaded, signature-verified, and prepared with the downstream patches. Its lib/softoken source audit reports FTS_SOURCE_REFERENCES_FOUND=0 and FTS5_SECURE_DELETE_REFERENCES_FOUND=0; it contains no FTS5 virtual-table, MATCH, or secure-delete consumer path. On native AMD64 and ARM64, Keycloak readiness and OIDC discovery passed, and no container process mapped libsqlite3.so or libsoftokn3.so. Source audit and runtime evidence: workflow run 42640592664 (artifacts 13684951865, 13684747105, 13683214768). The affected package remains installed and the vulnerable capability is compiled in; the justification is only that this FTS5 execution path is not used by the tested Keycloak 26.8.2 runtime. This does not apply to other products, versions, images, FTS5 consumers, SQLite CLI utilities, or custom providers/configurations. Re-evaluate when the base image, NSS/SQLite packages, runtime or provider configuration changes."
+    }
+  ]
+}
