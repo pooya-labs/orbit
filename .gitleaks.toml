@@ -1,0 +1,20 @@
+title = "ORBIT Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+# This value was deliberately used as a synthetic negative-test fixture in
+# historical revisions of runtime_test.go. The exception is constrained by
+# the exact test file, exact fixture value, and the two reviewed commits.
+[[rules]]
+id = "generic-api-key"
+
+  [[rules.allowlists]]
+  description = "Historical synthetic workspace-secret test fixture only"
+  condition = "AND"
+  commits = [
+    "01ae46532a3292ba228fd88aa3f1b635f8686ad8",
+    "58f948be49412567a1a84da9f753b08a21cb531e",
+  ]
+  paths = ['''^server/internal/observability/runtime_test\.go$''']
+  regexes = ['''^workspace-secret-123$''']
