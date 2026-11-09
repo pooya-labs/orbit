@@ -1,0 +1,4 @@
+# Deliberately contains no VEX references. Used only to prove the raw
+# scanner still detects the exact SQLite FTS5/Session findings before package-scoped VEX filtering.
+vulnerability:
+  ignore-unfixed: false
