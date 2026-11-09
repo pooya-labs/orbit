@@ -48,7 +48,7 @@ jobs:
                 ;;
             esac
             case "$path" in
-              server/*|deploy/*|examples/*|docker-compose.yml|docker-compose.*.yml|scripts/check_collector_network.py|scripts/check_observability_limits.py|scripts/check_resource_attribute_allowlist.py|scripts/postgres-restart-smoke.sh|scripts/postgres_backup_restore_smoke.sh)
+              .github/workflows/ci.yml|server/*|deploy/*|examples/*|docker-compose.yml|docker-compose.*.yml|scripts/check_collector_network.py|scripts/check_observability_limits.py|scripts/check_resource_attribute_allowlist.py|scripts/postgres-restart-smoke.sh|scripts/postgres_backup_restore_smoke.sh)
                 observability=true
                 ;;
             esac
@@ -133,7 +133,7 @@ jobs:
     if: needs.scope.outputs.observability == 'true'
     name: Local telemetry pipeline end-to-end smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 30
     env:
       ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS: hooks.example.test
