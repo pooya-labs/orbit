@@ -546,7 +546,7 @@ Exact PR head `8af075d01fd3178857e6aafe867d5f091a3525e6` passed [CI run 41599111
 
 PR #120 was squash-merged into main as 0348f8831d8f008970ad6c42532620a12ff5a0e0. The dashboard footer now displays the existing application release version v0.10.0; a browser regression reads the version from package.json and asserts the footer matches it. Exact PR head 23625b2916457947b44611872508d469ca064130 passed all four CI jobs, including 18/18 Playwright tests and the full Docker telemetry/workspace-isolation/PostgreSQL-recovery job, plus all 13/13 Security jobs. After merge, Pages deployment [41612768102](https://github.com/pooya16pg-spec/orbit/actions/runs/41612768102), release workflow [41612863226](https://github.com/pooya16pg-spec/orbit/actions/runs/41612863226), and post-merge Security [41612767938](https://github.com/pooya16pg-spec/orbit/actions/runs/41612767938) succeeded. See project-context.md for the exact remaining gates and final post-merge CI status.
 
-The human M01 acceptance gate remains open. Use the step-by-step manual accessibility guide (manual-acceptance-guide.md); automated browser/axe success is not a substitute for actual NVDA, TalkBack, VoiceOver, keyboard-only, and visual review.
+At this historical checkpoint the human M01 gate was still open. The owner later confirmed manual keyboard/device/assistive-technology acceptance on 2026-11-10; see the current-scope closeout at the end of this roadmap.
 
 
 ## Post-v1 CF01 — Cloudflare edge gateway (2026-11-06)
@@ -578,7 +578,7 @@ Do not introduce D1/Queues/Redis/NATS, duplicate JWT verification, raw telemetry
 
 ## Post-v1 CF02 — Cloudflare-native D1 runtime (merged foundation, PR #140, updated 2026-11-08)
 
-This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-runtime` edge gateway, the Go/PostgreSQL engineering core, GitHub Pages, or the Apps Script demo. PR #140 remains a draft and has not been deployed.
+This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-runtime` edge gateway, the Go/PostgreSQL engineering core, GitHub Pages, or the Apps Script demo. PR #140 merged the staged foundation; the profile has not been deployed.
 
 - [x] Add the isolated `cloudflare-native` Worker and initial SQLite/D1 schema for workspace membership, service/incident data, immutable audit/timeline records, alert rules, notification metadata, deployments and SLO definitions.
 - [x] Add OIDC discovery/JWKS verification for RS256/ES256 access tokens, exact issuer/audience, standard claim validation and D1-backed workspace-role checks.
