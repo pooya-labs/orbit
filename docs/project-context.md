@@ -1167,9 +1167,10 @@ from a new issue, measured regression, or explicitly requested post-v1 item.
 
 - ORBIT v1.0.0 remains published at https://github.com/pooya-labs/orbit/releases/tag/v1.0.0.
 - The immutable `v1.0.0` tag still points to `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`. Never move or recreate it.
-- Latest inspected `main` is `8759eda737f88958fc24e511b5a8f24357b915c9`. PR #163 (pgx 5.12.0 / puddle 2.2.3), PR #164 (lucide-react 1.70.0), and PR #157 (OpenTelemetry Go modules 1.47.0) were squash-merged after the release. The immutable v1.0.0 tag remains on its original release commit.
-- Exact-main CI [42628810334](https://github.com/pooya-labs/orbit/actions/runs/42628810334), Security [42628810320](https://github.com/pooya-labs/orbit/actions/runs/42628810320), Pages deployment [42628810160](https://github.com/pooya-labs/orbit/actions/runs/42628810160), and stable-release workflow [42629033390](https://github.com/pooya-labs/orbit/actions/runs/42629033390) completed successfully on the prior main head. After PR #157 merged, exact-main CI [42631275304](https://github.com/pooya-labs/orbit/actions/runs/42631275304), Security [42631275307](https://github.com/pooya-labs/orbit/actions/runs/42631275307), and Pages deployment [42631275337](https://github.com/pooya-labs/orbit/actions/runs/42631275337) were still in progress on `8759eda737f88958fc24e511b5a8f24357b915c9`.
-- The earlier release-workflow failure [42628935647](https://github.com/pooya-labs/orbit/actions/runs/42628935647) was caused by the overlapping/cancelled CI execution on intermediate commit `207368270f99092ea2e81b0e7e497adb54d95df5`; the subsequent exact-main CI and release workflow passed. It is not a current code failure.
+- The post-v1 application-code baseline is `8759eda737f88958fc24e511b5a8f24357b915c9`. PR #163 (pgx 5.12.0 / puddle 2.2.3), PR #164 (lucide-react 1.70.0), and PR #157 (OpenTelemetry Go modules 1.47.0) were squash-merged after the release. The immutable v1.0.0 tag remains on its original release commit `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`.
+- On application-code baseline `8759eda…`, exact-main Security [42631275307](https://github.com/pooya-labs/orbit/actions/runs/42631275307) and Pages [42631275337](https://github.com/pooya-labs/orbit/actions/runs/42631275337) succeeded. CI [42631275304](https://github.com/pooya-labs/orbit/actions/runs/42631275304) was cancelled when a documentation-only closeout commit superseded that main head; its E2E Docker job had remained in the startup step. Treat the complete successful exact PR-head CI/Security for PR #157 ([42624823853](https://github.com/pooya-labs/orbit/actions/runs/42624823853), [42624823618](https://github.com/pooya-labs/orbit/actions/runs/42624823618)) as the full post-v1 OpenTelemetry validation; do not report the cancelled main run as a test failure.
+- The final documentation-only main commit `dd5d05baf8291b0ba7de1a3b5f797a6d44fd2bd3` passed CI [42633782680](https://github.com/pooya-labs/orbit/actions/runs/42633782680), Security [42633782856](https://github.com/pooya-labs/orbit/actions/runs/42633782856), Pages [42633783397](https://github.com/pooya-labs/orbit/actions/runs/42633783397), and stable-release verification [42633998789](https://github.com/pooya-labs/orbit/actions/runs/42633998789). The CI correctly skipped Go and local telemetry jobs for the documentation-only diff. The v1.0.0 tag was not moved.
+- The earlier release-workflow failure [42628935647](https://github.com/pooya-labs/orbit/actions/runs/42628935647) was caused by the overlapping/cancelled CI execution on intermediate commit `207368270f99092ea2e81b0e7e497adb54d95df5`; a subsequent release workflow on `1ddb14ff59426a62656c33952d207ce7a94cccd2` succeeded, and the final docs-only release verification also succeeded. It is not a current code failure.
 
 ### Open post-v1 PRs
 
@@ -1179,10 +1180,9 @@ from a new issue, measured regression, or explicitly requested post-v1 item.
 
 ### Next continuation order
 
-1. Verify the post-merge CI, Security and Pages runs for main commit `8759eda737f88958fc24e511b5a8f24357b915c9` before claiming the latest main is fully green.
+1. The last fully verified main checkpoint is documentation-only commit `dd5d05baf8291b0ba7de1a3b5f797a6d44fd2bd3`; its CI, Security, Pages and release-verification runs all succeeded. The application-code baseline includes PRs #163/#164/#157, with PR #157 exact-head CI/Security fully green.
 2. For PR #138, inspect conflict files and reconcile only after the candidate-image publication strategy and registry authorization are explicit. Keep the upstream HIGH finding visible; do not broaden VEX or downgrade Trivy exit behavior.
-3. Update the README/roadmap/project handoff after any later merge with exact commit SHAs and exact CI/Security/Pages outcomes.
-4. Keep production origin, Keycloak tenancy, DNS, Worker routing, D1 deployment and real tenant traffic disabled until the owner-approved $0 deployment plan and exact environment evidence exist.
+3. Keep production origin, Keycloak tenancy, DNS, Worker routing, D1 deployment and real tenant traffic disabled until the owner-approved $0 deployment plan and exact environment evidence exist.
 
 ### Continuity safeguards
 
