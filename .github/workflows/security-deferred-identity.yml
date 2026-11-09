@@ -23,6 +23,12 @@ on:
 
 permissions:
   contents: read
+  packages: read
+
+env:
+  KEYCLOAK_IMAGE: ghcr.io/pooya-labs/orbit-keycloak@sha256:97cc4590f5abd77e23522d6d94c3fe77c82b91c44a4e7acef22aec28c61bf81d
+  TRIVY_USERNAME: ${{ github.actor }}
+  TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   keycloak-image:
@@ -33,18 +39,26 @@ jobs:
       - name: Checkout repository for VEX and Trivy configuration
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
       - name: Verify the pinned Keycloak image includes linux/arm64
         shell: bash
         run: |
           set -euo pipefail
-          docker buildx imagetools inspect quay.io/keycloak/keycloak:26.8.2 | tee /tmp/keycloak-image-manifest.txt
+          docker buildx imagetools inspect $KEYCLOAK_IMAGE | tee /tmp/keycloak-image-manifest.txt
           grep -Eq 'Platform:[[:space:]]+linux/arm64([[:space:]]|$)' /tmp/keycloak-image-manifest.txt
 
       - name: Inspect runtime packages related to the flagged findings
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm --entrypoint /bin/sh quay.io/keycloak/keycloak:26.8.2 -ec '
+          docker run --rm --entrypoint /bin/sh $KEYCLOAK_IMAGE -ec '
             echo "== Runtime package database tools =="
             command -v rpm || echo "rpm is absent"
             command -v microdnf || echo "microdnf is absent"
@@ -100,7 +114,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          container="$(docker create quay.io/keycloak/keycloak:26.8.2)"
+          container="$(docker create $KEYCLOAK_IMAGE)"
           cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
           trap cleanup EXIT
           docker cp "$container:/usr/lib64/libsqlite3.so.0.8.6" /tmp/keycloak-libsqlite3.so
@@ -142,7 +156,7 @@ jobs:
             -e KC_BOOTSTRAP_ADMIN_PASSWORD=ci-placeholder-password \
             -e KC_HEALTH_ENABLED=true -e KC_METRICS_ENABLED=true \
             -e KC_HTTP_ENABLED=true -e KC_HOSTNAME_STRICT=false \
-            quay.io/keycloak/keycloak:26.8.2 start-dev --http-port=8080
+            $KEYCLOAK_IMAGE start-dev --http-port=8080
           ready=0
           for _ in $(seq 1 90); do
             if curl --fail --silent http://127.0.0.1:19000/health/ready > "${RUNNER_TEMP}/keycloak-upstream-ready.json"; then
@@ -200,7 +214,7 @@ jobs:
       - name: Export Keycloak package inventory for security triage
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: quay.io/keycloak/keycloak:26.8.2
+          image-ref: ${{ env.KEYCLOAK_IMAGE }}
           version: v0.76.1
           trivy-config: trivy.yaml
           vuln-type: os,library
@@ -226,7 +240,7 @@ jobs:
             --output /tmp/keycloak-arm64-trivy.json \
             --list-all-pkgs \
             --timeout 10m \
-            quay.io/keycloak/keycloak:26.8.2
+            $KEYCLOAK_IMAGE
 
       - name: Report package versions relevant to current findings
         shell: bash
@@ -291,9 +305,9 @@ jobs:
         run: |
           set -euo pipefail
           set +e
-          trivy image --image-src remote --platform linux/amd64 --config trivy-keycloak.yaml --vuln-type os,library --severity HIGH,CRITICAL --ignore-unfixed=false --exit-code 1 --format table --timeout 10m quay.io/keycloak/keycloak:26.8.2
+          trivy image --image-src remote --platform linux/amd64 --config trivy-keycloak.yaml --vuln-type os,library --severity HIGH,CRITICAL --ignore-unfixed=false --exit-code 1 --format table --timeout 10m $KEYCLOAK_IMAGE
           amd64_status=$?
-          trivy image --image-src remote --platform linux/arm64 --config trivy-keycloak.yaml --vuln-type os,library --severity HIGH,CRITICAL --ignore-unfixed=false --exit-code 1 --format table --timeout 10m quay.io/keycloak/keycloak:26.8.2
+          trivy image --image-src remote --platform linux/arm64 --config trivy-keycloak.yaml --vuln-type os,library --severity HIGH,CRITICAL --ignore-unfixed=false --exit-code 1 --format table --timeout 10m $KEYCLOAK_IMAGE
           arm64_status=$?
           set -e
           echo "Keycloak scan exit codes: amd64=$amd64_status arm64=$arm64_status"
@@ -305,8 +319,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p sbom
-          trivy image --image-src remote --platform linux/amd64 --format cyclonedx --output sbom/keycloak-amd64.cdx.json --timeout 10m quay.io/keycloak/keycloak:26.8.2
-          trivy image --image-src remote --platform linux/arm64 --format cyclonedx --output sbom/keycloak-arm64.cdx.json --timeout 10m quay.io/keycloak/keycloak:26.8.2
+          trivy image --image-src remote --platform linux/amd64 --format cyclonedx --output sbom/keycloak-amd64.cdx.json --timeout 10m $KEYCLOAK_IMAGE
+          trivy image --image-src remote --platform linux/arm64 --format cyclonedx --output sbom/keycloak-arm64.cdx.json --timeout 10m $KEYCLOAK_IMAGE
 
       - name: Upload Keycloak SBOMs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -323,13 +337,21 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
       - name: Verify native ARM64 runner and image architecture
         shell: bash
         run: |
           set -euo pipefail
           test "$(uname -m)" = "aarch64"
-          docker pull --platform linux/arm64 quay.io/keycloak/keycloak:26.8.2
-          architecture="$(docker image inspect quay.io/keycloak/keycloak:26.8.2 --format '{{.Architecture}}')"
+          docker pull --platform linux/arm64 $KEYCLOAK_IMAGE
+          architecture="$(docker image inspect $KEYCLOAK_IMAGE --format '{{.Architecture}}')"
           test "$architecture" = "arm64"
           echo "KEYCLOAK_IMAGE_ARCHITECTURE=$architecture"
 
@@ -337,7 +359,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          container="$(docker create --platform linux/arm64 quay.io/keycloak/keycloak:26.8.2)"
+          container="$(docker create --platform linux/arm64 $KEYCLOAK_IMAGE)"
           cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
           trap cleanup EXIT
           docker cp "$container:/usr/lib64/libsqlite3.so.0.8.6" /tmp/keycloak-arm64-libsqlite3.so
@@ -367,7 +389,7 @@ jobs:
             -e KC_BOOTSTRAP_ADMIN_PASSWORD=ci-placeholder-password \
             -e KC_HEALTH_ENABLED=true -e KC_METRICS_ENABLED=true \
             -e KC_HTTP_ENABLED=true -e KC_HOSTNAME_STRICT=false \
-            quay.io/keycloak/keycloak:26.8.2 start-dev --http-port=8080
+            $KEYCLOAK_IMAGE start-dev --http-port=8080
           ready=0
           for _ in $(seq 1 90); do
             if curl --fail --silent http://127.0.0.1:19000/health/ready > "${RUNNER_TEMP}/keycloak-arm64-ready.json"; then

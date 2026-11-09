@@ -35,7 +35,7 @@ services:
     mem_limit: 2g
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.8.2
+    image: quay.io/keycloak/keycloak:26.8.1
     command: ["start", "--http-enabled=true", "--proxy-headers=xforwarded"]
     restart: unless-stopped
     environment:
