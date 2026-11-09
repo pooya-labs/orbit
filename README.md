@@ -47,7 +47,7 @@ The metric catalog is intentionally small and server-owned. The browser cannot s
 
 ## Runtime profiles — intentionally separate
 
-ORBIT has three established execution profiles shown below. A fourth, separate Cloudflare-native Workers + D1 profile is being developed in draft PR #140; it is not merged or deployed and is documented separately below. These paths share the dashboard/API contract where applicable, but their deployment state and data guarantees are different.
+ORBIT has three documented execution profiles shown below, plus a separately staged Cloudflare-native Workers + D1 foundation merged in PR #140. The D1 profile is not deployed and is documented separately below. These paths share the dashboard/API contract where applicable, but their deployment state and data guarantees are different.
 
 | Capability | Apps Script portfolio demo | Cloudflare edge profile (post-v1; not live yet) | Local engineering stack |
 | --- | --- | --- | --- |
@@ -280,7 +280,7 @@ go build ./cmd/orbit-api
 
 ### آخرین تغییرات — ۹ نوامبر ۲۰۲۶
 
-نسخهٔ پایدار v1.0.0 و تگ تغییرناپذیر آن بدون تغییر باقی مانده‌اند. پس از انتشار، PR شمارهٔ ۱۶۳ برای ارتقای pgx به نسخهٔ ۵.۱۲.۰ و PR شمارهٔ ۱۶۴ برای ارتقای lucide-react به نسخهٔ ۱.۷۰.۰ ادغام شدند. در commit فعلی شاخهٔ اصلی، آزمون‌های CI و امنیت، انتشار GitHub Pages و بررسی فرایند انتشار موفق بوده‌اند.
+نسخهٔ پایدار v1.0.0 و تگ تغییرناپذیر آن بدون تغییر باقی مانده‌اند. پس از انتشار، PRهای نگه‌داری وابستگی‌ها و PR شمارهٔ ۱۳۸ برای اصلاح امنیتی Keycloak 26.8.2 ادغام شدند. ایمیج اصلاح‌شده با digest تغییرناپذیر روی AMD64 و ARM64 منتشر و با اسکن سخت‌گیرانه تأیید شده است؛ اما هنوز در Production مستقر نشده و Compose همچنان روی نسخهٔ 26.8.1 است. بررسی دستی دسترس‌پذیری نیز توسط مالک پروژه در ۱۰ نوامبر ۲۰۲۶ تأیید شده است. راه‌اندازی زیرساخت واقعی، آزمون ظرفیت در محیط هدف، پشتیبان‌گیری Production و سیاست نگهداری تاریخچه‌ها تا درخواست بعدی به تعویق افتاده‌اند.
 
 ارتقای OpenTelemetry به نسخهٔ ۱.۴۷.۰ در PR شمارهٔ ۱۵۷ پس از موفقیت آزمون کامل Telemetry، جداسازی فضای‌کاری‌ها، بازیابی PostgreSQL و اسکن‌های امنیتی ادغام شد. پس از آن، commit نهایی مستندات `dd5d05baf8291b0ba7de1a3b5f797a6d44fd2bd3` نیز آزمون‌های CI، امنیت، انتشار Pages و بررسی انتشار را با موفقیت گذراند؛ در این commit چون تغییرات فقط مستنداتی بودند، تست‌های backend و Telemetry به‌درستی اجرا نشدند. اجرای CI قبلی روی commit کد `8759eda…` هنگام جایگزینی با commit مستندات لغو شد، نه اینکه شکست بخورد. تنها مورد اصلیِ سخت‌سازی پس از نسخهٔ ۱، PR شمارهٔ ۱۳۸ برای اصلاح Keycloak است که در حالت Draft باقی مانده و هنوز به رفع تعارض شاخه، انتشار ایمیج چندمعماری اصلاح‌شده و اسکن سخت‌گیرانهٔ همان digest نیاز دارد. آستانهٔ اسکن امنیتی یا دامنهٔ VEX نباید تضعیف شود و هیچ استقرار تولیدی برای هویت یا مبدأ اصلی ادعا نمی‌شود. محدودهٔ نسخهٔ عمومی GitHub Pages و دموی مصنوعی Apps Script همان نسخهٔ پایدار ۱.۰.۰ است.
 
