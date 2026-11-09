@@ -209,9 +209,11 @@ No open-source license has been selected. All rights are reserved by default.
 
 ---
 
-## Latest project update — 8 November 2026
+## Latest project update — 9 November 2026
 
-The owner identity in the dashboard sidebar was consolidated into one clickable Pooya Labs link, and the visible platform label was enlarged and given stronger weight for readability. The stable v1.0.0 release scope remains complete. Post-v1 Cloudflare work must retain the distinction documented above: the edge gateway is not connected to a live Go/Keycloak origin, and the separate Workers + D1 draft is not deployed.
+The stable v1.0.0 release and immutable tag remain unchanged. Post-release maintenance merged [PR #163](https://github.com/pooya-labs/orbit/pull/163) (pgx 5.12.0), [PR #164](https://github.com/pooya-labs/orbit/pull/164) (lucide-react 1.70.0), and [PR #157](https://github.com/pooya-labs/orbit/pull/157) (OpenTelemetry Go modules 1.47.0; merge commit `8759eda737f88958fc24e511b5a8f24357b915c9`). PR #157's exact-head CI [42624823853](https://github.com/pooya-labs/orbit/actions/runs/42624823853) and Security [42624823618](https://github.com/pooya-labs/orbit/actions/runs/42624823618) both passed, including the full telemetry, tenant-isolation, and PostgreSQL recovery checks. The resulting main commit is `8759eda737f88958fc24e511b5a8f24357b915c9`; its post-merge CI, Security, and Pages runs were still in progress at this update ([42631275304](https://github.com/pooya-labs/orbit/actions/runs/42631275304), [42631275307](https://github.com/pooya-labs/orbit/actions/runs/42631275307), [42631275337](https://github.com/pooya-labs/orbit/actions/runs/42631275337)).
+
+One post-v1 production-hardening item remains deliberately separate from the public demo release: [PR #138](https://github.com/pooya-labs/orbit/pull/138), the deferred Keycloak 26.8.2 remediation, still requires conflict resolution, a published multi-architecture patched image, and strict scans against its immutable digest. Do not weaken HIGH/CRITICAL scanning or VEX scope, move the v1.0.0 tag, or describe the deferred production identity/origin as deployed. The Pages + synthetic Apps Script demo remains the complete v1.0.0 scope.
 
 ## Project ownership
 
@@ -276,9 +278,11 @@ go build ./cmd/orbit-api
 
 نقشهٔ راه، معماری، راهنمای استقرار، مدل تهدید امنیتی، راهنمای دسترس‌پذیری و قرارداد OpenAPI در پوشهٔ `docs/` و پیوندهای بخش انگلیسی README قرار دارند. وضعیت نسخهٔ پایدار و محدودهٔ کارهای پس از v1 نیز در همان مستندات ثبت شده است.
 
-### آخرین تغییرات — ۸ نوامبر ۲۰۲۶
+### آخرین تغییرات — ۹ نوامبر ۲۰۲۶
 
-پیوند هویت مالک در نوار کناری داشبورد یکپارچه شد تا نشان و عنوان پویا لبز هر دو به‌صورت یک لینک قابل کلیک عمل کنند. اندازه و وزن عنوان نیز برای خوانایی بیشتر افزایش یافت. محدودهٔ نسخهٔ پایدار v1.0.0 تکمیل‌شده باقی می‌ماند؛ وضعیت توسعهٔ Cloudflare پس از نسخهٔ ۱ همان‌طور که در بخش انگلیسی توضیح داده شده، هنوز معادل یک استقرار تولیدی کامل نیست.
+نسخهٔ پایدار v1.0.0 و تگ تغییرناپذیر آن بدون تغییر باقی مانده‌اند. پس از انتشار، PR شمارهٔ ۱۶۳ برای ارتقای pgx به نسخهٔ ۵.۱۲.۰ و PR شمارهٔ ۱۶۴ برای ارتقای lucide-react به نسخهٔ ۱.۷۰.۰ ادغام شدند. در commit فعلی شاخهٔ اصلی، آزمون‌های CI و امنیت، انتشار GitHub Pages و بررسی فرایند انتشار موفق بوده‌اند.
+
+ارتقای OpenTelemetry به نسخهٔ ۱.۴۷.۰ در PR شمارهٔ ۱۵۷ پس از موفقیت آزمون کامل Telemetry، جداسازی فضای‌کاری‌ها، بازیابی PostgreSQL و اسکن‌های امنیتی ادغام شد. تنها مورد اصلیِ سخت‌سازی پس از نسخهٔ ۱، PR شمارهٔ ۱۳۸ برای اصلاح Keycloak است که هنوز به رفع تعارض شاخه، انتشار ایمیج چندمعماری اصلاح‌شده و اسکن سخت‌گیرانهٔ همان digest نیاز دارد. آستانهٔ اسکن امنیتی یا دامنهٔ VEX نباید تضعیف شود و هیچ استقرار تولیدی برای هویت یا مبدأ اصلی ادعا نمی‌شود. محدودهٔ نسخهٔ عمومی GitHub Pages و دموی مصنوعی Apps Script همان نسخهٔ پایدار ۱.۰.۰ است.
 
 ### مالکیت و نگه‌داری
 
