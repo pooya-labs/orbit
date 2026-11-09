@@ -12,8 +12,8 @@
 
 ORBIT is an engineering-focused observability workspace for exploring service health, incidents, operational workflows, and distributed telemetry across metrics, logs, and traces.
 
-> **Release status: v1.0.0 stable portfolio-demo scope is complete. Post-v1 Cloudflare expansion is in progress.**  
-> The immutable v1.0.0 release gates passed. The Cloudflare edge gateway is merged into main, but it is not yet connected to a live Go/Keycloak origin; a separate Workers + D1 profile is under development in draft [PR #140](https://github.com/pooya-labs/orbit/pull/140) and is not deployed. Apps Script remains unchanged and synthetic-only. Do not interpret either Cloudflare code path as a production-ready or live dual-runtime deployment.
+> **Release status: ORBIT v1.0.0 portfolio-demo scope is complete; post-v1 maintenance is closed for the current scope.**  
+> The patched Keycloak 26.8.2 artifact has been published and strictly validated on AMD64/ARM64, and PR [#138](https://github.com/pooya-labs/orbit/pull/138) is merged. The Cloudflare edge gateway and the separate Workers + D1 foundation are code-complete only to their documented stages; neither is connected to a live Go/Keycloak origin or deployed as a production runtime. Apps Script remains unchanged and synthetic-only.
 
 ## Start here
 
@@ -62,7 +62,7 @@ ORBIT has three established execution profiles shown below. A fourth, separate C
 
 The canonical orbit-runtime edge gateway was merged through PR #136. The last inspected Cloudflare state (November 6, 2026) showed Worker version 0.2.3, but its workers.dev route was disabled, no Worker bindings or gateway secret were attached, and the Go/Caddy origin was not provisioned. The Worker therefore remains fail-closed; this repository does not claim that the Cloudflare runtime is live.
 
-A separate Workers + D1 implementation is being developed in draft [PR #140](https://github.com/pooya-labs/orbit/pull/140). It is a different runtime profile, not an upgrade to the thin edge gateway. It currently lacks live telemetry, alert evaluation, SLO budget calculation, notification delivery/attempt history, rate limiting and complete frontend acceptance. Do not deploy it or point Pages at it until those gates pass.
+A separate Workers + D1 implementation was merged as a staged foundation in [PR #140](https://github.com/pooya-labs/orbit/pull/140). It is a different runtime profile, not an upgrade to the thin edge gateway. It still lacks live telemetry, alert evaluation, SLO budget calculation, notification delivery/attempt history, complete frontend acceptance and a deployed D1 environment. Do not deploy it or point Pages at it until those gates pass.
 
 
 
@@ -151,8 +151,8 @@ These results establish the automated and repository-level checks listed above. 
 The following are documented follow-up boundaries, not unfinished tasks hidden inside the released portfolio demo:
 
 1. **Live Google deployment acceptance:** an owner-side clean-browser smoke is still needed to independently verify the deployed Apps Script doGet, bootstrap, metadata, a synthetic mutation, refresh persistence, and separate browser profiles. The automated bridge uses a mocked Google runtime.
-2. **Human accessibility acceptance:** automated Chromium/axe checks and the Windows NVDA Browse Mode navigation check passed. Human keyboard-only rendered-state review, Android TalkBack, Apple VoiceOver, and audible-output review have not all been recorded. No formal WCAG conformance or certification is claimed. Use the [manual acceptance guide](docs/manual-acceptance-guide.md).
-3. **Production identity and hosting:** the Go/PostgreSQL/OTel services, Keycloak, and ingress scaffolding are not a live hosted production service. The separate deferred Keycloak image scan has unresolved HIGH findings; it remains enabled and must be remediated before production identity deployment.
+2. **Human accessibility acceptance:** the project owner has confirmed the manual device/keyboard review is complete (2026-11-10), in addition to automated Chromium/axe and Windows NVDA checks. No formal WCAG conformance or certification is claimed; the project does not advertise one.
+3. **Production identity and hosting:** the Go/PostgreSQL/OTel services, Keycloak, and ingress scaffolding are not a live hosted production service. The patched Keycloak 26.8.2 image is published and passed strict HIGH/CRITICAL scans against its immutable AMD64/ARM64 digest; production Compose intentionally remains on Keycloak 26.8.1 pending a separate deployment decision.
 4. **Production operations:** hosted API and managed persistence, DNS/TLS/firewall/private-network policy, encrypted off-host backups and PITR, measured RPO/RTO, approved durable-history retention, sustained target-environment load/capacity, and production recovery exercises require their own deployment evidence.
 5. **Deliberately bounded functionality:** arbitrary PromQL/LogQL, unrestricted metric discovery, real public-demo telemetry ingestion, real notification delivery, and Redis/NATS application integration are not v1 demo features.
 
@@ -209,11 +209,11 @@ No open-source license has been selected. All rights are reserved by default.
 
 ---
 
-## Latest project update — 9 November 2026
+## Latest project update — 10 November 2026
 
 The stable v1.0.0 release and immutable tag remain unchanged. Post-release maintenance merged [PR #163](https://github.com/pooya-labs/orbit/pull/163) (pgx 5.12.0), [PR #164](https://github.com/pooya-labs/orbit/pull/164) (lucide-react 1.70.0), and [PR #157](https://github.com/pooya-labs/orbit/pull/157) (OpenTelemetry Go modules 1.47.0; merge commit `8759eda737f88958fc24e511b5a8f24357b915c9`). PR #157's exact-head CI [42624823853](https://github.com/pooya-labs/orbit/actions/runs/42624823853) and Security [42624823618](https://github.com/pooya-labs/orbit/actions/runs/42624823618) both passed, including the full telemetry, tenant-isolation, and PostgreSQL recovery checks. The application-code baseline is `8759eda737f88958fc24e511b5a8f24357b915c9` (PR #157). Its post-merge Security [42631275307](https://github.com/pooya-labs/orbit/actions/runs/42631275307) and Pages [42631275337](https://github.com/pooya-labs/orbit/actions/runs/42631275337) succeeded; CI [42631275304](https://github.com/pooya-labs/orbit/actions/runs/42631275304) was cancelled when the documentation-only closeout commit superseded it, not because of a test failure. The final documentation-only main commit `dd5d05baf8291b0ba7de1a3b5f797a6d44fd2bd3` then passed CI [42633782680](https://github.com/pooya-labs/orbit/actions/runs/42633782680), Security [42633782856](https://github.com/pooya-labs/orbit/actions/runs/42633782856), Pages [42633783397](https://github.com/pooya-labs/orbit/actions/runs/42633783397), and stable-release verification [42633998789](https://github.com/pooya-labs/orbit/actions/runs/42633998789). Its CI correctly skipped Go and telemetry jobs because the diff was documentation-only. The immutable `v1.0.0` tag remained on `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`.
 
-One post-v1 production-hardening item remains deliberately separate from the public demo release: [PR #138](https://github.com/pooya-labs/orbit/pull/138), the deferred Keycloak 26.8.2 remediation, still requires conflict resolution, a published multi-architecture patched image, and strict scans against its immutable digest. Do not weaken HIGH/CRITICAL scanning or VEX scope, move the v1.0.0 tag, or describe the deferred production identity/origin as deployed. The Pages + synthetic Apps Script demo remains the complete v1.0.0 scope.
+The Keycloak 26.8.2 remediation in [PR #138](https://github.com/pooya-labs/orbit/pull/138) has now been squash-merged as `3c8ebc56d34a4c9ed553338c7d8531bb1c4a0e20`. Its published immutable GHCR digest passed strict scans on AMD64 and ARM64, and the exact-head source rebuild and deferred identity checks passed. Production Compose remains on Keycloak 26.8.1; the patched artifact was not promoted or deployed. The v1.0.0 tag remains unchanged.
 
 ## Project ownership
 
