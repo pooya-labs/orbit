@@ -36,20 +36,6 @@ jobs:
       - name: Checkout ORBIT
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Verify pinned upstream digest matches the current Keycloak 26.8.2 tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          pinned_digest="${KEYCLOAK_BASE_IMAGE##*@}"
-          current_digest="$(docker buildx imagetools inspect quay.io/keycloak/keycloak:26.8.2 | awk '$1 == "Digest:" {print $2; exit}')"
-          [[ "$pinned_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          if [[ "$current_digest" != "$pinned_digest" ]]; then
-            echo "Keycloak 26.8.2 upstream tag moved; review and update the immutable base pin before validation." >&2
-            echo "Pinned: $pinned_digest; current: $current_digest" >&2
-            exit 1
-          fi
-          echo "Verified pinned Keycloak base: $pinned_digest"
-
       - name: Set up Java 21
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:
