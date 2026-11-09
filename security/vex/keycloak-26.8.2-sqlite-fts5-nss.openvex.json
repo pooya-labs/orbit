@@ -1,0 +1,25 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/pooya-labs/orbit/blob/main/security/vex/keycloak-26.8.2-sqlite-fts5-nss.openvex.json",
+  "author": "ORBIT maintainers",
+  "timestamp": "2026-11-08T21:35:00Z",
+  "version": 2,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-119373"
+      },
+      "products": [
+        {
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=x86_64&distro=redhat-9.8"
+        },
+        {
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=aarch64&distro=redhat-9.8"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Scope: only the exact Red Hat sqlite-libs PURLs (3.34.1-11.el9_8, x86_64/aarch64, RHEL 9.8) present in the published quay.io/keycloak/keycloak:26.8.2 image when scanned through trivy-keycloak.yaml. This is not a claim that SQLite or its vulnerable FTS5 code is absent: the installed amd64 libsqlite3.so reports SQLITE_ENABLE_FTS5=1. Red Hat describes CVE-2026-119373 as requiring an application to expose FTS5 virtual full-text indexing with suppressed detail storage, accept negative row IDs, and execute targeted prefix MATCH expressions (https://access.redhat.com/security/cve/cve-2026-119373). The exact nss-softokn source version in both image inventories is 3.124.0-5.el9_6. Its corresponding nss-3.124.0-5.el9_6.src.rpm was fetched from Red Hat UBI 9 AppStream, SHA-256 checked (54413db2daff5780009e38d8e2ed0501b4e7a671302e09160de7f1990c52b4fe), and its RPM signature verified against the official Red Hat release key fingerprint 567E347AD0044ADE55BA8A5F199E2F91FD431D51. The exact downstream spec patches were applied with rpmbuild -bp. The prepared lib/softoken tree reports FTS_SOURCE_REFERENCES_FOUND=0 and SQLITE_DYNAMIC_EXTENSION_LOADING_FOUND=0: no FTS5, CREATE VIRTUAL TABLE, MATCH, sqlite3_load_extension, or sqlite3_enable_load_extension references; the observed SQLite calls are ordinary database/table operations and parameterized statements. Live runtime probes then started the published Keycloak 26.8.2 image on native linux/amd64 and linux/arm64 runners, passed /health/ready and OIDC discovery on both, and found neither libsqlite3.so nor libsoftokn3.so mapped in any container process. Evidence is retained in workflow run 42525414926: exact patched NSS source audit artifact 13634414163, amd64 runtime mapping artifact 13634744208, and native arm64 runtime mapping artifact 13635575240. The statement intentionally uses vulnerable_code_not_in_execute_path: the affected package remains installed, and FTS5 is compiled in, but the vulnerable FTS5 consumer path is not part of the tested Keycloak runtime. This statement is restricted to the exact package PURLs and Keycloak 26.8.2 scan configuration; it is not applicable to other products, package versions, images, custom SQLite consumers, or the SQLite CLI. Re-evaluate whenever the Keycloak base image, NSS/SQLite packages, custom providers, or runtime/crypto configuration changes."
+    }
+  ]
+}

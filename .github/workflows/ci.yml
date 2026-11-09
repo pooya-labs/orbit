@@ -185,7 +185,7 @@ jobs:
           assert not published("otel-collector"), published("otel-collector")
           assert {"default", "ingress", "telemetry-internal"} <= set(services["api"]["networks"])
           assert {"default", "ingress"} <= set(services["keycloak"]["networks"])
-          assert services["keycloak"]["image"] == "quay.io/keycloak/keycloak:26.8.1"
+          assert services["keycloak"]["image"] == "quay.io/keycloak/keycloak:26.8.2"
           assert "ingress" in services["caddy"]["networks"]
           assert "default" not in services["caddy"]["networks"]
           assert "telemetry-internal" not in services["caddy"]["networks"]

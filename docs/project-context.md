@@ -899,8 +899,12 @@ Repository: `pooya-labs/orbit`; default branch: `main`.
 - The OCI free deployment uses one 2-OCPU / 12-GB Ampere A1 instance, GitHub
   Pages, DuckDNS, self-hosted PostgreSQL/Keycloak, Caddy, Collector, Prometheus,
   Loki and Tempo. This is single-node and has no HA.
-- Keycloak is pinned to 26.8.1 (not 26.7.3); 26.8.1 fixes security issues
-  affecting 26.7.3, including the documented PAR single-use bypass.
+- Keycloak is pinned to 26.8.2 in the production Compose stack and the deferred
+  identity scan. Upstream published 26.8.2 on 2026-11-05 with additional security
+  fixes; see the [official Keycloak release](https://github.com/keycloak/keycloak/releases/tag/26.8.2).
+  The earlier 26.8.1 scan failure below is retained as historical evidence; the
+  26.8.2 image must pass the exact-image Trivy gate and ARM64 manifest check before
+  any production identity deployment.
 - `deploy/production/backup-to-oci.sh` uses the VM's OCI instance principal,
   a dedicated private bucket, an age public recipient whose private identity is
   kept offline, and a 16-GB maximum bucket budget. It backs up all PostgreSQL
@@ -1059,14 +1063,68 @@ remain deferred until after the portfolio v1 release, as previously requested.
   the separate scheduled/manual deferred identity workflow.
 - The separate Keycloak run
   [42032403489](https://github.com/pooya-labs/orbit/actions/runs/42032403489)
-  is red on the known HIGH OpenJDK CVE-2026-91403, SQLite
-  CVE-2026-119373 / CVE-2026-119586 and Guava CVE-2026-102554 findings in
-  `quay.io/keycloak/keycloak:26.8.1`. It was not suppressed, broadly VEXed or
-  silently marked green. This is an open production-identity-path task, not
-  a v1 portfolio-demo release blocker.
-- Keep that scan enabled weekly and for changes to the identity deployment
-  paths. Resolve findings only with a real vendor patch or evidence-based
-  mitigation before production identity rollout.
+  failed on the historical `quay.io/keycloak/keycloak:26.8.1` image with HIGH
+  OpenJDK CVE-2026-91403, SQLite CVE-2026-119373 / CVE-2026-119586 and Guava
+  CVE-2026-102554 findings. It was not suppressed, broadly VEXed or silently
+  marked green. The production image and deferred scan are now pinned to 26.8.2;
+  its exact-image Trivy scan and linux/arm64 manifest verification must pass before
+  production identity deployment. The first exact-image scan of 26.8.2
+  [42225793814](https://github.com/pooya-labs/orbit/actions/runs/42225793814)
+  passed the ARM64 manifest check but failed Trivy with three HIGH findings:
+  OpenJDK CVE-2026-91403, SQLite CVE-2026-119373 / CVE-2026-119586, and
+  Guava CVE-2026-102554. The package inventory in
+  [run 42227758708](https://github.com/pooya-labs/orbit/actions/runs/42227758708)
+  gives the following exact package data:
+  - `ca-certificates` is `2026.2.92_v9.0.319-90.3.el9_8`, exactly the
+    RHEL 9 package in [RHSA-2026:88459](https://access.redhat.com/errata/RHSA-2026:88459).
+    Red Hat clarifies that CVE-2026-91403 was the insufficient first upstream
+    OpenJDK mitigation; RHEL OpenJDK RPMs rely on the system CA package, and the
+    later root-removal update is tracked under CVE-2026-114406 / upstream
+    CVE-2026-114820
+    ([CVE-2026-91403](https://access.redhat.com/security/cve/cve-2026-91403),
+    [CVE-2026-114406](https://access.redhat.com/security/cve/cve-2026-114406)).
+    CI inspected the actual Java trust store: the only matching alias was
+    `emsignrootca-g1`; the affected Comodo AAA Services and emSign ECC Root CA
+    G3 aliases were absent. A narrowly scoped OpenVEX statement now marks only
+    the exact RHEL `java-21-openjdk-headless` package PURL in this Keycloak
+    image not affected by CVE-2026-91403. It does not exempt other Java builds,
+    Red Hat build-of-OpenJDK, or other images.
+  - `sqlite-libs` is exactly `3.34.1-11.el9_8`; its installed files are the
+    shared library only. The `sqlite3` CLI is absent, no executable in the
+    inspected runtime paths links to `libsqlite3`, and no SQLite JAR exists
+    in the Keycloak/JVM application library path. CVE-2026-119586 is in the
+    SQLite command-line shell `.recover` implementation, not the shared
+    library. A narrowly scoped OpenVEX statement now marks only this exact
+    `sqlite-libs` PURL not affected by CVE-2026-119586. It does not cover the
+    SQLite CLI package or the separate FTS5 CVE.
+  - CVE-2026-119373 affects SQLite FTS5 under specific application/table/query
+    preconditions. Red Hat's statement says exploitation requires exposed FTS5
+    virtual full-text indexing with suppressed detail storage, negative row
+    values and targeted prefix MATCH expressions. FTS5 is compiled into this
+    image's SQLite library; do not describe the vulnerable library code as
+    absent. A narrow OpenVEX statement now marks only the exact
+    `sqlite-libs 3.34.1-11.el9_8` x86_64/aarch64 PURLs in Keycloak 26.8.2 as
+    `not_affected` / `vulnerable_code_not_in_execute_path`. The exact Red Hat
+    NSS source RPM `nss-3.124.0-5.el9_6.src.rpm` was downloaded, checksum
+    recorded and prepared with all declared downstream patches using
+    `rpmbuild -bp`. The resulting `lib/softoken` code has no FTS5, virtual
+    table, MATCH or extension-loading path; it uses regular table/index CRUD
+    and bound parameters. Runtime package/linkage inventory found no SQLite
+    CLI or Java SQLite driver and only `libsoftokn3.so` linked to
+    `libsqlite3`. The source audit evidence is retained as a CI artifact;
+    the separate candidate checks compare raw Trivy detection with the
+    package-scoped VEX-filtered result. This disposition is specific to the
+    exact image/package set and does not generalize to other SQLite consumers.
+    ([Red Hat CVE details](https://access.redhat.com/security/cve/cve-2026-119373)).
+  - The 2026-11-08 isolated Keycloak source-build experiment applied a narrow Guava BOM override before the Quarkus BOM. Maven effective-POM verification and the complete Keycloak core/Quarkus build passed; the generated distribution contains only `com.google.guava.guava-33.7.2-jre.jar` (not 33.6.0). Candidate workflow [run 42520290804](https://github.com/pooya-labs/orbit/actions/runs/42520290804) passed all 12 steps: candidate image build, `kc.sh --version`, readiness, OIDC discovery, and pinned Trivy scan. The assertion confirms CVE-2026-102554 is absent in the CI-only linux/amd64 candidate while SQLite FTS5 CVE-2026-119373 remains present and visible. The earlier false failure (`trivy: command not found`, exit 127) was a CI tooling problem and has been corrected by using the pinned Trivy Action. The Dockerfile removes the complete upstream `/opt/keycloak` tree before copying the generated distribution so an old Guava JAR cannot survive in merged image layers. This does not produce or publish a production image, does not validate arm64, and does not resolve FTS5. The published upstream image strict scan [run 42520290899](https://github.com/pooya-labs/orbit/actions/runs/42520290899) still fails on both amd64 and arm64.
+    ([advisory](https://advisories.gitlab.io/maven/com.google.guava/guava/CVE-2026-102554/)).
+  The two VEX statements are package-version-specific and evidence-backed; no
+  broad image exception or blanket ignore was added. Keep production identity blocked
+  until every remaining finding has an evidence-based disposition and the
+  exact-image scan passes.
+- Keep the scan enabled weekly, on relevant pull requests, and for changes to
+  the identity deployment paths. Resolve findings only with a real vendor patch
+  or evidence-based mitigation before production identity rollout.
 
 ### Owner-supplied Apps Script URL — live verification boundary
 
@@ -1140,7 +1198,7 @@ from a new issue, measured regression, or explicitly requested post-v1 item.
 
 - PR #137 carries the consolidated Cloudflare runbook, README, roadmap and project-handoff corrections, including the billing clarification first proposed in PR #139. PR #139 is already closed as superseded; keep one authoritative runbook and roadmap entry.
 - PR #139 is docs-only and has been closed as superseded by the consolidated PR #137; do not maintain two competing billing-gate edits.
-- PR [#138](https://github.com/pooya-labs/orbit/pull/138) updates the deferred Keycloak origin to 26.8.2. Its exact-image scan still reports unresolved HIGH findings (including SQLite FTS5 and Guava; the Java CA finding needs narrow vendor-evidence disposition). Its deferred production-identity security jobs are not clean. Keep the production identity/origin gate blocked; do not suppress findings or call this scan green.
+- PR [#138](https://github.com/pooya-labs/orbit/pull/138) updates the deferred Keycloak origin to 26.8.2. It remains the only open PR in the repository; the latest merged PR is #151. The exact Red Hat NSS downstream source audit and runtime linkage inventory support a narrowly scoped FTS5 VEX for only the exact sqlite-libs PURLs in Keycloak 26.8.2. Candidate validation on exact PR head `1d120b95df1f30daa8136583527ab4c653a72e12` passed both native architectures in [run 42537493841](https://github.com/pooya-labs/orbit/actions/runs/42537493841): source build, patched distribution, image build, readiness/OIDC, runtime map, raw FTS5 detection, strict VEX-filtered HIGH/CRITICAL scan and final assertions. The workflow lifecycle bug was fixed by moving the runtime-map check into the live-container step before its cleanup trap; the candidate VEX scan now has `exit-code: 1`. Separate deferred scan [run 42537493850](https://github.com/pooya-labs/orbit/actions/runs/42537493850) still fails on the published upstream image's sole HIGH, Guava 33.6.0-jre / CVE-2026-102554. The patched candidate is not published; production Compose remains on upstream Keycloak until a multi-architecture artifact is published and its exact digest passes strict scans.
 - PR #140 is merged as a staged foundation. Continue from `main`; do not deploy or switch the API origin on the basis of source-level CI/Security alone.
 - [Issue #141](https://github.com/pooya-labs/orbit/issues/141) tracked CVE-2026-78661 / GO-2026-6860 and CVE-2026-97045 / GO-2026-6866. It was resolved by PR #142, squash-merged as `1caed65d11bbf9b5d419e4da5429115c98ebe3ac`. First-party Go module locks now use `golang.org/x/net v0.62.0`; the Caddy/Tempo builds, Collector v0.165.0, and source-built Prometheus v3.16.0/Loki v3.7.9 were rebuilt and scanned. Exact PR-head CI passed 4/4, Security passed 13/13, and 11 non-expired CycloneDX SBOM artifacts were uploaded. The Trivy HIGH/CRITICAL gate, non-zero exit behavior and `ignore-unfixed: false` remain enabled; no broad VEX or scanner suppression was added.
 
@@ -1161,6 +1219,19 @@ from a new issue, measured regression, or explicitly requested post-v1 item.
 - Do not move the immutable v1.0.0 tag, change the existing Apps Script runtime, or re-run completed v1 work without a measured regression.
 
 
+## Latest continuation — Keycloak 26.8.2 security track (2026-11-09)
+
+PR [#138](https://github.com/pooya-labs/orbit/pull/138) remains open and CI-only. Production Compose remains on the published upstream Keycloak 26.8.2 image; no production identity deployment or candidate image publication has occurred.
+
+- The exact Red Hat NSS source RPM `nss-3.124.0-5.el9_6.src.rpm` is SHA-256 verified (`54413db2daff5780009e38d8e2ed0501b4e7a671302e09160de7f1990c52b4fe`) and its RPM signature is valid under official Red Hat release-key fingerprint `567E347AD0044ADE55BA8A5F199E2F91FD431D51`. Its declared downstream patches were applied before inspecting source.
+- Patched NSS `lib/softoken` has no FTS5, `CREATE VIRTUAL TABLE`, `MATCH` or SQLite dynamic-extension-loading references. Its SQLite call sites use ordinary tables and parameterized operations.
+- Native linux/amd64 and linux/arm64 probes of the published Keycloak image both passed readiness and OIDC discovery. Neither architecture mapped `libsqlite3.so` or `libsoftokn3.so` in any running container process.
+- The CVE-2026-119373 OpenVEX statement is limited to exact `sqlite-libs 3.34.1-11.el9_8` PURLs for x86_64/aarch64 in the Keycloak 26.8.2 scan, with justification `vulnerable_code_not_in_execute_path`. FTS5 is compiled into SQLite; the statement concerns only the exact tested consumer path.
+- Deferred scan [run 42526403390](https://github.com/pooya-labs/orbit/actions/runs/42526403390) completed the signed source audit and both runtime probes. Its exact-image strict scan still has one HIGH: upstream Guava 33.6.0-jre (fixed version 33.7.2-jre). The HIGH/CRITICAL threshold and `ignore-unfixed: false` are unchanged.
+- Candidate run [42526403434](https://github.com/pooya-labs/orbit/actions/runs/42526403434) now builds on native amd64 and arm64 runners. Both jobs passed source fetch, patch application and Maven effective-POM verification; core/Quarkus compilation was still running at handoff.
+
+Next: publish the already validated candidate as a reproducible multi-architecture artifact, record its immutable digest, and run strict HIGH/CRITICAL scans against that exact digest on amd64 and arm64. Only after those gates pass may production Compose be switched to the candidate. Do not suppress the current upstream Guava finding, deploy identity, or close PR #138 before publication and exact-image validation.
+
 ## 19. Post-v1 maintenance handoff — 2026-11-09
 
 ### Stable release baseline
@@ -1175,7 +1246,7 @@ from a new issue, measured regression, or explicitly requested post-v1 item.
 ### Open post-v1 PRs
 
 - [PR #157](https://github.com/pooya-labs/orbit/pull/157) was squash-merged as `8759eda737f88958fc24e511b5a8f24357b915c9`. Exact PR-head CI [42624823853](https://github.com/pooya-labs/orbit/actions/runs/42624823853) and Security [42624823618](https://github.com/pooya-labs/orbit/actions/runs/42624823618) both succeeded. The full telemetry E2E job passed authenticated workspace write/query isolation and PostgreSQL restart/pool-recovery checks; the PR-head security run passed all relevant dependency, secret-history and image scans.
-- [PR #138](https://github.com/pooya-labs/orbit/pull/138) is a deferred Keycloak 26.8.2 remediation. Its candidate matrix [42537493841](https://github.com/pooya-labs/orbit/actions/runs/42537493841) passed on native AMD64 and ARM64 after building the pinned source and replacing the full upstream distribution with Guava 33.7.2-jre. The upstream published 26.8.2 image scan [42537493850](https://github.com/pooya-labs/orbit/actions/runs/42537493850) still fails on Guava 33.6.0-jre / CVE-2026-102554. The patched candidate is not published; no immutable image digest exists for it. The PR is also dirty/conflicted against latest main. Do not merge or switch production Compose until the branch is reconciled, a reproducible multi-architecture artifact is published through an authorized registry, and strict HIGH/CRITICAL scans pass against that exact digest on both architectures.
+- [PR #138](https://github.com/pooya-labs/orbit/pull/138) is a deferred Keycloak 26.8.2 remediation. Its candidate matrix [42537493841](https://github.com/pooya-labs/orbit/actions/runs/42537493841) passed on native AMD64 and ARM64 after building the pinned source and replacing the full upstream distribution with Guava 33.7.2-jre. The upstream published 26.8.2 image scan [42537493850](https://github.com/pooya-labs/orbit/actions/runs/42537493850) still fails on Guava 33.6.0-jre / CVE-2026-102554. The patched candidate is not published; no immutable image digest exists for it. The PR branch has now been reconciled with the latest main baseline; publication and strict scans of the published digest remain open. Do not merge or switch production Compose until the branch is reconciled, a reproducible multi-architecture artifact is published through an authorized registry, and strict HIGH/CRITICAL scans pass against that exact digest on both architectures.
 - The scheduled deferred-identity workflow on main [42630008753](https://github.com/pooya-labs/orbit/actions/runs/42630008753) failed against the still-pinned main-branch Keycloak 26.8.1 image; this workflow predates PR #138's 26.8.2 branch changes. It is outside the v1 Pages + Apps Script release gate and must not be represented as a green production identity scan.
 
 ### Next continuation order

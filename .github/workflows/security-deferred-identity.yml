@@ -10,6 +10,16 @@ on:
       - ".github/workflows/security-deferred-identity.yml"
       - "deploy/identity/**"
       - "deploy/keycloak/**"
+      - "deploy/production/keycloak/**"
+      - "deploy/production/compose.ingress.yaml"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/security-deferred-identity.yml"
+      - "deploy/identity/**"
+      - "deploy/keycloak/**"
+      - "deploy/production/keycloak/**"
+      - "deploy/production/compose.ingress.yaml"
 
 permissions:
   contents: read
@@ -20,35 +30,362 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Scan the pinned Keycloak image for high and critical vulnerabilities
+      - name: Checkout repository for VEX and Trivy configuration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Verify the pinned Keycloak image includes linux/arm64
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect quay.io/keycloak/keycloak:26.8.2 | tee /tmp/keycloak-image-manifest.txt
+          grep -Eq 'Platform:[[:space:]]+linux/arm64([[:space:]]|$)' /tmp/keycloak-image-manifest.txt
+
+      - name: Inspect runtime packages related to the flagged findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint /bin/sh quay.io/keycloak/keycloak:26.8.2 -ec '
+            echo "== Runtime package database tools =="
+            command -v rpm || echo "rpm is absent"
+            command -v microdnf || echo "microdnf is absent"
+            echo "== SQLite command availability =="
+            command -v sqlite3 || echo "sqlite3 CLI is absent"
+            echo "== SQLite libraries in image =="
+            find /usr/lib64 /lib64 /opt/keycloak/lib -iname "*sqlite*" -print 2>/dev/null || true
+            echo "== Executables linked to SQLite =="
+            for binary in /usr/bin/* /usr/sbin/* /usr/libexec/* /opt/keycloak/bin/*; do
+              [ -f "$binary" ] || continue
+              if ldd "$binary" 2>/dev/null | grep -q "libsqlite3"; then
+                echo "SQLITE_LINKED_BINARY=$binary"
+              fi
+            done
+            echo "== Java executable SQLite linkage =="
+            java_bin="$(command -v java)"
+            java_real="$(readlink -f "$java_bin")"
+            echo "JAVA_EXECUTABLE=$java_real"
+            if ldd "$java_real" 2>/dev/null | grep -q "libsqlite3"; then
+              echo "SQLITE_LINKED_JAVA_EXECUTABLE=$java_real"
+            else
+              echo "Java executable is not dynamically linked to libsqlite3"
+            fi
+            echo "== Shared objects linked to SQLite =="
+            for binary in $(find /usr/lib64 /usr/lib/jvm /opt/keycloak -type f -name "*.so*" 2>/dev/null); do
+              if ldd "$binary" 2>/dev/null | grep -q "libsqlite3"; then
+                echo "SQLITE_LINKED_SHARED_OBJECT=$binary"
+              fi
+            done
+            echo "== SQLite text in Keycloak application libraries =="
+            grep -R -a -l -i "sqlite" /opt/keycloak/lib 2>/dev/null || echo "No SQLite references found in Keycloak application libraries"
+            echo "== Guava jar paths =="
+            find /opt/keycloak/lib -type f -iname "*guava*" -print 2>/dev/null || true
+            echo "== Guava module references =="
+            grep -R -l -F "com.google.guava" /opt/keycloak/lib 2>/dev/null || true
+            echo "== Java trust store location =="
+            java -XshowSettings:properties -version 2>&1 | grep "java.home =" || true
+            java_home="$(java -XshowSettings:properties -version 2>&1 | grep "java.home =" | cut -d= -f2- | xargs)"
+            cacerts="$java_home/lib/security/cacerts"
+            echo "CACERTS_PATH=$cacerts"
+            if [ -e "$cacerts" ] && command -v keytool >/dev/null 2>&1; then
+              if keytool -list -keystore "$cacerts" -storepass changeit > /tmp/keycloak-cacerts.txt 2>/dev/null; then
+                grep -i -E "emSign|Comodo AAA" /tmp/keycloak-cacerts.txt || echo "No matching eMudhra/Comodo aliases in Java trust store"
+              else
+                echo "keytool could not read the Java trust store with the default password"
+              fi
+            else
+              echo "Java trust store or keytool is absent"
+            fi
+          '
+
+      - name: Verify SQLite FTS5 compile option in installed amd64 library
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="$(docker create quay.io/keycloak/keycloak:26.8.2)"
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker cp "$container:/usr/lib64/libsqlite3.so.0.8.6" /tmp/keycloak-libsqlite3.so
+          python3 - <<'PY'
+          import ctypes
+          lib = ctypes.CDLL("/tmp/keycloak-libsqlite3.so")
+          lib.sqlite3_libversion.restype = ctypes.c_char_p
+          lib.sqlite3_compileoption_used.argtypes = [ctypes.c_char_p]
+          lib.sqlite3_compileoption_used.restype = ctypes.c_int
+          version = lib.sqlite3_libversion().decode()
+          fts5 = lib.sqlite3_compileoption_used(b"ENABLE_FTS5")
+          fts4 = lib.sqlite3_compileoption_used(b"ENABLE_FTS4")
+          print("SQLITE_RUNTIME_VERSION=" + version)
+          print("SQLITE_ENABLE_FTS5=" + str(fts5))
+          print("SQLITE_ENABLE_FTS4=" + str(fts4))
+          if not fts5:
+              print("RESULT: SQLite FTS5 is not compiled into the inspected amd64 shared library.")
+          else:
+              print("RESULT: SQLite FTS5 is compiled into the inspected amd64 shared library; investigate consumer reachability, do not suppress CVE-2026-119373.")
+          PY
+
+      - name: Probe running upstream Keycloak for SQLite or NSS runtime mappings
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          report="${RUNNER_TEMP}/keycloak-runtime-sqlite-map.txt"
+          container="keycloak-upstream-runtime-probe"
+          cleanup() {
+            docker logs "$container" > "${RUNNER_TEMP}/keycloak-runtime-container.log" 2>&1 || true
+            docker rm -f "$container" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          : > "$report"
+          docker run -d --name "$container" -p 18080:8080 -p 19000:9000 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=ci-admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=ci-placeholder-password \
+            -e KC_HEALTH_ENABLED=true -e KC_METRICS_ENABLED=true \
+            -e KC_HTTP_ENABLED=true -e KC_HOSTNAME_STRICT=false \
+            quay.io/keycloak/keycloak:26.8.2 start-dev --http-port=8080
+          ready=0
+          for _ in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:19000/health/ready > "${RUNNER_TEMP}/keycloak-upstream-ready.json"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then
+            docker logs "$container" | tee -a "$report"
+            echo "UPSTREAM_KEYCLOAK_READINESS=failed" | tee -a "$report"
+            exit 1
+          fi
+          echo "UPSTREAM_KEYCLOAK_READINESS=ready" | tee -a "$report"
+          curl --fail --silent http://127.0.0.1:18080/realms/master/.well-known/openid-configuration \
+            > "${RUNNER_TEMP}/keycloak-upstream-oidc.json"
+          echo "UPSTREAM_KEYCLOAK_OIDC_DISCOVERY=passed" | tee -a "$report"
+          docker exec -u 0 "$container" sh -ec '
+            mapped=0
+            for maps in /proc/[0-9]*/maps; do
+              [ -r "$maps" ] || continue
+              if grep -E "/libsqlite3[.]so|/libsoftokn3[.]so" "$maps"; then
+                echo "RUNTIME_SQLITE_MAPPING=$maps"
+                mapped=1
+              fi
+            done
+            echo "KEYCLOAK_RUNTIME_SQLITE_CONSUMER_MAPPED=$mapped"
+          ' | tee -a "$report"
+
+      - name: Upload upstream Keycloak runtime reachability evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: keycloak-runtime-sqlite-map-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/keycloak-runtime-sqlite-map.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Audit exact Red Hat NSS source with downstream patches applied
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n deploy/production/keycloak/audit-nss-sqlite-source.sh
+          bash deploy/production/keycloak/audit-nss-sqlite-source.sh
+
+      - name: Upload exact NSS source audit evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nss-sqlite-source-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nss-sqlite-source-audit.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Export Keycloak package inventory for security triage
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: quay.io/keycloak/keycloak:26.8.1
+          image-ref: quay.io/keycloak/keycloak:26.8.2
           version: v0.76.1
           trivy-config: trivy.yaml
           vuln-type: os,library
-          severity: HIGH,CRITICAL
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
           ignore-unfixed: false
-          exit-code: "1"
-          format: table
+          exit-code: "0"
+          format: json
+          output: /tmp/keycloak-trivy.json
+          list-all-pkgs: true
           timeout: 10m
 
-      - name: Create SBOM output directory
-        run: mkdir -p sbom
+      - name: Export Keycloak ARM64 package inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          trivy image --image-src remote --platform linux/arm64 --config="" \
+            --vuln-type os,library \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+            --ignore-unfixed=false \
+            --exit-code 0 \
+            --format json \
+            --output /tmp/keycloak-arm64-trivy.json \
+            --list-all-pkgs \
+            --timeout 10m \
+            quay.io/keycloak/keycloak:26.8.2
 
-      - name: Generate Keycloak CycloneDX SBOM
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: quay.io/keycloak/keycloak:26.8.1
-          version: v0.76.1
-          trivy-config: trivy.yaml
-          format: cyclonedx
-          output: sbom/keycloak.cdx.json
+      - name: Report package versions relevant to current findings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
 
-      - name: Upload Keycloak SBOM
+          scans = (
+              ("amd64", Path("/tmp/keycloak-trivy.json")),
+              ("arm64", Path("/tmp/keycloak-arm64-trivy.json")),
+          )
+          needles = ("ca-certificates", "sqlite", "openjdk", "guava", "nss-softokn", "nss-util", "nspr")
+          seen = set()
+          for platform, report_path in scans:
+              report = json.loads(report_path.read_text())
+              packages = [package for result in report.get("Results") or [] for package in result.get("Packages") or []]
+              if platform == "arm64":
+                  wrong_arch = [
+                      package
+                      for package in packages
+                      if package.get("AnalyzedBy") == "rpm"
+                      and package.get("Arch") not in (None, "noarch", "aarch64")
+                  ]
+                  if wrong_arch:
+                      raise SystemExit(
+                          "ARM64 inventory unexpectedly contains non-ARM RPMs: "
+                          + json.dumps(
+                              [{"name": p.get("Name"), "arch": p.get("Arch"), "version": p.get("Version")} for p in wrong_arch[:20]],
+                              sort_keys=True,
+                          )
+                      )
+              for package in packages:
+                  name = str(package.get("Name") or "")
+                  if any(needle in name.lower() for needle in needles):
+                      item = (platform, str(package.get("Identifier", {}).get("PURL") or ""), str(package.get("Version") or ""))
+                      if item not in seen:
+                          seen.add(item)
+                          print("PACKAGE_PLATFORM", platform, "PACKAGE_FULL", json.dumps(package, sort_keys=True))
+                  for dependency in package.get("DependsOn") or []:
+                      if dependency.startswith("sqlite-libs@"):
+                          print("SQLITE_RPM_DEPENDENT", platform, package.get("Name"), dependency)
+              for result in report.get("Results") or []:
+                  for vuln in result.get("Vulnerabilities") or []:
+                      vuln_id = str(vuln.get("VulnerabilityID") or "")
+                      if vuln_id in {"CVE-2026-91403", "CVE-2026-119373", "CVE-2026-119586", "CVE-2026-102554"}:
+                          print(
+                              "FINDING",
+                              platform,
+                              vuln_id,
+                              "package=", vuln.get("PkgName"),
+                              "installed=", vuln.get("InstalledVersion"),
+                              "fixed=", vuln.get("FixedVersion"),
+                              "status=", vuln.get("Status"),
+                          )
+          if not seen:
+              print("No matching packages were present in either Trivy package inventory; retain the full scan as the security gate.")
+          PY
+
+      - name: Scan both Keycloak platforms for high and critical vulnerabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          trivy image --image-src remote --platform linux/amd64 --config trivy-keycloak.yaml --vuln-type os,library --severity HIGH,CRITICAL --ignore-unfixed=false --exit-code 1 --format table --timeout 10m quay.io/keycloak/keycloak:26.8.2
+          amd64_status=$?
+          trivy image --image-src remote --platform linux/arm64 --config trivy-keycloak.yaml --vuln-type os,library --severity HIGH,CRITICAL --ignore-unfixed=false --exit-code 1 --format table --timeout 10m quay.io/keycloak/keycloak:26.8.2
+          arm64_status=$?
+          set -e
+          echo "Keycloak scan exit codes: amd64=$amd64_status arm64=$arm64_status"
+          if [ "$amd64_status" -ne 0 ] || [ "$arm64_status" -ne 0 ]; then
+            exit 1
+          fi
+      - name: Generate AMD64 and ARM64 Keycloak SBOMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sbom
+          trivy image --image-src remote --platform linux/amd64 --format cyclonedx --output sbom/keycloak-amd64.cdx.json --timeout 10m quay.io/keycloak/keycloak:26.8.2
+          trivy image --image-src remote --platform linux/arm64 --format cyclonedx --output sbom/keycloak-arm64.cdx.json --timeout 10m quay.io/keycloak/keycloak:26.8.2
+
+      - name: Upload Keycloak SBOMs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: image-sbom-deferred-keycloak-${{ github.run_id }}-${{ github.run_attempt }}
-          path: sbom/keycloak.cdx.json
+          name: image-sbom-keycloak-multiarch-${{ github.run_id }}-${{ github.run_attempt }}
+          path: sbom/keycloak-*.cdx.json
           if-no-files-found: error
+          retention-days: 30
+
+  verify-arm64-runtime:
+    name: Verify Keycloak runtime SQLite reachability on ARM64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Verify native ARM64 runner and image architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "aarch64"
+          docker pull --platform linux/arm64 quay.io/keycloak/keycloak:26.8.2
+          architecture="$(docker image inspect quay.io/keycloak/keycloak:26.8.2 --format '{{.Architecture}}')"
+          test "$architecture" = "arm64"
+          echo "KEYCLOAK_IMAGE_ARCHITECTURE=$architecture"
+
+      - name: Run ARM64 Keycloak and inspect live process mappings
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="${RUNNER_TEMP}/keycloak-arm64-runtime-sqlite-map.txt"
+          container="keycloak-arm64-runtime-probe"
+          cleanup() {
+            docker logs "$container" > "${RUNNER_TEMP}/keycloak-arm64-runtime-container.log" 2>&1 || true
+            docker rm -f "$container" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          : > "$report"
+          docker run --platform linux/arm64 -d --name "$container" -p 18080:8080 -p 19000:9000 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=ci-admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=ci-placeholder-password \
+            -e KC_HEALTH_ENABLED=true -e KC_METRICS_ENABLED=true \
+            -e KC_HTTP_ENABLED=true -e KC_HOSTNAME_STRICT=false \
+            quay.io/keycloak/keycloak:26.8.2 start-dev --http-port=8080
+          ready=0
+          for _ in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:19000/health/ready > "${RUNNER_TEMP}/keycloak-arm64-ready.json"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then
+            docker logs "$container" | tee -a "$report"
+            echo "ARM64_KEYCLOAK_READINESS=failed" | tee -a "$report"
+            exit 1
+          fi
+          echo "ARM64_KEYCLOAK_READINESS=ready" | tee -a "$report"
+          curl --fail --silent http://127.0.0.1:18080/realms/master/.well-known/openid-configuration \
+            > "${RUNNER_TEMP}/keycloak-arm64-oidc.json"
+          echo "ARM64_KEYCLOAK_OIDC_DISCOVERY=passed" | tee -a "$report"
+          docker exec -u 0 "$container" sh -ec '
+            mapped=0
+            for maps in /proc/[0-9]*/maps; do
+              [ -r "$maps" ] || continue
+              if grep -E "/libsqlite3[.]so|/libsoftokn3[.]so" "$maps"; then
+                echo "ARM64_RUNTIME_SQLITE_MAPPING=$maps"
+                mapped=1
+              fi
+            done
+            echo "ARM64_KEYCLOAK_RUNTIME_SQLITE_CONSUMER_MAPPED=$mapped"
+            test "$mapped" -eq 0
+          ' | tee -a "$report"
+          echo "ARM64_KEYCLOAK_RUNTIME_REACHABILITY=not_mapped" | tee -a "$report"
+
+      - name: Upload ARM64 runtime reachability evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: keycloak-arm64-runtime-sqlite-map-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/keycloak-arm64-runtime-sqlite-map.txt
+            ${{ runner.temp }}/keycloak-arm64-runtime-container.log
+          if-no-files-found: warn
           retention-days: 30

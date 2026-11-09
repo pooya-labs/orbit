@@ -1,0 +1,4 @@
+# Deliberately contains no VEX references. Used only to prove the raw
+# scanner still detects CVE-2026-119373 before package-scoped VEX filtering.
+vulnerability:
+  ignore-unfixed: false
