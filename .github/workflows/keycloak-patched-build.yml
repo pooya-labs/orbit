@@ -31,9 +31,24 @@ jobs:
     timeout-minutes: 60
     env:
       MAVEN_OPTS: -Xms512m -Xmx4g -XX:+ExitOnOutOfMemoryError
+      KEYCLOAK_BASE_IMAGE: quay.io/keycloak/keycloak:26.8.2@sha256:723b1d6e254c0fc96d5cffec860c7e0744d6a3277822b865bb538cf891575e41
     steps:
       - name: Checkout ORBIT
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Verify pinned upstream digest matches the current Keycloak 26.8.2 tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          pinned_digest="${KEYCLOAK_BASE_IMAGE##*@}"
+          current_digest="$(docker buildx imagetools inspect quay.io/keycloak/keycloak:26.8.2 | awk '$1 == "Digest:" {print $2; exit}')"
+          [[ "$pinned_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          if [[ "$current_digest" != "$pinned_digest" ]]; then
+            echo "Keycloak 26.8.2 upstream tag moved; review and update the immutable base pin before validation." >&2
+            echo "Pinned: $pinned_digest; current: $current_digest" >&2
+            exit 1
+          fi
+          echo "Verified pinned Keycloak base: $pinned_digest"
 
       - name: Set up Java 21
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
@@ -113,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           cat > .keycloak-patched-context/Dockerfile <<'DOCKERFILE'
-          FROM quay.io/keycloak/keycloak:26.8.2
+          FROM ${{ env.KEYCLOAK_BASE_IMAGE }}
           USER 0
           # Replace the complete upstream distribution so its vulnerable Guava
           # JAR cannot remain alongside the patched 33.7.2 distribution.
@@ -179,7 +194,9 @@ jobs:
           lib.sqlite3_compileoption_used.argtypes = [ctypes.c_char_p]
           lib.sqlite3_compileoption_used.restype = ctypes.c_int
           enabled = lib.sqlite3_compileoption_used(b"ENABLE_FTS5")
+          session = lib.sqlite3_compileoption_used(b"ENABLE_SESSION")
           print("SQLITE_ENABLE_FTS5=" + str(enabled))
+          print("SQLITE_ENABLE_SESSION=" + str(session))
           if not enabled:
               raise SystemExit("Expected FTS5 compile option in this platform SQLite library.")
           PY
@@ -196,7 +213,27 @@ jobs:
           exit-code: "0"
           format: json
           output: /tmp/patched-keycloak-raw-scan.json
+          cache: false
           timeout: 10m
+
+      - name: Summarize raw HIGH and CRITICAL findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          report=json.load(open('/tmp/patched-keycloak-raw-scan.json'))
+          seen=set()
+          for result in report.get('Results') or []:
+              for vuln in result.get('Vulnerabilities') or []:
+                  if vuln.get('Severity') not in ('HIGH','CRITICAL'):
+                      continue
+                  key=(vuln.get('VulnerabilityID'),vuln.get('PkgName'),vuln.get('InstalledVersion'))
+                  if key not in seen:
+                      seen.add(key)
+                      print('RAW_FINDING', *key, 'severity='+str(vuln.get('Severity')), 'fixed='+str(vuln.get('FixedVersion')))
+          print('RAW_HIGH_CRITICAL_FINDING_COUNT='+str(len(seen)))
+          PY
 
       - name: Scan patched candidate image with scoped VEX
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -210,6 +247,7 @@ jobs:
           exit-code: "1"
           format: json
           output: /tmp/patched-keycloak-scan.json
+          cache: false
           timeout: 10m
 
       - name: Assert raw FTS5 detection and scoped VEX behavior

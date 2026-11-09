@@ -113,9 +113,11 @@ jobs:
           version = lib.sqlite3_libversion().decode()
           fts5 = lib.sqlite3_compileoption_used(b"ENABLE_FTS5")
           fts4 = lib.sqlite3_compileoption_used(b"ENABLE_FTS4")
+          session = lib.sqlite3_compileoption_used(b"ENABLE_SESSION")
           print("SQLITE_RUNTIME_VERSION=" + version)
           print("SQLITE_ENABLE_FTS5=" + str(fts5))
           print("SQLITE_ENABLE_FTS4=" + str(fts4))
+          print("SQLITE_ENABLE_SESSION=" + str(session))
           if not fts5:
               print("RESULT: SQLite FTS5 is not compiled into the inspected amd64 shared library.")
           else:
@@ -269,7 +271,7 @@ jobs:
               for result in report.get("Results") or []:
                   for vuln in result.get("Vulnerabilities") or []:
                       vuln_id = str(vuln.get("VulnerabilityID") or "")
-                      if vuln_id in {"CVE-2026-91403", "CVE-2026-119373", "CVE-2026-119586", "CVE-2026-102554"}:
+                      if vuln_id in {"CVE-2026-91403", "CVE-2026-119373", "CVE-2026-119374", "CVE-2026-119379", "CVE-2026-119586", "CVE-2026-102554"}:
                           print(
                               "FINDING",
                               platform,
@@ -329,6 +331,23 @@ jobs:
           architecture="$(docker image inspect quay.io/keycloak/keycloak:26.8.2 --format '{{.Architecture}}')"
           test "$architecture" = "arm64"
           echo "KEYCLOAK_IMAGE_ARCHITECTURE=$architecture"
+
+      - name: Verify SQLite compile options in the native ARM64 library
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="$(docker create --platform linux/arm64 quay.io/keycloak/keycloak:26.8.2)"
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker cp "$container:/usr/lib64/libsqlite3.so.0.8.6" /tmp/keycloak-arm64-libsqlite3.so
+          python3 - <<'PY'
+          import ctypes
+          lib=ctypes.CDLL('/tmp/keycloak-arm64-libsqlite3.so')
+          lib.sqlite3_compileoption_used.argtypes=[ctypes.c_char_p]
+          lib.sqlite3_compileoption_used.restype=ctypes.c_int
+          for name in (b'ENABLE_FTS5', b'ENABLE_SESSION'):
+              print(name.decode()+'='+str(lib.sqlite3_compileoption_used(name)))
+          PY
 
       - name: Run ARM64 Keycloak and inspect live process mappings
         shell: bash

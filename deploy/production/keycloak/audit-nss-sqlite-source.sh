@@ -117,6 +117,26 @@ fi
     echo "FTS_SOURCE_REFERENCES_FOUND=0"
   fi
   echo
+  echo "== FTS5 secure-delete controls in lib/softoken =="
+  if grep -RInE --include='*.c' --include='*.h' --include='*.inc' \
+    'secure[-_]delete|PRAGMA[[:space:]]+secure_delete|fts5DoSecureDelete' "$softoken_dir"; then
+    echo "FTS5_SECURE_DELETE_REFERENCES_FOUND=1"
+    echo "Softoken references FTS5 secure-delete controls; retain CVE-2026-119374 as blocking." >&2
+    exit 1
+  else
+    echo "FTS5_SECURE_DELETE_REFERENCES_FOUND=0"
+  fi
+  echo
+  echo "== SQLite Session/changeset extension references in lib/softoken =="
+  if grep -RInE --include='*.c' --include='*.h' --include='*.inc' \
+    'sqlite3(session|changeset|changegroup|rebaser)_[[:alnum:]_]*|SQLITE_ENABLE_SESSION|changeset_apply|changeset_iter' "$softoken_dir"; then
+    echo "SQLITE_SESSION_API_REFERENCES_FOUND=1"
+    echo "Softoken references SQLite Session/changeset APIs; retain CVE-2026-119379 as blocking." >&2
+    exit 1
+  else
+    echo "SQLITE_SESSION_API_REFERENCES_FOUND=0"
+  fi
+  echo
   echo "== SQLite API call sites in lib/softoken (first 240 matches) =="
   grep -RInE --include='*.c' --include='*.h' \
     'sqlite3_(open|prepare|exec|step|bind|create_function|load_extension)' "$softoken_dir" \
