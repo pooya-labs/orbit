@@ -1159,3 +1159,34 @@ from a new issue, measured regression, or explicitly requested post-v1 item.
 - Never publish Worker gateway secrets, OIDC client secrets, private Apps Script URLs, spreadsheet IDs or production environment files.
 - Never describe synthetic demo records as observed telemetry.
 - Do not move the immutable v1.0.0 tag, change the existing Apps Script runtime, or re-run completed v1 work without a measured regression.
+
+
+## 19. Post-v1 maintenance handoff — 2026-11-09
+
+### Stable release baseline
+
+- ORBIT v1.0.0 remains published at https://github.com/pooya-labs/orbit/releases/tag/v1.0.0.
+- The immutable `v1.0.0` tag still points to `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`. Never move or recreate it.
+- Latest inspected `main` is `8759eda737f88958fc24e511b5a8f24357b915c9`. PR #163 (pgx 5.12.0 / puddle 2.2.3), PR #164 (lucide-react 1.70.0), and PR #157 (OpenTelemetry Go modules 1.47.0) were squash-merged after the release. The immutable v1.0.0 tag remains on its original release commit.
+- Exact-main CI [42628810334](https://github.com/pooya-labs/orbit/actions/runs/42628810334), Security [42628810320](https://github.com/pooya-labs/orbit/actions/runs/42628810320), Pages deployment [42628810160](https://github.com/pooya-labs/orbit/actions/runs/42628810160), and stable-release workflow [42629033390](https://github.com/pooya-labs/orbit/actions/runs/42629033390) completed successfully on the prior main head. After PR #157 merged, exact-main CI [42631275304](https://github.com/pooya-labs/orbit/actions/runs/42631275304), Security [42631275307](https://github.com/pooya-labs/orbit/actions/runs/42631275307), and Pages deployment [42631275337](https://github.com/pooya-labs/orbit/actions/runs/42631275337) were still in progress on `8759eda737f88958fc24e511b5a8f24357b915c9`.
+- The earlier release-workflow failure [42628935647](https://github.com/pooya-labs/orbit/actions/runs/42628935647) was caused by the overlapping/cancelled CI execution on intermediate commit `207368270f99092ea2e81b0e7e497adb54d95df5`; the subsequent exact-main CI and release workflow passed. It is not a current code failure.
+
+### Open post-v1 PRs
+
+- [PR #157](https://github.com/pooya-labs/orbit/pull/157) was squash-merged as `8759eda737f88958fc24e511b5a8f24357b915c9`. Exact PR-head CI [42624823853](https://github.com/pooya-labs/orbit/actions/runs/42624823853) and Security [42624823618](https://github.com/pooya-labs/orbit/actions/runs/42624823618) both succeeded. The full telemetry E2E job passed authenticated workspace write/query isolation and PostgreSQL restart/pool-recovery checks; the PR-head security run passed all relevant dependency, secret-history and image scans.
+- [PR #138](https://github.com/pooya-labs/orbit/pull/138) is a deferred Keycloak 26.8.2 remediation. Its candidate matrix [42537493841](https://github.com/pooya-labs/orbit/actions/runs/42537493841) passed on native AMD64 and ARM64 after building the pinned source and replacing the full upstream distribution with Guava 33.7.2-jre. The upstream published 26.8.2 image scan [42537493850](https://github.com/pooya-labs/orbit/actions/runs/42537493850) still fails on Guava 33.6.0-jre / CVE-2026-102554. The patched candidate is not published; no immutable image digest exists for it. The PR is also dirty/conflicted against latest main. Do not merge or switch production Compose until the branch is reconciled, a reproducible multi-architecture artifact is published through an authorized registry, and strict HIGH/CRITICAL scans pass against that exact digest on both architectures.
+- The scheduled deferred-identity workflow on main [42630008753](https://github.com/pooya-labs/orbit/actions/runs/42630008753) failed against the still-pinned main-branch Keycloak 26.8.1 image; this workflow predates PR #138's 26.8.2 branch changes. It is outside the v1 Pages + Apps Script release gate and must not be represented as a green production identity scan.
+
+### Next continuation order
+
+1. Verify the post-merge CI, Security and Pages runs for main commit `8759eda737f88958fc24e511b5a8f24357b915c9` before claiming the latest main is fully green.
+2. For PR #138, inspect conflict files and reconcile only after the candidate-image publication strategy and registry authorization are explicit. Keep the upstream HIGH finding visible; do not broaden VEX or downgrade Trivy exit behavior.
+3. Update the README/roadmap/project handoff after any later merge with exact commit SHAs and exact CI/Security/Pages outcomes.
+4. Keep production origin, Keycloak tenancy, DNS, Worker routing, D1 deployment and real tenant traffic disabled until the owner-approved $0 deployment plan and exact environment evidence exist.
+
+### Continuity safeguards
+
+- Do not change the immutable v1.0.0 tag or redeploy the owner-supplied Apps Script runtime without a concrete runtime regression.
+- Do not enable paid infrastructure, automatic overages, or paid hosting; maintain the $0 monthly budget.
+- Never publish credentials, gateway secrets, OIDC client secrets, private Apps Script URLs or spreadsheet identifiers.
+- Never call synthetic demo records live telemetry or claim an undeployed Cloudflare/Go/Keycloak origin as production.
