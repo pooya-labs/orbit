@@ -1,0 +1,276 @@
+name: Validate patched Keycloak 26.8.2 source build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/keycloak-patched-build.yml"
+      - "deploy/production/keycloak/**"
+      - "deploy/production/compose.ingress.yaml"
+      - "trivy-keycloak.yaml"
+      - "trivy-keycloak-raw.yaml"
+      - "security/vex/**"
+
+permissions:
+  contents: read
+
+jobs:
+  patched-keycloak:
+    name: Build, run and scan patched Keycloak (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      MAVEN_OPTS: -Xms512m -Xmx4g -XX:+ExitOnOutOfMemoryError
+      KEYCLOAK_BASE_IMAGE: quay.io/keycloak/keycloak:26.8.2@sha256:723b1d6e254c0fc96d5cffec860c7e0744d6a3277822b865bb538cf891575e41
+    steps:
+      - name: Checkout ORBIT
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Fetch the immutable Keycloak 26.8.2 source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init /tmp/keycloak
+          git -C /tmp/keycloak remote add origin https://github.com/keycloak/keycloak.git
+          git -C /tmp/keycloak fetch --depth 1 origin e514445f9dcdabc5bdcf67cab56c1e49655de067
+          git -C /tmp/keycloak checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/keycloak rev-parse HEAD)" = "e514445f9dcdabc5bdcf67cab56c1e49655de067"
+
+      - name: Apply the narrowly scoped Guava BOM override
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C /tmp/keycloak apply --check "$GITHUB_WORKSPACE/deploy/production/keycloak/keycloak-26.8.2-guava-33.7.2.patch"
+          git -C /tmp/keycloak apply "$GITHUB_WORKSPACE/deploy/production/keycloak/keycloak-26.8.2-guava-33.7.2.patch"
+
+      - name: Verify Maven resolves patched Guava before building
+        working-directory: /tmp/keycloak
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./mvnw -B -ntp -f quarkus/runtime/pom.xml help:effective-pom -Doutput=/tmp/keycloak-effective-pom.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse('/tmp/keycloak-effective-pom.xml').getroot()
+          ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
+          matches = []
+          for dep in root.findall('.//m:dependencyManagement/m:dependencies/m:dependency', ns):
+              group = dep.findtext('m:groupId', default='', namespaces=ns)
+              artifact = dep.findtext('m:artifactId', default='', namespaces=ns)
+              version = dep.findtext('m:version', default='', namespaces=ns)
+              if group == 'com.google.guava' and artifact == 'guava':
+                  matches.append(version)
+          if not matches or any(v != '33.7.2-jre' for v in matches):
+              raise SystemExit(f'Expected only Guava 33.7.2-jre in effective dependency management; got {matches}')
+          print('Effective Guava version:', matches)
+          PY
+
+      - name: Build Keycloak core and Quarkus distribution
+        working-directory: /tmp/keycloak/quarkus
+        shell: bash
+        run: |
+          set -euo pipefail
+          ../mvnw -B -ntp -f ../pom.xml clean install -DskipTestsuite -DskipExamples -DskipTests
+          ../mvnw -B -ntp clean install -DskipTests
+
+      - name: Verify the generated distribution contains only patched Guava
+        working-directory: /tmp/keycloak/quarkus
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$(find dist/target -maxdepth 1 -type f -name 'keycloak-26.8.2.tar.gz' -print -quit)"
+          test -n "$archive"
+          mkdir -p /tmp/keycloak-dist
+          tar -xzf "$archive" -C /tmp/keycloak-dist
+          mapfile -t jars < <(find /tmp/keycloak-dist/keycloak-26.8.2/lib/lib/main -maxdepth 1 -type f -name 'com.google.guava.guava-*.jar' -print)
+          test "${#jars[@]}" -eq 1
+          test "$(basename "${jars[0]}")" = "com.google.guava.guava-33.7.2-jre.jar"
+          if find /tmp/keycloak-dist/keycloak-26.8.2 -type f -name '*guava-33.6.0*' | grep -q .; then
+            echo "Vulnerable Guava 33.6.0 remains in the distribution" >&2
+            exit 1
+          fi
+          echo "Patched distribution jar: ${jars[0]}"
+          mkdir -p "$GITHUB_WORKSPACE/.keycloak-patched-context"
+          cp -a /tmp/keycloak-dist/keycloak-26.8.2 "$GITHUB_WORKSPACE/.keycloak-patched-context/"
+
+      - name: Build an isolated candidate image from the patched distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .keycloak-patched-context/Dockerfile <<'DOCKERFILE'
+          FROM ${{ env.KEYCLOAK_BASE_IMAGE }}
+          USER 0
+          # Replace the complete upstream distribution so its vulnerable Guava
+          # JAR cannot remain alongside the patched 33.7.2 distribution.
+          RUN rm -rf /opt/keycloak && mkdir -p /opt/keycloak && chown 1000:0 /opt/keycloak
+          COPY --chown=1000:0 keycloak-26.8.2/ /opt/keycloak/
+          USER 1000
+          DOCKERFILE
+          image="orbit-keycloak:26.8.2-guava-33.7.2-${{ matrix.arch }}"
+          docker build --pull --platform "${{ matrix.platform }}" -t "$image" .keycloak-patched-context
+          docker run --rm --platform "${{ matrix.platform }}" --entrypoint /opt/keycloak/bin/kc.sh "$image" --version
+
+      - name: Start patched Keycloak and verify readiness plus OIDC discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() { docker logs keycloak-patched 2>/dev/null || true; docker rm -f keycloak-patched >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name keycloak-patched -p 8080:8080 -p 9000:9000 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=ci-admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=ci-placeholder-password \
+            -e KC_HEALTH_ENABLED=true -e KC_METRICS_ENABLED=true \
+            -e KC_HTTP_ENABLED=true -e KC_HOSTNAME_STRICT=false \
+            "orbit-keycloak:26.8.2-guava-33.7.2-${{ matrix.arch }}" start-dev --http-port=8080
+          ready=0
+          for _ in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:9000/health/ready >/tmp/keycloak-ready.json; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+          curl --fail --silent http://127.0.0.1:8080/realms/master/.well-known/openid-configuration > /tmp/keycloak-oidc.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/keycloak-oidc.json'))
+          assert d.get('issuer', '').endswith('/realms/master'), d.get('issuer')
+          print('OIDC discovery issuer:', d['issuer'])
+          PY
+          # Inspect the live process before this step's EXIT trap removes the container.
+          docker exec -u 0 keycloak-patched sh -ec '
+            found=0
+            for maps in /proc/[0-9]*/maps; do
+              [ -r "$maps" ] || continue
+              if grep -E "/libsqlite3[.]so|/libsoftokn3[.]so" "$maps"; then
+                echo "Keycloak runtime mapped a SQLite/NSS softoken library: $maps" >&2
+                found=1
+              fi
+            done
+            if [ "$found" -ne 0 ]; then exit 1; fi
+            echo "KEYCLOAK_SQLITE_RUNTIME_MAP=none"
+          '
+
+      - name: Verify FTS5 compile option in the ${{ matrix.arch }} SQLite library
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="orbit-keycloak:26.8.2-guava-33.7.2-${{ matrix.arch }}"
+          container="$(docker create --platform "${{ matrix.platform }}" "$image")"
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker cp "$container:/usr/lib64/libsqlite3.so.0.8.6" /tmp/keycloak-libsqlite3.so
+          python3 - <<'PY'
+          import ctypes
+          lib = ctypes.CDLL("/tmp/keycloak-libsqlite3.so")
+          lib.sqlite3_compileoption_used.argtypes = [ctypes.c_char_p]
+          lib.sqlite3_compileoption_used.restype = ctypes.c_int
+          enabled = lib.sqlite3_compileoption_used(b"ENABLE_FTS5")
+          session = lib.sqlite3_compileoption_used(b"ENABLE_SESSION")
+          print("SQLITE_ENABLE_FTS5=" + str(enabled))
+          print("SQLITE_ENABLE_SESSION=" + str(session))
+          if not enabled:
+              raise SystemExit("Expected FTS5 compile option in this platform SQLite library.")
+          PY
+
+      - name: Scan candidate without VEX to preserve raw findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-keycloak:26.8.2-guava-33.7.2-${{ matrix.arch }}
+          version: v0.76.1
+          trivy-config: trivy-keycloak-raw.yaml
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "0"
+          format: json
+          output: /tmp/patched-keycloak-raw-scan.json
+          cache: false
+          timeout: 10m
+
+      - name: Summarize raw HIGH and CRITICAL findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          report=json.load(open('/tmp/patched-keycloak-raw-scan.json'))
+          seen=set()
+          for result in report.get('Results') or []:
+              for vuln in result.get('Vulnerabilities') or []:
+                  if vuln.get('Severity') not in ('HIGH','CRITICAL'):
+                      continue
+                  key=(vuln.get('VulnerabilityID'),vuln.get('PkgName'),vuln.get('InstalledVersion'))
+                  if key not in seen:
+                      seen.add(key)
+                      print('RAW_FINDING', *key, 'severity='+str(vuln.get('Severity')), 'fixed='+str(vuln.get('FixedVersion')))
+          print('RAW_HIGH_CRITICAL_FINDING_COUNT='+str(len(seen)))
+          PY
+
+      - name: Scan patched candidate image with scoped VEX
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: orbit-keycloak:26.8.2-guava-33.7.2-${{ matrix.arch }}
+          version: v0.76.1
+          trivy-config: trivy-keycloak.yaml
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          format: json
+          output: /tmp/patched-keycloak-scan.json
+          cache: false
+          timeout: 10m
+
+      - name: Assert raw FTS5 detection and scoped VEX behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+
+          def findings(path):
+              report = json.load(open(path))
+              return [v for result in report.get('Results') or [] for v in result.get('Vulnerabilities') or []]
+
+          raw = findings('/tmp/patched-keycloak-raw-scan.json')
+          filtered = findings('/tmp/patched-keycloak-scan.json')
+          raw_fts5 = [v for v in raw if v.get('VulnerabilityID') == 'CVE-2026-119373']
+          filtered_fts5 = [v for v in filtered if v.get('VulnerabilityID') == 'CVE-2026-119373']
+          raw_guava = [v for v in raw if v.get('VulnerabilityID') == 'CVE-2026-102554']
+          filtered_guava = [v for v in filtered if v.get('VulnerabilityID') == 'CVE-2026-102554']
+
+          raw_fts5_secure = [v for v in raw if v.get('VulnerabilityID') == 'CVE-2026-119374']
+          filtered_fts5_secure = [v for v in filtered if v.get('VulnerabilityID') == 'CVE-2026-119374']
+          raw_session = [v for v in raw if v.get('VulnerabilityID') == 'CVE-2026-119379']
+          filtered_session = [v for v in filtered if v.get('VulnerabilityID') == 'CVE-2026-119379']
+          if not raw_fts5:
+              raise SystemExit('Raw Trivy scan did not report the expected FTS5 finding; inspect image and scan database.')
+          if not raw_fts5_secure:
+              raise SystemExit('Raw Trivy scan did not report CVE-2026-119374; inspect fresh database and exact package inventory.')
+          if not raw_session:
+              raise SystemExit('Raw Trivy scan did not report CVE-2026-119379; inspect fresh database and exact package inventory.')
+          if filtered_fts5:
+              raise SystemExit('The exact-package NSS-path VEX did not filter CVE-2026-119373: ' + repr(filtered_fts5))
+          if filtered_fts5_secure:
+              raise SystemExit('The exact-package FTS5 secure-delete VEX did not filter CVE-2026-119374: ' + repr(filtered_fts5_secure))
+          if filtered_session:
+              raise SystemExit('The exact-package SQLite Session VEX did not filter CVE-2026-119379: ' + repr(filtered_session))
+          if raw_guava or filtered_guava:
+              raise SystemExit('Patched candidate still contains Guava CVE-2026-102554: ' + repr(raw_guava or filtered_guava))
+          print('PASS: raw Trivy detects FTS5, FTS5 secure-delete, and SQLite Session findings; exact package/path VEX statements filter only those findings; patched Guava is absent.')
+          PY

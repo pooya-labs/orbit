@@ -19,7 +19,7 @@ already own; never choose a paid fallback.
 | Dashboard | Existing GitHub Pages static export |
 | API | Existing Go API container on one OCI Always Free VM |
 | Database | Self-hosted PostgreSQL container and persistent volume |
-| Identity | Self-hosted Keycloak 26.8.1 |
+| Identity | Self-hosted Keycloak 26.8.2 |
 | Telemetry | Existing Collector, Prometheus, Loki and Tempo containers |
 | HTTPS ingress | Caddy with automatic Let's Encrypt certificates |
 | DNS | Four free DuckDNS hostnames |

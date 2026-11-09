@@ -1,12 +1,25 @@
-# Keycloak 26.8.2 patched build experiment
+# Keycloak 26.8.2 patched build and published artifact
 
-This directory contains a source-build experiment and CI-only validation for the Guava CVE-2026-102554 present in the published Keycloak 26.8.2 image.
+This directory documents the reproducible Keycloak 26.8.2 source build, scoped SQLite reachability evidence, and the validated multi-architecture GHCR artifact. The patched distribution replaces vulnerable Guava 33.6.0-jre with 33.7.2-jre.
 
 - Upstream source tag commit: `e514445f9dcdabc5bdcf67cab56c1e49655de067`.
 - Quarkus baseline: 3.40.1.1.
 - Override: import Guava BOM 33.7.2-jre before the Quarkus BOM, because the Quarkus 3.40.1.1 BOM manages Guava 33.6.0-jre.
 - The patched workflow now builds and tests the complete candidate natively on both linux/amd64 and linux/arm64 using the `ubuntu-26.04` and `ubuntu-26.04-arm` runners. It verifies Maven dependency management, the generated distribution, full `/opt/keycloak` replacement, startup/readiness/OIDC, runtime library mappings, raw Trivy findings, and scoped-VEX output.
 - Exact PR-head candidate matrix: [run 42537493841](https://github.com/pooya-labs/orbit/actions/runs/42537493841) passed both native jobs (amd64 and arm64). Both builds verified the Guava 33.7.2-jre distribution, replaced the complete `/opt/keycloak` tree, passed startup/readiness/OIDC and runtime-map checks, retained raw FTS5 detection, and passed the strict VEX-filtered HIGH/CRITICAL scan plus final assertions.
+
+## Published multi-architecture artifact — 2026-11-09
+
+The owner-triggered GHCR publication completed successfully in [workflow run 42654381960, attempt 2](https://github.com/pooya-labs/orbit/actions/runs/42654381960).
+
+- Image: `ghcr.io/pooya-labs/orbit-keycloak@sha256:97cc4590f5abd77e23522d6d94c3fe77c82b91c44a4e7acef22aec28c61bf81d`
+- Immutable commit tag: `ghcr.io/pooya-labs/orbit-keycloak:26.8.2-guava-33.7.2-c4e45b9c1f0be4fd878c32366c7743a28d079227`
+- Platforms: `linux/amd64` and `linux/arm64`.
+- Both native candidate build, readiness/OIDC/runtime, SQLite compile-option and local strict scan jobs passed.
+- The workflow pulled this exact manifest digest separately on native AMD64 and ARM64 runners. Both strict published-digest scans passed with `ignore-unfixed=false`.
+- The raw reports retained the expected FTS5, FTS5 secure-delete and SQLite Session findings; the exact-package/path OpenVEX statements filtered only those scoped findings, and Guava CVE-2026-102554 was absent.
+
+The GHCR publication proves the patched artifact is available by immutable digest. It does not deploy the image or change production Compose.
 
 ## FTS5 reachability evidence (2026-11-09)
 
@@ -18,9 +31,9 @@ This directory contains a source-build experiment and CI-only validation for the
 
 ## Release boundary
 
-This remains a CI-validated experiment, not a published production image or release artifact. The patched candidate passed native amd64 and arm64 builds, runtime checks and strict VEX-filtered scans in run 42537493841, but it has not been published. The production Compose file still points to upstream Keycloak 26.8.2, whose separate strict scan still reports the upstream Guava 33.6.0-jre HIGH. Do not switch production Compose or provision production identity until a reproducible multi-architecture candidate is published, its immutable digest is recorded, and strict HIGH/CRITICAL scans pass against that exact digest on both architectures.
+The patched multi-architecture image is now published and its immutable digest has passed strict HIGH/CRITICAL scans on both native architectures. It is a validated registry artifact, not a production deployment. Production Compose, identity provisioning, DNS/routing and live tenant traffic remain unchanged. Any future production promotion requires a separate explicit deployment decision and must pin the immutable digest above rather than a mutable tag.
 
-Run `.github/workflows/keycloak-patched-build.yml`. Do not deploy or publish the candidate based on a successful single-architecture or Guava-only check.
+The source-build validation remains reproducible through `.github/workflows/keycloak-patched-build.yml`; controlled publication is performed by `.github/workflows/keycloak-ghcr-publish.yml` with `confirm_publish=true`.
 
 
 ## SQLite FTS5 and Session path review — 9 November 2026
