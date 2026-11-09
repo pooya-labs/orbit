@@ -254,11 +254,23 @@ jobs:
           raw_guava = [v for v in raw if v.get('VulnerabilityID') == 'CVE-2026-102554']
           filtered_guava = [v for v in filtered if v.get('VulnerabilityID') == 'CVE-2026-102554']
 
+          raw_fts5_secure = [v for v in raw if v.get('VulnerabilityID') == 'CVE-2026-119374']
+          filtered_fts5_secure = [v for v in filtered if v.get('VulnerabilityID') == 'CVE-2026-119374']
+          raw_session = [v for v in raw if v.get('VulnerabilityID') == 'CVE-2026-119379']
+          filtered_session = [v for v in filtered if v.get('VulnerabilityID') == 'CVE-2026-119379']
           if not raw_fts5:
-              raise SystemExit('Raw Trivy scan did not report SQLite FTS5; inspect image and scan configuration.')
+              raise SystemExit('Raw Trivy scan did not report the expected FTS5 finding; inspect image and scan database.')
+          if not raw_fts5_secure:
+              raise SystemExit('Raw Trivy scan did not report CVE-2026-119374; inspect fresh database and exact package inventory.')
+          if not raw_session:
+              raise SystemExit('Raw Trivy scan did not report CVE-2026-119379; inspect fresh database and exact package inventory.')
           if filtered_fts5:
-              raise SystemExit('The exact-package NSS-path VEX did not filter the FTS5 finding: ' + repr(filtered_fts5))
+              raise SystemExit('The exact-package NSS-path VEX did not filter CVE-2026-119373: ' + repr(filtered_fts5))
+          if filtered_fts5_secure:
+              raise SystemExit('The exact-package FTS5 secure-delete VEX did not filter CVE-2026-119374: ' + repr(filtered_fts5_secure))
+          if filtered_session:
+              raise SystemExit('The exact-package SQLite Session VEX did not filter CVE-2026-119379: ' + repr(filtered_session))
           if raw_guava or filtered_guava:
               raise SystemExit('Patched candidate still contains Guava CVE-2026-102554: ' + repr(raw_guava or filtered_guava))
-          print('PASS: raw Trivy detects FTS5; the scoped NSS consumer-path VEX filters only that exact package finding; patched Guava is absent.')
+          print('PASS: raw Trivy detects FTS5, FTS5 secure-delete, and SQLite Session findings; exact package/path VEX statements filter only those findings; patched Guava is absent.')
           PY

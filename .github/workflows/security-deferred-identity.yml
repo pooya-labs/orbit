@@ -210,6 +210,7 @@ jobs:
           format: json
           output: /tmp/keycloak-trivy.json
           list-all-pkgs: true
+          cache: false
           timeout: 10m
 
       - name: Export Keycloak ARM64 package inventory

@@ -1,0 +1,25 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/pooya-labs/orbit/blob/main/security/vex/keycloak-26.8.2-sqlite-session-changesets.openvex.json",
+  "author": "ORBIT maintainers",
+  "timestamp": "2026-11-09T15:15:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-119379"
+      },
+      "products": [
+        {
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=x86_64&distro=redhat-9.8"
+        },
+        {
+          "@id": "pkg:rpm/redhat/sqlite-libs@3.34.1-11.el9_8?arch=aarch64&distro=redhat-9.8"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Strictly limited to the exact sqlite-libs 3.34.1-11.el9_8 x86_64/aarch64 PURLs in the published Keycloak 26.8.2 image and this repository's dedicated scan. The SQLite library is compiled with ENABLE_SESSION=1 on both architectures; this statement does not claim the Session extension is absent. CVE-2026-119379 affects the Session extension changeset-application path, including crafted repeated-table changesets (Red Hat advisory: https://access.redhat.com/security/cve/cve-2026-119379). The exact Red Hat NSS 3.124.0-5.el9_6 source RPM was downloaded, signature-verified, and prepared with its declared downstream patches. The prepared lib/softoken source audit reports SQLITE_SESSION_API_REFERENCES_FOUND=0: no sqlite3session_*, sqlite3changeset_*, sqlite3changegroup_*, or sqlite3rebaser_* calls. On native AMD64 and ARM64, Keycloak readiness and OIDC discovery passed, and no container process mapped libsqlite3.so or libsoftokn3.so. Source audit and runtime evidence: workflow run 42640592664 (artifacts 13684951865, 13684747105, 13683214768). The affected package and Session capability remain present; the justification is only that the vulnerable changeset consumer path is not used by the tested Keycloak 26.8.2 runtime. This does not apply to other products, versions, images, applications using SQLite Session APIs, or custom providers/configurations. Re-evaluate when the base image, NSS/SQLite packages, runtime or provider configuration changes."
+    }
+  ]
+}

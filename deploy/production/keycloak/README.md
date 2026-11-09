@@ -21,3 +21,14 @@ This directory contains a source-build experiment and CI-only validation for the
 This remains a CI-validated experiment, not a published production image or release artifact. The patched candidate passed native amd64 and arm64 builds, runtime checks and strict VEX-filtered scans in run 42537493841, but it has not been published. The production Compose file still points to upstream Keycloak 26.8.2, whose separate strict scan still reports the upstream Guava 33.6.0-jre HIGH. Do not switch production Compose or provision production identity until a reproducible multi-architecture candidate is published, its immutable digest is recorded, and strict HIGH/CRITICAL scans pass against that exact digest on both architectures.
 
 Run `.github/workflows/keycloak-patched-build.yml`. Do not deploy or publish the candidate based on a successful single-architecture or Guava-only check.
+
+
+## SQLite FTS5 and Session path review — 9 November 2026
+
+The current upstream Keycloak 26.8.2 scan also reports HIGH findings CVE-2026-119374 (FTS5 secure-delete) and CVE-2026-119379 (SQLite Session changesets) against the exact `sqlite-libs 3.34.1-11.el9_8` RPM PURLs on both architectures. These CVEs are not treated as fixed or absent from the library.
+
+Both compile options are enabled (`SQLITE_ENABLE_FTS5=1`, `SQLITE_ENABLE_SESSION=1`) on the inspected image. The signed and patched Red Hat NSS 3.124.0-5.el9_6 source audit now explicitly checks for FTS5 secure-delete references and SQLite Session/changeset APIs; results are `FTS_SOURCE_REFERENCES_FOUND=0`, `FTS5_SECURE_DELETE_REFERENCES_FOUND=0`, and `SQLITE_SESSION_API_REFERENCES_FOUND=0`. Native AMD64/ARM64 Keycloak runtime probes passed readiness and OIDC discovery and found no process mapping either `libsqlite3.so` or `libsoftokn3.so`.
+
+The two new OpenVEX statements therefore use only `vulnerable_code_not_in_execute_path`, scoped to the two exact `sqlite-libs` PURLs in the Keycloak 26.8.2 scan. Raw Trivy findings remain visible; the strict filtered scan must prove the matching statements apply. These statements are not general SQLite exemptions and must be revalidated after changes to the image, NSS/SQLite packages, runtime or crypto/provider configuration.
+
+Evidence: deferred identity workflow [run 42640592664](https://github.com/pooya-labs/orbit/actions/runs/42640592664), source audit [artifact 13684951865](https://github.com/pooya-labs/orbit/actions/runs/42640592664/artifacts/13684951865), AMD64 runtime mapping [artifact 13684747105](https://github.com/pooya-labs/orbit/actions/runs/42640592664/artifacts/13684747105), and ARM64 runtime mapping [artifact 13683214768](https://github.com/pooya-labs/orbit/actions/runs/42640592664/artifacts/13683214768).
