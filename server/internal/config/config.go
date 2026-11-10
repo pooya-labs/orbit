@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"crypto/subtle"
 	"net"
 	"net/url"
 	"os"
@@ -31,6 +32,9 @@ type Config struct {
 	RateLimitPerMinute          int
 	AlertWebhookSecrets         map[string]string
 	AlertWebhookAllowedHosts    []string
+	LocalWorkEnabled            bool
+	LocalHumanToken             string
+	LocalWorkloadToken          string
 }
 
 func Load() Config {
@@ -56,10 +60,55 @@ func Load() Config {
 		RateLimitPerMinute:        integerOrDefault("ORBIT_RATE_LIMIT_PER_MINUTE", 120),
 		AlertWebhookSecrets:       alertWebhookSecretsFromEnv(),
 		AlertWebhookAllowedHosts:  lowerCaseList(os.Getenv("ORBIT_ALERT_WEBHOOK_ALLOWED_HOSTS")),
+		LocalWorkEnabled:           strings.EqualFold(strings.TrimSpace(os.Getenv("ORBIT_LOCAL_WORK")), "true"),
+		LocalHumanToken:            strings.TrimSpace(os.Getenv("ORBIT_LOCAL_HUMAN_TOKEN")),
+		LocalWorkloadToken:         strings.TrimSpace(os.Getenv("ORBIT_LOCAL_WORKLOAD_TOKEN")),
 	}
 }
 
 func (c Config) Validate() error {
+	if c.LocalWorkEnabled {
+		if c.Environment != "development" {
+			return fmt.Errorf("ORBIT_LOCAL_WORK is permitted only in explicit development mode")
+		}
+		if c.OIDCIssuer != "" || c.OIDCAudience != "" || c.WorkloadOIDCIssuer != "" || c.WorkloadOIDCAudience != "" {
+			return fmt.Errorf("Local Work credentials cannot be combined with OIDC configuration")
+		}
+		if len(c.LocalHumanToken) < 32 || len(c.LocalHumanToken) > 4096 ||
+			len(c.LocalWorkloadToken) < 32 || len(c.LocalWorkloadToken) > 4096 ||
+			subtle.ConstantTimeCompare([]byte(c.LocalHumanToken), []byte(c.LocalWorkloadToken)) == 1 {
+			return fmt.Errorf("Local Work requires two distinct access tokens of at least 32 characters")
+		}
+		if c.DatabaseURL == "" || c.PrometheusURL == "" || c.LokiURL == "" || c.TempoURL == "" {
+			return fmt.Errorf("Local Work requires PostgreSQL, Prometheus, Loki, and Tempo")
+		}
+		if err := validateCollectorHTTPURL(c.CollectorOTLPHTTPURL); err != nil {
+			return fmt.Errorf("ORBIT_COLLECTOR_OTLP_HTTP_URL: %w", err)
+		}
+		if err := validateCollectorGRPCEndpoint(c.CollectorOTLPGRPCEndpoint); err != nil {
+			return fmt.Errorf("ORBIT_COLLECTOR_OTLP_GRPC_ENDPOINT: %w", err)
+		}
+		if strings.TrimSpace(c.IngestionHTTPAddr) == "" || strings.TrimSpace(c.IngestionGRPCAddr) == "" {
+			return fmt.Errorf("Local Work OTLP gateway addresses are required")
+		}
+		if len(c.AllowedOrigins) == 0 {
+			return fmt.Errorf("Local Work requires an explicit loopback-only CORS allowlist")
+		}
+		for _, origin := range c.AllowedOrigins {
+			parsed, err := url.Parse(origin)
+			host := ""
+			if parsed != nil { host = strings.ToLower(parsed.Hostname()) }
+			if err != nil || parsed == nil || parsed.User != nil || parsed.RawQuery != "" ||
+				parsed.Fragment != "" || parsed.Path != "" || host == "" ||
+				(host != "localhost" && host != "127.0.0.1" && host != "::1") ||
+				(parsed.Scheme != "http" && parsed.Scheme != "https") {
+				return fmt.Errorf("Local Work CORS origins must be loopback-only origins without a path")
+			}
+		}
+	} else if c.LocalHumanToken != "" || c.LocalWorkloadToken != "" {
+		return fmt.Errorf("ORBIT_LOCAL_HUMAN_TOKEN and ORBIT_LOCAL_WORKLOAD_TOKEN require ORBIT_LOCAL_WORK=true")
+	}
+
 	if c.SelfTelemetryOTLPHTTPURL != "" {
 		if err := validateCollectorHTTPURL(c.SelfTelemetryOTLPHTTPURL); err != nil {
 			return fmt.Errorf("ORBIT_OTEL_EXPORTER_OTLP_ENDPOINT: %w", err)
