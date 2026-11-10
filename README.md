@@ -15,6 +15,18 @@ ORBIT is an engineering-focused observability workspace for exploring service he
 > **Release status: ORBIT v1.0.0 portfolio-demo scope is complete; post-v1 maintenance is closed for the current scope.**  
 > The patched Keycloak 26.8.2 artifact has been published and strictly validated on AMD64/ARM64, and PR [#138](https://github.com/pooya-labs/orbit/pull/138) is merged. The Cloudflare edge gateway and the separate Workers + D1 foundation are code-complete only to their documented stages; neither is connected to a live Go/Keycloak origin or deployed as a production runtime. Apps Script remains unchanged and synthetic-only.
 
+## Local Work edition
+
+The public v1.0.0 site remains the lightweight portfolio demo. For a full local runtime with the Go API, PostgreSQL, authenticated OTLP ingestion, Prometheus, Loki, Tempo, and operational workflows, use the **Local Work edition**:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local-work.ps1
+```
+
+Open `http://localhost:3000` and sign in with `ORBIT_LOCAL_HUMAN_TOKEN` from the generated, Git-ignored `.env.local-work` file. macOS/Linux users can run `./scripts/start-local-work.sh`. See the [Local Work guide](docs/local-work.md) for security boundaries, webhook configuration, persistence, and the fast test profile.
+
+Local Work is a single-user, loopback-only runtime; it is not a hosted or production deployment. It uses separate local human and workload credentials and sends telemetry through the authenticated workspace gateway.
+
 ## Start here
 
 - **[Open the dashboard](https://pooya-labs.github.io/orbit/)**
