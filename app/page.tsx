@@ -381,9 +381,12 @@ export default function Home() {
   const [apiMetadata, setApiMetadata] = useState<ApiMetadata | null>(null);
   const [apiServices, setApiServices] = useState<ServiceSummary[]>([]);
   const [apiIncidents, setApiIncidents] = useState<IncidentSummary[]>([]);
-  const [authUser, setAuthUser] = useState(() => getCurrentAuthUser());
+  const [authUser, setAuthUser] = useState<ReturnType<typeof getCurrentAuthUser>>(null);
 
-  useEffect(() => subscribeToAuth(() => setAuthUser(getCurrentAuthUser())), []);
+  useEffect(() => {
+    setAuthUser(getCurrentAuthUser());
+    return subscribeToAuth(() => setAuthUser(getCurrentAuthUser()));
+  }, []);
 
   useEffect(() => {
     if (!sourcePanelOpen) return;
