@@ -858,20 +858,29 @@ test("creator and repository credits use the right destinations and order", asyn
   await expect(sidebarProfile).toHaveAttribute("href", "https://pooya-labs.github.io/pooya-labs-platform/");
   await expect(sidebarProfile).toHaveText("Pooya Labs Platform");
   await expect(sidebarProfile).toHaveAttribute("aria-label", "Open Pooya Labs Platform website");
-  await expect(page.locator(".profile-avatar img")).toBeVisible();
-  await expect(page.locator(".profile-avatar img")).toHaveAttribute("src", /(?:\/orbit)?\/brand\/pooya-monogram\.webp$/);
+
+  const sidebarMonogram = page.locator(".profile-avatar img");
+  await expect(sidebarMonogram).toBeVisible();
+  await expect(sidebarMonogram).toHaveAttribute("src", /(?:\\/orbit)?\\/brand\\/pooya-monogram\\.webp\\?v=2026-11-10$/);
+  await expect.poll(() => sidebarMonogram.evaluate((image) => (
+    image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
+  ))).toBe(true);
 
   const footerCredit = page.locator(".owner-credit");
   const repositoryCredit = footerCredit.locator("a").first();
   const footerProfile = footerCredit.locator(".owner-github-link");
+  const footerMonogram = footerProfile.locator("img");
 
   await expect(repositoryCredit).toHaveAttribute("href", "https://github.com/pooya-labs/orbit");
   await expect(repositoryCredit).toHaveText("Created and maintained by");
   await expect(footerCredit.locator("strong")).toHaveText("PROJECT OWNER:");
   await expect(footerProfile).toHaveAttribute("href", "https://pooya-labs.github.io/pooya-labs-platform/");
   await expect(footerProfile).toHaveText("Pooya Labs Platform");
-  await expect(footerProfile.locator("img")).toBeVisible();
-  await expect(footerProfile.locator("img")).toHaveAttribute("src", /(?:\/orbit)?\/brand\/pooya-monogram\.webp$/);
+  await expect(footerMonogram).toBeVisible();
+  await expect(footerMonogram).toHaveAttribute("src", /(?:\\/orbit)?\\/brand\\/pooya-monogram\\.webp\\?v=2026-11-10$/);
+  await expect.poll(() => footerMonogram.evaluate((image) => (
+    image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
+  ))).toBe(true);
 
   const englishOrder = await footerCredit.innerText();
   expect(englishOrder.indexOf("Created and maintained by")).toBeLessThan(englishOrder.indexOf("PROJECT OWNER:"));
