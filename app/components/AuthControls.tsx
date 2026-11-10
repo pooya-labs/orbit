@@ -23,11 +23,14 @@ function displayName(user: OrbitAuthUser): string {
 }
 
 export default function AuthControls({ language }: { language: Language }) {
-  const [user, setUser] = useState<OrbitAuthUser | null>(() => getCurrentAuthUser());
+  const [user, setUser] = useState<OrbitAuthUser | null>(null);
   const [busy, setBusy] = useState(false);
   const [localKey, setLocalKey] = useState("");
   const [error, setError] = useState("");
-  useEffect(() => subscribeToAuth(() => setUser(getCurrentAuthUser())), []);
+  useEffect(() => {
+    setUser(getCurrentAuthUser());
+    return subscribeToAuth(() => setUser(getCurrentAuthUser()));
+  }, []);
 
   if (isAppsScriptRuntime()) {
     if (!user) return null;
