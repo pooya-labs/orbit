@@ -1013,6 +1013,13 @@ html[data-theme="light"] .telemetry-spinner { border-color: #dce5e9; border-top-
 
 /* Optional browser OIDC controls and callback surface. */
 .auth-controls { display:inline-flex; align-items:center; justify-content:flex-end; gap:7px; min-width:0; }
+
+.auth-local-form { display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; min-width:0; }
+.auth-local-key { width:148px; min-width:0; height:28px; padding:0 8px; border:1px solid rgba(101,217,193,.22); border-radius:6px; color:#d9e7e4; background:rgba(8,17,19,.72); font:9px "DM Mono",monospace; }
+.auth-local-key:focus-visible { outline:2px solid rgba(101,217,193,.75); outline-offset:2px; }
+.auth-local-key::placeholder { color:#829397; }
+.auth-local-form .auth-button:disabled { opacity:.55; cursor:not-allowed; }
+
 .auth-user { display:inline-block; max-width:126px; overflow:hidden; color:#9aadb3; font:9px "DM Mono",monospace; text-overflow:ellipsis; white-space:nowrap; }
 .auth-button { min-height:28px; padding:0 10px; border:1px solid rgba(101,217,193,.26); border-radius:6px; color:#b9e4d9; background:rgba(24,54,48,.42); font-size:9px; white-space:nowrap; cursor:pointer; }
 .auth-button:hover { border-color:rgba(101,217,193,.5); background:rgba(24,54,48,.7); }
