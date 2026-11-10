@@ -81,6 +81,16 @@ func main() {
 			logger.Error("database initialization failed", "error", err)
 			os.Exit(1)
 		}
+		if cfg.LocalWorkEnabled {
+			bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			bootstrapErr := db.BootstrapLocalWork(bootstrapCtx)
+			bootstrapCancel()
+			if bootstrapErr != nil {
+				db.Close()
+				logger.Error("Local Work database bootstrap failed", "error", bootstrapErr)
+				os.Exit(1)
+			}
+		}
 		repository = db
 		defer repository.Close()
 	} else {
