@@ -2,11 +2,13 @@
 
 ## Requirements
 
+For the full authenticated local runtime, prefer the dedicated [Local Work edition guide](local-work.md). The instructions below remain the lightweight development setup and do not create a signed-in workspace owner or enable authenticated workload ingestion.
+
 - Windows 10/11, macOS, or Linux
 - Git
-- Node.js 20+ and npm
+- Node.js 22+ and npm
 - Docker Desktop (for the backend stack)
-- Go 1.26+ (API and telemetry demo)
+- Go 1.27+ (only needed for running the API/tests directly; Docker handles Go in the local stack)
 
 ## Clone the repository
 
