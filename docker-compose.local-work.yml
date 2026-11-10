@@ -10,3 +10,38 @@ services:
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://api:4319/v1/workspaces/f2000000-0000-4000-8000-000000000001
       OTEL_EXPORTER_OTLP_HEADERS: Authorization=Bearer ${ORBIT_LOCAL_WORKLOAD_TOKEN:?run the Local Work launcher to create .env.local-work}
+
+  local-work-test:
+    image: golang:1.27-alpine
+    profiles: ["local-work-test"]
+    working_dir: /workspace
+    command:
+      - go
+      - test
+      - ./internal/auth
+      - ./internal/config
+      - ./internal/httpapi
+      - ./internal/ingest
+      - ./internal/store/postgres
+      - -run
+      - TestStaticTokenVerifier|TestLocalWork|TestAuthorization
+      - -count=1
+    environment:
+      ORBIT_TEST_DATABASE_URL: postgres://orbit:orbit_local_only@postgres:5432/orbit?sslmode=disable
+      GOPROXY: https://proxy.golang.org,direct
+      GOFLAGS: -mod=readonly
+      GOMODCACHE: /go/pkg/mod
+      GOCACHE: /root/.cache/go-build
+    volumes:
+      - ./server:/workspace:ro
+      - orbit-local-work-go-mod-cache:/go/pkg/mod
+      - orbit-local-work-go-build-cache:/root/.cache/go-build
+    networks:
+      - default
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  orbit-local-work-go-mod-cache:
+  orbit-local-work-go-build-cache:
