@@ -33,7 +33,16 @@ func main() {
 	}
 
 	var authVerifier httpapi.TokenVerifier
-	if cfg.OIDCIssuer != "" {
+	if cfg.LocalWorkEnabled {
+		authVerifier, err = auth.NewStaticTokenVerifier(cfg.LocalHumanToken, auth.Principal{
+			Issuer: "urn:orbit:local-work", Subject: "local-owner", Roles: []string{"administrator"},
+		})
+		if err != nil {
+			logger.Error("Local Work authentication initialization failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("explicit Local Work single-user authentication enabled; keep all listeners on loopback")
+	} else if cfg.OIDCIssuer != "" {
 		authCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		verifier, err := auth.NewVerifier(authCtx, auth.Config{
 			Issuer: cfg.OIDCIssuer, Audience: cfg.OIDCAudience,
@@ -117,10 +126,10 @@ func main() {
 	var ingestionGRPCServer *grpc.Server
 	var ingestionHTTPListener net.Listener
 	var ingestionGRPCListener net.Listener
-	var workloadVerifier *auth.Verifier
+	var workloadVerifier ingest.TokenVerifier
 	var collectorGRPCForwarder *ingest.CollectorGRPCForwarder
 
-	if cfg.WorkloadOIDCIssuer != "" {
+	if cfg.WorkloadOIDCIssuer != "" || cfg.LocalWorkEnabled {
 		workloadRepository, ok := repository.(store.WorkloadIdentityRepository)
 		if !ok || workloadRepository == nil {
 			logger.Error("workload ingestion requires a repository with workload identity authorization support")
@@ -132,18 +141,30 @@ func main() {
 			os.Exit(1)
 		}
 
-		authCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		workloadVerifier, err = auth.NewIngestionVerifier(authCtx, auth.Config{
-			Issuer: cfg.WorkloadOIDCIssuer,
-			Audience: cfg.WorkloadOIDCAudience,
-			AllowInsecureHTTP: cfg.Environment == "development",
-		}, cfg.OIDCAudience)
-		cancel()
-		if err != nil {
-			logger.Error("workload OIDC verifier initialization failed", "error", err)
-			os.Exit(1)
+		if cfg.LocalWorkEnabled {
+			workloadVerifier, err = auth.NewStaticTokenVerifier(cfg.LocalWorkloadToken, auth.Principal{
+				Issuer: "urn:orbit:local-workload", Subject: "orbit-telemetry-demo",
+			})
+			if err != nil {
+				logger.Error("Local Work telemetry token initialization failed", "error", err)
+				os.Exit(1)
+			}
+		} else {
+			authCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			var oidcVerifier *auth.Verifier
+			oidcVerifier, err = auth.NewIngestionVerifier(authCtx, auth.Config{
+				Issuer: cfg.WorkloadOIDCIssuer,
+				Audience: cfg.WorkloadOIDCAudience,
+				AllowInsecureHTTP: cfg.Environment == "development",
+			}, cfg.OIDCAudience)
+			cancel()
+			if err != nil {
+				logger.Error("workload OIDC verifier initialization failed", "error", err)
+				os.Exit(1)
+			}
+			workloadVerifier = oidcVerifier
+			defer oidcVerifier.Close()
 		}
-		defer workloadVerifier.Close()
 
 		resourceAttributeRecorder, ok := repository.(store.WorkloadResourceAttributeRepository)
 		if !ok {
@@ -220,7 +241,7 @@ func main() {
 			"collector_grpc", cfg.CollectorOTLPGRPCEndpoint,
 		)
 	} else {
-		logger.Warn("authenticated OTLP ingestion gateways are disabled; workload OIDC is not configured")
+		logger.Warn("authenticated OTLP ingestion gateways are disabled; workload OIDC and Local Work are not configured")
 	}
 
 	serverErrors := make(chan error, 3)
