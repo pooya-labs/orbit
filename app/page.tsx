@@ -83,7 +83,7 @@ type IncidentRow = {
 };
 
 const serviceTones = ["blue", "violet", "amber", "teal", "rose"];
-const ownerMonogramSrc = `${process.env.NEXT_PUBLIC_ORBIT_BASE_PATH ?? ""}/brand/pooya-monogram.webp`;
+const ownerMonogramSrc = `${process.env.NEXT_PUBLIC_ORBIT_BASE_PATH ?? ""}/brand/pooya-monogram.webp?v=2026-11-10`;
 
 function mapApiService(item: ServiceSummary, index: number, language: Language): Service {
   const state: ServiceState =

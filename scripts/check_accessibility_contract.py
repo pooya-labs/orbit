@@ -98,7 +98,7 @@ checks = [
     (page, 'href="https://pooya-labs.github.io/pooya-labs-platform/"', "sidebar owner link opens the Pooya Labs Platform website"),
     (page, 'href="https://github.com/pooya-labs"', "footer creator profile links use the current GitHub account"),
     (page, 'href="https://pooya-labs.github.io/pooya-labs-platform/"', "project owner link opens the Pooya Labs Platform website"),
-    (page, "const ownerMonogramSrc = `${process.env.NEXT_PUBLIC_ORBIT_BASE_PATH ?? \"\"}/brand/pooya-monogram.webp`", "the official owner monogram follows the GitHub Pages base path"),
+    (page, "const ownerMonogramSrc = `${process.env.NEXT_PUBLIC_ORBIT_BASE_PATH ?? \"\"}/brand/pooya-monogram.webp?v=2026-11-10`", "the official owner monogram is cache-versioned and follows the GitHub Pages base path"),
     (page, "src={ownerMonogramSrc}", "the official owner monogram is used in the dashboard"),
     (page, 'className="icon-button subtle-more preview-unavailable" disabled', "the unavailable incident-options control is explicitly disabled"),
     (page, 'onClick={() => chooseNav("Notifications")}', "the notification button opens the implemented Notifications view"),
