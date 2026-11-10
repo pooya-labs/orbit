@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { LogIn, LogOut } from "lucide-react";
+import { listWorkspaces } from "../../lib/orbit/client";
 import {
+  activateLocalWorkSession,
   beginOidcLogin,
   clearAuthSession,
   getCurrentAuthUser,
+  isLocalWorkEnabled,
   isOidcConfigured,
+  stageLocalWorkAccessToken,
   subscribeToAuth,
   type OrbitAuthUser
 } from "../../lib/orbit/oidc";
@@ -20,8 +25,10 @@ function displayName(user: OrbitAuthUser): string {
 export default function AuthControls({ language }: { language: Language }) {
   const [user, setUser] = useState<OrbitAuthUser | null>(() => getCurrentAuthUser());
   const [busy, setBusy] = useState(false);
+  const [localKey, setLocalKey] = useState("");
   const [error, setError] = useState("");
   useEffect(() => subscribeToAuth(() => setUser(getCurrentAuthUser())), []);
+
   if (isAppsScriptRuntime()) {
     if (!user) return null;
     return (
@@ -32,6 +39,60 @@ export default function AuthControls({ language }: { language: Language }) {
       </div>
     );
   }
+
+  if (isLocalWorkEnabled()) {
+    const signInLocal = async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setBusy(true);
+      setError("");
+      try {
+        stageLocalWorkAccessToken(localKey);
+        await listWorkspaces(undefined, process.env.NEXT_PUBLIC_ORBIT_API_URL || "http://localhost:8080");
+        activateLocalWorkSession();
+        setLocalKey("");
+      } catch (cause) {
+        clearAuthSession();
+        setError(cause instanceof Error ? cause.message : "The local access key could not be verified.");
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    return (
+      <div className="auth-controls" aria-live="polite">
+        {user ? (
+          <>
+            <span className="auth-user" title={user.sub}>{displayName(user)}</span>
+            <button className="auth-button" type="button" onClick={clearAuthSession} title={t(language, "signOut")}>
+              <LogOut size={13} aria-hidden="true" /> {t(language, "signOut")}
+            </button>
+          </>
+        ) : (
+          <form className="auth-local-form" onSubmit={(event) => void signInLocal(event)}>
+            <label className="sr-only" htmlFor="orbit-local-work-key">
+              Local Work access key
+            </label>
+            <input
+              id="orbit-local-work-key"
+              className="auth-local-key"
+              type="password"
+              autoComplete="current-password"
+              value={localKey}
+              onChange={(event) => setLocalKey(event.target.value)}
+              placeholder="Local access key"
+              aria-describedby={error ? "orbit-local-work-error" : undefined}
+              required
+            />
+            <button className="auth-button" type="submit" disabled={busy || localKey.trim().length < 32}>
+              <LogIn size={13} aria-hidden="true" /> {busy ? "Verifying…" : "Unlock Local Work"}
+            </button>
+          </form>
+        )}
+        {error && <span id="orbit-local-work-error" className="auth-error" role="alert">{error}</span>}
+      </div>
+    );
+  }
+
   if (!isOidcConfigured()) return null;
 
   const signIn = async () => {
