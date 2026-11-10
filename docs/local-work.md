@@ -97,4 +97,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test-local-work.ps1
 
 The script runs the targeted Go tests, web TypeScript typecheck, API readiness, and authenticated workspace/service/incident smoke checks.
 
+On macOS/Linux, run the equivalent targeted checks from the repository root:
+
+```bash
+docker compose --env-file .env.local-work -f docker-compose.yml -f docker-compose.local-work.yml --profile local-work-test run --rm local-work-test
+npm run typecheck
+curl -fsS http://localhost:8080/health/ready
+```
+
 For the final release candidate, CI remains responsible for the full Go race suite, vet/build, web production build, authenticated OTLP write-to-query isolation across all three signals, backpressure/recovery, PostgreSQL restart recovery, and Security scans. Those broad suites are run at the release gate, not after every documentation or styling edit. The Local Work branch must be green on the exact PR head before a release is published.
