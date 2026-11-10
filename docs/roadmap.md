@@ -700,7 +700,7 @@ The owner requested a separate full-function local release because the public po
 
 ### Implementation checklist
 
-- [x] Create a dedicated `feature/local-work-edition` branch from the verified `main` closeout commit; do not modify the stable v1.0.0 tag.
+- [x] Create a dedicated `feature/local-work-edition-final` branch from the verified `main` closeout commit; do not modify the stable v1.0.0 tag.
 - [x] Add an explicit `ORBIT_LOCAL_WORK` configuration gate. It is valid only in development, rejects OIDC overlap, requires PostgreSQL plus all three telemetry stores/Collector endpoints, requires two distinct high-entropy tokens, and permits loopback CORS origins only.
 - [x] Add constant-time local token verification. Human API operations use the local owner principal; the telemetry workload uses a separate identity and static token.
 - [x] Keep local bootstrap data out of the normal migration chain. The local workspace, owner membership, scenario services/incidents, SLO, alert rule, deployment annotations, and workload grants are created only by `BootstrapLocalWork` when the explicit mode is enabled.
@@ -709,7 +709,7 @@ The owner requested a separate full-function local release because the public po
 - [x] Add Windows and macOS/Linux launchers. Tokens live only in ignored `.env.local-work`; the frontend receives no token through a `NEXT_PUBLIC_*` build variable.
 - [x] Add tab-scoped local browser sign-in and automatic API/workspace connection after successful verification.
 - [x] Add a targeted Go/PostgreSQL test profile with persistent module/build caches.
-- [ ] Add Local Work setup, operational, notification-webhook, persistence, and test documentation.
+- [x] Add Local Work setup, operational, notification-webhook, persistence, and test documentation.
 - [ ] Validate Compose configuration, targeted Go tests, frontend typecheck/build, PostgreSQL bootstrap idempotency, and API workspace smoke checks.
 - [ ] Run the exact-head CI and Security workflows. Preserve the full existing race, telemetry-isolation, backpressure/recovery, database restart, and security gates.
 - [ ] Review the exact PR diff for accidental secrets, production-mode changes, changes to v1.0.0, and unscoped telemetry paths.
