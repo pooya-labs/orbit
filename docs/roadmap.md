@@ -23,7 +23,7 @@ The owner confirmed the manual keyboard/device acceptance is complete on 2026-11
 - [x] Extend real NVDA coverage through all primary dashboard views: verify Ctrl+Home announces the skip link, then use native Tab/Enter to traverse Overview and the other 12 views and assert each page heading is announced in Speech Viewer (PR #125; tested script head `e359be15216cccc9aaf48e11dd89b7475f9a9eff`; exact NVDA run [41637653806](https://github.com/pooya-labs/orbit/actions/runs/41637653806) passed).
 - [x] Owner-confirmed manual keyboard, device, and assistive-technology acceptance completed (2026-11-10). This is owner-provided acceptance evidence; it does not constitute a formal WCAG audit or certification.
 
-The contrast regression check covers the base palette plus explicit light-theme text colors against a reviewed set of pale surfaces. Both the live Metrics chart and illustrative Overview chart now expose expandable table alternatives. Metrics uses its Prometheus response; Overview uses clearly labelled samples derived from the same SVG fixture and updates its time labels to the selected window. Manual verification of the chart/table relationship and assistive-technology experience remains open.
+The contrast regression check covers the base palette plus explicit light-theme text colors against a reviewed set of pale surfaces. Both the live Metrics chart and illustrative Overview chart now expose expandable table alternatives. Metrics uses its Prometheus response; Overview uses clearly labelled samples derived from the same SVG fixture and updates its time labels to the selected window. The project owner confirmed manual keyboard, device, and assistive-technology acceptance on 2026-11-10. This owner-provided acceptance closes the v1 portfolio-demo review item; it does not constitute a formal WCAG audit or certification.
 
 ## M02 — API and persistence foundation
 
@@ -340,8 +340,9 @@ identity, health, and tenant-isolation smoke checks pass.
   gate remains blocked for production deployment until the real origin, identity,
   DNS/ingress and operational gates are approved. Keycloak is not used by the Pages + Apps Script
   demo and remains outside the v1 release gate.
-- The release does not claim formal WCAG conformance. Human TalkBack/VoiceOver
-  device acceptance and broad sustained-load/capacity benchmarking remain
+- The release does not claim formal WCAG conformance. The project owner
+  subsequently confirmed manual keyboard, device, and assistive-technology
+  acceptance on 2026-11-10. Broad sustained-load/capacity benchmarking remains
   post-v1 work.
 
 ### Release status
@@ -674,3 +675,20 @@ The owner has chosen to stop at the existing stable portfolio-demo scope and def
 - Production Compose remains on Keycloak 26.8.1. The patched image is a validated registry artifact, not a production deployment.
 - No origin VM, real OIDC tenant, DNS/ingress, live tenant traffic, D1 deployment, or paid service was provisioned. The Pages + synthetic Apps Script portfolio demo remains the delivered product.
 - Production backup scheduling, durable-history retention policy, target-environment load/capacity measurement, RPO/RTO drills, and any Cloudflare/Go production runtime remain deferred. They are not blockers for the current portfolio-demo scope.
+
+## Final portfolio-demo closeout — 2026-11-10
+
+The owner requested completion of the existing ORBIT v1.0.0 portfolio-demo scope. This is the final repository closeout; production-hosting expansion is not part of the delivered scope.
+
+- [x] Owner-confirmed manual keyboard, device, and assistive-technology acceptance recorded. No formal WCAG conformance or certification is claimed.
+- [x] [PR #169](https://github.com/pooya-labs/orbit/pull/169) passed exact-head CI [42723914925](https://github.com/pooya-labs/orbit/actions/runs/42723914925) and Security [42723915044](https://github.com/pooya-labs/orbit/actions/runs/42723915044), including full-history Gitleaks and image/dependency checks.
+- [x] [PR #170](https://github.com/pooya-labs/orbit/pull/170), the final documentation-only handoff, passed exact-head CI [42726300904](https://github.com/pooya-labs/orbit/actions/runs/42726300904) and Security [42726301000](https://github.com/pooya-labs/orbit/actions/runs/42726301000), then merged to `main` as `f70e8464359e9b999c8b87490528cd132a80ee80`.
+- [x] Final post-merge `main` CI [42726617351](https://github.com/pooya-labs/orbit/actions/runs/42726617351), Security [42726617308](https://github.com/pooya-labs/orbit/actions/runs/42726617308), and GitHub Pages deployment [42726617657](https://github.com/pooya-labs/orbit/actions/runs/42726617657) all succeeded.
+- [x] No pull requests remained open at the closeout checkpoint. The published [v1.0.0 release](https://github.com/pooya-labs/orbit/releases/tag/v1.0.0) remains on its original tag target; the final documentation commits did not move the tag.
+- [x] The public portfolio dashboard remains available at https://pooya-labs.github.io/orbit/.
+
+### Explicitly deferred — not v1 blockers
+
+Live Go/API and Keycloak origin deployment, real OIDC tenant provisioning, production DNS/ingress and live traffic, Cloudflare Worker/D1 deployment, production Compose promotion of the patched Keycloak image, encrypted off-host backup scheduling, durable-history retention/archive decisions, target-environment capacity/load measurements, formal RPO/RTO recovery drills, and Redis/NATS application integration are outside this portfolio-demo closeout. Do not provision paid resources or start this work without a new explicit owner request. Preserve the $0/month constraint unless the owner changes it.
+
+**Completion decision:** ORBIT v1.0.0 is complete for its stated portfolio-demo scope. Any future production or feature expansion must be tracked as a new scope rather than reopening this completed release.
