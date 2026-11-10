@@ -143,7 +143,7 @@ func main() {
 
 		if cfg.LocalWorkEnabled {
 			workloadVerifier, err = auth.NewStaticTokenVerifier(cfg.LocalWorkloadToken, auth.Principal{
-				Issuer: "urn:orbit:local-workload", Subject: "orbit-telemetry-demo",
+				Issuer: "urn:orbit:local-workload", Subject: "orbit-telemetry-demo", Roles: []string{"viewer"},
 			})
 			if err != nil {
 				logger.Error("Local Work telemetry token initialization failed", "error", err)
