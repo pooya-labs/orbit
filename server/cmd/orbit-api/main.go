@@ -32,6 +32,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	var err error
 	var authVerifier httpapi.TokenVerifier
 	if cfg.LocalWorkEnabled {
 		authVerifier, err = auth.NewStaticTokenVerifier(cfg.LocalHumanToken, auth.Principal{
