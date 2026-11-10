@@ -215,6 +215,10 @@ The stable v1.0.0 release and immutable tag remain unchanged. Post-release maint
 
 The Keycloak 26.8.2 remediation in [PR #138](https://github.com/pooya-labs/orbit/pull/138) has now been squash-merged as `3c8ebc56d34a4c9ed553338c7d8531bb1c4a0e20`. Its published immutable GHCR digest passed strict scans on AMD64 and ARM64, and the exact-head source rebuild and deferred identity checks passed. Production Compose remains on Keycloak 26.8.1; the patched artifact was not promoted or deployed. The v1.0.0 tag remains unchanged.
 
+The final documentation closeout is complete. [PR #169](https://github.com/pooya-labs/orbit/pull/169) closed the post-merge secret-scan false positive with a narrow exact-path/exact-value Gitleaks allowance. [PR #170](https://github.com/pooya-labs/orbit/pull/170) then recorded the final verification evidence and was squash-merged as `f70e8464359e9b999c8b87490528cd132a80ee80`. The exact PR #170 head passed [CI](https://github.com/pooya-labs/orbit/actions/runs/42726300904) and [Security](https://github.com/pooya-labs/orbit/actions/runs/42726301000). On the resulting `main` commit, [CI](https://github.com/pooya-labs/orbit/actions/runs/42726617351), [Security](https://github.com/pooya-labs/orbit/actions/runs/42726617308), and [GitHub Pages deployment](https://github.com/pooya-labs/orbit/actions/runs/42726617657) all succeeded. No pull requests remained open at closeout. The stable `v1.0.0` tag still points to its original release commit; these documentation-only closeout commits did not move it.
+
+**Final status:** the ORBIT v1.0.0 portfolio-demo scope is complete and closed. Production hosting, live OIDC tenancy, Cloudflare/D1 deployment, off-host backup automation, measured capacity and RPO/RTO exercises remain explicitly deferred until a new owner request.
+
 ## Project ownership
 
 <p align="center"><a href="https://pooya-labs.github.io/pooya-labs-platform/"><img src="https://raw.githubusercontent.com/pooya-labs/pooya-labs-platform/main/apps/platform/public/brand/pooya-monogram-tile.svg" alt="Pooya Labs Platform monogram" width="96" /></a></p>

@@ -1282,4 +1282,32 @@ The owner chose to finish the existing v1.0.0 portfolio-demo scope and defer fut
 
 ### Continuation boundary
 
-The current portfolio-demo scope is finished: PR #169 and the resulting main CI, Security, Pages and stable-release verification all passed. Do not reopen v1.0.0 or start the production checklist automatically. Future work requires a new, explicit owner request and must preserve the $0 monthly infrastructure constraint unless the owner changes it.
+The current portfolio-demo scope is finished. The final documentation PR #170 merged as `f70e8464359e9b999c8b87490528cd132a80ee80`; post-merge main CI, Security, and Pages deployment all passed. No pull requests remained open at closeout. Do not reopen v1.0.0 or start the production checklist automatically. Future work requires a new, explicit owner request and must preserve the $0 monthly infrastructure constraint unless the owner changes it.
+
+## 21. Final portfolio-demo closure — 2026-11-10
+
+This section supersedes earlier pre-closeout continuation notes above. The owner explicitly chose to finish the existing v1.0.0 portfolio-demo scope and defer future production deployment/runtime work until requested.
+
+### Final repository state
+
+- Default branch: `main`.
+- Final closeout commit: `f70e8464359e9b999c8b87490528cd132a80ee80`.
+- [PR #170](https://github.com/pooya-labs/orbit/pull/170) was documentation-only, passed its exact-head [CI](https://github.com/pooya-labs/orbit/actions/runs/42726300904) and [Security](https://github.com/pooya-labs/orbit/actions/runs/42726301000) checks, and was squash-merged.
+- Post-merge main [CI](https://github.com/pooya-labs/orbit/actions/runs/42726617351), [Security](https://github.com/pooya-labs/orbit/actions/runs/42726617308), and [GitHub Pages deployment](https://github.com/pooya-labs/orbit/actions/runs/42726617657) all completed successfully.
+- No pull requests remained open at the final closeout checkpoint.
+- The published [v1.0.0 release](https://github.com/pooya-labs/orbit/releases/tag/v1.0.0) and its original tag target remain unchanged. The dashboard remains at https://pooya-labs.github.io/orbit/.
+
+### Acceptance and security evidence
+
+- The owner confirmed manual keyboard, mobile/device, and assistive-technology acceptance on 2026-11-10. This is owner-provided acceptance evidence only; it is not a formal WCAG audit or certification.
+- The patched Keycloak 26.8.2 multi-architecture image remains a validated GHCR artifact at `ghcr.io/pooya-labs/orbit-keycloak@sha256:97cc4590f5abd77e23522d6d94c3fe77c82b91c44a4e7acef22aec28c61bf81d`. Strict AMD64/ARM64 digest scans, independent source rebuild, and deferred identity scan passed.
+- Production Compose remains pinned to Keycloak 26.8.1. The patched image was not promoted or deployed. No origin VM, live OIDC tenant, production DNS/ingress, D1 database, live tenant traffic, or paid infrastructure was provisioned.
+- PR #169's narrow exact-path/exact-value Gitleaks allowlist remains deliberately scoped to the public source SHA embedded in the immutable image tag. Never generalize it to arbitrary hashes, GHCR references, or credentials.
+
+### Deferred work — separate future scope only
+
+Production Go/API and Keycloak hosting, real OIDC tenancy, DNS/ingress and live tenant traffic, Cloudflare Worker/D1 runtime deployment, encrypted off-host backup scheduling, durable-history retention/archive policy, target-environment capacity/load tests, measured RPO/RTO recovery exercises, and Redis/NATS application integration remain deferred. They are not blockers for the completed synthetic portfolio demo. Do not begin this work, provision paid services, promote the Keycloak artifact, or change production Compose unless the owner explicitly requests it. Preserve the $0/month infrastructure constraint unless the owner changes it.
+
+### Final decision
+
+**ORBIT v1.0.0 portfolio-demo scope is complete and closed.** Any future production deployment, broader operations scope, or feature expansion must start as a new owner-approved scope; do not silently reopen this release.
