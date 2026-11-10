@@ -2,6 +2,7 @@ services:
   api:
     environment:
       ORBIT_LOCAL_WORK: "true"
+      ORBIT_VERSION: "1.1.0"
       ORBIT_LOCAL_HUMAN_TOKEN: ${ORBIT_LOCAL_HUMAN_TOKEN:?run the Local Work launcher to create .env.local-work}
       ORBIT_LOCAL_WORKLOAD_TOKEN: ${ORBIT_LOCAL_WORKLOAD_TOKEN:?run the Local Work launcher to create .env.local-work}
       ORBIT_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
