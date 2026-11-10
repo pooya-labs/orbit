@@ -21,8 +21,13 @@ $envFile = Join-Path $root ".env.local-work"
 if (-not (Test-Path $envFile)) {
   $humanBytes = New-Object byte[] 36
   $workloadBytes = New-Object byte[] 36
-  [System.Security.Cryptography.RandomNumberGenerator]::Fill($humanBytes)
-  [System.Security.Cryptography.RandomNumberGenerator]::Fill($workloadBytes)
+  $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $random.GetBytes($humanBytes)
+    $random.GetBytes($workloadBytes)
+  } finally {
+    $random.Dispose()
+  }
   $humanToken = [Convert]::ToBase64String($humanBytes)
   $workloadToken = [Convert]::ToBase64String($workloadBytes)
   @(
