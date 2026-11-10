@@ -4,6 +4,9 @@ import (
 	"context"
 	"os"
 	"testing"
+
+	"github.com/pooya16pg-spec/orbit/server/internal/auth"
+	"github.com/pooya16pg-spec/orbit/server/internal/ingest"
 	"time"
 )
 
@@ -55,10 +58,24 @@ func TestLocalWorkBootstrapIsExplicitIdempotentAndWorkspaceScoped(t *testing.T) 
 		t.Fatalf("Local Work incident count = %d, want 2", len(incidents))
 	}
 
+	workloadToken := "local-workload-token-0123456789abcdef"
+	workloadVerifier, err := auth.NewStaticTokenVerifier(workloadToken, auth.Principal{
+		Issuer: "urn:orbit:local-workload", Subject: "orbit-telemetry-demo", Roles: []string{"viewer"},
+	})
+	if err != nil {
+		t.Fatalf("create local workload verifier: %v", err)
+	}
+	workloadAuthorizer, err := ingest.NewAuthorizer(workloadVerifier, repository)
+	if err != nil {
+		t.Fatalf("create local workload authorizer: %v", err)
+	}
 	for _, signal := range []string{"metrics", "logs", "traces"} {
-		identity, err := repository.AuthorizeWorkloadTelemetry(ctx, "urn:orbit:local-workload", "orbit-telemetry-demo", workspaceID, signal)
-		if err != nil || identity.Status != "active" {
-			t.Fatalf("Local Work %s grant identity = %#v, error = %v", signal, identity, err)
+		decision, err := workloadAuthorizer.Authorize(
+			ctx, []string{"Bearer " + workloadToken}, workspaceID, signal,
+		)
+		if err != nil || decision.WorkspaceID != workspaceID || decision.Signal != signal ||
+			decision.IdentityID == "" {
+			t.Fatalf("Local Work %s token decision = %#v, error = %v", signal, decision, err)
 		}
 	}
 
