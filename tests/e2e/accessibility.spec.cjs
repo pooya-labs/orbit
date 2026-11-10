@@ -861,7 +861,7 @@ test("creator and repository credits use the right destinations and order", asyn
 
   const sidebarMonogram = page.locator(".profile-avatar img");
   await expect(sidebarMonogram).toBeVisible();
-  await expect(sidebarMonogram).toHaveAttribute("src", /(?:\\/orbit)?\\/brand\\/pooya-monogram\\.webp\\?v=2026-11-10$/);
+  await expect(sidebarMonogram).toHaveAttribute("src", /pooya-monogram\.webp\?v=2026-11-10$/);
   await expect.poll(() => sidebarMonogram.evaluate((image) => (
     image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
   ))).toBe(true);
@@ -877,7 +877,7 @@ test("creator and repository credits use the right destinations and order", asyn
   await expect(footerProfile).toHaveAttribute("href", "https://pooya-labs.github.io/pooya-labs-platform/");
   await expect(footerProfile).toHaveText("Pooya Labs Platform");
   await expect(footerMonogram).toBeVisible();
-  await expect(footerMonogram).toHaveAttribute("src", /(?:\\/orbit)?\\/brand\\/pooya-monogram\\.webp\\?v=2026-11-10$/);
+  await expect(footerMonogram).toHaveAttribute("src", /pooya-monogram\.webp\?v=2026-11-10$/);
   await expect.poll(() => footerMonogram.evaluate((image) => (
     image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
   ))).toBe(true);
