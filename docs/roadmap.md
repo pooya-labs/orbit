@@ -674,3 +674,33 @@ The owner has chosen to stop at the existing stable portfolio-demo scope and def
 - Production Compose remains on Keycloak 26.8.1. The patched image is a validated registry artifact, not a production deployment.
 - No origin VM, real OIDC tenant, DNS/ingress, live tenant traffic, D1 deployment, or paid service was provisioned. The Pages + synthetic Apps Script portfolio demo remains the delivered product.
 - Production backup scheduling, durable-history retention policy, target-environment load/capacity measurement, RPO/RTO drills, and any Cloudflare/Go production runtime remain deferred. They are not blockers for the current portfolio-demo scope.
+
+
+## Local Work edition — new release scope (2026-11-10)
+
+The owner requested a separate full-function local release because the public portfolio edition intentionally uses synthetic data for capabilities that require a hosted origin. Keep the published `v1.0.0` tag and GitHub Pages/Apps Script demo unchanged. Local Work is a distinct, opt-in single-user runtime.
+
+### Implementation checklist
+
+- [x] Create a dedicated `feature/local-work-edition` branch from the verified `main` closeout commit; do not modify the stable v1.0.0 tag.
+- [x] Add an explicit `ORBIT_LOCAL_WORK` configuration gate. It is valid only in development, rejects OIDC overlap, requires PostgreSQL plus all three telemetry stores/Collector endpoints, requires two distinct high-entropy tokens, and permits loopback CORS origins only.
+- [x] Add constant-time local token verification. Human API operations use the local owner principal; the telemetry workload uses a separate identity and static token.
+- [x] Keep local bootstrap data out of the normal migration chain. The local workspace, owner membership, scenario services/incidents, SLO, alert rule, deployment annotations, and workload grants are created only by `BootstrapLocalWork` when the explicit mode is enabled.
+- [x] Add authenticated OTLP HTTP/gRPC gateway startup for Local Work using the same authorizer, PostgreSQL grants/rate limits, canonical tenant attribute injection, and private Collector forwarders as the OIDC runtime.
+- [x] Route the local Go telemetry demo through the authenticated workspace OTLP HTTP gateway; do not let it write directly to the Collector.
+- [x] Add Windows and macOS/Linux launchers. Tokens live only in ignored `.env.local-work`; the frontend receives no token through a `NEXT_PUBLIC_*` build variable.
+- [x] Add tab-scoped local browser sign-in and automatic API/workspace connection after successful verification.
+- [x] Add a targeted Go/PostgreSQL test profile with persistent module/build caches.
+- [ ] Add Local Work setup, operational, notification-webhook, persistence, and test documentation.
+- [ ] Validate Compose configuration, targeted Go tests, frontend typecheck/build, PostgreSQL bootstrap idempotency, and API workspace smoke checks.
+- [ ] Run the exact-head CI and Security workflows. Preserve the full existing race, telemetry-isolation, backpressure/recovery, database restart, and security gates.
+- [ ] Review the exact PR diff for accidental secrets, production-mode changes, changes to v1.0.0, and unscoped telemetry paths.
+- [ ] Merge only after every required check succeeds; then publish a separate Local Work release/tag without moving v1.0.0.
+
+### Fast test strategy
+
+During implementation, use the focused `local-work-test` Compose profile plus web typecheck and authenticated API smoke checks. Run the full backend race/vet/build suite and the full real-dependency observability/tenant-isolation/security workflows once on the release candidate's exact PR head. Do not replace integration/security gates with mocks or lower scan thresholds. Keep long-duration capacity/RPO/RTO exercises outside this local edition; they are deployment-specific, not local functionality tests.
+
+### Release boundary
+
+Local Work is a separate local runtime, not a free public SaaS. Keep every published listener bound to loopback or a private Docker network. Do not provision an external server, DNS, identity provider, Cloudflare runtime, or paid service as part of this scope. Webhook delivery requires an operator-supplied HTTPS endpoint/secret; never add a real one to source control.
