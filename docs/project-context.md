@@ -1311,3 +1311,29 @@ Production Go/API and Keycloak hosting, real OIDC tenancy, DNS/ingress and live 
 ### Final decision
 
 **ORBIT v1.0.0 portfolio-demo scope is complete and closed.** Any future production deployment, broader operations scope, or feature expansion must start as a new owner-approved scope; do not silently reopen this release.
+
+
+## 22. Local Work edition continuation handoff — 2026-11-10
+
+The owner requested a separate fully functional local version rather than expanding the public synthetic portfolio demo. Work is isolated on branch `feature/local-work-edition-final`, based on the completed `main` closeout commit `f70e8464359e9b999c8b87490528cd132a80ee80`. The immutable public `v1.0.0` release/tag, Pages deployment, Apps Script wrapper, and Production Compose remain untouched.
+
+### Implemented on the branch
+
+- `ORBIT_LOCAL_WORK=true` is an explicit development-only mode. Config validation rejects Production/staging, human/workload OIDC overlap, reused/short credentials, missing PostgreSQL/telemetry dependencies, and non-loopback CORS origins.
+- `auth.StaticTokenVerifier` checks separate local human/workload tokens in constant time. The human principal is `urn:orbit:local-work / local-owner` with administrator role; the telemetry principal is `urn:orbit:local-workload / orbit-telemetry-demo`.
+- `BootstrapLocalWork` is called only by API startup when Local Work is explicitly enabled. Its SQL file is separate from schema migrations, so normal/Production database opens do not create local identities or demo records. It is idempotent and seeds a local owner workspace, marked sample scenarios, one real telemetry-demo service, incident timelines, a sample alert rule/SLO/deployment comparison, and metrics/logs/traces workload grants.
+- Local Work starts the same authenticated OTLP HTTP/gRPC gateways and private Collector forwarders as the existing OIDC runtime. The Go telemetry demo sends its three signals to the workspace gateway and uses a distinct local workload secret.
+- Browser sign-in is tab-scoped and uses session storage only. It does not publish the secret in a `NEXT_PUBLIC_*` variable or persist it to local storage.
+- Launchers: `scripts/start-local-work.ps1` and `scripts/start-local-work.sh`. Targeted test profile: `local-work-test` in `docker-compose.local-work.yml`.
+
+### Current validation state
+
+Implementation is in progress and is not yet a published release. Run the fast targeted test profile, TypeScript typecheck, authenticated API smoke, then exact-head CI/Security. Verify that the runtime migration path does not seed Local Work data unless its explicit flag is on. Confirm the telemetry-demo receives an accepted workload token and that each metrics/logs/traces route returns only the Local Work workspace. Do not claim a green test suite until GitHub reports the exact head successful.
+
+### Constraints
+
+- No public hosting, no VM/domain, no paid service, and no production configuration changes.
+- Dashboard and API public host bindings remain loopback-only; OTLP gateways and raw telemetry stores remain inside Docker's private network.
+- Keep credentials only in ignored `.env.local-work`. Never copy real tokens/webhook URLs into docs, logs, screenshots, or commits.
+- Outbound notifications are supported through the existing HTTPS webhook adapter only when the owner supplies a secret reference and exact hostname allowlist. No fake "delivered" result should be claimed when no webhook is configured.
+- Preserve the published v1.0.0 tag. Publish Local Work as a separate version only after CI/Security are green.
