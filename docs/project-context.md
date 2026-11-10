@@ -1282,4 +1282,4 @@ The owner chose to finish the existing v1.0.0 portfolio-demo scope and defer fut
 
 ### Continuation boundary
 
-The current portfolio-demo scope is finished: PR #169 and the resulting main CI, Security, Pages and stable-release verification all passed. Do not reopen v1.0.0 or start the production checklist automatically. Do not reopen v1.0.0 or start the production checklist automatically. Future work requires a new, explicit owner request and must preserve the $0 monthly infrastructure constraint unless the owner changes it.
+The current portfolio-demo scope is finished: PR #169 and the resulting main CI, Security, Pages and stable-release verification all passed. Do not reopen v1.0.0 or start the production checklist automatically. Future work requires a new, explicit owner request and must preserve the $0 monthly infrastructure constraint unless the owner changes it.
