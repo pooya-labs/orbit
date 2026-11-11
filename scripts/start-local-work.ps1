@@ -91,9 +91,10 @@ if ($LASTEXITCODE -ne 0) { throw "Docker Compose failed to start the Local Work 
 
 Write-Host "Waiting for the local API to become ready..."
 $ready = $false
-for ($attempt = 0; $attempt -lt 60; $attempt++) {
+$readinessDeadline = (Get-Date).AddSeconds(120)
+while ((Get-Date) -lt $readinessDeadline) {
   try {
-    $health = Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8080/health/ready" -TimeoutSec 3
+    $health = Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8080/health/ready" -TimeoutSec 2
     if ($health.status -eq "ready") {
       $ready = $true
       break
