@@ -1315,9 +1315,9 @@ Production Go/API and Keycloak hosting, real OIDC tenancy, DNS/ingress and live 
 
 ## 22. Local Work edition continuation handoff — 2026-11-10
 
-The owner requested a separate fully functional local version rather than expanding the public synthetic portfolio demo. Work is isolated on branch `feature/local-work-edition-final`, based on the completed `main` closeout commit `f70e8464359e9b999c8b87490528cd132a80ee80`. The immutable public `v1.0.0` release/tag, Pages deployment, Apps Script wrapper, and Production Compose remain untouched.
+The owner requested a separate fully functional local version rather than expanding the public synthetic portfolio demo. The implementation was developed on `feature/local-work-edition-final` and merged into `main` as `289de28ba22730e4d731ac565094e2716e06a865` (PR #173). The immutable public `v1.0.0` release/tag, Apps Script wrapper, and Production Compose remain untouched; the GitHub Pages deployment was refreshed from the merged main commit.
 
-### Implemented on the branch
+### Implemented and merged as ORBIT Local Work v1.1.0
 
 - `ORBIT_LOCAL_WORK=true` is an explicit development-only mode. Config validation rejects Production/staging, human/workload OIDC overlap, reused/short credentials, missing PostgreSQL/telemetry dependencies, and non-loopback CORS origins.
 - `auth.StaticTokenVerifier` checks separate local human/workload tokens in constant time. The human principal is `urn:orbit:local-work / local-owner` with administrator role; the telemetry principal is `urn:orbit:local-workload / orbit-telemetry-demo`.
@@ -1326,9 +1326,16 @@ The owner requested a separate fully functional local version rather than expand
 - Browser sign-in is tab-scoped and uses session storage only. It does not publish the secret in a `NEXT_PUBLIC_*` variable or persist it to local storage.
 - Launchers: `scripts/start-local-work.ps1` and `scripts/start-local-work.sh`. Targeted test profile: `local-work-test` in `docker-compose.local-work.yml`.
 
-### Current validation state
+### Release and validation status — complete
 
-Implementation is in progress and is not yet a published release. Run the fast targeted test profile, TypeScript typecheck, authenticated API smoke, then exact-head CI/Security. Verify that the runtime migration path does not seed Local Work data unless its explicit flag is on. Confirm the telemetry-demo receives an accepted workload token and that each metrics/logs/traces route returns only the Local Work workspace. Do not claim a green test suite until GitHub reports the exact head successful.
+**ORBIT Local Work v1.1.0 is published:** [GitHub Release](https://github.com/pooya-labs/orbit/releases/tag/local-work-v1.1.0). The immutable `local-work-v1.1.0` tag points to `289de28ba22730e4d731ac565094e2716e06a865`.
+
+- PR #173 merged the Local Work implementation as `289de28ba22730e4d731ac565094e2716e06a865`. Exact-main CI [43023167724](https://github.com/pooya-labs/orbit/actions/runs/43023167724) and Security [43023167746](https://github.com/pooya-labs/orbit/actions/runs/43023167746) succeeded; the Pages deployment [43023168057](https://github.com/pooya-labs/orbit/actions/runs/43023168057) also succeeded.
+- The Local Work E2E verified the owner session, six services, two incidents, and authenticated workspace telemetry results (Metrics=1, Logs=3, Traces=2). The comprehensive telemetry job verified OTLP write/query, Collector scrape, workspace isolation, and PostgreSQL restart plus pool recovery.
+- Windows NVDA Browse Mode heading navigation passed in PR run [43020025849](https://github.com/pooya-labs/orbit/actions/runs/43020025849).
+- The release automation was added in PR #174, merged as `0d99afebdc9d788cfa94f321d9cf45c62ebe88ca`. The public `v1.0.0` tag is unchanged and still points to `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`.
+
+Do not reinterpret the local single-user runtime as a hosted service. Production OIDC, external ingress, paid infrastructure, and real customer traffic remain out of scope.
 
 ### Constraints
 
