@@ -5,6 +5,7 @@
 **Distributed Systems Intelligence & Observability**
 
 [![Stable release](https://img.shields.io/badge/release-v1.0.0-2ea44f)](https://github.com/pooya-labs/orbit/releases/tag/v1.0.0)
+[![Local Work release](https://img.shields.io/badge/Local%20Work-v1.1.0-0f766e)](https://github.com/pooya-labs/orbit/releases/tag/local-work-v1.1.0)
 [![CI](https://github.com/pooya-labs/orbit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pooya-labs/orbit/actions)
 [![Security](https://github.com/pooya-labs/orbit/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/pooya-labs/orbit/actions)
 
@@ -12,12 +13,12 @@
 
 ORBIT is an engineering-focused observability workspace for exploring service health, incidents, operational workflows, and distributed telemetry across metrics, logs, and traces.
 
-> **Release status: ORBIT v1.0.0 portfolio-demo scope is complete; post-v1 maintenance is closed for the current scope.**  
+> **Release status: ORBIT v1.0.0 portfolio-demo scope is complete; ORBIT Local Work v1.1.0 is also published as a separate single-user local runtime.**  
 > The patched Keycloak 26.8.2 artifact has been published and strictly validated on AMD64/ARM64, and PR [#138](https://github.com/pooya-labs/orbit/pull/138) is merged. The Cloudflare edge gateway and the separate Workers + D1 foundation are code-complete only to their documented stages; neither is connected to a live Go/Keycloak origin or deployed as a production runtime. Apps Script remains unchanged and synthetic-only.
 
 ## Local Work edition
 
-The public v1.0.0 site remains the lightweight portfolio demo. For a full local runtime with the Go API, PostgreSQL, authenticated OTLP ingestion, Prometheus, Loki, Tempo, and operational workflows, use the **Local Work edition**:
+The public v1.0.0 site remains the lightweight portfolio demo. The separate **[ORBIT Local Work v1.1.0 release](https://github.com/pooya-labs/orbit/releases/tag/local-work-v1.1.0)** provides a full single-user local runtime with the Go API, PostgreSQL, authenticated OTLP ingestion, Prometheus, Loki, Tempo, and operational workflows:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start-local-work.ps1
