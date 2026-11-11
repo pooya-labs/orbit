@@ -1,5 +1,8 @@
 # Build the pinned Loki v3.7.9 source with the fixed golang.org/x/net release.
 FROM golang:1.27-alpine AS build
+
+# Fall back to direct VCS downloads after any proxy error (including transient HTTP/2 failures).
+ENV GOPROXY=https://proxy.golang.org|direct
 RUN apk add --no-cache bash git make
 WORKDIR /src/loki
 ARG LOKI_VERSION=v3.7.9
