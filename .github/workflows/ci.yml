@@ -43,7 +43,7 @@ jobs:
           while IFS= read -r path; do
             [[ -z "$path" ]] && continue
             case "$path" in
-              server/*|scripts/postgres_backup_restore_smoke.sh)
+              server/*|scripts/postgres_backup_restore_smoke.sh|docker-compose.local-work.yml)
                 api=true
                 ;;
             esac
