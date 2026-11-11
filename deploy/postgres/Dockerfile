@@ -23,7 +23,13 @@ RUN set -eux; \
 
 FROM postgres:17-alpine
 COPY --from=gosu-build /out/gosu /usr/local/bin/gosu
-RUN gosu --version && gosu nobody true
+
+# The official image may predate security updates published in its Alpine branch.
+# Refresh final-stage OS packages so fixed repository builds are present in the
+# runtime image scanned by CI, without changing PostgreSQL or its entrypoint.
+RUN apk upgrade --no-cache \
+    && gosu --version \
+    && gosu nobody true
 
 # Optional Keycloak database, created only on a fresh production volume.
 COPY --chmod=755 deploy/postgres/init/10-keycloak-db.sh /docker-entrypoint-initdb.d/10-keycloak-db.sh

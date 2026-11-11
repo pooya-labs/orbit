@@ -311,3 +311,75 @@ func TestSelfTelemetryEndpointMustBeAnHTTPBaseURL(t *testing.T) {
 		}
 	}
 }
+
+
+func localWorkTestConfig() Config {
+	return Config{
+		Environment: "development",
+		RateLimitPerMinute: 120,
+		OIDCRolesClaim: "roles",
+		DatabaseURL: "postgres://orbit:local@localhost:5432/orbit?sslmode=disable",
+		PrometheusURL: "http://prometheus:9090",
+		LokiURL: "http://loki:3100",
+		TempoURL: "http://tempo:3200",
+		CollectorOTLPHTTPURL: "http://otel-collector:4318",
+		CollectorOTLPGRPCEndpoint: "otel-collector:4317",
+		IngestionHTTPAddr: ":4319",
+		IngestionGRPCAddr: ":4320",
+		AllowedOrigins: []string{"http://localhost:3000", "http://127.0.0.1:3000"},
+		LocalWorkEnabled: true,
+		LocalHumanToken: "human-local-token-0123456789abcdef",
+		LocalWorkloadToken: "workload-local-token-0123456789abcd",
+	}
+}
+
+func TestLocalWorkRequiresCompleteLoopbackDevelopmentConfiguration(t *testing.T) {
+	cfg := localWorkTestConfig()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid Local Work configuration rejected: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		edit func(*Config)
+	}{
+		{name: "protected environment", edit: func(c *Config) { c.Environment = "production" }},
+		{name: "missing database", edit: func(c *Config) { c.DatabaseURL = "" }},
+		{name: "missing Prometheus", edit: func(c *Config) { c.PrometheusURL = "" }},
+		{name: "missing Loki", edit: func(c *Config) { c.LokiURL = "" }},
+		{name: "missing Tempo", edit: func(c *Config) { c.TempoURL = "" }},
+		{name: "short human token", edit: func(c *Config) { c.LocalHumanToken = "short" }},
+		{name: "short workload token", edit: func(c *Config) { c.LocalWorkloadToken = "short" }},
+		{name: "reused token", edit: func(c *Config) { c.LocalWorkloadToken = c.LocalHumanToken }},
+		{name: "OIDC overlap", edit: func(c *Config) { c.OIDCIssuer = "https://identity.example"; c.OIDCAudience = "orbit-api" }},
+		{name: "remote CORS origin", edit: func(c *Config) { c.AllowedOrigins = []string{"https://pooya-labs.github.io"} }},
+		{name: "CORS path", edit: func(c *Config) { c.AllowedOrigins = []string{"http://localhost:3000/orbit"} }},
+		{name: "missing Collector HTTP", edit: func(c *Config) { c.CollectorOTLPHTTPURL = "" }},
+		{name: "missing Collector gRPC", edit: func(c *Config) { c.CollectorOTLPGRPCEndpoint = "" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := localWorkTestConfig()
+			test.edit(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("Validate() accepted incomplete or unsafe Local Work configuration")
+			}
+		})
+	}
+}
+
+func TestLocalWorkTokensCannotBeConfiguredWhileModeIsDisabled(t *testing.T) {
+	cfg := localWorkTestConfig()
+	cfg.LocalWorkEnabled = false
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() accepted Local Work credentials while the mode is disabled")
+	}
+}
+
+func TestLocalWorkRejectsLoopbackOriginWithCredentials(t *testing.T) {
+	cfg := localWorkTestConfig()
+	cfg.AllowedOrigins = []string{"http://user:password@localhost:3000"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() accepted credentials embedded in a local CORS origin")
+	}
+}

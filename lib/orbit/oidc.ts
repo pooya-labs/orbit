@@ -63,6 +63,7 @@ export class OrbitAuthError extends Error {
 }
 
 const TRANSACTION_KEY = "orbit.oidc.transaction.v1";
+const LOCAL_WORK_SESSION_KEY = "orbit.local-work.session.v1";
 const TRANSACTION_MAX_AGE_MS = 10 * 60 * 1000;
 const ACCESS_TOKEN_SKEW_MS = 45 * 1000;
 const ALLOWED_ID_TOKEN_ALGORITHMS = ["RS256", "ES256"] as const;
@@ -75,7 +76,47 @@ const listeners = new Set<() => void>();
 
 export const orbitBasePath = process.env.NEXT_PUBLIC_ORBIT_BASE_PATH ?? "";
 
+export function isLocalWorkEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ORBIT_LOCAL_WORK?.trim().toLowerCase() === "true";
+}
+
+function getLocalWorkToken(): string | null {
+  if (!isLocalWorkEnabled() || typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(LOCAL_WORK_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function stageLocalWorkAccessToken(token: string): void {
+  if (!isLocalWorkEnabled() || typeof window === "undefined") {
+    throw new OrbitAuthError("Local Work sign-in is not enabled in this build.", "local_work_disabled");
+  }
+  const value = token.trim();
+  if (value.length < 32 || value.length > 4096) {
+    throw new OrbitAuthError("The local access key is not valid.", "invalid_local_work_token");
+  }
+  try {
+    window.sessionStorage.setItem(LOCAL_WORK_SESSION_KEY, value);
+  } catch {
+    throw new OrbitAuthError("This browser cannot store the temporary Local Work session.", "local_work_storage_unavailable");
+  }
+}
+
+export function activateLocalWorkSession(): void {
+  notifyAuthChanged();
+}
+
+export function clearLocalWorkAccessToken(): void {
+  if (typeof window !== "undefined") {
+    try { window.sessionStorage.removeItem(LOCAL_WORK_SESSION_KEY); } catch { /* Session storage may be unavailable. */ }
+  }
+  notifyAuthChanged();
+}
+
 export function isOidcConfigured(): boolean {
+  if (isLocalWorkEnabled()) return true;
   if (isAppsScriptRuntime()) return Boolean(getAppsScriptDemoUser());
   return Boolean(
     process.env.NEXT_PUBLIC_ORBIT_OIDC_ISSUER?.trim() &&
@@ -254,6 +295,11 @@ export function subscribeToAuth(listener: () => void): () => void {
 }
 
 export function getCurrentAuthUser(): OrbitAuthUser | null {
+  if (isLocalWorkEnabled()) {
+    return getLocalWorkToken()
+      ? { sub: "local-owner", name: "Local Work Owner", preferred_username: "local-owner" }
+      : null;
+  }
   if (isAppsScriptRuntime()) return getAppsScriptDemoUser();
   return activeSession?.user ?? null;
 }
@@ -480,6 +526,7 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 export async function getAccessToken(): Promise<string | null> {
+  if (isLocalWorkEnabled()) return getLocalWorkToken();
   if (isAppsScriptRuntime() || !activeSession) return null;
   if (Date.now() < activeSession.expiresAt - ACCESS_TOKEN_SKEW_MS) {
     return activeSession.accessToken;
@@ -497,6 +544,10 @@ export async function getAccessToken(): Promise<string | null> {
 }
 
 export function clearAuthSession(): void {
+  if (isLocalWorkEnabled()) {
+    clearLocalWorkAccessToken();
+    return;
+  }
   sessionGeneration += 1;
   activeSession = null;
   refreshPromise = null;

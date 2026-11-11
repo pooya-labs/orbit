@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getMetadata, listWorkspaceIncidents, listWorkspaceServices, listWorkspaces } from "../lib/orbit/client";
-import { getCurrentAuthUser } from "../lib/orbit/oidc";
+import { getCurrentAuthUser, subscribeToAuth } from "../lib/orbit/oidc";
 import { isAppsScriptRuntime } from "../lib/orbit/apps-script-bridge";
 import type { ApiMetadata, IncidentSummary, ServiceSummary } from "../lib/orbit/contracts";
 import { chartArea, chartPoints, chartSamples, demoIncidents, demoServices } from "../lib/orbit/demo";
@@ -369,7 +369,7 @@ export default function Home() {
   }, [utilityDialog]);
 
   const [showAllServices, setShowAllServices] = useState(false);
-  const [sourceMode, setSourceMode] = useState<SourceMode>("demo");
+  const [sourceMode, setSourceMode] = useState<SourceMode>(process.env.NEXT_PUBLIC_ORBIT_LOCAL_WORK === "true" ? "api" : "demo");
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
   // Keep the initial state identical during static HTML hydration. The
   // Apps Script runtime is detected after mount in the effect below.
@@ -381,6 +381,12 @@ export default function Home() {
   const [apiMetadata, setApiMetadata] = useState<ApiMetadata | null>(null);
   const [apiServices, setApiServices] = useState<ServiceSummary[]>([]);
   const [apiIncidents, setApiIncidents] = useState<IncidentSummary[]>([]);
+  const [authUser, setAuthUser] = useState<ReturnType<typeof getCurrentAuthUser>>(null);
+
+  useEffect(() => {
+    setAuthUser(getCurrentAuthUser());
+    return subscribeToAuth(() => setAuthUser(getCurrentAuthUser()));
+  }, []);
 
   useEffect(() => {
     if (!sourcePanelOpen) return;
@@ -509,6 +515,28 @@ export default function Home() {
       setApiError(error instanceof Error ? error.message : tr("connectFailed"));
     }
   };
+
+  const localWorkAutoConnectUser = useRef("");
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_ORBIT_LOCAL_WORK !== "true") return;
+    if (!authUser) {
+      setSourceMode("api");
+      setApiUrlInput(process.env.NEXT_PUBLIC_ORBIT_API_URL || "http://localhost:8080");
+      setApiMetadata(null);
+      setApiServices([]);
+      setApiIncidents([]);
+      setApiStatus("idle");
+      return;
+    }
+    if (localWorkAutoConnectUser.current === authUser.sub) return;
+    localWorkAutoConnectUser.current = authUser.sub;
+    void connectSource();
+  }, [authUser?.sub]);
+
+  useEffect(() => {
+    if (authUser) return;
+    localWorkAutoConnectUser.current = "";
+  }, [authUser?.sub]);
 
   const appsScriptAutoConnectStarted = useRef(false);
   useEffect(() => {
