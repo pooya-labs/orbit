@@ -25,7 +25,7 @@ npm run typecheck
 echo "[3/5] Waiting for authenticated API runtime readiness..."
 ready=0
 for attempt in $(seq 1 60); do
-  if curl --silent --show-error --fail http://127.0.0.1:8080/health/ready >/dev/null; then
+  if curl --silent --fail http://127.0.0.1:8080/health/ready >/dev/null; then
     ready=1
     break
   fi
@@ -36,8 +36,20 @@ if [[ "$ready" -ne 1 ]]; then
   exit 1
 fi
 
-echo "[4/5] Sending real telemetry through the authenticated local workload gateway..."
-for attempt in 1 2 3; do
+echo "[4/5] Waiting for the telemetry demo, then sending real requests through the authenticated local workload gateway..."
+demo_ready=0
+for attempt in $(seq 1 30); do
+  if docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.local-work.yml --profile observability exec -T telemetry-demo wget -qO- http://127.0.0.1:8081/emit >/dev/null 2>&1; then
+    demo_ready=1
+    break
+  fi
+  sleep 2
+done
+if [[ "$demo_ready" -ne 1 ]]; then
+  echo "The local telemetry demo did not become ready." >&2
+  exit 1
+fi
+for attempt in 1 2; do
   docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.local-work.yml --profile observability exec -T telemetry-demo wget -qO- http://127.0.0.1:8081/emit >/dev/null
   sleep 2
 done
