@@ -28,7 +28,7 @@ chmod +x scripts/start-local-work.sh
 ./scripts/start-local-work.sh
 ```
 
-The launcher creates `.env.local-work` on first run, generates two independent random credentials, starts the local services, installs web dependencies from the lockfile when needed, and starts the dashboard.
+The launcher validates Node.js 22+, Docker Engine, and the Compose plugin before starting. It validates the two separate local credentials, checks the Compose configuration, and repairs missing or inconsistent web dependencies with `npm ci` **before** starting any containers. After starting the backend, it waits up to two minutes for the API readiness endpoint and prints recent container diagnostics if the API does not become ready. The dashboard starts on the fixed loopback address `127.0.0.1:3000`; a port conflict is reported rather than silently switching ports.
 
 Open **http://localhost:3000**. In the Local Work sign-in field, paste `ORBIT_LOCAL_HUMAN_TOKEN` from `.env.local-work`. The browser keeps this key in tab-scoped session storage only; it is not part of the frontend build and is not saved to local storage.
 

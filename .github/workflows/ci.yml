@@ -261,7 +261,6 @@ jobs:
           docker compose --env-file .env.local-work \
             -f docker-compose.yml -f docker-compose.local-work.yml \
             --profile observability --profile local-work-test config --quiet
-          bash -n scripts/test-local-work.sh
 
       - name: Start the isolated Local Work runtime
         run: |
@@ -305,6 +304,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Validate Local Work launcher syntax
+        run: bash -n scripts/start-local-work.sh scripts/test-local-work.sh
 
       - name: Check keyboard accessibility contract
         run: python3 scripts/check_accessibility_contract.py
