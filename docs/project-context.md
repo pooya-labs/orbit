@@ -1344,3 +1344,41 @@ Do not reinterpret the local single-user runtime as a hosted service. Production
 - Keep credentials only in ignored `.env.local-work`. Never copy real tokens/webhook URLs into docs, logs, screenshots, or commits.
 - Outbound notifications are supported through the existing HTTPS webhook adapter only when the owner supplies a secret reference and exact hostname allowlist. No fake "delivered" result should be claimed when no webhook is configured.
 - Preserve the published v1.0.0 tag. Publish Local Work as a separate version only after CI/Security are green.
+
+
+## 23. Latest continuation handoff — 2026-11-11
+
+### Repository state
+
+- Default branch: `main`.
+- Current verified main commit: `34fd46828c46ae94814132bc8122506ee6a85fac`.
+- [PR #176](https://github.com/pooya-labs/orbit/pull/176) hardened the Windows and Unix Local Work launchers and was merged before PR #177.
+- [PR #177](https://github.com/pooya-labs/orbit/pull/177) was squash-merged as the current main commit above.
+- No application-runtime feature or production deployment was introduced by PR #177. It is a CI/build reliability and test-coverage change.
+
+### What PR #177 changed
+
+- Go module consumers used by the Loki source build and Compose-based Go test containers now use `GOPROXY=https://proxy.golang.org|direct`. This allows direct VCS fallback after transient proxy errors, while checksums, module lock files, and `go mod verify` remain active.
+- `docker-compose.local-work.yml` now triggers the dedicated Go/API and Local Work runtime E2E jobs in the CI path detector.
+- The Playwright install step first attempts `npx playwright install --with-deps chromium`. If Ubuntu apt mirrors/DNS fail, it downloads only the Playwright browser and requires a real headless Chromium launch probe before proceeding. It never skips the browser suite.
+
+### Exact-head and post-merge evidence
+
+- Final PR commit: `d33c7903165b0323958f09421b73b2086fded183`.
+- [PR CI, run 43046603959 attempt 2](https://github.com/pooya-labs/orbit/actions/runs/43046603959) passed all six jobs. This included all 26 Playwright/axe tests, Go API tests/vet/build and PostgreSQL backup/restore, Local Work owner/bootstrap/authenticated telemetry E2E, and the full OTLP pipeline with workspace isolation, Prometheus scrape, and PostgreSQL restart/pool recovery.
+- [PR Security, run 43046603978](https://github.com/pooya-labs/orbit/actions/runs/43046603978) passed all 14 jobs, including dependency and full-history secret checks plus patched image build/scan/SBOM jobs for Loki, Prometheus, Tempo, Collector, API and Caddy. No HIGH/CRITICAL threshold was reduced.
+- Post-merge [main CI 43049775372](https://github.com/pooya-labs/orbit/actions/runs/43049775372), [Security 43049775382](https://github.com/pooya-labs/orbit/actions/runs/43049775382), and [Pages deployment 43049775227](https://github.com/pooya-labs/orbit/actions/runs/43049775227) all passed on `34fd46828c46ae94814132bc8122506ee6a85fac`.
+- Follow-up release workflows both succeeded: [v1.0.0 stable verification 43049905442](https://github.com/pooya-labs/orbit/actions/runs/43049905442) and [Local Work v1.1.0 verification 43049905272](https://github.com/pooya-labs/orbit/actions/runs/43049905272).
+
+### Immutable releases
+
+- Public `v1.0.0` remains on `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`.
+- Local Work `local-work-v1.1.0` remains on `289de28ba22730e4d731ac565094e2716e06a865`.
+- No new release/tag was cut for PR #177 because it changes CI/build reliability and test selection, not the application runtime. Both existing GitHub Releases remain published and immutable.
+
+### Continuation guardrails
+
+- The current main branch and both release workflows are green; do not rerun completed work without a new regression or concrete request.
+- Keep the public Pages + synthetic Apps Script edition separate from the opt-in single-user Local Work runtime.
+- Preserve the $0/month infrastructure boundary. Do not provision a VM, paid service, external DNS/ingress, live OIDC tenancy, Cloudflare D1, or production customer traffic without explicit owner approval.
+- Never put local tokens, webhook credentials, Apps Script secrets, or spreadsheet identifiers in source control.
