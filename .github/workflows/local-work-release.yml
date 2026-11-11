@@ -11,7 +11,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: orbit-local-work-release-${{ github.event.workflow_run.head_sha }}
+  group: orbit-local-work-release
   cancel-in-progress: false
 
 jobs:
@@ -48,22 +48,49 @@ jobs:
           echo "Local Work 1.1.0 candidate at $DEPLOYED_SHA"
           echo "enabled=true" >> "$GITHUB_OUTPUT"
 
-      - name: Wait for exact-commit CI and Security workflows
+      - name: Inspect the immutable Local Work tag and release
         if: steps.candidate.outputs.enabled == 'true'
+        id: release_gate
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          workflows=("CI" "Security")
+          ref="tags/local-work-v1.1.0"
+          if existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/${ref}" 2>/dev/null)"; then
+            release_sha="$(jq -r '.object.sha' <<< "$existing")"
+            echo "The immutable Local Work tag already points to $release_sha."
+            if gh release view local-work-v1.1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "The Local Work release already exists; future deployments will leave it unchanged."
+            else
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+              echo "The tag exists but its GitHub Release is missing; will repair the release without moving the tag."
+            fi
+          else
+            release_sha="$DEPLOYED_SHA"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+            echo "No Local Work release tag exists; candidate commit is $release_sha."
+          fi
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for exact-commit CI and Security workflows
+        if: steps.candidate.outputs.enabled == 'true' && steps.release_gate.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.release_gate.outputs.release_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
           all_green=false
           for attempt in $(seq 1 90); do
             runs="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" \
-              -f head_sha="$DEPLOYED_SHA" -f branch=main -F per_page=100)"
+              -f head_sha="$RELEASE_SHA" -f branch=main -F per_page=100)"
             waiting=false
             for workflow in "CI" "Security"; do
-              state="$(jq -r --arg name "$workflow" --arg sha "$DEPLOYED_SHA" '
+              state="$(jq -r --arg name "$workflow" --arg sha "$RELEASE_SHA" '
                 [.workflow_runs[]
                   | select(.name == $name and .head_sha == $sha and .event == "push" and .head_branch == "main")]
                 | sort_by(.run_started_at // "")
@@ -72,11 +99,11 @@ jobs:
                   else ([.status, (.conclusion // "pending")] | join(":"))
                   end
               ' <<< "$runs")"
-              echo "$workflow on $DEPLOYED_SHA: $state"
+              echo "$workflow on $RELEASE_SHA: $state"
               case "$state" in
                 completed:success) ;;
                 completed:*)
-                  echo "::error title=Local Work release gate failed::$workflow did not pass on the exact deployed commit."
+                  echo "::error title=Local Work release gate failed::$workflow did not pass on the exact release commit."
                   exit 1
                   ;;
                 *)
@@ -91,33 +118,39 @@ jobs:
             sleep 20
           done
           if [[ "$all_green" != "true" ]]; then
-            echo "::error title=Release gates not completed::CI and Security did not both pass on the exact deployed commit."
+            echo "::error title=Release gates not completed::CI and Security did not both pass on the exact release commit."
             exit 1
           fi
 
-      - name: Create or verify the immutable Local Work tag
-        if: steps.candidate.outputs.enabled == 'true'
+      - name: Create the immutable Local Work tag if it does not exist
+        if: steps.candidate.outputs.enabled == 'true' && steps.release_gate.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_SHA: ${{ steps.release_gate.outputs.release_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          REF="tags/local-work-v1.1.0"
-          if EXISTING="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/${REF}" 2>/dev/null)"; then
-            EXISTING_SHA="$(jq -r '.object.sha' <<< "$EXISTING")"
-            if [[ "$EXISTING_SHA" != "$DEPLOYED_SHA" ]]; then
-              echo "::error title=Immutable release tag conflict::local-work-v1.1.0 already points to $EXISTING_SHA; refusing to move it."
-              exit 1
+          ref="tags/local-work-v1.1.0"
+          if existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/${ref}" 2>/dev/null)"; then
+            existing_sha="$(jq -r '.object.sha' <<< "$existing")"
+            if [[ "$existing_sha" != "$RELEASE_SHA" ]]; then
+              echo "The immutable Local Work tag points to $existing_sha, not $RELEASE_SHA; it will not be moved."
             fi
-            echo "The immutable Local Work tag already points to the deployed commit."
           else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-              -f ref="refs/tags/local-work-v1.1.0" -f sha="$DEPLOYED_SHA"
+            if ! gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/local-work-v1.1.0" -f sha="$RELEASE_SHA"; then
+              # Handle a concurrent publisher only when it created the same target.
+              existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/${ref}")"
+              existing_sha="$(jq -r '.object.sha' <<< "$existing")"
+              if [[ "$existing_sha" != "$RELEASE_SHA" ]]; then
+                echo "::error title=Immutable release tag conflict::local-work-v1.1.0 points to $existing_sha; refusing to move it."
+                exit 1
+              fi
+            fi
           fi
 
       - name: Check whether the GitHub Release already exists
-        if: steps.candidate.outputs.enabled == 'true'
+        if: steps.candidate.outputs.enabled == 'true' && steps.release_gate.outputs.publish == 'true'
         id: release_preflight
         env:
           GH_TOKEN: ${{ github.token }}
@@ -132,11 +165,11 @@ jobs:
           fi
 
       - name: Publish the separate Local Work GitHub Release
-        if: steps.candidate.outputs.enabled == 'true' && steps.release_preflight.outputs.publish == 'true'
+        if: steps.candidate.outputs.enabled == 'true' && steps.release_gate.outputs.publish == 'true' && steps.release_preflight.outputs.publish == 'true'
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: local-work-v1.1.0
-          target_commitish: ${{ github.event.workflow_run.head_sha }}
+          target_commitish: ${{ steps.release_gate.outputs.release_sha }}
           name: ORBIT Local Work v1.1.0 — Standalone Local Runtime
           body_path: docs/releases/local-work-v1.1.0.md
           draft: false
