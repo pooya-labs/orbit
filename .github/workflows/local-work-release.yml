@@ -1,0 +1,147 @@
+name: Publish ORBIT Local Work v1.1.0
+
+on:
+  workflow_run:
+    workflows: ["Deploy ORBIT to GitHub Pages"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: orbit-local-work-release-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish Local Work after exact-head gates
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Check out the deployed revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Confirm this commit contains the Local Work 1.1.0 edition
+        id: candidate
+        env:
+          DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f docker-compose.local-work.yml || ! -f docs/local-work.md || ! -f scripts/start-local-work.ps1 ]]; then
+            echo "This deployment does not contain the Local Work edition; no Local Work release is due."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! grep -Fq 'ORBIT_VERSION: "1.1.0"' docker-compose.local-work.yml; then
+            echo "::error title=Unexpected Local Work version::The runtime version is not 1.1.0."
+            exit 1
+          fi
+          echo "Local Work 1.1.0 candidate at $DEPLOYED_SHA"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for exact-commit CI and Security workflows
+        if: steps.candidate.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflows=("CI" "Security")
+          all_green=false
+          for attempt in $(seq 1 90); do
+            runs="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" \
+              -f head_sha="$DEPLOYED_SHA" -f branch=main -F per_page=100)"
+            waiting=false
+            for workflow in "CI" "Security"; do
+              state="$(jq -r --arg name "$workflow" --arg sha "$DEPLOYED_SHA" '
+                [.workflow_runs[]
+                  | select(.name == $name and .head_sha == $sha and .event == "push" and .head_branch == "main")]
+                | sort_by(.run_started_at // "")
+                | last
+                | if . == null then "missing"
+                  else ([.status, (.conclusion // "pending")] | join(":"))
+                  end
+              ' <<< "$runs")"
+              echo "$workflow on $DEPLOYED_SHA: $state"
+              case "$state" in
+                completed:success) ;;
+                completed:*)
+                  echo "::error title=Local Work release gate failed::$workflow did not pass on the exact deployed commit."
+                  exit 1
+                  ;;
+                *)
+                  waiting=true
+                  ;;
+              esac
+            done
+            if [[ "$waiting" == "false" ]]; then
+              all_green=true
+              break
+            fi
+            sleep 20
+          done
+          if [[ "$all_green" != "true" ]]; then
+            echo "::error title=Release gates not completed::CI and Security did not both pass on the exact deployed commit."
+            exit 1
+          fi
+
+      - name: Create or verify the immutable Local Work tag
+        if: steps.candidate.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF="tags/local-work-v1.1.0"
+          if EXISTING="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/${REF}" 2>/dev/null)"; then
+            EXISTING_SHA="$(jq -r '.object.sha' <<< "$EXISTING")"
+            if [[ "$EXISTING_SHA" != "$DEPLOYED_SHA" ]]; then
+              echo "::error title=Immutable release tag conflict::local-work-v1.1.0 already points to $EXISTING_SHA; refusing to move it."
+              exit 1
+            fi
+            echo "The immutable Local Work tag already points to the deployed commit."
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/local-work-v1.1.0" -f sha="$DEPLOYED_SHA"
+          fi
+
+      - name: Check whether the GitHub Release already exists
+        if: steps.candidate.outputs.enabled == 'true'
+        id: release_preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view local-work-v1.1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "The Local Work GitHub Release already exists; leaving it unchanged."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish the separate Local Work GitHub Release
+        if: steps.candidate.outputs.enabled == 'true' && steps.release_preflight.outputs.publish == 'true'
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          tag_name: local-work-v1.1.0
+          target_commitish: ${{ github.event.workflow_run.head_sha }}
+          name: ORBIT Local Work v1.1.0 — Standalone Local Runtime
+          body_path: docs/releases/local-work-v1.1.0.md
+          draft: false
+          prerelease: false
+          make_latest: false
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
