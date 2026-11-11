@@ -710,14 +710,22 @@ The owner requested a separate full-function local release because the public po
 - [x] Add tab-scoped local browser sign-in and automatic API/workspace connection after successful verification.
 - [x] Add a targeted Go/PostgreSQL test profile with persistent module/build caches.
 - [x] Add Local Work setup, operational, notification-webhook, persistence, and test documentation.
-- [ ] Validate Compose configuration, targeted Go tests, frontend typecheck/build, PostgreSQL bootstrap idempotency, and API workspace smoke checks.
-- [ ] Run the exact-head CI and Security workflows. Preserve the full existing race, telemetry-isolation, backpressure/recovery, database restart, and security gates.
-- [ ] Review the exact PR diff for accidental secrets, production-mode changes, changes to v1.0.0, and unscoped telemetry paths.
-- [ ] Merge only after every required check succeeds; then publish a separate Local Work release/tag without moving v1.0.0.
+- [x] Validate Compose configuration, targeted Go/PostgreSQL tests, frontend typecheck/build, PostgreSQL bootstrap idempotency, and authenticated API workspace smoke checks (PR #173; main Local Work E2E confirms 6 services, 2 incidents, Metrics=1, Logs=3, Traces=2).
+- [x] Run exact-head CI and Security workflows on the merged main commit. Main CI [43023167724](https://github.com/pooya-labs/orbit/actions/runs/43023167724) and Security [43023167746](https://github.com/pooya-labs/orbit/actions/runs/43023167746) succeeded; the full telemetry pipeline verified OTLP writes/queries, Collector scraping, workspace isolation, and PostgreSQL restart/connection-pool recovery. NVDA screen-reader smoke also passed on PR #173 [43020025849](https://github.com/pooya-labs/orbit/actions/runs/43020025849).
+- [x] Review the exact PR diff for accidental secrets, production-mode changes, changes to v1.0.0, and unscoped telemetry paths. No production listeners or customer traffic were enabled.
+- [x] Merge the Local Work implementation and publish a separate release/tag without moving v1.0.0. PR #173 merged as `289de28ba22730e4d731ac565094e2716e06a865`; release automation PR #174 merged as `0d99afebdc9d788cfa94f321d9cf45c62ebe88ca`; Local Work `v1.1.0` is published at [the GitHub Release](https://github.com/pooya-labs/orbit/releases/tag/local-work-v1.1.0).
 
 ### Fast test strategy
 
 During implementation, use the focused `local-work-test` Compose profile plus web typecheck and authenticated API smoke checks. Run the full backend race/vet/build suite and the full real-dependency observability/tenant-isolation/security workflows once on the release candidate's exact PR head. Do not replace integration/security gates with mocks or lower scan thresholds. Keep long-duration capacity/RPO/RTO exercises outside this local edition; they are deployment-specific, not local functionality tests.
+
+### Local Work v1.1.0 closeout — 2026-11-11
+
+- PR [#173](https://github.com/pooya-labs/orbit/pull/173) merged as `289de28ba22730e4d731ac565094e2716e06a865`. The main-branch Pages deployment [43023168057](https://github.com/pooya-labs/orbit/actions/runs/43023168057), full CI [43023167724](https://github.com/pooya-labs/orbit/actions/runs/43023167724), and Security [43023167746](https://github.com/pooya-labs/orbit/actions/runs/43023167746) all succeeded.
+- The main Local Work E2E verified the local owner, six seeded services, two incidents, and real authenticated Metrics/Logs/Traces results. The comprehensive telemetry E2E passed the OTLP write/query round-trip, Collector scraping, cross-workspace isolation, and PostgreSQL restart/connection-pool recovery checks. CI-only containers and volumes were removed after successful tests.
+- PR [#174](https://github.com/pooya-labs/orbit/pull/174) merged as `0d99afebdc9d788cfa94f321d9cf45c62ebe88ca` and added exact-head-gated Local Work release automation. It published [ORBIT Local Work v1.1.0](https://github.com/pooya-labs/orbit/releases/tag/local-work-v1.1.0), with immutable tag `local-work-v1.1.0` pointing to `289de28ba22730e4d731ac565094e2716e06a865`.
+- The public `v1.0.0` tag remains unchanged at `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`; its Pages + Apps Script portfolio demo remains synthetic-only and separate from Local Work.
+- The release is a single-user local runtime, not a hosted SaaS or production tenant service. External hosting, public DNS, identity provider, paid services, and real customer traffic remain out of scope.
 
 ### Release boundary
 
