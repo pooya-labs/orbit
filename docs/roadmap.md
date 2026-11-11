@@ -730,3 +730,19 @@ During implementation, use the focused `local-work-test` Compose profile plus we
 ### Release boundary
 
 Local Work is a separate local runtime, not a free public SaaS. Keep every published listener bound to loopback or a private Docker network. Do not provision an external server, DNS, identity provider, Cloudflare runtime, or paid service as part of this scope. Webhook delivery requires an operator-supplied HTTPS endpoint/secret; never add a real one to source control.
+
+
+## Post-merge CI reliability closeout — 2026-11-11
+
+PR [#177](https://github.com/pooya-labs/orbit/pull/177) was squash-merged to `main` as `34fd46828c46ae94814132bc8122506ee6a85fac`.
+
+- [x] Make Go module downloads resilient to transient proxy failures by using Go's pipe-separated `GOPROXY=https://proxy.golang.org|direct` fallback for the pinned Loki build and Compose-based telemetry, PostgreSQL recovery, and Local Work test containers. `GOSUMDB`, committed module locks, and `go mod verify` remain enabled; no dependency floor or security threshold was lowered.
+- [x] Ensure edits to `docker-compose.local-work.yml` activate the dedicated Local Work E2E and Go API jobs instead of being classified as documentation-only/non-API changes.
+- [x] Make Playwright setup resilient to Ubuntu apt mirror/DNS failures: retain the normal `install --with-deps` path, fall back to browser-only installation when apt cannot resolve its mirrors, and require an actual headless Chromium launch probe before browser tests. The browser suite is not skipped by this fallback.
+- [x] Pass exact-head CI on final PR commit `d33c7903165b0323958f09421b73b2086fded183`: [run 43046603959, attempt 2](https://github.com/pooya-labs/orbit/actions/runs/43046603959). All six jobs passed: web typecheck/build and 26 Playwright/axe tests; immutable workflow-action pin policy; change-scope detection; Go API test/vet/build and PostgreSQL backup/restore; Local Work runtime E2E; and full telemetry E2E.
+- [x] Pass exact-head Security [run 43046603978](https://github.com/pooya-labs/orbit/actions/runs/43046603978), all 14 jobs. Loki, Prometheus, Tempo, Collector, API and Caddy image builds/scans, dependency checks, full-history secret scan and SBOM generation succeeded. HIGH/CRITICAL gates and `ignore-unfixed: false` remain intact.
+- [x] Verify the post-merge main commit `34fd46828c46ae94814132bc8122506ee6a85fac`: [CI 43049775372](https://github.com/pooya-labs/orbit/actions/runs/43049775372), [Security 43049775382](https://github.com/pooya-labs/orbit/actions/runs/43049775382), and [GitHub Pages deploy 43049775227](https://github.com/pooya-labs/orbit/actions/runs/43049775227) all succeeded.
+- [x] Verify both release workflows after Pages deployment: [stable v1.0.0 verification 43049905442](https://github.com/pooya-labs/orbit/actions/runs/43049905442) and [Local Work v1.1.0 verification 43049905272](https://github.com/pooya-labs/orbit/actions/runs/43049905272) succeeded without moving either immutable tag.
+- [x] Preserve release boundaries: `v1.0.0` still points to `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`; `local-work-v1.1.0` still points to `289de28ba22730e4d731ac565094e2716e06a865`. PR #177 changes build/test reliability and CI coverage only; it does not change the Local Work application runtime or require a new application release.
+
+**Current main checkpoint:** `34fd46828c46ae94814132bc8122506ee6a85fac`. The public portfolio demo and the separate single-user Local Work edition remain the supported deliverables. Do not provision production hosting, a live OIDC tenant, external DNS/ingress, D1, paid infrastructure, or customer traffic without a new explicit owner-approved scope.
