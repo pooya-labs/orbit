@@ -1382,3 +1382,34 @@ Do not reinterpret the local single-user runtime as a hosted service. Production
 - Keep the public Pages + synthetic Apps Script edition separate from the opt-in single-user Local Work runtime.
 - Preserve the $0/month infrastructure boundary. Do not provision a VM, paid service, external DNS/ingress, live OIDC tenancy, Cloudflare D1, or production customer traffic without explicit owner approval.
 - Never put local tokens, webhook credentials, Apps Script secrets, or spreadsheet identifiers in source control.
+
+## 24. Final main verification handoff — 2026-11-12
+
+### Repository state
+
+- Default branch: `main`.
+- Latest verified main commit: `0a43053e359653c58484e8c436836691379ecaab`.
+- [PR #178](https://github.com/pooya-labs/orbit/pull/178) merged the documentation-only closeout as this commit. It updates `docs/roadmap.md` and `docs/project-context.md`; no application, runtime, Docker, production configuration, or release-tag files changed.
+- There are no open pull requests or open issues at this handoff checkpoint.
+
+### Exact-head and post-merge verification
+
+- PR #178 exact-head [CI run 43054449416](https://github.com/pooya-labs/orbit/actions/runs/43054449416) passed. Web typecheck/build, generated-HTML accessibility audit, Chromium setup and browser interaction/axe tests completed successfully. Backend and telemetry jobs were correctly skipped for the documentation-only diff.
+- PR #178 exact-head [Security run 43054449266](https://github.com/pooya-labs/orbit/actions/runs/43054449266) passed. Security-change detection succeeded; dependency/image/full-history secret-scan jobs were correctly skipped because no security-relevant files changed. This is not a new full image/secret scan.
+- Post-merge [main CI run 43063282722](https://github.com/pooya-labs/orbit/actions/runs/43063282722) passed. The browser job ran all **26 Playwright tests**, including axe checks. The headless Chromium launch probe passed with browser version 156.0.8078.4. The accessibility contract reported 92 checks passed; the generated-HTML audit checked five pages and 787 elements. Backend/telemetry jobs were correctly skipped for the docs-only change.
+- Post-merge [Security run 43063282992](https://github.com/pooya-labs/orbit/actions/runs/43063282992) passed with security-change detection successful and security scans skipped as expected for the documentation-only diff.
+- [GitHub Pages deployment 43063282415](https://github.com/pooya-labs/orbit/actions/runs/43063282415) succeeded on the new main commit.
+- Both exact-head-gated release workflows succeeded on the new main commit: [stable v1.0.0 verification 43063413344](https://github.com/pooya-labs/orbit/actions/runs/43063413344) and [Local Work v1.1.0 verification 43063413365](https://github.com/pooya-labs/orbit/actions/runs/43063413365).
+
+### Immutable releases and scope
+
+- Public `v1.0.0` remains on `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`.
+- Local Work `local-work-v1.1.0` remains on `289de28ba22730e4d731ac565094e2716e06a865`.
+- No new application release was created; PR #178 only records verified repository state.
+- Keep the public Pages + synthetic Apps Script demo separate from the loopback-only, single-user Local Work runtime.
+- Preserve the $0/month boundary. Do not provision an origin VM, paid service, public DNS/ingress, live OIDC tenant, D1 database, or customer traffic without an explicit owner-approved scope.
+- The post-v1 production and Cloudflare deployment gates remain deferred. Do not describe them as complete or deployed based on CI, Workers Free account evidence, or a published Keycloak artifact alone.
+
+### Continuation guidance
+
+The published application scopes are complete and the current main branch is green. There are no open repository issues or pull requests to resume. Continue only with a concrete regression, a newly specified feature, or a separately approved post-v1 scope; do not repeat completed checks or introduce production infrastructure by implication.
