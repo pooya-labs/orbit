@@ -10,7 +10,10 @@ updates:
     open-pull-requests-limit: 5
 
   - package-ecosystem: gomod
-    directory: /server
+    directories:
+      - /server
+      - /examples/telemetry-go
+      - /scripts/telemetry-smoke
     schedule:
       interval: weekly
       day: monday
@@ -28,19 +31,16 @@ updates:
     open-pull-requests-limit: 5
 
   - package-ecosystem: docker
-    directory: /server
+    directories:
+      - /
+      - /server
+      - /examples/telemetry-go
+      - /deploy/observability
+      - /deploy/postgres
+      - /deploy/production
     schedule:
       interval: weekly
       day: monday
       time: "05:15"
       timezone: "Etc/UTC"
-    open-pull-requests-limit: 3
-
-  - package-ecosystem: docker
-    directory: /examples/telemetry-go
-    schedule:
-      interval: weekly
-      day: monday
-      time: "05:30"
-      timezone: "Etc/UTC"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
