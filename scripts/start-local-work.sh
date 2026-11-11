@@ -54,7 +54,8 @@ echo "Starting PostgreSQL, ORBIT API, Collector, Prometheus, Loki, Tempo, and th
 
 echo "Waiting for the local API to become ready..."
 ready=0
-for ((attempt = 1; attempt <= 60; attempt++)); do
+readiness_deadline=$((SECONDS + 120))
+while (( SECONDS < readiness_deadline )); do
   if node -e 'fetch("http://127.0.0.1:8080/health/ready", { signal: AbortSignal.timeout(1500) }).then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))' >/dev/null 2>&1; then
     ready=1
     break
