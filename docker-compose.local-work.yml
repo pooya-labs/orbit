@@ -29,7 +29,7 @@ services:
       - -count=1
     environment:
       ORBIT_TEST_DATABASE_URL: postgres://orbit:orbit_local_only@postgres:5432/orbit?sslmode=disable
-      GOPROXY: https://proxy.golang.org,direct
+      GOPROXY: https://proxy.golang.org|direct
       GOFLAGS: -mod=readonly
       GOMODCACHE: /go/pkg/mod
       GOCACHE: /root/.cache/go-build
