@@ -134,7 +134,8 @@ jobs:
           if existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/${ref}" 2>/dev/null)"; then
             existing_sha="$(jq -r '.object.sha' <<< "$existing")"
             if [[ "$existing_sha" != "$RELEASE_SHA" ]]; then
-              echo "The immutable Local Work tag points to $existing_sha, not $RELEASE_SHA; it will not be moved."
+              echo "::error title=Immutable release tag conflict::local-work-v1.1.0 points to $existing_sha, not the verified release commit $RELEASE_SHA."
+              exit 1
             fi
           else
             if ! gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
