@@ -746,3 +746,18 @@ PR [#177](https://github.com/pooya-labs/orbit/pull/177) was squash-merged to `ma
 - [x] Preserve release boundaries: `v1.0.0` still points to `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`; `local-work-v1.1.0` still points to `289de28ba22730e4d731ac565094e2716e06a865`. PR #177 changes build/test reliability and CI coverage only; it does not change the Local Work application runtime or require a new application release.
 
 **Current main checkpoint:** `34fd46828c46ae94814132bc8122506ee6a85fac`. The public portfolio demo and the separate single-user Local Work edition remain the supported deliverables. Do not provision production hosting, a live OIDC tenant, external DNS/ingress, D1, paid infrastructure, or customer traffic without a new explicit owner-approved scope.
+
+## Final post-PR #178 main verification — 2026-11-12
+
+PR [#178](https://github.com/pooya-labs/orbit/pull/178) was squash-merged to `main` as `0a43053e359653c58484e8c436836691379ecaab`. It changes only `docs/roadmap.md` and `docs/project-context.md`.
+
+- [x] Exact-head PR CI [43054449416](https://github.com/pooya-labs/orbit/actions/runs/43054449416) succeeded; browser/accessibility checks and the Chromium setup completed. Backend and telemetry jobs were correctly skipped for the docs-only diff.
+- [x] Exact-head PR Security [43054449266](https://github.com/pooya-labs/orbit/actions/runs/43054449266) succeeded; the security-change detector passed and security scans were correctly skipped for the docs-only diff.
+- [x] Post-merge main CI [43063282722](https://github.com/pooya-labs/orbit/actions/runs/43063282722) succeeded, including **26/26 Playwright tests**, 92 accessibility-contract checks, and a generated-HTML audit of five pages / 787 elements. Chromium 156.0.8078.4 launched successfully. Backend/telemetry jobs were correctly skipped because the commit changed documentation only.
+- [x] Post-merge Security [43063282992](https://github.com/pooya-labs/orbit/actions/runs/43063282992) succeeded; security scans were skipped as expected for the docs-only diff.
+- [x] GitHub Pages deployment [43063282415](https://github.com/pooya-labs/orbit/actions/runs/43063282415) succeeded.
+- [x] Stable release verification [43063413344](https://github.com/pooya-labs/orbit/actions/runs/43063413344) and Local Work release verification [43063413365](https://github.com/pooya-labs/orbit/actions/runs/43063413365) succeeded.
+- [x] Confirmed immutable tags: `v1.0.0` → `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`; `local-work-v1.1.0` → `289de28ba22730e4d731ac565094e2716e06a865`. No application release or tag movement was made.
+- [x] Confirmed no open pull requests or open issues at this checkpoint.
+
+**Current verified main:** `0a43053e359653c58484e8c436836691379ecaab`. No production origin, public ingress, live OIDC tenant, D1 deployment, paid service, or customer traffic was provisioned. Keep the existing $0/month and runtime-separation boundaries intact.
