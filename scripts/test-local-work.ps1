@@ -53,7 +53,17 @@ if (@($incidents).Count -ne 2) { throw "Expected two seeded workspace incidents;
 
 Write-Host "[5/5] Authenticated OTLP write and workspace-scoped Metrics/Logs/Traces queries..."
 $compose = @("--env-file", $envFile, "-f", "docker-compose.yml", "-f", "docker-compose.local-work.yml", "--profile", "observability")
-for ($attempt = 0; $attempt -lt 3; $attempt++) {
+$demoReady = $false
+for ($attempt = 0; $attempt -lt 30; $attempt++) {
+  docker compose @compose exec -T telemetry-demo wget -qO- http://127.0.0.1:8081/emit | Out-Null 2>$null
+  if ($LASTEXITCODE -eq 0) {
+    $demoReady = $true
+    break
+  }
+  Start-Sleep -Seconds 2
+}
+if (-not $demoReady) { throw "The local telemetry demo did not become ready." }
+for ($attempt = 0; $attempt -lt 2; $attempt++) {
   docker compose @compose exec -T telemetry-demo wget -qO- http://127.0.0.1:8081/emit | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "The telemetry demo could not submit a request through its authenticated OTLP gateway." }
   Start-Sleep -Seconds 2
