@@ -4,7 +4,7 @@ WORKDIR /build
 COPY deploy/observability/collector-builder.yaml ./builder.yaml
 RUN builder --config=builder.yaml
 
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates
 COPY --from=build /build/_build/orbit-otel-collector /orbit-otel-collector
 USER 10001:10001

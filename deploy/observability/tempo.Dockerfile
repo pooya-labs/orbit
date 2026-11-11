@@ -19,7 +19,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -trimpath \
     && go version -m /out/tempo | tee /tmp/tempo-build-info \
     && grep -F "vcs.revision=${TEMPO_COMMIT}" /tmp/tempo-build-info
 
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata \
     && mkdir -p /var/tempo \
     && chown 10001:10001 /var/tempo

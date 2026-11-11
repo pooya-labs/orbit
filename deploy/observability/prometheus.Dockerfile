@@ -18,7 +18,7 @@ RUN go mod edit -require=golang.org/x/net@v0.62.0 \
     && go version -m /src/prometheus | tee /tmp/prometheus-build-info \
     && grep -E 'golang.org/x/net[[:space:]]+v0\.62\.0' /tmp/prometheus-build-info
 
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata \
     && mkdir -p /prometheus /etc/prometheus \
     && addgroup -g 10001 -S prometheus \
