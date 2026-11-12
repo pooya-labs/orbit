@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -trimpath \
     -ldflags="-s -w -X github.com/caddyserver/caddy/v2.CustomVersion=2.11.7-orbit.1" \
     -o /out/caddy ./cmd
 
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -g 10001 -S caddy \
     && adduser -u 10001 -S caddy -G caddy \
