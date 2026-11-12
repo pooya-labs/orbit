@@ -1413,3 +1413,24 @@ Do not reinterpret the local single-user runtime as a hosted service. Production
 ### Continuation guidance
 
 The published application scopes are complete and the current main branch is green. There are no open repository issues or pull requests to resume. Continue only with a concrete regression, a newly specified feature, or a separately approved post-v1 scope; do not repeat completed checks or introduce production infrastructure by implication.
+
+
+## 13. Repository maintenance handoff — 2026-11-12
+
+The post-v1 maintenance pass expanded Dependabot coverage and merged five reviewed dependency/configuration updates after PR #180:
+
+- PR #191: update the server OTLP HTTP log exporter to v0.23.0; merged as `bc5c7b2238abb535d06831188255a445435bb6af`. Its exact-head CI and Security workflows passed, including Go tests/vet/build, PostgreSQL backup/restore, Local Work and telemetry end-to-end tests, dependency vulnerability review, full-history secret scan, image scans, and SBOM jobs.
+- PR #182: update Collector, Prometheus, and Tempo Alpine runtime bases to 3.24; merged as `f88d3e71f3bfadc1122e39e31396eb934d1726cd`.
+- PR #184: update `jose` to 6.2.16; merged as `b7b8bc8f96a0d164e330fc488473a5f72c93e8ed`.
+- PR #185: update the Keycloak workflows to the verified full-SHA `actions/setup-java@v6.2.0` pin; merged as `3a6ee8bb9782f3032dee9e1898802de72e20293c`. Its patched Keycloak source-build validation passed.
+- PR #187: update the production Caddy Alpine runtime base to 3.24; merged as `74e5c5d7b7e0ea91d2486e22338150f777e93b18`.
+
+The latest observed `main` head is `74e5c5d7b7e0ea91d2486e22338150f777e93b18`. At this handoff snapshot its push-triggered CI run `43209056173` and Security run `43209056293` were queued, and Pages deployment `43209056239` was pending. Do not mark these latest-main checks complete until their exact-head runs finish. On the immediately preceding main head `bc5c7b2238abb535d06831188255a445435bb6af`, Security and Pages deployment passed; the CI run was cancelled after subsequent pushes superseded it. Both release-verification workflows for that preceding head passed.
+
+Six Dependabot PRs remain open and require careful, exact-head validation before merging: #181, #183, #186, #188, #189, and #190. The telemetry-go PRs overlap in `examples/telemetry-go/go.mod` and `go.sum`; avoid merging them as independent concurrent changes. PR #186 is the broadest coordinated update: it moves the core OTel API, Logs API, Metrics API, SDK, Logs SDK, Metrics SDK, Trace API, and OTLP log exporter to the 1.47.0 / 0.23.0 release family, while leaving the OTLP trace exporter at 1.46.0. PR #181 proposes the remaining trace-exporter update to 1.47.0. PRs #183, #188, and #189 are narrower overlapping updates; once #186 passes and merges, re-check whether they are superseded and close them only after verifying the combined lockfile state. PR #190 independently updates the server OTLP trace exporter to 1.47.0 after #191.
+
+Release boundaries remain unchanged:
+- `v1.0.0` still points to `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`.
+- `local-work-v1.1.0` still points to `289de28ba22730e4d731ac565094e2716e06a865`.
+- Public GitHub Pages remains the static frontend + synthetic Apps Script demo; Local Work remains a single-user loopback-bound local runtime.
+- No hosted API, public OTLP ingress, production tenant ingestion, paid provider, external VM, or managed database was provisioned. Keep production ingestion disabled until the environment-specific identity, ingress/network, capacity/backpressure, retention, backup/PITR, and operational gates in this document are evidenced.
