@@ -1460,3 +1460,35 @@ The immutable release tags remain unchanged:
 - `local-work-v1.1.0` -> `289de28ba22730e4d731ac565094e2716e06a865`
 
 No hosted API, public OTLP ingress, production tenant ingestion, paid provider, external VM, or managed database was provisioned. Keep production ingestion disabled until all environment-specific identity, ingress/network, capacity/backpressure, retention, backup/PITR, and operations gates are evidenced.
+
+
+## 25. Final November 12 maintenance verification — checked 2026-11-13
+
+### Current repository state
+
+- Default branch: `main`.
+- Latest verified main commit: `63ac457ad0b2c7887e0f0d0e158399a8fd7472cc`, merged through PR [#193](https://github.com/pooya-labs/orbit/pull/193).
+- The PR records the final OpenTelemetry dependency merges (#181, #186, and #190). Its exact-head CI [43227920657](https://github.com/pooya-labs/orbit/actions/runs/43227920657) and Security [43227920689](https://github.com/pooya-labs/orbit/actions/runs/43227920689) both succeeded.
+- A fresh repository search on 2026-11-13 found no open pull requests and no open issues.
+
+### Exact-main verification
+
+All checks below refer to the same latest `main` SHA, `63ac457ad0b2c7887e0f0d0e158399a8fd7472cc`:
+
+- Main CI [43228233435](https://github.com/pooya-labs/orbit/actions/runs/43228233435): completed successfully.
+- Security [43228233380](https://github.com/pooya-labs/orbit/actions/runs/43228233380): completed successfully.
+- GitHub Pages deployment [43228233665](https://github.com/pooya-labs/orbit/actions/runs/43228233665): completed successfully.
+- Stable v1.0.0 release verification [43228365477](https://github.com/pooya-labs/orbit/actions/runs/43228365477): completed successfully.
+- Local Work v1.1.0 release verification [43228365346](https://github.com/pooya-labs/orbit/actions/runs/43228365346): completed successfully.
+
+### Release and scope boundaries
+
+- Public `v1.0.0` remains on `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`.
+- Local Work `local-work-v1.1.0` remains on `289de28ba22730e4d731ac565094e2716e06a865`.
+- The latest closeout changes only repository documentation and maintenance dependencies already merged through their reviewed PRs. No application release or release-tag movement was made by PR #193.
+- Keep public Pages + the synthetic Apps Script demo separate from the opt-in single-user Local Work loopback runtime.
+- Preserve the $0/month boundary. Do not provision external hosting, public ingress, live OIDC tenancy, D1, paid services, or real customer traffic without a new explicit owner-approved scope.
+
+### Continuation guidance
+
+The public portfolio and Local Work release scopes are complete, the latest main workflows are green, and no repository PRs/issues are open. Resume only for a concrete regression, an explicitly requested feature, or a separately approved post-v1 scope. Do not repeat completed release checks or introduce production infrastructure by implication.

@@ -761,3 +761,17 @@ PR [#178](https://github.com/pooya-labs/orbit/pull/178) was squash-merged to `ma
 - [x] Confirmed no open pull requests or open issues at this checkpoint.
 
 **Current verified main:** `0a43053e359653c58484e8c436836691379ecaab`. No production origin, public ingress, live OIDC tenant, D1 deployment, paid service, or customer traffic was provisioned. Keep the existing $0/month and runtime-separation boundaries intact.
+
+
+## Final repository maintenance verification — 2026-11-13
+
+This section supersedes the earlier November 12 snapshot that still showed the latest-main checks as pending.
+
+- PR [#193](https://github.com/pooya-labs/orbit/pull/193) merged the final maintenance handoff as `63ac457ad0b2c7887e0f0d0e158399a8fd7472cc`. It records the final OpenTelemetry dependency merges (#181, #186, and #190), their exact-head validation, and the maintenance closeout.
+- The exact latest `main` head `63ac457ad0b2c7887e0f0d0e158399a8fd7472cc` passed CI [run 43228233435](https://github.com/pooya-labs/orbit/actions/runs/43228233435), Security [run 43228233380](https://github.com/pooya-labs/orbit/actions/runs/43228233380), and GitHub Pages deployment [run 43228233665](https://github.com/pooya-labs/orbit/actions/runs/43228233665).
+- Both exact-head release verification workflows succeeded: stable v1.0.0 [run 43228365477](https://github.com/pooya-labs/orbit/actions/runs/43228365477) and Local Work v1.1.0 [run 43228365346](https://github.com/pooya-labs/orbit/actions/runs/43228365346).
+- PR #193's own exact-head CI [run 43227920657](https://github.com/pooya-labs/orbit/actions/runs/43227920657) and Security [run 43227920689](https://github.com/pooya-labs/orbit/actions/runs/43227920689) both succeeded before merge.
+- A fresh repository check on 2026-11-13 found no open pull requests or open issues.
+- The immutable release targets remain unchanged: `v1.0.0` -> `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`; `local-work-v1.1.0` -> `289de28ba22730e4d731ac565094e2716e06a865`.
+
+This closeout is documentation/maintenance only. It does not change application code, runtime configuration, deployment topology, or release tags. Public Pages remains the static frontend with synthetic Apps Script demo data; Local Work remains a separate single-user loopback-bound runtime. No production hosting, public OTLP ingress, live OIDC tenant, paid infrastructure, or customer traffic was provisioned. Preserve the $0/month and production-ingestion guardrails.
