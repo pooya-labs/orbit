@@ -1434,3 +1434,29 @@ Release boundaries remain unchanged:
 - `local-work-v1.1.0` still points to `289de28ba22730e4d731ac565094e2716e06a865`.
 - Public GitHub Pages remains the static frontend + synthetic Apps Script demo; Local Work remains a single-user loopback-bound local runtime.
 - No hosted API, public OTLP ingress, production tenant ingestion, paid provider, external VM, or managed database was provisioned. Keep production ingestion disabled until the environment-specific identity, ingress/network, capacity/backpressure, retention, backup/PITR, and operational gates in this document are evidenced.
+
+
+## 14. Maintenance closeout update — 2026-11-12
+
+This section supersedes the still-open Dependabot list in section 13.
+
+Final OpenTelemetry dependency updates have now been merged:
+- PR #186 updated the telemetry demo's OpenTelemetry API, logs, metrics, SDK, and OTLP log exporter to the v1.47.0 / v0.23.0 release family; merged as `c2cada4972dae13515a45cc338af9a517815bfbe`.
+- PR #181 updated the telemetry demo OTLP trace exporter and its indirect trace module to v1.47.0; merged as `d3f614364edaad56773204f17db408444cf63b79`.
+- PR #190 updated the server OTLP trace exporter and its indirect trace module to v1.47.0; merged as `096b3e525d24db6796d600335a81a1f26810b035`.
+
+Exact-head validation for PR #181 passed CI run `43211470512` (including telemetry end-to-end; Local Work runtime was correctly skipped because the example-only diff did not change Local Work) and Security run `43211468751` (dependency vulnerability checks, Gitleaks, API/Collector/Tempo/Loki/Prometheus/Caddy/Compose image scans). PR #190 passed CI run `43211488610` (Go API tests/build, telemetry end-to-end, and Local Work end-to-end) and Security run `43211488518` (dependency vulnerability checks, Gitleaks, and all configured image scans).
+
+After PR #190, no open pull requests or issues were returned by the repository search. The latest observed `main` head is `096b3e525d24db6796d600335a81a1f26810b035`. Its new push-triggered checks at this handoff snapshot are:
+- CI run [43227586118](https://github.com/pooya-labs/orbit/actions/runs/43227586118): web build, Go API, Local Work, and telemetry end-to-end jobs were running; action-pin policy and backend-change detection had passed.
+- Security run [43227586304](https://github.com/pooya-labs/orbit/actions/runs/43227586304): security change detection and full-history secret scan had passed; dependency and image scans were running.
+- Pages deployment [43227586048](https://github.com/pooya-labs/orbit/actions/runs/43227586048): queued.
+- The configured Go Modules graph update [43227591508](https://github.com/pooya-labs/orbit/actions/runs/43227591508) was running.
+
+Do not treat these latest-main checks as complete until those exact-head runs reach their final conclusions. PR #192 merged as documentation-only commit `0483378f8297a797bd7009515381e7778b22e66a`; its exact-head CI and Security both passed.
+
+The immutable release tags remain unchanged:
+- `v1.0.0` -> `d2197244b1c1316cbe4b362d15c838c8eaa4cb1a`
+- `local-work-v1.1.0` -> `289de28ba22730e4d731ac565094e2716e06a865`
+
+No hosted API, public OTLP ingress, production tenant ingestion, paid provider, external VM, or managed database was provisioned. Keep production ingestion disabled until all environment-specific identity, ingress/network, capacity/backpressure, retention, backup/PITR, and operations gates are evidenced.
