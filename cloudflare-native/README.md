@@ -75,3 +75,23 @@ npx wrangler d1 migrations apply orbit-native --remote --config cloudflare-nativ
 ```
 
 The current migration is the initial schema. Do not configure the GitHub Pages API URL to this Worker until the remaining evaluator/telemetry gaps, hosted OIDC decision and end-to-end acceptance matrix are complete.
+
+
+
+## Native request Metrics — staged source only
+
+The Worker source contains a request-only Metrics path backed by Workers Analytics Engine:
+
+- Each completed request records a fixed route template, HTTP method, response status, elapsed milliseconds, service version and deployment environment.
+- Workspace partitioning uses a SHA-256 digest of the workspace UUID. Raw workspace IDs, issuer/subject values, access tokens, query strings, request bodies and payload contents are not written to Analytics Engine.
+- The Metrics API verifies workspace membership before querying a tenant partition. It accepts fixed time windows, three metric IDs and three allow-listed grouping dimensions; results are cached for 60 seconds per Worker isolate.
+- Analytics Engine data is adaptively sampled. The dashboard identifies the source and discloses adaptive sampling. Results reaching the 5,000-row safety cap fail closed rather than returning a silently truncated chart.
+- This profile currently provides request Metrics only. Logs and Traces continue to return explicit 503 responses; live alert evaluation, SLO budgets and notification delivery are not implemented.
+
+The Wrangler configuration declares an Analytics Engine dataset binding for writes and an Analytics SQL binding for reads. The CI workflow validates the Analytics SQL binding with Wrangler 4.158.0 and tests the write/query contract with mocks. This does not provision or remotely test a Cloudflare dataset, D1 database, Worker route or identity provider.
+
+Cloudflare's published Workers Free allowance for Analytics Engine is 100,000 data points written per day and 10,000 read queries per day. Cloudflare currently states Analytics Engine usage is not being billed yet, while publishing future pricing. Treat both the limits and temporary billing statement as subject to change; do not switch to Workers Paid or enable a paid fallback. Re-check the account's plan and current pricing before any deployment. See [Analytics Engine pricing](https://developers.cloudflare.com/analytics/analytics-engine/pricing/).
+
+The Analytics SQL Wrangler binding requires Wrangler 4.145.0 or later. The dataset binding is declared through `analytics_engine_datasets`; Analytics Engine datasets are created on first write after binding configuration, not by this source-only branch. See [Analytics SQL binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/analytics-sql/), [Wrangler Analytics Engine datasets](https://developers.cloudflare.com/workers/wrangler/configuration/#analytics-engine-datasets), and [Analytics Engine write API](https://developers.cloudflare.com/workers/examples/analytics-engine/).
+
+**Deployment remains blocked by design:** no remote D1 database, Analytics Engine dataset, OIDC tenant, secret, Worker route or Pages API-origin switch is created by this change. Keep `workers_dev: false`, the Apps Script demo unchanged and the $0/month constraint intact.
