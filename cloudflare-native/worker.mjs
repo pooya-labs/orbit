@@ -467,9 +467,9 @@ async function queryWorkspaceRequestMetrics(env, workspaceId, url, origin, id) {
   const query = `
     SELECT
       toStartOfInterval(timestamp, INTERVAL ${bucketMinutes} MINUTE) AS bucket${selectGroupSql},
-      COUNT() AS request_count,
-      countIf(double1 >= 200 AND double1 < 400) AS successful_request_count,
-      countIf(double1 >= 400) AS failed_request_count
+      SUM(_sample_interval) AS request_count,
+      SUM(if(double1 >= 200 AND double1 < 400, _sample_interval, 0)) AS successful_request_count,
+      SUM(if(double1 >= 400, _sample_interval, 0)) AS failed_request_count
     FROM events.analyticsEngine.orbit_native_requests
     WHERE index1 = $workspace_key
       AND blob1 = 'orbit-native-runtime'
