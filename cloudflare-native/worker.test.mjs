@@ -531,15 +531,32 @@ test("workspace telemetry metrics fail closed when Analytics SQL is not configur
 test("rejected browser origins cannot write into a workspace telemetry partition", async () => {
   const workspaceId = "123e4567-e89b-12d3-a456-426614174099";
   const points = [];
-  const response = await worker.fetch(new Request(
-    `https://native.example/api/v1/workspaces/${workspaceId}/membership`,
-    { headers: { origin: "https://attacker.example" } }
-  ), {
-    ALLOWED_ORIGIN: "https://pooya-labs.github.io",
-    ORBIT_REQUEST_EVENTS: { writeDataPoint(point) { points.push(point); } }
-  });
+  const spanAttributes = [];
+  const capturedLogs = [];
+  const originalLog = console.log;
+  console.log = (event) => capturedLogs.push(event);
+  let response;
+  try {
+    response = await worker.fetch(new Request(
+      `https://native.example/api/v1/workspaces/${workspaceId}/membership`,
+      { headers: { origin: "https://attacker.example" } }
+    ), {
+      ALLOWED_ORIGIN: "https://pooya-labs.github.io",
+      ORBIT_REQUEST_EVENTS: { writeDataPoint(point) { points.push(point); } }
+    }, {
+      tracing: {
+        getActiveSpan() {
+          return { setAttribute(key, value) { spanAttributes.push([key, value]); } };
+        }
+      }
+    });
+  } finally {
+    console.log = originalLog;
+  }
 
   assert.equal(response.status, 403);
+  assert.equal(spanAttributes.length, 0, "A rejected origin must never annotate a workspace trace");
+  assert.equal(capturedLogs.length, 0, "A rejected origin must never emit a workspace-scoped log");
   assert.equal(points.length, 1);
   const globalDigest = new Uint8Array(await crypto.subtle.digest(
     "SHA-256",
@@ -816,6 +833,7 @@ test("workspace Traces list only returns root spans tagged for the verified work
     assert.equal(payload.data[0].rootServiceName, "orbit-native-runtime");
     assert.equal(Number(payload.data[0].durationMs), 18);
     assert.match(queries[0].query, /FROM logs\.traces/);
+    assert.match(queries[0].query, /serviceName = 'orbit-native-runtime'/);
     assert.match(queries[0].query, /attributes\['workspace_key'\] = \$workspace_key/);
     assert.match(queries[0].query, /parentSpanId IS NULL OR parentSpanId = ''/);
     assert.doesNotMatch(queries[0].query, /accountTag|_sample_interval/i);
@@ -881,6 +899,7 @@ test("workspace Trace detail verifies the root span ownership before reading chi
     assert.equal(spans[0].name, "ORBIT request");
     assert.equal(spans[1].name, "Worker operation");
     assert.equal(spans[1].status.code, 2);
+    assert.match(queries[0].query, /serviceName = 'orbit-native-runtime'/);
     assert.match(queries[0].query, /attributes\['workspace_key'\] = \$workspace_key/);
     assert.match(queries[1].query, /WHERE traceId = \$trace_id/);
     assert.doesNotMatch(queries[1].query, /attributes\['workspace_key'\]/);
