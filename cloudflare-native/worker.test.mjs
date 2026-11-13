@@ -902,6 +902,7 @@ test("workspace Trace detail verifies the root span ownership before reading chi
     assert.match(queries[0].query, /serviceName = 'orbit-native-runtime'/);
     assert.match(queries[0].query, /attributes\['workspace_key'\] = \$workspace_key/);
     assert.match(queries[1].query, /WHERE traceId = \$trace_id/);
+    assert.match(queries[1].query, /serviceName = 'orbit-native-runtime'/);
     assert.doesNotMatch(queries[1].query, /attributes\['workspace_key'\]/);
     assert.equal(queries[0].params.trace_id, traceId);
     assert.equal(queries[1].params.trace_id, traceId);
