@@ -368,23 +368,25 @@ async function recordRequestTelemetry(request, result, env, startedAt, telemetry
     // Structured Logs: deliberately emit only fixed route templates and bounded,
     // non-sensitive metadata. Never log URLs, query strings, bodies, subjects,
     // authorization headers or raw workspace identifiers.
-    try {
-      console.log({
-        event: "orbit.request",
-        workspace_key: workspaceKey,
-        service_name: TELEMETRY_SERVICE_NAME,
-        service_version: serviceVersion,
-        deployment_environment: deploymentEnvironment,
-        route: telemetryRouteTemplate(url.pathname),
-        method: request.method,
-        status,
-        duration_ms: elapsedMs,
-        request_id: requestIdValue,
-        trace_id: typeof trace.traceId === "string" ? trace.traceId : "",
-        span_id: typeof trace.spanId === "string" ? trace.spanId : ""
-      });
-    } catch {
-      // Logging is best-effort and must never affect the API response.
+    if (typeof telemetryContext.workspaceId === "string") {
+      try {
+        console.log({
+          event: "orbit.request",
+          workspace_key: workspaceKey,
+          service_name: TELEMETRY_SERVICE_NAME,
+          service_version: serviceVersion,
+          deployment_environment: deploymentEnvironment,
+          route: telemetryRouteTemplate(url.pathname),
+          method: request.method,
+          status,
+          duration_ms: elapsedMs,
+          request_id: requestIdValue,
+          trace_id: typeof trace.traceId === "string" ? trace.traceId : "",
+          span_id: typeof trace.spanId === "string" ? trace.spanId : ""
+        });
+      } catch {
+        // Logging is best-effort and must never affect the API response.
+      }
     }
 
     const dataset = env.ORBIT_REQUEST_EVENTS;
