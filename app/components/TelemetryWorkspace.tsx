@@ -817,8 +817,13 @@ export default function TelemetryWorkspace({
     view === "Logs" ? logs?.queried_at :
     traces?.queried_at;
   const backend =
-    view === "Metrics" ? "PROMETHEUS" :
-    view === "Logs" ? "LOKI" : "TEMPO";
+    view === "Metrics"
+      ? metrics?.source === "workers-analytics-engine" || !useLegacyDevelopmentReads
+        ? "WORKERS ANALYTICS ENGINE"
+        : "PROMETHEUS"
+      : !useLegacyDevelopmentReads
+        ? "UNAVAILABLE"
+        : view === "Logs" ? "LOKI" : "TEMPO";
   const count =
     view === "Metrics" ? metricSamples.length :
     view === "Logs" ? logRows.length : traceRows.length;
@@ -832,7 +837,7 @@ export default function TelemetryWorkspace({
           </span>
           <div>
             <h2 id="telemetry-title">{navLabel(language, view)}</h2>
-            <p>{tr("liveQuery")} · {backend} · {selectedService}{!useLegacyDevelopmentReads && membership ? ` · ${membership.role}` : ""}</p>
+            <p>{tr("liveQuery")} · {backend} · {selectedService}{view === "Metrics" && metrics?.sampling === "adaptive" ? ` · ${tr("adaptiveSamplingNote")}` : ""}{!useLegacyDevelopmentReads && membership ? ` · ${membership.role}` : ""}</p>
           </div>
         </div>
         {!useLegacyDevelopmentReads && user && (

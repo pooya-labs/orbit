@@ -17,6 +17,11 @@ for name, expected_limit in (("ORBIT_READ_LIMITER", 120), ("ORBIT_WRITE_LIMITER"
     assert item["simple"] == {"limit": expected_limit, "period": 60}
 assert len(namespace_ids) == len(set(namespace_ids)), "Rate-limit namespace IDs must be unique"
 assert config["d1_databases"][0]["database_id"] == "REPLACE-WITH-CREATED-D1-DATABASE-ID"
+analytics_datasets = {item["binding"]: item for item in config.get("analytics_engine_datasets", [])}
+assert set(analytics_datasets) == {"ORBIT_REQUEST_EVENTS"}
+assert analytics_datasets["ORBIT_REQUEST_EVENTS"]["dataset"] == "orbit_native_requests"
+assert analytics_datasets["ORBIT_REQUEST_EVENTS"].get("remote", False) is False
+assert config.get("analytics") == {"binding": "ANALYTICS_SQL"}
 
 migration = Path("cloudflare-native/migrations/0001_foundation.sql").read_text(encoding="utf-8")
 db = sqlite3.connect(":memory:")

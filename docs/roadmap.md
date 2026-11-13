@@ -589,7 +589,8 @@ This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-r
 - [x] Add two authenticated Workers Rate Limiting bindings: 120 reads/60s and 30 writes/60s per pseudonymous OIDC subject; checks run before D1 and fail closed when a binding is missing or unavailable.
 - [x] Add tests for read/write limiter selection, 429 responses, pseudonymous keys, missing-binding fail-closed and provider-failure behavior; the browser can read `Retry-After` through CORS.
 - [ ] Verify the Wrangler configuration against the deployment account and confirm the two rate-limit namespace IDs are unused before any first deployment.
-- [ ] Implement a trustworthy native telemetry source and a dedicated UI that distinguishes runtime telemetry from synthetic samples.
+- [x] Implement workspace-scoped request Metrics through Workers Analytics Engine, with pseudonymous workspace partitioning, `_sample_interval`-weighted aggregates, bounded windows/grouping/results, adaptive-sampling disclosure and a dedicated source label in the dashboard. The Worker records request status/duration only; Logs and Traces remain explicit 503 responses, and the profile is still undeployed.
+- [ ] Implement native Logs and Traces only after selecting a real supported source, retention model and query budget; do not imply Prometheus/Loki/Tempo parity.
 - [ ] Implement alert evaluation and bounded scheduled execution within Workers Free limits.
 - [ ] Implement SLO error-budget calculation using a trustworthy request-metrics source.
 - [ ] Implement delivery dispatch, bounded retries and immutable notification-attempt history.

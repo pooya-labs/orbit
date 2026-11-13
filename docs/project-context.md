@@ -1492,3 +1492,14 @@ All checks below refer to the same latest `main` SHA, `63ac457ad0b2c7887e0f0d0e1
 ### Continuation guidance
 
 The public portfolio and Local Work release scopes are complete, the latest main workflows are green, and no repository PRs/issues are open. Resume only for a concrete regression, an explicitly requested feature, or a separately approved post-v1 scope. Do not repeat completed release checks or introduce production infrastructure by implication.
+
+
+## 26. CF02 native request-Metrics increment — staged source only (2026-11-13)
+
+The Cloudflare-native D1 profile now has a separately scoped Workers Analytics Engine request-Metrics implementation on branch `feat/cloudflare-native-request-metrics`. The public Pages + Apps Script demo, canonical Go/PostgreSQL stack and CF01 edge gateway remain unchanged.
+
+- Request events contain only a fixed route template, method, status code, elapsed milliseconds, service version and deployment environment. Workspace partitioning uses a SHA-256 digest; raw workspace IDs, issuer/subject values, bearer tokens, query strings and request bodies are excluded.
+- Workspace membership is checked before tenant Metrics queries. Query windows, metric IDs and grouping dimensions are allow-listed; event counts and response-class counts use the per-row `_sample_interval` weight; results are cached for 60 seconds per isolate and a 5,000-row cap fails closed to avoid silently incomplete graphs.
+- Analytics Engine is adaptively sampled; the dashboard discloses that sampling. The implementation covers request Metrics only. Logs and Traces remain explicit 503 responses; live alert evaluation, SLO budgets and notification delivery are still unsupported in this profile.
+- CI contract tests and Wrangler configuration validation do not prove a remote dataset or deployed Worker exists. No D1 database, Analytics Engine dataset, OIDC tenant, Worker route, Cloudflare secret or Pages API-origin switch is provisioned by this code change.
+- Cloudflare currently publishes Workers Free Analytics Engine allowances of 100,000 daily data-point writes and 10,000 daily read queries, while noting Analytics Engine usage is not yet billed. These limits and the temporary billing statement must be re-checked before any remote deployment. Preserve Workers Free and the $0/month constraint; never activate a Paid plan or paid fallback by implication.

@@ -265,7 +265,7 @@ export interface TelemetryMetricCatalogResponse {
 }
 
 export interface TelemetryQueryResponse<T> {
-  source: "prometheus" | "loki" | "tempo";
+  source: "prometheus" | "loki" | "tempo" | "workers-analytics-engine";
   window: TelemetryWindow;
   queried_at: string;
   query?: string;
@@ -274,6 +274,7 @@ export interface TelemetryQueryResponse<T> {
   group_by?: string[];
   metric?: TelemetryMetricID;
   limit?: number;
+  sampling?: "adaptive";
   data: T;
 }
 
@@ -344,7 +345,7 @@ export type TelemetryLogsResponse = TelemetryQueryResponse<LokiLogStream[]>;
 export type TelemetryTracesResponse = TelemetryQueryResponse<TempoTraceSummary[]>;
 
 
-export type TelemetryBackend = "prometheus" | "loki" | "tempo";
+export type TelemetryBackend = "prometheus" | "loki" | "tempo" | "workers-analytics-engine";
 
 export type TelemetryServiceSource = TelemetryBackend | "otlp";
 
@@ -352,9 +353,9 @@ export interface WorkspaceTelemetryService {
   id: string;
   name: string;
   sources: TelemetryServiceSource[];
-  first_seen_at: string;
-  last_seen_at: string;
-  last_discovered_at: string;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  last_discovered_at?: string;
   resource_attributes: Record<string, unknown[]>;
   resource_attribute_sources: Record<string, TelemetryServiceSource[]>;
 }
