@@ -450,9 +450,10 @@ test("workspace request metrics query Analytics Engine with a hashed tenant part
     assert.match(queries[0].query, /index1 = \$workspace_key/);
     assert.match(queries[0].query, /timestamp >= \$start/);
     assert.match(queries[0].query, /INTERVAL '[0-9]+' MINUTE/);
-    assert.match(queries[0].query, /SUM\(_sample_interval\) AS request_count/);
-    assert.match(queries[0].query, /SUM\(if\(double1 >= 200 AND double1 < 400, _sample_interval, 0\)\)/i);
-    assert.match(queries[0].query, /SUM\(if\(double1 >= 400, _sample_interval, 0\)\)/i);
+    assert.match(queries[0].query, /COUNT\(\*\) AS request_count/i);
+    assert.match(queries[0].query, /countIf\(double1 >= 200 AND double1 < 400\) AS successful_request_count/i);
+    assert.match(queries[0].query, /countIf\(double1 >= 400\) AS failed_request_count/i);
+    assert.doesNotMatch(queries[0].query, /_sample_interval/i);
     assert.doesNotMatch(queries[0].query, new RegExp(workspaceId));
     assert.match(queries[0].params.workspace_key, /^[0-9a-f]{64}$/);
     assert.notEqual(queries[0].params.workspace_key, workspaceId);
