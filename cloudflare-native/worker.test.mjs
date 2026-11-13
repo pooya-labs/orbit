@@ -527,6 +527,29 @@ test("workspace telemetry metrics fail closed when Analytics SQL is not configur
   });
 });
 
+test("rejected browser origins cannot write into a workspace telemetry partition", async () => {
+  const workspaceId = "123e4567-e89b-12d3-a456-426614174099";
+  const points = [];
+  const response = await worker.fetch(new Request(
+    `https://native.example/api/v1/workspaces/${workspaceId}/membership`,
+    { headers: { origin: "https://attacker.example" } }
+  ), {
+    ALLOWED_ORIGIN: "https://pooya-labs.github.io",
+    ORBIT_REQUEST_EVENTS: { writeDataPoint(point) { points.push(point); } }
+  });
+
+  assert.equal(response.status, 403);
+  assert.equal(points.length, 1);
+  const globalDigest = new Uint8Array(await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode("orbit-native-telemetry:global")
+  ));
+  const globalKey = Array.from(globalDigest, (part) => part.toString(16).padStart(2, "0")).join("");
+  assert.equal(points[0].indexes[0], globalKey);
+  assert.notEqual(points[0].indexes[0], workspaceId);
+  assert.equal(points[0].blobs.includes(workspaceId), false);
+});
+
 test("request telemetry writes one pseudonymous event without leaking path IDs, query strings or tokens", async () => {
   await withSignedAccessToken(async (token, env) => {
     const workspaceId = "123e4567-e89b-12d3-a456-426614174003";
