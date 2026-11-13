@@ -332,7 +332,7 @@ export interface TempoTraceDetailBatch {
 }
 
 export interface WorkspaceTraceDetailResponse {
-  source: "tempo";
+  source: "tempo" | "workers-analytics-engine";
   trace_id: string;
   queried_at: string;
   data: {
