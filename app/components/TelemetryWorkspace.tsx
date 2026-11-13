@@ -824,9 +824,14 @@ export default function TelemetryWorkspace({
       : view === "Logs"
         ? useLegacyDevelopmentReads ? "LOKI" : "WORKERS LOGS"
         : useLegacyDevelopmentReads ? "TEMPO" : "WORKERS TRACES";
-  const samplingNote =
+  const samplingLabel =
     (view === "Metrics" ? metrics?.sampling :
-      view === "Logs" ? logs?.sampling : traces?.sampling) === "adaptive";
+      view === "Logs" ? logs?.sampling : traces?.sampling) === "adaptive"
+      ? tr("adaptiveSamplingNote")
+      : (view === "Logs" || view === "Traces") &&
+          (view === "Logs" ? logs?.sampling : traces?.sampling) === "head"
+        ? tr("headSamplingNote")
+        : "";
   const count =
     view === "Metrics" ? metricSamples.length :
     view === "Logs" ? logRows.length : traceRows.length;
@@ -840,7 +845,7 @@ export default function TelemetryWorkspace({
           </span>
           <div>
             <h2 id="telemetry-title">{navLabel(language, view)}</h2>
-            <p>{tr("liveQuery")} · {backend} · {selectedService}{samplingNote ? ` · ${tr("adaptiveSamplingNote")}` : ""}{!useLegacyDevelopmentReads && membership ? ` · ${membership.role}` : ""}</p>
+            <p>{tr("liveQuery")} · {backend} · {selectedService}{samplingLabel ? ` · ${samplingLabel}` : ""}{!useLegacyDevelopmentReads && membership ? ` · ${membership.role}` : ""}</p>
           </div>
         </div>
         {!useLegacyDevelopmentReads && user && (
