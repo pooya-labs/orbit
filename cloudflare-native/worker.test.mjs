@@ -371,7 +371,7 @@ test("workspace telemetry discovery and metric catalogue describe only the nativ
     assert.equal(services.status, 200);
     const service = (await services.json()).data[0];
     assert.equal(service.name, "orbit-native-runtime");
-    assert.deepEqual(service.sources, ["workers-analytics-engine"]);
+    assert.deepEqual(service.sources, ["workers-analytics-engine", "workers-observability"]);
     assert.equal(service.resource_attributes["service.name"][0], "orbit-native-runtime");
 
     const catalog = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/telemetry/metrics/catalog`, token), { ...env, DB });
@@ -766,7 +766,7 @@ test("workspace Logs query only returns structured orbit.request events in the h
     ), { ...env, DB, ANALYTICS_SQL });
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.source, "workers-analytics-engine");
+    assert.equal(payload.source, "workers-observability");
     assert.equal(payload.sampling, "adaptive");
     assert.equal(payload.limit, 25);
     assert.equal(payload.data.length, 1);
@@ -827,7 +827,7 @@ test("workspace Traces list only returns root spans tagged for the verified work
     ), { ...env, DB, ANALYTICS_SQL });
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.source, "workers-analytics-engine");
+    assert.equal(payload.source, "workers-observability");
     assert.equal(payload.sampling, "adaptive");
     assert.equal(payload.data[0].traceID, "e".repeat(32));
     assert.equal(payload.data[0].rootServiceName, "orbit-native-runtime");
@@ -892,7 +892,7 @@ test("workspace Trace detail verifies the root span ownership before reading chi
     ), { ...env, DB, ANALYTICS_SQL });
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.source, "workers-analytics-engine");
+    assert.equal(payload.source, "workers-observability");
     assert.equal(payload.trace_id, traceId);
     const spans = payload.data.batches[0].scopeSpans[0].spans;
     assert.equal(spans.length, 2);
