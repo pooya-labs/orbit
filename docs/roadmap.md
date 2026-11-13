@@ -604,7 +604,11 @@ This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-r
 
 **PR #195 result (2026-11-13):** merged to `main` as squash commit [`c9d7318`](https://github.com/pooya-labs/orbit/commit/c9d731863716303dc642efeae02156aa0473b446). Exact PR head [`a4b3025`](https://github.com/pooya-labs/orbit/commit/a4b30252be11e917a07f0e456699cf6578facbb4) passed [CI](https://github.com/pooya-labs/orbit/actions/runs/43334671711) (4 jobs successful; Go API and Local Work jobs correctly skipped by change detection), [Security](https://github.com/pooya-labs/orbit/actions/runs/43334671830) (14/14 jobs successful), and [Windows NVDA](https://github.com/pooya-labs/orbit/actions/runs/43334671715) (1/1 successful). CI included Wrangler Analytics binding validation, native Worker/D1 tests, web typecheck/build, Playwright/axe, full OTLP pipeline, workspace A/B isolation, Prometheus scrape, PostgreSQL restart recovery and cleanup.
 
-**Release boundary:** PR #140 merged a staged foundation, not feature parity and not a deployable v1. No D1 database, OIDC tenant, Worker route or Pages API switch has been provisioned. Keep Apps Script unchanged and preserve CF01 as the separate canonical-Go edge profile.
+**Release boundary:** PR #140 merged a staged foundation, not feature parity and not a deployable v1. PRs #195 and #196 have merged source-only request Metrics and the corrected Analytics SQL sampling model. No D1 database, Analytics Engine dataset, OIDC tenant, Worker route or Pages API switch has been provisioned. Keep Apps Script unchanged and preserve CF01 as the separate canonical-Go edge profile.
+
+
+**PR #196 result (2026-11-13):** corrected the Analytics SQL sampling contract and was squash-merged into `main` as [`0ac3369`](https://github.com/pooya-labs/orbit/commit/0ac3369e5c47bc435a5a2566dfa65ddd5b61c29f). Exact PR head [`3436d9e`](https://github.com/pooya-labs/orbit/commit/3436d9e041e38e06c3435bf306bf0a249c8a4171) passed [CI](https://github.com/pooya-labs/orbit/actions/runs/43337462457) and [Security](https://github.com/pooya-labs/orbit/actions/runs/43337462543). The newer Analytics SQL binding automatically applies adaptive-sampling weights to supported `COUNT`/`countIf` aggregates; the query now uses these directly and no longer multiplies by `_sample_interval` a second time. This remains source-only and undeployed.
+
 
 ## Post-v1 Security 01 — Go x/net advisory response (2026-11-07)
 
