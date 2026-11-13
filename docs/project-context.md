@@ -1496,7 +1496,7 @@ The public portfolio and Local Work release scopes are complete, the latest main
 
 ## 26. CF02 native request-Metrics increment — staged source only (2026-11-13)
 
-The Cloudflare-native D1 profile now has a separately scoped Workers Analytics Engine request-Metrics implementation on branch `feat/cloudflare-native-request-metrics`. The public Pages + Apps Script demo, canonical Go/PostgreSQL stack and CF01 edge gateway remain unchanged.
+The Cloudflare-native D1 profile now has a separately scoped Workers Analytics Engine request-Metrics implementation merged into `main` by PR #195 (`c9d7318`), with the Analytics SQL sampling correction merged by PR #196 (`0ac3369`). The public Pages + Apps Script demo, canonical Go/PostgreSQL stack and CF01 edge gateway remain unchanged.
 
 - Request events contain only a fixed route template, method, status code, elapsed milliseconds, service version and deployment environment. Workspace partitioning uses a SHA-256 digest; raw workspace IDs, issuer/subject values, bearer tokens, query strings and request bodies are excluded.
 - Workspace membership is checked before tenant Metrics queries. Query windows, metric IDs and grouping dimensions are allow-listed; event counts and response-class counts use `COUNT`/`countIf`; the newer Analytics SQL binding auto-applies sample weights, so the query must not multiply by `_sample_interval` again; results are cached for 60 seconds per isolate and a 5,000-row cap fails closed to avoid silently incomplete graphs.
@@ -1516,3 +1516,14 @@ PR [#195](https://github.com/pooya-labs/orbit/pull/195) was squash-merged into `
 - The final request-telemetry boundary attributes events to a workspace only after request-local membership verification. Unauthorized origins, failed authentication, missing memberships and rate-limit denials stay global; authorized workspace validation failures remain attributed to their verified workspace. Contract tests cover both cases.
 - Metrics aggregates use the Analytics SQL API's automatic adaptive-sampling weights, explicit sampling disclosure, bounded query shapes and a 5,000-row fail-closed limit. Logs and Traces still return explicit 503 responses.
 - This is a source-only merge. No D1 database, Analytics Engine dataset, OIDC tenant, Worker route, secret, paid plan, Cloudflare deployment or Pages API-origin switch was created. Preserve `workers_dev: false`, the Workers Free / $0 monthly boundary, the public Pages + synthetic Apps Script demo, canonical Go/PostgreSQL runtime and CF01 gateway.
+
+
+## 28. CF02 Analytics SQL automatic sampling correction — merged (2026-11-13)
+
+PR [#196](https://github.com/pooya-labs/orbit/pull/196) was squash-merged into `main` as [`0ac3369e5c47bc435a5a2566dfa65ddd5b61c29f`](https://github.com/pooya-labs/orbit/commit/0ac3369e5c47bc435a5a2566dfa65ddd5b61c29f). Exact PR head: `3436d9e041e38e06c3435bf306bf0a249c8a4171`.
+
+- Exact-head [CI run 43337462457](https://github.com/pooya-labs/orbit/actions/runs/43337462457) succeeded: Wrangler Analytics binding validation, Worker/D1 tests, typecheck, production build, HTML accessibility audit and all 26 Playwright/axe tests. Go API, Local Work and local telemetry end-to-end jobs were skipped by the workflow change detector because this was a query/docs-only correction.
+- Exact-head [Security run 43337462543](https://github.com/pooya-labs/orbit/actions/runs/43337462543) succeeded all 14 jobs, including dependency vulnerability checks, full-history secret scan, image vulnerability scans, and CycloneDX SBOM generation/upload for first-party and patched observability images.
+- Cloudflare's newer Workers Analytics SQL binding auto-applies adaptive-sampling weights to supported aggregates, including `COUNT` and `countIf`. The request-metrics query uses those supported aggregate functions directly and avoids a second manual `_sample_interval` multiplication.
+- The free-tier entitlement/pricing note is intentionally conservative: verify the actual account's current entitlement and billing terms before provisioning; do not assume a permanent free allocation or switch to a Paid plan.
+- No remote Cloudflare resource or deployment was created. Keep `workers_dev: false`, no Pages API-origin switch, and preserve the $0/month boundary.
