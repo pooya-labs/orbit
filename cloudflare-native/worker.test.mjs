@@ -767,7 +767,7 @@ test("workspace Logs query only returns structured orbit.request events in the h
     assert.equal(response.status, 200);
     const payload = await response.json();
     assert.equal(payload.source, "workers-observability");
-    assert.equal(payload.sampling, "adaptive");
+    assert.equal(payload.sampling, "head");
     assert.equal(payload.limit, 25);
     assert.equal(payload.data.length, 1);
     assert.equal(payload.data[0].stream.level, "info");
@@ -828,7 +828,7 @@ test("workspace Traces list only returns root spans tagged for the verified work
     assert.equal(response.status, 200);
     const payload = await response.json();
     assert.equal(payload.source, "workers-observability");
-    assert.equal(payload.sampling, "adaptive");
+    assert.equal(payload.sampling, "head");
     assert.equal(payload.data[0].traceID, "e".repeat(32));
     assert.equal(payload.data[0].rootServiceName, "orbit-native-runtime");
     assert.equal(Number(payload.data[0].durationMs), 18);
