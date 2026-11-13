@@ -660,6 +660,7 @@ async function queryWorkspaceTraceDetail(env, workspaceId, traceId, origin, id) 
                durationMs, spanStatus
         FROM logs.traces
         WHERE traceId = $trace_id
+          AND serviceName = 'orbit-native-runtime'
           AND startTime >= $start
         ORDER BY startTime ASC
         LIMIT 501
