@@ -537,7 +537,7 @@ async function queryWorkspaceRequestLogs(env, workspaceId, url, origin, id) {
   }
 
   const body = {
-    source: "workers-analytics-engine",
+    source: "workers-observability",
     window: windowName,
     queried_at: new Date().toISOString(),
     query: "logs.workersLogs/orbit.request",
@@ -603,7 +603,7 @@ async function queryWorkspaceRequestTraces(env, workspaceId, url, origin, id) {
     }));
 
   return response({
-    source: "workers-analytics-engine",
+    source: "workers-observability",
     window: windowName,
     queried_at: new Date().toISOString(),
     query: "logs.traces/workspace-root-spans",
@@ -691,7 +691,7 @@ async function queryWorkspaceTraceDetail(env, workspaceId, traceId, origin, id) 
   });
 
   return response({
-    source: "workers-analytics-engine",
+    source: "workers-observability",
     trace_id: traceId,
     queried_at: new Date().toISOString(),
     data: {
@@ -1009,13 +1009,13 @@ async function handleApi(request, env, url, origin, id, principal) {
         data: [{
           id: TELEMETRY_SERVICE_NAME,
           name: TELEMETRY_SERVICE_NAME,
-          sources: ["workers-analytics-engine"],
+          sources: ["workers-analytics-engine", "workers-observability"],
           last_discovered_at: discoveredAt,
           resource_attributes: attributes,
           resource_attribute_sources: {
-            "service.name": ["workers-analytics-engine"],
-            "cloud.provider": ["workers-analytics-engine"],
-            "deployment.environment": ["workers-analytics-engine"]
+            "service.name": ["workers-analytics-engine", "workers-observability"],
+            "cloud.provider": ["workers-analytics-engine", "workers-observability"],
+            "deployment.environment": ["workers-analytics-engine", "workers-observability"]
           }
         }]
       }, 200, origin, env, id);
