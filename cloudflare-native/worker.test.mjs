@@ -449,6 +449,9 @@ test("workspace request metrics query Analytics Engine with a hashed tenant part
     assert.match(queries[0].query, /events\.analyticsEngine\.orbit_native_requests/);
     assert.match(queries[0].query, /index1 = \$workspace_key/);
     assert.match(queries[0].query, /timestamp >= \$start/);
+    assert.match(queries[0].query, /attributes\['trace_id'\] AS custom_trace_id/);
+    assert.match(queries[0].query, /attributes\['span_id'\] AS custom_span_id/);
+    assert.match(queries[0].query, /attributes\['request_id'\] AS custom_request_id/);
     assert.match(queries[0].query, /INTERVAL '[0-9]+' MINUTE/);
     assert.match(queries[0].query, /COUNT\(\*\) AS request_count/i);
     assert.match(queries[0].query, /countIf\(double1 >= 200 AND double1 < 400\) AS successful_request_count/i);
@@ -748,9 +751,12 @@ test("workspace Logs query only returns structured orbit.request events in the h
             timestamp: "2026-11-13T00:00:00.000Z",
             level: "info",
             message: "ORBIT request",
-            traceId: "c".repeat(32),
-            spanId: "d".repeat(16),
-            requestId: "req-safe-1",
+            traceId: "",
+            spanId: "",
+            requestId: "",
+            custom_trace_id: "c".repeat(32),
+            custom_span_id: "d".repeat(16),
+            custom_request_id: "req-safe-1",
             route: "/api/v1/workspaces/:workspace/membership",
             method: "GET",
             status: 200,
