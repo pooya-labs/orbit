@@ -481,6 +481,9 @@ async function queryWorkspaceRequestLogs(env, workspaceId, url, origin, id) {
       traceId,
       spanId,
       requestId,
+      attributes['trace_id'] AS custom_trace_id,
+      attributes['span_id'] AS custom_span_id,
+      attributes['request_id'] AS custom_request_id,
       attributes['route'] AS route,
       attributes['method'] AS method,
       attributes['status'] AS status,
@@ -529,9 +532,9 @@ async function queryWorkspaceRequestLogs(env, workspaceId, url, origin, id) {
       method,
       status: Number(row.status ?? row.httpStatus ?? 0),
       duration_ms: Number(row.duration_ms ?? 0),
-      trace_id: String(row.traceId || ""),
-      span_id: String(row.spanId || ""),
-      request_id: String(row.requestId || "")
+      trace_id: String(row.traceId || row.custom_trace_id || ""),
+      span_id: String(row.spanId || row.custom_span_id || ""),
+      request_id: String(row.requestId || row.custom_request_id || "")
     });
     stream.values.push([String(row.timestamp || ""), line]);
   }
