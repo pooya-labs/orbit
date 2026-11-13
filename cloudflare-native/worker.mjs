@@ -333,7 +333,7 @@ function telemetryRouteTemplate(path) {
       "telemetry/services", "telemetry/metrics", "telemetry/metrics/catalog",
       "telemetry/logs", "telemetry/traces"
     ]);
-    if (/^telemetry\\/traces\\/[0-9a-f]{32}$/i.test(suffix)) {
+    if (/^telemetry\/traces\/[0-9a-f]{32}$/i.test(suffix)) {
       return "/api/v1/workspaces/:workspace/telemetry/traces/:trace_id";
     }
     return known.has(suffix) ? `/api/v1/workspaces/:workspace/${suffix}` : "/api/v1/workspaces/:workspace/other";
@@ -1040,7 +1040,7 @@ async function handleApi(request, env, url, origin, id, principal) {
       return queryWorkspaceRequestTraces(env, workspaceId, url, origin, id);
     }
 
-    const traceDetailMatch = suffix.match(/^telemetry\\/traces\\/([0-9a-f]{32})$/i);
+    const traceDetailMatch = suffix.match(/^telemetry\/traces\/([0-9a-f]{32})$/i);
     if (traceDetailMatch && request.method === "GET") {
       return queryWorkspaceTraceDetail(env, workspaceId, traceDetailMatch[1], origin, id);
     }
