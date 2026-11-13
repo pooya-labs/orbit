@@ -550,6 +550,58 @@ test("rejected browser origins cannot write into a workspace telemetry partition
   assert.equal(points[0].blobs.includes(workspaceId), false);
 });
 
+test("authenticated workspace validation failures remain in that workspace's request metrics", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174098";
+    const points = [];
+    const DB = {
+      prepare(sql) {
+        assert.match(sql, /FROM workspace_memberships/);
+        return {
+          bind(...values) {
+            assert.deepEqual(values, [workspaceId, env.ORBIT_OIDC_ISSUER, "native-api-test-user"]);
+            return {
+              first: async () => ({
+                workspace_id: workspaceId,
+                role: "owner",
+                created_at: "2026-11-06T12:00:00.000Z",
+                updated_at: "2026-11-06T12:00:00.000Z"
+              })
+            };
+          }
+        };
+      }
+    };
+    const request = new Request(
+      `https://native.example/api/v1/workspaces/${workspaceId}/incidents`,
+      {
+        method: "POST",
+        headers: {
+          origin: "https://pooya-labs.github.io",
+          authorization: "Bearer " + token,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({})
+      }
+    );
+    const response = await worker.fetch(request, {
+      ...env,
+      DB,
+      ORBIT_REQUEST_EVENTS: { writeDataPoint(point) { points.push(point); } }
+    });
+    assert.equal(response.status, 400);
+    assert.equal(points.length, 1);
+    const digest = new Uint8Array(await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`orbit-native-telemetry:${workspaceId}`)
+    ));
+    const workspaceKey = Array.from(digest, (part) => part.toString(16).padStart(2, "0")).join("");
+    assert.equal(points[0].indexes[0], workspaceKey);
+    assert.equal(points[0].doubles[0], 400);
+    assert.equal(points[0].blobs.includes(workspaceId), false);
+  });
+});
+
 test("request telemetry writes one pseudonymous event without leaking path IDs, query strings or tokens", async () => {
   await withSignedAccessToken(async (token, env) => {
     const workspaceId = "123e4567-e89b-12d3-a456-426614174003";
