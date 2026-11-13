@@ -1527,3 +1527,17 @@ PR [#196](https://github.com/pooya-labs/orbit/pull/196) was squash-merged into `
 - Cloudflare's newer Workers Analytics SQL binding auto-applies adaptive-sampling weights to supported aggregates, including `COUNT` and `countIf`. The request-metrics query uses those supported aggregate functions directly and avoids a second manual `_sample_interval` multiplication.
 - The free-tier entitlement/pricing note is intentionally conservative: verify the actual account's current entitlement and billing terms before provisioning; do not assume a permanent free allocation or switch to a Paid plan.
 - No remote Cloudflare resource or deployment was created. Keep `workers_dev: false`, no Pages API-origin switch, and preserve the $0/month boundary.
+
+
+
+## 29. CF02 native workspace Logs and Traces — source staged (2026-11-13)
+
+Branch `feat/cloudflare-native-workspace-logs-traces` adds first-party Cloudflare Workers Observability support without deploying or provisioning a Worker.
+
+- **Logs:** one structured `orbit.request` event is emitted only after D1 has verified workspace membership. It contains a SHA-256 `workspace_key`, fixed route template, method, status, duration, bounded service metadata and correlation IDs only. It never records raw workspace IDs, issuer/subject, access tokens, request bodies, full URLs or query strings. SQL queries filter by script name, event name and the hashed workspace key.
+- **Invocation safety:** Wrangler keeps custom Workers Logs enabled but sets `invocation_logs: false`, because automatic invocation metadata can include sensitive request headers. Custom structured logs remain available.
+- **Traces:** the active invocation root span receives the same `workspace_key` only after membership verification. Trace lists query root spans with that key; a detail request must first prove that the root trace belongs to the requested workspace before any child spans are queried. Child-span output intentionally excludes arbitrary span attributes, names, URLs and messages.
+- **Bounds:** Logs and Traces accept only the fixed 15m/1h/6h/24h windows, allowlisted service name and 10/25/50/100 limits. Trace details use a seven-day lookback and fail closed above 500 spans. Responses identify the source as Workers Analytics SQL and label adaptive sampling.
+- **Observed account catalog:** read-only inspection found `logs.workersLogs` and `logs.traces`; a count-only query was accepted for each and returned zero rows for `orbit-native-runtime`, consistent with the native Worker remaining undeployed. No log contents or trace spans were read. The SQL API binding itself is still validated through Wrangler/mocks only; remote binding operation must be proven after a separately approved deployment.
+- **Cost boundary:** until Nov 30, Workers Free Logs include 200,000 events/day and three-day retention. From Dec 1, Workers Logs and Workers Traces share the Free Observability allowance of 0.5 GB/day ingestion and seven-day retention; Free ingestion pauses at the daily cap and resumes at 00:00 UTC. Keep 10% head sampling, review account usage before rollout, and never enable Paid overage by implication.
+- **Remaining:** alert evaluation, SLO budget calculation and notification delivery remain unsupported in CF02. No D1, Analytics dataset, OIDC tenant, secret, Worker route or Pages API-origin switch is provisioned. Preserve `workers_dev: false`, public Pages + synthetic Apps Script, CF01 and the $0/month boundary.
