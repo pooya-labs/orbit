@@ -449,6 +449,7 @@ test("workspace request metrics query Analytics Engine with a hashed tenant part
     assert.match(queries[0].query, /events\.analyticsEngine\.orbit_native_requests/);
     assert.match(queries[0].query, /index1 = \$workspace_key/);
     assert.match(queries[0].query, /timestamp >= \$start/);
+    assert.match(queries[0].query, /INTERVAL '\\d+' MINUTE/);
     assert.match(queries[0].query, /SUM\(_sample_interval\) AS request_count/);
     assert.match(queries[0].query, /SUM\(if\(double1 >= 200 AND double1 < 400, _sample_interval, 0\)\)/i);
     assert.match(queries[0].query, /SUM\(if\(double1 >= 400, _sample_interval, 0\)\)/i);
