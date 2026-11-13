@@ -302,6 +302,9 @@ async function membership(db, workspaceId, principal) {
 async function requireWorkspace(db, workspaceId, principal, role = "viewer") {
   const item = await membership(db, workspaceId, principal);
   if (!item) return { error: { status: 404, code: "workspace_not_found", message: "The workspace was not found." } };
+  // This principal is request-local. Once membership is verified, attribute even
+  // handled 4xx results (for example invalid input) to the correct workspace.
+  principal.telemetryWorkspaceId = workspaceId;
   if (!roleAtLeast(item.role, role)) return { error: { status: 403, code: "workspace_role_forbidden", message: "Your workspace role cannot perform this operation." } };
   return { membership: item };
 }
@@ -336,19 +339,18 @@ function telemetryRouteTemplate(path) {
   return "/other";
 }
 
-async function recordRequestTelemetry(request, result, env, startedAt) {
+async function recordRequestTelemetry(request, result, env, startedAt, authorizedWorkspaceId = null) {
   const dataset = env.ORBIT_REQUEST_EVENTS;
   if (!dataset || typeof dataset.writeDataPoint !== "function" || request.method === "OPTIONS") return;
 
   try {
     const url = new URL(request.url);
     const status = result.status;
-    const workspaceMatch = url.pathname.match(/^\/api\/v1\/workspaces\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i);
-    // Only successful responses are attributed to a workspace. Rejected origins,
-    // failed authentication, missing memberships, rate limits and invalid requests
-    // remain in the global partition so an unauthorised caller cannot poison a tenant.
-    const attributedWorkspace = workspaceMatch && status >= 200 && status < 400
-      ? workspaceMatch[1]
+    // Only requireWorkspace can supply this request-local ID after membership
+    // verification. Rejected origins, failed auth, missing memberships and
+    // rate limits therefore remain global without dropping authorized 4xx metrics.
+    const attributedWorkspace = typeof authorizedWorkspaceId === "string"
+      ? authorizedWorkspaceId
       : "global";
     const index = await telemetryIndexKey(attributedWorkspace);
     const elapsedMs = Math.max(0, Date.now() - startedAt);
@@ -1158,7 +1160,7 @@ async function handleApi(request, env, url, origin, id, principal) {
   return fail(404, "route_not_found", "The requested ORBIT API route was not found in the Cloudflare-native runtime.", origin, env, id);
 }
 
-async function handleWorkerRequest(request, env) {
+async function handleWorkerRequest(request, env, telemetryContext = {}) {
     const id = requestId();
     const url = new URL(request.url);
     const origin = request.headers.get("origin") || "";
@@ -1217,8 +1219,11 @@ async function handleWorkerRequest(request, env) {
     }
 
     try {
-      return await handleApi(request, env, url, origin, id, auth.principal);
+      const result = await handleApi(request, env, url, origin, id, auth.principal);
+      telemetryContext.workspaceId = auth.principal.telemetryWorkspaceId || null;
+      return result;
     } catch {
+      telemetryContext.workspaceId = auth.principal.telemetryWorkspaceId || null;
       return fail(503, "api_operation_unavailable", "The ORBIT API operation is temporarily unavailable.", origin, env, id);
     }
 }
@@ -1226,8 +1231,9 @@ async function handleWorkerRequest(request, env) {
 export default {
   async fetch(request, env, ctx) {
     const startedAt = Date.now();
-    const result = await handleWorkerRequest(request, env);
-    const telemetryTask = recordRequestTelemetry(request, result, env, startedAt);
+    const telemetryContext = {};
+    const result = await handleWorkerRequest(request, env, telemetryContext);
+    const telemetryTask = recordRequestTelemetry(request, result, env, startedAt, telemetryContext.workspaceId);
     if (ctx && typeof ctx.waitUntil === "function") {
       try { ctx.waitUntil(telemetryTask); } catch {}
     } else {
