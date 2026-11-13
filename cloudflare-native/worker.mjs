@@ -574,7 +574,8 @@ async function queryWorkspaceRequestTraces(env, workspaceId, url, origin, id) {
   const query = `
     SELECT traceId, serviceName, startTime, durationMs, spanStatus
     FROM logs.traces
-    WHERE attributes['workspace_key'] = $workspace_key
+    WHERE serviceName = 'orbit-native-runtime'
+      AND attributes['workspace_key'] = $workspace_key
       AND startTime >= $start
       AND (parentSpanId IS NULL OR parentSpanId = '')
     ORDER BY startTime DESC
@@ -637,6 +638,7 @@ async function queryWorkspaceTraceDetail(env, workspaceId, traceId, origin, id) 
         SELECT traceId
         FROM logs.traces
         WHERE traceId = $trace_id
+          AND serviceName = 'orbit-native-runtime'
           AND attributes['workspace_key'] = $workspace_key
           AND startTime >= $start
         LIMIT 1
