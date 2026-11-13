@@ -466,7 +466,7 @@ async function queryWorkspaceRequestMetrics(env, workspaceId, url, origin, id) {
   const start = new Date(Date.now() - windowConfig.seconds * 1000).toISOString();
   const query = `
     SELECT
-      toStartOfInterval(timestamp, INTERVAL ${bucketMinutes} MINUTE) AS bucket${selectGroupSql},
+      toStartOfInterval(timestamp, INTERVAL '${bucketMinutes}' MINUTE) AS bucket${selectGroupSql},
       SUM(_sample_interval) AS request_count,
       SUM(if(double1 >= 200 AND double1 < 400, _sample_interval, 0)) AS successful_request_count,
       SUM(if(double1 >= 400, _sample_interval, 0)) AS failed_request_count
