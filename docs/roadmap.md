@@ -602,6 +602,8 @@ This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-r
 
 **Verification:** exact PR-head CI [42401556604](https://github.com/pooya-labs/orbit/actions/runs/42401556604) passed 4/4 jobs; Security [42401556495](https://github.com/pooya-labs/orbit/actions/runs/42401556495) passed 13/13 jobs. This includes 23 Worker tests, D1/Wrangler config smoke, the complete OTLP pipeline, Prometheus scrape, workspace isolation, PostgreSQL recovery, browser/a11y tests, and all image/security scans.
 
+**PR #195 result (2026-11-13):** merged to `main` as squash commit [`c9d7318`](https://github.com/pooya-labs/orbit/commit/c9d731863716303dc642efeae02156aa0473b446). Exact PR head [`a4b3025`](https://github.com/pooya-labs/orbit/commit/a4b30252be11e917a07f0e456699cf6578facbb4) passed [CI](https://github.com/pooya-labs/orbit/actions/runs/43334671711) (4 jobs successful; Go API and Local Work jobs correctly skipped by change detection), [Security](https://github.com/pooya-labs/orbit/actions/runs/43334671830) (14/14 jobs successful), and [Windows NVDA](https://github.com/pooya-labs/orbit/actions/runs/43334671715) (1/1 successful). CI included Wrangler Analytics binding validation, native Worker/D1 tests, web typecheck/build, Playwright/axe, full OTLP pipeline, workspace A/B isolation, Prometheus scrape, PostgreSQL restart recovery and cleanup.
+
 **Release boundary:** PR #140 merged a staged foundation, not feature parity and not a deployable v1. No D1 database, OIDC tenant, Worker route or Pages API switch has been provisioned. Keep Apps Script unchanged and preserve CF01 as the separate canonical-Go edge profile.
 
 ## Post-v1 Security 01 — Go x/net advisory response (2026-11-07)
