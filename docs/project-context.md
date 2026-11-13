@@ -1503,3 +1503,16 @@ The Cloudflare-native D1 profile now has a separately scoped Workers Analytics E
 - Analytics Engine is adaptively sampled; the dashboard discloses that sampling. The implementation covers request Metrics only. Logs and Traces remain explicit 503 responses; live alert evaluation, SLO budgets and notification delivery are still unsupported in this profile.
 - CI contract tests and Wrangler configuration validation do not prove a remote dataset or deployed Worker exists. No D1 database, Analytics Engine dataset, OIDC tenant, Worker route, Cloudflare secret or Pages API-origin switch is provisioned by this code change.
 - Cloudflare currently publishes Workers Free Analytics Engine allowances of 100,000 daily data-point writes and 10,000 daily read queries, while noting Analytics Engine usage is not yet billed. These limits and the temporary billing statement must be re-checked before any remote deployment. Preserve Workers Free and the $0/month constraint; never activate a Paid plan or paid fallback by implication.
+
+
+
+## 27. CF02 native request-Metrics merge closeout (2026-11-13)
+
+PR [#195](https://github.com/pooya-labs/orbit/pull/195) was squash-merged into `main` as [`c9d731863716303dc642efeae02156aa0473b446`](https://github.com/pooya-labs/orbit/commit/c9d731863716303dc642efeae02156aa0473b446). The merged head was `a4b30252be11e917a07f0e456699cf6578facbb4`.
+
+- Exact-head [CI run 43334671711](https://github.com/pooya-labs/orbit/actions/runs/43334671711) succeeded. The web/typecheck/build and Playwright/axe path passed; Cloudflare-native Wrangler binding validation and Worker/D1 tests passed; the local telemetry end-to-end stack passed OTLP write/query, Prometheus scrape, workspace A/B isolation and PostgreSQL restart/connection-pool recovery. The Compose stack cleanup also passed. The Go API and Local Work jobs were intentionally skipped by the workflow change detector.
+- Exact-head [Security run 43334671830](https://github.com/pooya-labs/orbit/actions/runs/43334671830) passed all 14 jobs, including full-history secret scanning, dependency review, first-party and Compose image scans, and SBOM steps.
+- Exact-head [Windows NVDA run 43334671715](https://github.com/pooya-labs/orbit/actions/runs/43334671715) passed the real Browse Mode heading-navigation smoke test.
+- The final request-telemetry boundary attributes events to a workspace only after request-local membership verification. Unauthorized origins, failed authentication, missing memberships and rate-limit denials stay global; authorized workspace validation failures remain attributed to their verified workspace. Contract tests cover both cases.
+- Metrics aggregates use Analytics Engine `_sample_interval` weighting, explicit adaptive-sampling disclosure, bounded query shapes and a 5,000-row fail-closed limit. Logs and Traces still return explicit 503 responses.
+- This is a source-only merge. No D1 database, Analytics Engine dataset, OIDC tenant, Worker route, secret, paid plan, Cloudflare deployment or Pages API-origin switch was created. Preserve `workers_dev: false`, the Workers Free / $0 monthly boundary, the public Pages + synthetic Apps Script demo, canonical Go/PostgreSQL runtime and CF01 gateway.
