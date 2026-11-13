@@ -274,7 +274,7 @@ export interface TelemetryQueryResponse<T> {
   group_by?: string[];
   metric?: TelemetryMetricID;
   limit?: number;
-  sampling?: "adaptive";
+  sampling?: "adaptive" | "head";
   data: T;
 }
 
