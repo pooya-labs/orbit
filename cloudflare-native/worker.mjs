@@ -543,7 +543,7 @@ async function queryWorkspaceRequestLogs(env, workspaceId, url, origin, id) {
     query: "logs.workersLogs/orbit.request",
     service: TELEMETRY_SERVICE_NAME,
     limit,
-    sampling: "adaptive",
+    sampling: "head",
     data: Array.from(streams.values()).map((stream) => ({
       ...stream,
       values: stream.values.sort((a, b) => Date.parse(b[0]) - Date.parse(a[0]))
@@ -609,7 +609,7 @@ async function queryWorkspaceRequestTraces(env, workspaceId, url, origin, id) {
     query: "logs.traces/workspace-root-spans",
     service: TELEMETRY_SERVICE_NAME,
     limit,
-    sampling: "adaptive",
+    sampling: "head",
     data
   }, 200, origin, env, id);
 }
