@@ -344,11 +344,10 @@ async function recordRequestTelemetry(request, result, env, startedAt) {
     const url = new URL(request.url);
     const status = result.status;
     const workspaceMatch = url.pathname.match(/^\/api\/v1\/workspaces\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i);
-    // Only attribute to a workspace after the request has passed authentication and
-    // membership lookup. A 404/401/429 must not let an unauthorised caller poison
-    // another tenant's telemetry partition.
-    const attributedWorkspace = workspaceMatch && status >= 200 && status < 500 &&
-      status !== 401 && status !== 404 && status !== 429
+    // Only successful responses are attributed to a workspace. Rejected origins,
+    // failed authentication, missing memberships, rate limits and invalid requests
+    // remain in the global partition so an unauthorised caller cannot poison a tenant.
+    const attributedWorkspace = workspaceMatch && status >= 200 && status < 400
       ? workspaceMatch[1]
       : "global";
     const index = await telemetryIndexKey(attributedWorkspace);
