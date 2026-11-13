@@ -371,7 +371,7 @@ test("workspace telemetry discovery and metric catalogue describe only the nativ
     assert.equal(services.status, 200);
     const service = (await services.json()).data[0];
     assert.equal(service.name, "orbit-native-runtime");
-    assert.deepEqual(service.sources, ["workers-analytics-engine"]);
+    assert.deepEqual(service.sources, ["workers-analytics-engine", "workers-observability"]);
     assert.equal(service.resource_attributes["service.name"][0], "orbit-native-runtime");
 
     const catalog = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/telemetry/metrics/catalog`, token), { ...env, DB });
@@ -449,6 +449,9 @@ test("workspace request metrics query Analytics Engine with a hashed tenant part
     assert.match(queries[0].query, /events\.analyticsEngine\.orbit_native_requests/);
     assert.match(queries[0].query, /index1 = \$workspace_key/);
     assert.match(queries[0].query, /timestamp >= \$start/);
+    assert.match(queries[0].query, /attributes\['trace_id'\] AS custom_trace_id/);
+    assert.match(queries[0].query, /attributes\['span_id'\] AS custom_span_id/);
+    assert.match(queries[0].query, /attributes\['request_id'\] AS custom_request_id/);
     assert.match(queries[0].query, /INTERVAL '[0-9]+' MINUTE/);
     assert.match(queries[0].query, /COUNT\(\*\) AS request_count/i);
     assert.match(queries[0].query, /countIf\(double1 >= 200 AND double1 < 400\) AS successful_request_count/i);
@@ -531,15 +534,32 @@ test("workspace telemetry metrics fail closed when Analytics SQL is not configur
 test("rejected browser origins cannot write into a workspace telemetry partition", async () => {
   const workspaceId = "123e4567-e89b-12d3-a456-426614174099";
   const points = [];
-  const response = await worker.fetch(new Request(
-    `https://native.example/api/v1/workspaces/${workspaceId}/membership`,
-    { headers: { origin: "https://attacker.example" } }
-  ), {
-    ALLOWED_ORIGIN: "https://pooya-labs.github.io",
-    ORBIT_REQUEST_EVENTS: { writeDataPoint(point) { points.push(point); } }
-  });
+  const spanAttributes = [];
+  const capturedLogs = [];
+  const originalLog = console.log;
+  console.log = (event) => capturedLogs.push(event);
+  let response;
+  try {
+    response = await worker.fetch(new Request(
+      `https://native.example/api/v1/workspaces/${workspaceId}/membership`,
+      { headers: { origin: "https://attacker.example" } }
+    ), {
+      ALLOWED_ORIGIN: "https://pooya-labs.github.io",
+      ORBIT_REQUEST_EVENTS: { writeDataPoint(point) { points.push(point); } }
+    }, {
+      tracing: {
+        getActiveSpan() {
+          return { setAttribute(key, value) { spanAttributes.push([key, value]); } };
+        }
+      }
+    });
+  } finally {
+    console.log = originalLog;
+  }
 
   assert.equal(response.status, 403);
+  assert.equal(spanAttributes.length, 0, "A rejected origin must never annotate a workspace trace");
+  assert.equal(capturedLogs.length, 0, "A rejected origin must never emit a workspace-scoped log");
   assert.equal(points.length, 1);
   const globalDigest = new Uint8Array(await crypto.subtle.digest(
     "SHA-256",
@@ -652,7 +672,281 @@ test("Analytics Engine write failures never change the API response", async () =
   });
 });
 
-test("global telemetry, Logs and Traces remain explicitly unavailable without a real source", async () => {
+test("verified workspace requests emit safe structured Logs and tag only the active root span", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174077";
+    const captured = [];
+    const attributes = [];
+    const originalLog = console.log;
+    console.log = (event) => captured.push(event);
+    try {
+      const DB = {
+        prepare(sql) {
+          assert.match(sql, /FROM workspace_memberships/);
+          return {
+            bind() {
+              return {
+                first: async () => ({ workspace_id: workspaceId, role: "viewer" })
+              };
+            }
+          };
+        }
+      };
+      const span = {
+        setAttribute(key, value) { attributes.push([key, value]); },
+        spanContext() { return { traceId: "a".repeat(32), spanId: "b".repeat(16) }; }
+      };
+      const response = await worker.fetch(authorizedRequest(
+        `/api/v1/workspaces/${workspaceId}/membership?private=do-not-log`, token
+      ), { ...env, DB }, {
+        tracing: { getActiveSpan: () => span }
+      });
+      assert.equal(response.status, 200);
+    } finally {
+      console.log = originalLog;
+    }
+
+    assert.equal(attributes.length, 1);
+    assert.equal(attributes[0][0], "workspace_key");
+    const digest = new Uint8Array(await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`orbit-native-telemetry:${workspaceId}`)
+    ));
+    const workspaceKey = Array.from(digest, (part) => part.toString(16).padStart(2, "0")).join("");
+    assert.equal(attributes[0][1], workspaceKey);
+    assert.equal(captured.length, 1);
+    assert.equal(captured[0].event, "orbit.request");
+    assert.equal(captured[0].workspace_key, workspaceKey);
+    assert.equal(captured[0].route, "/api/v1/workspaces/:workspace/membership");
+    assert.equal(captured[0].method, "GET");
+    assert.equal(captured[0].status, 200);
+    assert.equal(captured[0].trace_id, "a".repeat(32));
+    assert.equal(captured[0].span_id, "b".repeat(16));
+    const serialized = JSON.stringify(captured[0]);
+    assert.doesNotMatch(serialized, new RegExp(workspaceId));
+    assert.doesNotMatch(serialized, /do-not-log|authorization|Bearer|private=/i);
+    assert.doesNotMatch(serialized, new RegExp(token));
+  });
+});
+
+test("workspace Logs query only returns structured orbit.request events in the hashed tenant partition", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174076";
+    const queries = [];
+    const DB = {
+      prepare(sql) {
+        assert.match(sql, /FROM workspace_memberships/);
+        return {
+          bind() {
+            return { first: async () => ({ workspace_id: workspaceId, role: "viewer" }) };
+          }
+        };
+      }
+    };
+    const ANALYTICS_SQL = {
+      async query(request) {
+        queries.push(request);
+        return {
+          data: [{
+            timestamp: "2026-11-13T00:00:00.000Z",
+            level: "info",
+            message: "ORBIT request",
+            traceId: "",
+            spanId: "",
+            requestId: "",
+            custom_trace_id: "c".repeat(32),
+            custom_span_id: "d".repeat(16),
+            custom_request_id: "req-safe-1",
+            route: "/api/v1/workspaces/:workspace/membership",
+            method: "GET",
+            status: 200,
+            duration_ms: 12
+          }],
+          rows: 1,
+          statistics: { elapsed_ms: 2, rows_read: 1, bytes_read: 256 }
+        };
+      }
+    };
+    const response = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/telemetry/logs?window=1h&service=orbit-native-runtime&limit=25`, token
+    ), { ...env, DB, ANALYTICS_SQL });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.source, "workers-observability");
+    assert.equal(payload.sampling, "head");
+    assert.equal(payload.limit, 25);
+    assert.equal(payload.data.length, 1);
+    assert.equal(payload.data[0].stream.level, "info");
+    const line = JSON.parse(payload.data[0].values[0][1]);
+    assert.equal(line.event, "orbit.request");
+    assert.equal(line.trace_id, "c".repeat(32));
+    assert.equal(line.status, 200);
+    assert.equal(queries.length, 1);
+    assert.match(queries[0].query, /FROM logs\.workersLogs/);
+    assert.match(queries[0].query, /scriptName = 'orbit-native-runtime'/);
+    assert.match(queries[0].query, /attributes\['event'\] = 'orbit\.request'/);
+    assert.match(queries[0].query, /attributes\['workspace_key'\] = \$workspace_key/);
+    assert.match(queries[0].query, /timestamp >= \$start/);
+    assert.doesNotMatch(queries[0].query, /accountTag|authorization|request\.url|_sample_interval/i);
+    const digest = new Uint8Array(await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`orbit-native-telemetry:${workspaceId}`)
+    ));
+    const workspaceKey = Array.from(digest, (part) => part.toString(16).padStart(2, "0")).join("");
+    assert.equal(queries[0].params.workspace_key, workspaceKey);
+    assert.equal(queries[0].params.workspace_key.includes(workspaceId), false);
+  });
+});
+
+test("workspace Traces list only returns root spans tagged for the verified workspace", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174075";
+    const queries = [];
+    const DB = {
+      prepare(sql) {
+        assert.match(sql, /FROM workspace_memberships/);
+        return {
+          bind() {
+            return { first: async () => ({ workspace_id: workspaceId, role: "viewer" }) };
+          }
+        };
+      }
+    };
+    const ANALYTICS_SQL = {
+      async query(request) {
+        queries.push(request);
+        return {
+          data: [{
+            traceId: "e".repeat(32),
+            serviceName: "orbit-native-runtime",
+            startTime: "2026-11-13T00:00:00.000Z",
+            durationMs: 18,
+            spanStatus: "ok"
+          }],
+          rows: 1,
+          statistics: { elapsed_ms: 2, rows_read: 1, bytes_read: 128 }
+        };
+      }
+    };
+    const response = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/telemetry/traces?window=1h&service=orbit-native-runtime&limit=25`, token
+    ), { ...env, DB, ANALYTICS_SQL });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.source, "workers-observability");
+    assert.equal(payload.sampling, "head");
+    assert.equal(payload.data[0].traceID, "e".repeat(32));
+    assert.equal(payload.data[0].rootServiceName, "orbit-native-runtime");
+    assert.equal(Number(payload.data[0].durationMs), 18);
+    assert.match(queries[0].query, /FROM logs\.traces/);
+    assert.match(queries[0].query, /serviceName = 'orbit-native-runtime'/);
+    assert.match(queries[0].query, /attributes\['workspace_key'\] = \$workspace_key/);
+    assert.match(queries[0].query, /parentSpanId IS NULL OR parentSpanId = ''/);
+    assert.doesNotMatch(queries[0].query, /accountTag|_sample_interval/i);
+    const digest = new Uint8Array(await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`orbit-native-telemetry:${workspaceId}`)
+    ));
+    const workspaceKey = Array.from(digest, (part) => part.toString(16).padStart(2, "0")).join("");
+    assert.equal(queries[0].params.workspace_key, workspaceKey);
+  });
+});
+
+test("workspace Trace detail verifies the root span ownership before reading child spans", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174074";
+    const traceId = "f".repeat(32);
+    const queries = [];
+    const DB = {
+      prepare(sql) {
+        assert.match(sql, /FROM workspace_memberships/);
+        return {
+          bind() {
+            return { first: async () => ({ workspace_id: workspaceId, role: "viewer" }) };
+          }
+        };
+      }
+    };
+    const ANALYTICS_SQL = {
+      async query(request) {
+        queries.push(request);
+        if (queries.length === 1) return { data: [{ traceId }], rows: 1, statistics: {} };
+        return {
+          data: [
+            {
+              traceId, spanId: "1".repeat(16), parentSpanId: "",
+              serviceName: "orbit-native-runtime",
+              startTime: "2026-11-13T00:00:00.000Z",
+              endTime: "2026-11-13T00:00:00.020Z",
+              durationMs: 20, spanStatus: "ok"
+            },
+            {
+              traceId, spanId: "2".repeat(16), parentSpanId: "1".repeat(16),
+              serviceName: "orbit-native-runtime",
+              startTime: "2026-11-13T00:00:00.005Z",
+              endTime: "2026-11-13T00:00:00.010Z",
+              durationMs: 5, spanStatus: "error"
+            }
+          ],
+          rows: 2,
+          statistics: { elapsed_ms: 2, rows_read: 2, bytes_read: 256 }
+        };
+      }
+    };
+    const response = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/telemetry/traces/${traceId}`, token
+    ), { ...env, DB, ANALYTICS_SQL });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.source, "workers-observability");
+    assert.equal(payload.trace_id, traceId);
+    const spans = payload.data.batches[0].scopeSpans[0].spans;
+    assert.equal(spans.length, 2);
+    assert.equal(spans[0].name, "ORBIT request");
+    assert.equal(spans[1].name, "Worker operation");
+    assert.equal(spans[1].status.code, 2);
+    assert.match(queries[0].query, /serviceName = 'orbit-native-runtime'/);
+    assert.match(queries[0].query, /attributes\['workspace_key'\] = \$workspace_key/);
+    assert.match(queries[1].query, /WHERE traceId = \$trace_id/);
+    assert.match(queries[1].query, /serviceName = 'orbit-native-runtime'/);
+    assert.doesNotMatch(queries[1].query, /attributes\['workspace_key'\]/);
+    assert.equal(queries[0].params.trace_id, traceId);
+    assert.equal(queries[1].params.trace_id, traceId);
+    assert.notEqual(queries[0].params.workspace_key, workspaceId);
+  });
+});
+
+test("a trace from another workspace is not readable even when its trace ID is known", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174073";
+    const queries = [];
+    const DB = {
+      prepare(sql) {
+        assert.match(sql, /FROM workspace_memberships/);
+        return {
+          bind() {
+            return { first: async () => ({ workspace_id: workspaceId, role: "viewer" }) };
+          }
+        };
+      }
+    };
+    const ANALYTICS_SQL = {
+      async query(request) {
+        queries.push(request);
+        return { data: [], rows: 0, statistics: {} };
+      }
+    };
+    const traceId = "9".repeat(32);
+    const response = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/telemetry/traces/${traceId}`, token
+    ), { ...env, DB, ANALYTICS_SQL });
+    assert.equal(response.status, 404);
+    assert.equal((await response.json()).error.code, "telemetry_trace_not_found");
+    assert.equal(queries.length, 1, "Child spans must never be queried before tenant ownership is proven");
+  });
+});
+
+test("workspace Logs and Traces fail closed when the Analytics SQL binding is missing", async () => {
   await withSignedAccessToken(async (token, env) => {
     const globalTelemetry = await worker.fetch(authorizedRequest("/api/v1/telemetry/metrics?window=1h", token), { ...env, DB: {} });
     assert.equal(globalTelemetry.status, 503);
@@ -678,10 +972,10 @@ test("global telemetry, Logs and Traces remain explicitly unavailable without a 
     };
     const logs = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/telemetry/logs`, token), { ...env, DB });
     assert.equal(logs.status, 503);
-    assert.equal((await logs.json()).error.code, "telemetry_signal_unavailable");
+    assert.equal((await logs.json()).error.code, "analytics_sql_not_configured");
     const traces = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/telemetry/traces`, token), { ...env, DB });
     assert.equal(traces.status, 503);
-    assert.equal((await traces.json()).error.code, "telemetry_signal_unavailable");
+    assert.equal((await traces.json()).error.code, "analytics_sql_not_configured");
 
     const alerts = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/alerts?limit=50`, token), { ...env, DB });
     assert.equal(alerts.status, 503);
