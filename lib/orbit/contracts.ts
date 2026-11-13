@@ -265,7 +265,7 @@ export interface TelemetryMetricCatalogResponse {
 }
 
 export interface TelemetryQueryResponse<T> {
-  source: "prometheus" | "loki" | "tempo" | "workers-analytics-engine";
+  source: "prometheus" | "loki" | "tempo" | "workers-analytics-engine" | "workers-observability";
   window: TelemetryWindow;
   queried_at: string;
   query?: string;
@@ -332,7 +332,7 @@ export interface TempoTraceDetailBatch {
 }
 
 export interface WorkspaceTraceDetailResponse {
-  source: "tempo" | "workers-analytics-engine";
+  source: "tempo" | "workers-analytics-engine" | "workers-observability";
   trace_id: string;
   queried_at: string;
   data: {
@@ -345,7 +345,7 @@ export type TelemetryLogsResponse = TelemetryQueryResponse<LokiLogStream[]>;
 export type TelemetryTracesResponse = TelemetryQueryResponse<TempoTraceSummary[]>;
 
 
-export type TelemetryBackend = "prometheus" | "loki" | "tempo" | "workers-analytics-engine";
+export type TelemetryBackend = "prometheus" | "loki" | "tempo" | "workers-analytics-engine" | "workers-observability";
 
 export type TelemetryServiceSource = TelemetryBackend | "otlp";
 
