@@ -333,26 +333,28 @@ function telemetryRouteTemplate(path) {
       "telemetry/services", "telemetry/metrics", "telemetry/metrics/catalog",
       "telemetry/logs", "telemetry/traces"
     ]);
+    if (/^telemetry\/traces\/[0-9a-f]{32}$/i.test(suffix)) {
+      return "/api/v1/workspaces/:workspace/telemetry/traces/:trace_id";
+    }
     return known.has(suffix) ? `/api/v1/workspaces/:workspace/${suffix}` : "/api/v1/workspaces/:workspace/other";
   }
   if (path.startsWith("/api/v1/")) return "/api/v1/other";
   return "/other";
 }
 
-async function recordRequestTelemetry(request, result, env, startedAt, authorizedWorkspaceId = null) {
-  const dataset = env.ORBIT_REQUEST_EVENTS;
-  if (!dataset || typeof dataset.writeDataPoint !== "function" || request.method === "OPTIONS") return;
+async function recordRequestTelemetry(request, result, env, startedAt, telemetryContext = {}) {
+  if (request.method === "OPTIONS") return;
 
   try {
     const url = new URL(request.url);
     const status = result.status;
-    // Only requireWorkspace can supply this request-local ID after membership
-    // verification. Rejected origins, failed auth, missing memberships and
-    // rate limits therefore remain global without dropping authorized 4xx metrics.
-    const attributedWorkspace = typeof authorizedWorkspaceId === "string"
-      ? authorizedWorkspaceId
+    // The request-local workspace ID is set only by requireWorkspace after D1
+    // membership verification. Unauthenticated, rejected-origin and rate-limited
+    // requests are kept in a global partition.
+    const attributedWorkspace = typeof telemetryContext.workspaceId === "string"
+      ? telemetryContext.workspaceId
       : "global";
-    const index = await telemetryIndexKey(attributedWorkspace);
+    const workspaceKey = await telemetryIndexKey(attributedWorkspace);
     const elapsedMs = Math.max(0, Date.now() - startedAt);
     const serviceVersion = typeof env.ORBIT_VERSION === "string" && env.ORBIT_VERSION.length <= 64
       ? env.ORBIT_VERSION
@@ -360,24 +362,354 @@ async function recordRequestTelemetry(request, result, env, startedAt, authorize
     const deploymentEnvironment = typeof env.ORBIT_ENVIRONMENT === "string" && env.ORBIT_ENVIRONMENT.length <= 64
       ? env.ORBIT_ENVIRONMENT
       : "cloudflare";
+    const trace = telemetryContext.trace || {};
+    const requestIdValue = result.headers?.get("x-request-id") || "";
 
-    // Keep request telemetry intentionally low-cardinality and non-sensitive:
-    // no query string, request body, authorization header, user subject or raw workspace ID.
-    dataset.writeDataPoint({
-      indexes: [index],
-      blobs: [
-        TELEMETRY_SERVICE_NAME,
-        telemetryRouteTemplate(url.pathname),
-        request.method,
-        "cloudflare-worker",
-        serviceVersion,
-        deploymentEnvironment
-      ],
-      doubles: [status, elapsedMs]
-    });
+    // Structured Logs: deliberately emit only fixed route templates and bounded,
+    // non-sensitive metadata. Never log URLs, query strings, bodies, subjects,
+    // authorization headers or raw workspace identifiers.
+    if (typeof telemetryContext.workspaceId === "string") {
+      try {
+        console.log({
+          event: "orbit.request",
+          workspace_key: workspaceKey,
+          service_name: TELEMETRY_SERVICE_NAME,
+          service_version: serviceVersion,
+          deployment_environment: deploymentEnvironment,
+          route: telemetryRouteTemplate(url.pathname),
+          method: request.method,
+          status,
+          duration_ms: elapsedMs,
+          request_id: requestIdValue,
+          trace_id: typeof trace.traceId === "string" ? trace.traceId : "",
+          span_id: typeof trace.spanId === "string" ? trace.spanId : ""
+        });
+      } catch {
+        // Logging is best-effort and must never affect the API response.
+      }
+    }
+
+    const dataset = env.ORBIT_REQUEST_EVENTS;
+    if (dataset && typeof dataset.writeDataPoint === "function") {
+      try {
+        dataset.writeDataPoint({
+          indexes: [workspaceKey],
+          blobs: [
+            TELEMETRY_SERVICE_NAME,
+            telemetryRouteTemplate(url.pathname),
+            request.method,
+            "cloudflare-worker",
+            serviceVersion,
+            deploymentEnvironment
+          ],
+          doubles: [status, elapsedMs]
+        });
+      } catch {
+        // Analytics Engine is best-effort and must never change the API response.
+      }
+    }
   } catch {
     // Telemetry is best-effort and must never change the API response.
   }
+}
+
+async function annotateWorkspaceTrace(ctx, workspaceId) {
+  if (typeof workspaceId !== "string" || typeof ctx?.tracing?.getActiveSpan !== "function") return null;
+  try {
+    const workspaceKey = await telemetryIndexKey(workspaceId);
+    const span = ctx.tracing.getActiveSpan();
+    if (!span) return null;
+    span.setAttribute("workspace_key", workspaceKey);
+    const context = typeof span.spanContext === "function" ? span.spanContext() : null;
+    return {
+      traceId: typeof context?.traceId === "string" ? context.traceId : "",
+      spanId: typeof context?.spanId === "string" ? context.spanId : ""
+    };
+  } catch {
+    // Tracing is best-effort; D1 membership remains the authorization boundary.
+    return null;
+  }
+}
+
+function telemetryStartForWindow(windowName) {
+  const config = TELEMETRY_WINDOWS[windowName];
+  return config ? new Date(Date.now() - config.seconds * 1000).toISOString() : null;
+}
+
+function analyticsTimestampNanoseconds(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const milliseconds = value > 1_000_000_000_000 ? value : value > 1_000_000_000 ? value * 1000 : value * 1000;
+    return String(BigInt(Math.trunc(milliseconds)) * 1_000_000n);
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed)
+    ? String(BigInt(Math.trunc(parsed)) * 1_000_000n)
+    : "0";
+}
+
+function nativeTelemetryService(url, origin, env, id) {
+  const service = url.searchParams.get("service") || TELEMETRY_SERVICE_NAME;
+  return service === TELEMETRY_SERVICE_NAME
+    ? null
+    : fail(404, "telemetry_service_not_found", "The requested Cloudflare Workers telemetry service was not found.", origin, env, id);
+}
+
+async function queryWorkspaceRequestLogs(env, workspaceId, url, origin, id) {
+  const windowName = url.searchParams.get("window") || "1h";
+  const start = telemetryStartForWindow(windowName);
+  if (!start) return fail(400, "invalid_telemetry_window", "window must be 15m, 1h, 6h, or 24h.", origin, env, id);
+  const serviceError = nativeTelemetryService(url, origin, env, id);
+  if (serviceError) return serviceError;
+  const limit = limitFromUrl(url, 50);
+  if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
+  if (!env.ANALYTICS_SQL || typeof env.ANALYTICS_SQL.query !== "function") {
+    return fail(503, "analytics_sql_not_configured", "The Workers Analytics SQL binding is not configured for this runtime.", origin, env, id);
+  }
+
+  let workspaceKey;
+  try {
+    workspaceKey = await telemetryIndexKey(workspaceId);
+  } catch {
+    return fail(503, "telemetry_partition_unavailable", "The workspace telemetry partition could not be resolved.", origin, env, id);
+  }
+
+  const query = `
+    SELECT
+      timestamp,
+      level,
+      message,
+      traceId,
+      spanId,
+      requestId,
+      attributes['trace_id'] AS custom_trace_id,
+      attributes['span_id'] AS custom_span_id,
+      attributes['request_id'] AS custom_request_id,
+      attributes['route'] AS route,
+      attributes['method'] AS method,
+      attributes['status'] AS status,
+      attributes['duration_ms'] AS duration_ms
+    FROM logs.workersLogs
+    WHERE scriptName = 'orbit-native-runtime'
+      AND attributes['event'] = 'orbit.request'
+      AND attributes['workspace_key'] = $workspace_key
+      AND timestamp >= $start
+    ORDER BY timestamp DESC
+    LIMIT ${limit}
+  `;
+
+  let result;
+  try {
+    result = await env.ANALYTICS_SQL.query({
+      query,
+      params: { workspace_key: workspaceKey, start }
+    });
+  } catch {
+    return fail(503, "telemetry_query_unavailable", "Workers Observability Logs could not answer the workspace query.", origin, env, id);
+  }
+
+  const streams = new Map();
+  const rows = Array.isArray(result?.data) ? result.data : [];
+  for (const row of rows) {
+    const level = String(row.level || "info");
+    const route = String(row.route || "unknown");
+    const method = String(row.method || "GET");
+    const labels = {
+      service_name: TELEMETRY_SERVICE_NAME,
+      level,
+      route,
+      method
+    };
+    const key = JSON.stringify(labels);
+    let stream = streams.get(key);
+    if (!stream) {
+      stream = { stream: labels, values: [] };
+      streams.set(key, stream);
+    }
+    const line = JSON.stringify({
+      message: "ORBIT request",
+      event: "orbit.request",
+      route,
+      method,
+      status: Number(row.status ?? row.httpStatus ?? 0),
+      duration_ms: Number(row.duration_ms ?? 0),
+      trace_id: String(row.traceId || row.custom_trace_id || ""),
+      span_id: String(row.spanId || row.custom_span_id || ""),
+      request_id: String(row.requestId || row.custom_request_id || "")
+    });
+    stream.values.push([String(row.timestamp || ""), line]);
+  }
+
+  const body = {
+    source: "workers-observability",
+    window: windowName,
+    queried_at: new Date().toISOString(),
+    query: "logs.workersLogs/orbit.request",
+    service: TELEMETRY_SERVICE_NAME,
+    limit,
+    sampling: "head",
+    data: Array.from(streams.values()).map((stream) => ({
+      ...stream,
+      values: stream.values.sort((a, b) => Date.parse(b[0]) - Date.parse(a[0]))
+    }))
+  };
+  return response(body, 200, origin, env, id);
+}
+
+async function queryWorkspaceRequestTraces(env, workspaceId, url, origin, id) {
+  const windowName = url.searchParams.get("window") || "1h";
+  const start = telemetryStartForWindow(windowName);
+  if (!start) return fail(400, "invalid_telemetry_window", "window must be 15m, 1h, 6h, or 24h.", origin, env, id);
+  const serviceError = nativeTelemetryService(url, origin, env, id);
+  if (serviceError) return serviceError;
+  const limit = limitFromUrl(url, 50);
+  if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
+  if (!env.ANALYTICS_SQL || typeof env.ANALYTICS_SQL.query !== "function") {
+    return fail(503, "analytics_sql_not_configured", "The Workers Analytics SQL binding is not configured for this runtime.", origin, env, id);
+  }
+
+  let workspaceKey;
+  try {
+    workspaceKey = await telemetryIndexKey(workspaceId);
+  } catch {
+    return fail(503, "telemetry_partition_unavailable", "The workspace telemetry partition could not be resolved.", origin, env, id);
+  }
+
+  const query = `
+    SELECT traceId, serviceName, startTime, durationMs, spanStatus
+    FROM logs.traces
+    WHERE serviceName = 'orbit-native-runtime'
+      AND attributes['workspace_key'] = $workspace_key
+      AND startTime >= $start
+      AND (parentSpanId IS NULL OR parentSpanId = '')
+    ORDER BY startTime DESC
+    LIMIT ${limit}
+  `;
+
+  let result;
+  try {
+    result = await env.ANALYTICS_SQL.query({
+      query,
+      params: { workspace_key: workspaceKey, start }
+    });
+  } catch {
+    return fail(503, "telemetry_query_unavailable", "Workers Observability Traces could not answer the workspace query.", origin, env, id);
+  }
+
+  const data = (Array.isArray(result?.data) ? result.data : [])
+    .filter((row) => typeof row.traceId === "string" && /^[0-9a-f]{32}$/i.test(row.traceId))
+    .map((row) => ({
+      traceID: row.traceId,
+      rootServiceName: String(row.serviceName || TELEMETRY_SERVICE_NAME),
+      rootTraceName: "ORBIT request",
+      startTimeUnixNano: analyticsTimestampNanoseconds(row.startTime),
+      durationMs: Math.max(0, Number(row.durationMs) || 0)
+    }));
+
+  return response({
+    source: "workers-observability",
+    window: windowName,
+    queried_at: new Date().toISOString(),
+    query: "logs.traces/workspace-root-spans",
+    service: TELEMETRY_SERVICE_NAME,
+    limit,
+    sampling: "head",
+    data
+  }, 200, origin, env, id);
+}
+
+async function queryWorkspaceTraceDetail(env, workspaceId, traceId, origin, id) {
+  if (!/^[0-9a-f]{32}$/i.test(traceId)) {
+    return fail(400, "invalid_trace_id", "trace_id must be a 32-character hexadecimal identifier.", origin, env, id);
+  }
+  if (!env.ANALYTICS_SQL || typeof env.ANALYTICS_SQL.query !== "function") {
+    return fail(503, "analytics_sql_not_configured", "The Workers Analytics SQL binding is not configured for this runtime.", origin, env, id);
+  }
+
+  let workspaceKey;
+  try {
+    workspaceKey = await telemetryIndexKey(workspaceId);
+  } catch {
+    return fail(503, "telemetry_partition_unavailable", "The workspace telemetry partition could not be resolved.", origin, env, id);
+  }
+  // A trace is readable only if its root span carries the workspace key written
+  // after requireWorkspace verified membership. Never query child spans first.
+  const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  let ownership;
+  try {
+    ownership = await env.ANALYTICS_SQL.query({
+      query: `
+        SELECT traceId
+        FROM logs.traces
+        WHERE traceId = $trace_id
+          AND serviceName = 'orbit-native-runtime'
+          AND attributes['workspace_key'] = $workspace_key
+          AND startTime >= $start
+        LIMIT 1
+      `,
+      params: { trace_id: traceId, workspace_key: workspaceKey, start }
+    });
+  } catch {
+    return fail(503, "telemetry_query_unavailable", "Workers Observability could not verify trace ownership for this workspace.", origin, env, id);
+  }
+  if (!Array.isArray(ownership?.data) || ownership.data.length === 0) {
+    return fail(404, "telemetry_trace_not_found", "The trace was not found in this workspace.", origin, env, id);
+  }
+
+  let result;
+  try {
+    result = await env.ANALYTICS_SQL.query({
+      query: `
+        SELECT traceId, spanId, parentSpanId, serviceName, startTime, endTime,
+               durationMs, spanStatus
+        FROM logs.traces
+        WHERE traceId = $trace_id
+          AND serviceName = 'orbit-native-runtime'
+          AND startTime >= $start
+        ORDER BY startTime ASC
+        LIMIT 501
+      `,
+      params: { trace_id: traceId, start }
+    });
+  } catch {
+    return fail(503, "telemetry_query_unavailable", "Workers Observability could not load the verified trace spans.", origin, env, id);
+  }
+
+  const rows = Array.isArray(result?.data) ? result.data : [];
+  if (Number(result?.rows) > 500 || rows.length > 500) {
+    return fail(503, "telemetry_result_limit_exceeded", "The trace contains more than 500 spans. The detail view is unavailable rather than returning a partial trace.", origin, env, id);
+  }
+  const spans = rows.map((row) => {
+    const status = String(row.spanStatus || "unset").toLowerCase();
+    const span = {
+      traceId: String(row.traceId),
+      spanId: String(row.spanId),
+      name: row.parentSpanId ? "Worker operation" : "ORBIT request",
+      startTimeUnixNano: analyticsTimestampNanoseconds(row.startTime),
+      endTimeUnixNano: analyticsTimestampNanoseconds(row.endTime),
+      status: { code: status === "error" ? 2 : status === "ok" ? 1 : 0 }
+    };
+    if (typeof row.parentSpanId === "string" && row.parentSpanId.length > 0) {
+      span.parentSpanId = row.parentSpanId;
+    }
+    return span;
+  });
+
+  return response({
+    source: "workers-observability",
+    trace_id: traceId,
+    queried_at: new Date().toISOString(),
+    data: {
+      batches: [{
+        resource: {
+          attributes: [{ key: "service.name", value: { stringValue: TELEMETRY_SERVICE_NAME } }]
+        },
+        scopeSpans: [{
+          scope: { name: "Cloudflare Workers", version: "native" },
+          spans
+        }]
+      }]
+    }
+  }, 200, origin, env, id);
 }
 
 function analyticsBucketSeconds(bucketMinutes) {
@@ -681,13 +1013,13 @@ async function handleApi(request, env, url, origin, id, principal) {
         data: [{
           id: TELEMETRY_SERVICE_NAME,
           name: TELEMETRY_SERVICE_NAME,
-          sources: ["workers-analytics-engine"],
+          sources: ["workers-analytics-engine", "workers-observability"],
           last_discovered_at: discoveredAt,
           resource_attributes: attributes,
           resource_attribute_sources: {
-            "service.name": ["workers-analytics-engine"],
-            "cloud.provider": ["workers-analytics-engine"],
-            "deployment.environment": ["workers-analytics-engine"]
+            "service.name": ["workers-analytics-engine", "workers-observability"],
+            "cloud.provider": ["workers-analytics-engine", "workers-observability"],
+            "deployment.environment": ["workers-analytics-engine", "workers-observability"]
           }
         }]
       }, 200, origin, env, id);
@@ -708,8 +1040,20 @@ async function handleApi(request, env, url, origin, id, principal) {
       return queryWorkspaceRequestMetrics(env, workspaceId, url, origin, id);
     }
 
-    if (suffix.startsWith("telemetry/logs") || suffix.startsWith("telemetry/traces")) {
-      return fail(503, "telemetry_signal_unavailable", "This runtime currently collects request metrics only; Logs and Traces require a separately configured event or trace source.", origin, env, id);
+    if (suffix === "telemetry/logs" && request.method === "GET") {
+      return queryWorkspaceRequestLogs(env, workspaceId, url, origin, id);
+    }
+
+    if (suffix === "telemetry/traces" && request.method === "GET") {
+      return queryWorkspaceRequestTraces(env, workspaceId, url, origin, id);
+    }
+
+    const traceDetailMatch = suffix.match(/^telemetry\/traces\/([0-9a-f]{32})$/i);
+    if (traceDetailMatch && request.method === "GET") {
+      return queryWorkspaceTraceDetail(env, workspaceId, traceDetailMatch[1], origin, id);
+    }
+    if (suffix.startsWith("telemetry/traces/")) {
+      return fail(400, "invalid_trace_id", "The requested trace identifier is invalid.", origin, env, id);
     }
 
     if (suffix === "membership" && request.method === "GET") {
@@ -1160,7 +1504,7 @@ async function handleApi(request, env, url, origin, id, principal) {
   return fail(404, "route_not_found", "The requested ORBIT API route was not found in the Cloudflare-native runtime.", origin, env, id);
 }
 
-async function handleWorkerRequest(request, env, telemetryContext = {}) {
+async function handleWorkerRequest(request, env, telemetryContext = {}, ctx) {
     const id = requestId();
     const url = new URL(request.url);
     const origin = request.headers.get("origin") || "";
@@ -1221,9 +1565,15 @@ async function handleWorkerRequest(request, env, telemetryContext = {}) {
     try {
       const result = await handleApi(request, env, url, origin, id, auth.principal);
       telemetryContext.workspaceId = auth.principal.telemetryWorkspaceId || null;
+      if (telemetryContext.workspaceId) {
+        telemetryContext.trace = await annotateWorkspaceTrace(ctx, telemetryContext.workspaceId);
+      }
       return result;
     } catch {
       telemetryContext.workspaceId = auth.principal.telemetryWorkspaceId || null;
+      if (telemetryContext.workspaceId) {
+        telemetryContext.trace = await annotateWorkspaceTrace(ctx, telemetryContext.workspaceId);
+      }
       return fail(503, "api_operation_unavailable", "The ORBIT API operation is temporarily unavailable.", origin, env, id);
     }
 }
@@ -1232,8 +1582,8 @@ export default {
   async fetch(request, env, ctx) {
     const startedAt = Date.now();
     const telemetryContext = {};
-    const result = await handleWorkerRequest(request, env, telemetryContext);
-    const telemetryTask = recordRequestTelemetry(request, result, env, startedAt, telemetryContext.workspaceId);
+    const result = await handleWorkerRequest(request, env, telemetryContext, ctx);
+    const telemetryTask = recordRequestTelemetry(request, result, env, startedAt, telemetryContext);
     if (ctx && typeof ctx.waitUntil === "function") {
       try { ctx.waitUntil(telemetryTask); } catch {}
     } else {

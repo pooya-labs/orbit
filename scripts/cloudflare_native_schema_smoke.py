@@ -22,6 +22,15 @@ assert set(analytics_datasets) == {"ORBIT_REQUEST_EVENTS"}
 assert analytics_datasets["ORBIT_REQUEST_EVENTS"]["dataset"] == "orbit_native_requests"
 assert analytics_datasets["ORBIT_REQUEST_EVENTS"].get("remote", False) is False
 assert config.get("analytics") == {"binding": "ANALYTICS_SQL"}
+observability = config.get("observability", {})
+logs_config = observability.get("logs", {})
+traces_config = observability.get("traces", {})
+assert observability.get("enabled") is True
+assert logs_config.get("enabled") is True
+assert logs_config.get("invocation_logs") is False, "Automatic invocation logs can include sensitive request headers"
+assert logs_config.get("head_sampling_rate") == 0.1
+assert traces_config.get("enabled") is True
+assert traces_config.get("head_sampling_rate") == 0.1
 
 migration = Path("cloudflare-native/migrations/0001_foundation.sql").read_text(encoding="utf-8")
 db = sqlite3.connect(":memory:")
