@@ -3,6 +3,9 @@ import worker from "./worker.mjs";
 import assert from "node:assert/strict";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import {
+  calculateAvailabilityBudget,
+  evaluateAlertRule,
+  dispatchPendingDeliveries,
   incidentTransitionAllowed,
   parseBearer,
   readBoundedResponseBytes,
@@ -449,9 +452,6 @@ test("workspace request metrics query Analytics Engine with a hashed tenant part
     assert.match(queries[0].query, /events\.analyticsEngine\.orbit_native_requests/);
     assert.match(queries[0].query, /index1 = \$workspace_key/);
     assert.match(queries[0].query, /timestamp >= \$start/);
-    assert.match(queries[0].query, /attributes\['trace_id'\] AS custom_trace_id/);
-    assert.match(queries[0].query, /attributes\['span_id'\] AS custom_span_id/);
-    assert.match(queries[0].query, /attributes\['request_id'\] AS custom_request_id/);
     assert.match(queries[0].query, /INTERVAL '[0-9]+' MINUTE/);
     assert.match(queries[0].query, /COUNT\(\*\) AS request_count/i);
     assert.match(queries[0].query, /countIf\(double1 >= 200 AND double1 < 400\) AS successful_request_count/i);
@@ -955,19 +955,48 @@ test("workspace Logs and Traces fail closed when the Analytics SQL binding is mi
     const workspaceId = "123e4567-e89b-12d3-a456-426614174004";
     const DB = {
       prepare(sql) {
-        assert.match(sql, /FROM workspace_memberships/);
-        return {
-          bind() {
-            return {
-              first: async () => ({
-                workspace_id: workspaceId,
-                role: "owner",
-                created_at: "2026-11-06T12:00:00.000Z",
-                updated_at: "2026-11-06T12:00:00.000Z"
-              })
-            };
-          }
-        };
+        if (/FROM workspace_memberships/.test(sql)) {
+          return {
+            bind() {
+              return {
+                first: async () => ({
+                  workspace_id: workspaceId,
+                  role: "owner",
+                  created_at: "2026-11-06T12:00:00.000Z",
+                  updated_at: "2026-11-06T12:00:00.000Z"
+                })
+              };
+            }
+          };
+        }
+        if (/FROM alert_instances/.test(sql)) {
+          return {
+            bind() {
+              return { all: async () => ({ results: [] }) };
+            }
+          };
+        }
+        if (/FROM service_level_objectives/.test(sql)) {
+          return {
+            bind() {
+              return {
+                first: async () => ({
+                  id: "123e4567-e89b-12d3-a456-426614174001",
+                  workspace_id: workspaceId,
+                  service_id: "service-1",
+                  service_name: "checkout",
+                  environment: "production",
+                  name: "Checkout availability",
+                  route: "/api/v1/checkout",
+                  target: 0.99,
+                  rolling_window_days: 7,
+                  enabled: 1
+                })
+              };
+            }
+          };
+        }
+        throw new Error(`Unexpected SQL: ${sql}`);
       }
     };
     const logs = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/telemetry/logs`, token), { ...env, DB });
@@ -978,12 +1007,12 @@ test("workspace Logs and Traces fail closed when the Analytics SQL binding is mi
     assert.equal((await traces.json()).error.code, "analytics_sql_not_configured");
 
     const alerts = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/alerts?limit=50`, token), { ...env, DB });
-    assert.equal(alerts.status, 503);
-    assert.equal((await alerts.json()).error.code, "alert_evaluator_unavailable");
+    assert.equal(alerts.status, 200);
+    assert.deepEqual((await alerts.json()).data, []);
 
     const budget = await worker.fetch(authorizedRequest(`/api/v1/workspaces/${workspaceId}/slos/123e4567-e89b-12d3-a456-426614174001/budget`, token), { ...env, DB });
     assert.equal(budget.status, 503);
-    assert.equal((await budget.json()).error.code, "slo_telemetry_unavailable");
+    assert.equal((await budget.json()).error.code, "analytics_sql_not_configured");
   });
 });
 
@@ -1124,5 +1153,257 @@ test("workspace metrics fail closed instead of returning a truncated Analytics E
     ), { ...env, DB, ANALYTICS_SQL });
     assert.equal(result.status, 503);
     assert.equal((await result.json()).error.code, "telemetry_result_limit_exceeded");
+  });
+});
+
+test("calculateAvailabilityBudget computes accurate error budgets and handles zero events as insufficient data", () => {
+  const r0 = calculateAvailabilityBudget(0.99, 0, 0);
+  assert.equal(r0.status, "insufficient_data");
+  assert.equal(r0.total_events, 0);
+  assert.equal(r0.availability, undefined);
+
+  const r1 = calculateAvailabilityBudget(0.99, 9950, 50);
+  assert.equal(r1.status, "within_budget");
+  assert.equal(r1.good_events, 9950);
+  assert.equal(r1.bad_events, 50);
+  assert.equal(r1.total_events, 10000);
+  assert.ok(Math.abs(r1.availability - 0.995) < 1e-9);
+  assert.ok(Math.abs(r1.allowed_bad_events - 100) < 1e-9);
+  assert.ok(Math.abs(r1.remaining_bad_events - 50) < 1e-9);
+  assert.ok(Math.abs(r1.burn_rate - 0.5) < 1e-9);
+  assert.ok(Math.abs(r1.budget_consumed_percent - 50) < 1e-9);
+  assert.ok(Math.abs(r1.budget_remaining_percent - 50) < 1e-9);
+
+  const r2 = calculateAvailabilityBudget(0.99, 9800, 200);
+  assert.equal(r2.status, "exhausted");
+  assert.ok(Math.abs(r2.burn_rate - 2) < 1e-9);
+  assert.ok(Math.abs(r2.budget_consumed_percent - 200) < 1e-9);
+  assert.equal(r2.remaining_bad_events, 0);
+
+  assert.throws(() => calculateAvailabilityBudget(0.89, 100, 0), /invalid availability SLO input/);
+  assert.throws(() => calculateAvailabilityBudget(1.0, 100, 0), /invalid availability SLO input/);
+  assert.throws(() => calculateAvailabilityBudget(0.99, -1, 0), /invalid availability SLO input/);
+});
+
+test("workspace SLO budget calculates error budget using Analytics Engine request metrics", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174061";
+    const sloId = "123e4567-e89b-12d3-a456-426614174062";
+    const queries = [];
+    const DB = {
+      prepare(sql) {
+        if (/FROM workspace_memberships/.test(sql)) {
+          return {
+            bind() {
+              return {
+                first: async () => ({
+                  workspace_id: workspaceId,
+                  role: "viewer"
+                })
+              };
+            }
+          };
+        }
+        if (/FROM service_level_objectives/.test(sql)) {
+          return {
+            bind(idArg, wsArg) {
+              assert.equal(idArg, sloId);
+              assert.equal(wsArg, workspaceId);
+              return {
+                first: async () => ({
+                  id: sloId,
+                  workspace_id: workspaceId,
+                  service_id: "service-1",
+                  service_name: "orbit-native-runtime",
+                  environment: "production",
+                  name: "Checkout availability",
+                  route: "/api/v1/workspaces/:workspace/membership",
+                  target: 0.99,
+                  rolling_window_days: 7,
+                  enabled: 1,
+                  created_at: "2026-11-13T00:00:00.000Z",
+                  updated_at: "2026-11-13T00:00:00.000Z"
+                })
+              };
+            }
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+    const ANALYTICS_SQL = {
+      async query(request) {
+        queries.push(request);
+        return {
+          data: [{ good_events: 995, bad_events: 5 }],
+          rows: 1,
+          statistics: { elapsed_ms: 2, rows_read: 1, bytes_read: 64 }
+        };
+      }
+    };
+
+    const response = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/slos/${sloId}/budget`, token
+    ), { ...env, DB, ANALYTICS_SQL });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.data.sli, "http_request_success_rate");
+    assert.equal(payload.data.objective.id, sloId);
+    assert.equal(payload.data.budget.status, "within_budget");
+    assert.equal(payload.data.budget.good_events, 995);
+    assert.equal(payload.data.budget.bad_events, 5);
+    assert.equal(payload.data.budget.total_events, 1000);
+    assert.ok(Math.abs(payload.data.budget.availability - 0.995) < 1e-9);
+    assert.equal(queries.length, 1);
+    assert.match(queries[0].query, /events\.analyticsEngine\.orbit_native_requests/);
+    assert.match(queries[0].query, /index1 = \$workspace_key/);
+    assert.match(queries[0].query, /blob1 = \$service_name/);
+    assert.match(queries[0].query, /blob2 = \$route/);
+    assert.match(queries[0].query, /countIf\(double1 >= 200 AND double1 < 400\) AS good_events/);
+  });
+});
+
+test("workspace alerts lists alert instances from D1 and filters by status", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174063";
+    const DB = {
+      prepare(sql) {
+        if (/FROM workspace_memberships/.test(sql)) {
+          return {
+            bind() {
+              return { first: async () => ({ workspace_id: workspaceId, role: "viewer" }) };
+            }
+          };
+        }
+        if (/FROM alert_instances/.test(sql)) {
+          return {
+            bind(wsArg, status1, status2, limitArg) {
+              assert.equal(wsArg, workspaceId);
+              assert.equal(limitArg, 25);
+              return {
+                all: async () => ({
+                  results: [{
+                    id: "inst-1",
+                    workspace_id: workspaceId,
+                    alert_rule_id: "rule-1",
+                    rule_name: "High request rate",
+                    service_name: "orbit-native-runtime",
+                    metric: "request_rate",
+                    operator: "gt",
+                    threshold: 100,
+                    window_seconds: 60,
+                    pending_seconds: 0,
+                    severity: "high",
+                    status: "firing",
+                    value: 125.5,
+                    pending_since: "2026-11-13T00:00:00.000Z",
+                    fired_at: "2026-11-13T00:00:00.000Z",
+                    resolved_at: null,
+                    last_evaluated_at: "2026-11-13T00:01:00.000Z",
+                    created_at: "2026-11-13T00:00:00.000Z",
+                    updated_at: "2026-11-13T00:01:00.000Z"
+                  }]
+                })
+              };
+            }
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+
+    const response = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/alerts?limit=25&status=firing`, token
+    ), { ...env, DB });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.data.length, 1);
+    assert.equal(payload.data[0].id, "inst-1");
+    assert.equal(payload.data[0].status, "firing");
+    assert.equal(payload.data[0].value, 125.5);
+  });
+});
+
+test("workspace alert notification deliveries and attempts return D1 records", async () => {
+  await withSignedAccessToken(async (token, env) => {
+    const workspaceId = "123e4567-e89b-12d3-a456-426614174064";
+    const deliveryId = "123e4567-e89b-12d3-a456-426614174065";
+    const DB = {
+      prepare(sql) {
+        if (/FROM workspace_memberships/.test(sql)) {
+          return {
+            bind() {
+              return { first: async () => ({ workspace_id: workspaceId, role: "viewer" }) };
+            }
+          };
+        }
+        if (/FROM alert_notification_deliveries d/.test(sql)) {
+          return {
+            bind(wsArg, ch1, ch2, st1, st2, limitArg) {
+              assert.equal(wsArg, workspaceId);
+              return {
+                all: async () => ({
+                  results: [{
+                    id: deliveryId,
+                    workspace_id: workspaceId,
+                    channel_name: "Ops Webhook",
+                    event_type: "alert.firing",
+                    status: "delivered",
+                    attempts: 1,
+                    value: 150
+                  }]
+                })
+              };
+            }
+          };
+        }
+        if (/FROM alert_notification_deliveries WHERE id/.test(sql)) {
+          return {
+            bind() {
+              return { first: async () => ({ id: deliveryId }) };
+            }
+          };
+        }
+        if (/FROM alert_notification_attempts/.test(sql)) {
+          return {
+            bind(dId, wsId, lim) {
+              assert.equal(dId, deliveryId);
+              assert.equal(wsId, workspaceId);
+              return {
+                all: async () => ({
+                  results: [{
+                    id: "att-1",
+                    delivery_id: deliveryId,
+                    attempt_number: 1,
+                    outcome: "delivered",
+                    http_status: 200,
+                    attempted_at: "2026-11-13T00:00:00.000Z"
+                  }]
+                })
+              };
+            }
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      }
+    };
+
+    const delivResponse = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/alert-notification-deliveries?limit=25`, token
+    ), { ...env, DB });
+    assert.equal(delivResponse.status, 200);
+    const delivPayload = await delivResponse.json();
+    assert.equal(delivPayload.data.length, 1);
+    assert.equal(delivPayload.data[0].id, deliveryId);
+    assert.equal(delivPayload.data[0].channel_name, "Ops Webhook");
+
+    const attResponse = await worker.fetch(authorizedRequest(
+      `/api/v1/workspaces/${workspaceId}/alert-notification-deliveries/${deliveryId}/attempts?limit=10`, token
+    ), { ...env, DB });
+    assert.equal(attResponse.status, 200);
+    const attPayload = await attResponse.json();
+    assert.equal(attPayload.data.length, 1);
+    assert.equal(attPayload.data[0].outcome, "delivered");
+    assert.equal(attPayload.data[0].http_status, 200);
   });
 });

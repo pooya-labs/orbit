@@ -593,9 +593,9 @@ This is a separate Workers + D1 profile. It does **not** replace CF01's `orbit-r
 - [x] Add workspace-scoped structured Workers Logs (`logs.workersLogs`) using `workspace_key` only after verified membership; disable automatic invocation logs, keep custom events low-cardinality, and query only the app's `orbit.request` events.
 - [x] Add workspace-scoped Workers Traces (`logs.traces`) by tagging the invocation root span after verified membership; require a workspace-tagged root span before querying child spans, enforce 7-day lookback and bounded 500-span detail responses, and disclose the configured 10% head-based sampling.
 - [x] Keep Workers Logs/Traces at 10% head sampling; document the November 30 / December 1, 2026 pricing transition and the Free 0.5 GB/day shared ingestion cap. No Paid overage or remote resource is activated. The Worker profile remains undeployed.
-- [ ] Implement alert evaluation and bounded scheduled execution within Workers Free limits.
-- [ ] Implement SLO error-budget calculation using a trustworthy request-metrics source.
-- [ ] Implement delivery dispatch, bounded retries and immutable notification-attempt history.
+- [x] Implement alert evaluation and bounded scheduled execution within Workers Free limits; scheduled execution queries enabled rules and updates alert instances and transitions.
+- [x] Implement SLO error-budget calculation using a trustworthy request-metrics source; calculate availability, allowed/remaining bad events, and burn rates from Analytics Engine request events.
+- [x] Implement delivery dispatch, bounded retries and immutable notification-attempt history; support webhook delivery with exponential backoff and attempt tracking.
 - [ ] Configure and test a real compatible OIDC tenant; no Auth0 tenant or issuer has been created.
 - [ ] Exercise every frontend API-client method against the native profile and complete role, workspace-isolation, browser and accessibility acceptance.
 - [ ] Create the dedicated D1 database, apply remote migrations, configure secrets/variables, deploy the Worker, and only then consider a guarded Pages API-origin switch.
