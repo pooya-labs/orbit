@@ -336,6 +336,12 @@ function telemetryRouteTemplate(path) {
     if (/^telemetry\/traces\/[0-9a-f]{32}$/i.test(suffix)) {
       return "/api/v1/workspaces/:workspace/telemetry/traces/:trace_id";
     }
+    if (/^slos\/[0-9a-f-]{36}\/budget$/i.test(suffix)) {
+      return "/api/v1/workspaces/:workspace/slos/:slo/budget";
+    }
+    if (/^alert-notification-deliveries(?:\/[0-9a-f-]{36}\/attempts)?$/i.test(suffix)) {
+      return "/api/v1/workspaces/:workspace/alert-notification-deliveries";
+    }
     return known.has(suffix) ? `/api/v1/workspaces/:workspace/${suffix}` : "/api/v1/workspaces/:workspace/other";
   }
   if (path.startsWith("/api/v1/")) return "/api/v1/other";
@@ -867,6 +873,301 @@ async function queryWorkspaceRequestMetrics(env, workspaceId, url, origin, id) {
   return response(body, 200, origin, env, id);
 }
 
+
+function calculateAvailabilityBudget(target, goodEvents, badEvents) {
+  if (typeof target !== "number" || !Number.isFinite(target) || target < 0.90 || target > 0.9999 ||
+      typeof goodEvents !== "number" || !Number.isFinite(goodEvents) || goodEvents < 0 ||
+      typeof badEvents !== "number" || !Number.isFinite(badEvents) || badEvents < 0) {
+    throw new Error("invalid availability SLO input");
+  }
+  const total = goodEvents + badEvents;
+  const result = {
+    status: "insufficient_data",
+    target,
+    good_events: goodEvents,
+    bad_events: badEvents,
+    total_events: total
+  };
+  if (total === 0) {
+    return result;
+  }
+  const availability = goodEvents / total;
+  const allowedBad = total * (1 - target);
+  const remainingBad = Math.max(0, allowedBad - badEvents);
+  const burnRate = allowedBad > 0 ? (badEvents / allowedBad) : 0;
+  const consumedPercent = burnRate * 100;
+  const remainingPercent = Math.max(0, 100 - consumedPercent);
+
+  result.availability = availability;
+  result.allowed_bad_events = allowedBad;
+  result.remaining_bad_events = remainingBad;
+  result.budget_consumed_percent = consumedPercent;
+  result.budget_remaining_percent = remainingPercent;
+  result.burn_rate = burnRate;
+  result.status = remainingBad > 0 ? "within_budget" : "exhausted";
+  return result;
+}
+
+async function evaluateAlertRule(env, rule, now = new Date().toISOString()) {
+  if (!env.DB || !env.ANALYTICS_SQL || typeof env.ANALYTICS_SQL.query !== "function") return null;
+  const workspaceKey = await telemetryIndexKey(rule.workspace_id);
+  const windowSeconds = Number(rule.window_seconds) || 60;
+  const start = new Date(Date.now() - windowSeconds * 1000).toISOString();
+  let queryResult;
+  try {
+    queryResult = await env.ANALYTICS_SQL.query({
+      query: `
+        SELECT COUNT(*) AS total_requests
+        FROM events.analyticsEngine.orbit_native_requests
+        WHERE index1 = $workspace_key
+          AND ($service_name = '' OR blob1 = $service_name)
+          AND timestamp >= $start
+      `,
+      params: {
+        workspace_key: workspaceKey,
+        service_name: rule.service_name || "",
+        start
+      }
+    });
+  } catch {
+    return null;
+  }
+
+  const count = Number(queryResult?.data?.[0]?.total_requests ?? 0);
+  const rate = windowSeconds > 0 ? (count / windowSeconds) : 0;
+  let matches = false;
+  switch (rule.operator) {
+    case "gt": matches = rate > rule.threshold; break;
+    case "gte": matches = rate >= rule.threshold; break;
+    case "lt": matches = rate < rule.threshold; break;
+    case "lte": matches = rate <= rule.threshold; break;
+  }
+
+  const current = await env.DB.prepare(
+    "SELECT id, status, pending_since, fired_at FROM alert_instances WHERE alert_rule_id = ? AND workspace_id = ? AND status IN ('pending', 'firing') ORDER BY created_at DESC LIMIT 1"
+  ).bind(rule.id, rule.workspace_id).first();
+
+  if (matches) {
+    if (!current) {
+      const instanceId = crypto.randomUUID();
+      const eventId = crypto.randomUUID();
+      const pendingSeconds = Number(rule.pending_seconds) || 0;
+      if (pendingSeconds === 0) {
+        const statements = [
+          env.DB.prepare(`
+            INSERT INTO alert_instances (id, workspace_id, alert_rule_id, rule_name, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity, status, value, pending_since, fired_at, last_evaluated_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'firing', ?, ?, ?, ?, ?, ?)
+          `).bind(instanceId, rule.workspace_id, rule.id, rule.name, rule.service_name, rule.metric, rule.operator, rule.threshold, windowSeconds, pendingSeconds, rule.severity, rate, now, now, now, now, now),
+          env.DB.prepare(`
+            INSERT INTO alert_instance_events (id, workspace_id, alert_instance_id, alert_rule_id, event_type, details, created_at)
+            VALUES (?, ?, ?, ?, 'alert.firing', ?, ?)
+          `).bind(eventId, rule.workspace_id, instanceId, rule.id, JSON.stringify({ value: rate, threshold: rule.threshold, operator: rule.operator }), now)
+        ];
+        const channels = await env.DB.prepare("SELECT id FROM alert_notification_channels WHERE workspace_id = ? AND enabled = 1").bind(rule.workspace_id).all();
+        for (const channel of (channels.results || [])) {
+          statements.push(env.DB.prepare(`
+            INSERT INTO alert_notification_deliveries (id, workspace_id, alert_instance_id, alert_instance_event_id, channel_id, event_type, status, attempts, next_attempt_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'alert.firing', 'pending', 0, ?, ?, ?)
+          `).bind(crypto.randomUUID(), rule.workspace_id, instanceId, eventId, channel.id, now, now, now));
+        }
+        await env.DB.batch(statements);
+        return { status: "firing", instance_id: instanceId };
+      } else {
+        await env.DB.batch([
+          env.DB.prepare(`
+            INSERT INTO alert_instances (id, workspace_id, alert_rule_id, rule_name, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity, status, value, pending_since, last_evaluated_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+          `).bind(instanceId, rule.workspace_id, rule.id, rule.name, rule.service_name, rule.metric, rule.operator, rule.threshold, windowSeconds, pendingSeconds, rule.severity, rate, now, now, now, now),
+          env.DB.prepare(`
+            INSERT INTO alert_instance_events (id, workspace_id, alert_instance_id, alert_rule_id, event_type, details, created_at)
+            VALUES (?, ?, ?, ?, 'alert.pending', ?, ?)
+          `).bind(eventId, rule.workspace_id, instanceId, rule.id, JSON.stringify({ value: rate, threshold: rule.threshold, operator: rule.operator }), now)
+        ]);
+        return { status: "pending", instance_id: instanceId };
+      }
+    } else if (current.status === "pending") {
+      const elapsedSeconds = Math.max(0, (Date.parse(now) - Date.parse(current.pending_since)) / 1000);
+      const pendingSeconds = Number(rule.pending_seconds) || 0;
+      if (elapsedSeconds >= pendingSeconds) {
+        const eventId = crypto.randomUUID();
+        const statements = [
+          env.DB.prepare(`
+            UPDATE alert_instances SET status = 'firing', value = ?, fired_at = ?, last_evaluated_at = ?, updated_at = ?
+            WHERE id = ? AND workspace_id = ?
+          `).bind(rate, now, now, now, current.id, rule.workspace_id),
+          env.DB.prepare(`
+            INSERT INTO alert_instance_events (id, workspace_id, alert_instance_id, alert_rule_id, event_type, details, created_at)
+            VALUES (?, ?, ?, ?, 'alert.firing', ?, ?)
+          `).bind(eventId, rule.workspace_id, current.id, rule.id, JSON.stringify({ value: rate, threshold: rule.threshold, operator: rule.operator }), now)
+        ];
+        const channels = await env.DB.prepare("SELECT id FROM alert_notification_channels WHERE workspace_id = ? AND enabled = 1").bind(rule.workspace_id).all();
+        for (const channel of (channels.results || [])) {
+          statements.push(env.DB.prepare(`
+            INSERT INTO alert_notification_deliveries (id, workspace_id, alert_instance_id, alert_instance_event_id, channel_id, event_type, status, attempts, next_attempt_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'alert.firing', 'pending', 0, ?, ?, ?)
+          `).bind(crypto.randomUUID(), rule.workspace_id, current.id, eventId, channel.id, now, now, now));
+        }
+        await env.DB.batch(statements);
+        return { status: "firing", instance_id: current.id };
+      } else {
+        await env.DB.prepare(
+          "UPDATE alert_instances SET value = ?, last_evaluated_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ?"
+        ).bind(rate, now, now, current.id, rule.workspace_id).run();
+        return { status: "pending", instance_id: current.id };
+      }
+    } else if (current.status === "firing") {
+      await env.DB.prepare(
+        "UPDATE alert_instances SET value = ?, last_evaluated_at = ?, updated_at = ? WHERE id = ? AND workspace_id = ?"
+      ).bind(rate, now, now, current.id, rule.workspace_id).run();
+      return { status: "firing", instance_id: current.id };
+    }
+  } else {
+    if (current) {
+      const eventId = crypto.randomUUID();
+      if (current.status === "pending") {
+        await env.DB.batch([
+          env.DB.prepare(`
+            UPDATE alert_instances SET status = 'cancelled', value = ?, last_evaluated_at = ?, updated_at = ?
+            WHERE id = ? AND workspace_id = ?
+          `).bind(rate, now, now, current.id, rule.workspace_id),
+          env.DB.prepare(`
+            INSERT INTO alert_instance_events (id, workspace_id, alert_instance_id, alert_rule_id, event_type, details, created_at)
+            VALUES (?, ?, ?, ?, 'alert.pending_cancelled', ?, ?)
+          `).bind(eventId, rule.workspace_id, current.id, rule.id, JSON.stringify({ value: rate, threshold: rule.threshold }), now)
+        ]);
+        return { status: "cancelled", instance_id: current.id };
+      } else if (current.status === "firing") {
+        const statements = [
+          env.DB.prepare(`
+            UPDATE alert_instances SET status = 'resolved', value = ?, resolved_at = ?, last_evaluated_at = ?, updated_at = ?
+            WHERE id = ? AND workspace_id = ?
+          `).bind(rate, now, now, now, current.id, rule.workspace_id),
+          env.DB.prepare(`
+            INSERT INTO alert_instance_events (id, workspace_id, alert_instance_id, alert_rule_id, event_type, details, created_at)
+            VALUES (?, ?, ?, ?, 'alert.resolved', ?, ?)
+          `).bind(eventId, rule.workspace_id, current.id, rule.id, JSON.stringify({ value: rate, threshold: rule.threshold }), now)
+        ];
+        const channels = await env.DB.prepare("SELECT id FROM alert_notification_channels WHERE workspace_id = ? AND enabled = 1").bind(rule.workspace_id).all();
+        for (const channel of (channels.results || [])) {
+          statements.push(env.DB.prepare(`
+            INSERT INTO alert_notification_deliveries (id, workspace_id, alert_instance_id, alert_instance_event_id, channel_id, event_type, status, attempts, next_attempt_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'alert.resolved', 'pending', 0, ?, ?, ?)
+          `).bind(crypto.randomUUID(), rule.workspace_id, current.id, eventId, channel.id, now, now, now));
+        }
+        await env.DB.batch(statements);
+        return { status: "resolved", instance_id: current.id };
+      }
+    }
+  }
+  return null;
+}
+
+async function dispatchPendingDeliveries(env, now = new Date().toISOString()) {
+  if (!env.DB) return 0;
+  const pending = await env.DB.prepare(`
+    SELECT d.id, d.workspace_id, d.channel_id, d.event_type, d.attempts, c.secret_ref, c.name AS channel_name
+    FROM alert_notification_deliveries d
+    JOIN alert_notification_channels c ON c.id = d.channel_id AND c.workspace_id = d.workspace_id
+    WHERE d.status IN ('pending', 'processing')
+      AND d.next_attempt_at <= ?
+      AND c.enabled = 1
+    ORDER BY d.next_attempt_at ASC
+    LIMIT 10
+  `).bind(now).all();
+
+  const deliveries = pending.results || [];
+  let dispatched = 0;
+  for (const delivery of deliveries) {
+    const webhookUrl = env[delivery.secret_ref];
+    const attemptNumber = Number(delivery.attempts || 0) + 1;
+    const attemptId = crypto.randomUUID();
+
+    if (!webhookUrl || typeof webhookUrl !== "string") {
+      await env.DB.batch([
+        env.DB.prepare(`
+          UPDATE alert_notification_deliveries
+          SET status = 'dead', attempts = ?, last_attempt_at = ?, last_error = 'secret_unconfigured', updated_at = ?
+          WHERE id = ? AND workspace_id = ?
+        `).bind(attemptNumber, now, now, delivery.id, delivery.workspace_id),
+        env.DB.prepare(`
+          INSERT INTO alert_notification_attempts (id, workspace_id, delivery_id, attempt_number, outcome, error_code, attempted_at)
+          VALUES (?, ?, ?, ?, 'dead', 'secret_unconfigured', ?)
+        `).bind(attemptId, delivery.workspace_id, delivery.id, attemptNumber, now)
+      ]);
+      continue;
+    }
+
+    let outcome = "delivered";
+    let httpStatus = 200;
+    let errorCode = "";
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json", "user-agent": "ORBIT-Alert-Webhook/1.0" },
+        body: JSON.stringify({
+          event_type: delivery.event_type,
+          workspace_id: delivery.workspace_id,
+          channel_id: delivery.channel_id,
+          dispatched_at: now
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      httpStatus = res.status;
+      if (!res.ok) {
+        outcome = attemptNumber >= 8 ? "dead" : "retry_scheduled";
+        errorCode = `http_${res.status}`;
+      }
+    } catch (err) {
+      outcome = attemptNumber >= 8 ? "dead" : "retry_scheduled";
+      errorCode = err && err.name === "AbortError" ? "timeout" : "network_error";
+    }
+
+    if (outcome === "delivered") {
+      await env.DB.batch([
+        env.DB.prepare(`
+          UPDATE alert_notification_deliveries
+          SET status = 'delivered', attempts = ?, last_attempt_at = ?, delivered_at = ?, updated_at = ?
+          WHERE id = ? AND workspace_id = ?
+        `).bind(attemptNumber, now, now, now, delivery.id, delivery.workspace_id),
+        env.DB.prepare(`
+          INSERT INTO alert_notification_attempts (id, workspace_id, delivery_id, attempt_number, outcome, http_status, attempted_at)
+          VALUES (?, ?, ?, ?, 'delivered', ?, ?)
+        `).bind(attemptId, delivery.workspace_id, delivery.id, attemptNumber, httpStatus, now)
+      ]);
+    } else if (outcome === "retry_scheduled") {
+      const nextAttempt = new Date(Date.now() + Math.min(3600000, Math.pow(2, attemptNumber) * 30000)).toISOString();
+      await env.DB.batch([
+        env.DB.prepare(`
+          UPDATE alert_notification_deliveries
+          SET status = 'pending', attempts = ?, next_attempt_at = ?, last_attempt_at = ?, last_error = ?, updated_at = ?
+          WHERE id = ? AND workspace_id = ?
+        `).bind(attemptNumber, nextAttempt, now, errorCode, now, delivery.id, delivery.workspace_id),
+        env.DB.prepare(`
+          INSERT INTO alert_notification_attempts (id, workspace_id, delivery_id, attempt_number, outcome, http_status, error_code, attempted_at)
+          VALUES (?, ?, ?, ?, 'retry_scheduled', ?, ?, ?)
+        `).bind(attemptId, delivery.workspace_id, delivery.id, attemptNumber, httpStatus || null, errorCode, now)
+      ]);
+    } else {
+      await env.DB.batch([
+        env.DB.prepare(`
+          UPDATE alert_notification_deliveries
+          SET status = 'dead', attempts = ?, last_attempt_at = ?, last_error = ?, updated_at = ?
+          WHERE id = ? AND workspace_id = ?
+        `).bind(attemptNumber, now, errorCode, now, delivery.id, delivery.workspace_id),
+        env.DB.prepare(`
+          INSERT INTO alert_notification_attempts (id, workspace_id, delivery_id, attempt_number, outcome, http_status, error_code, attempted_at)
+          VALUES (?, ?, ?, ?, 'dead', ?, ?, ?)
+        `).bind(attemptId, delivery.workspace_id, delivery.id, attemptNumber, httpStatus || null, errorCode, now)
+      ]);
+    }
+    dispatched++;
+  }
+  return dispatched;
+}
+
 async function handleApi(request, env, url, origin, id, principal) {
   if (!env.DB) return fail(503, "database_not_configured", "The Cloudflare D1 database is not bound to this Worker.", origin, env, id);
   const path = url.pathname;
@@ -1307,7 +1608,16 @@ async function handleApi(request, env, url, origin, id, principal) {
       if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
       const status = url.searchParams.get("status") || "";
       if (status && !["pending", "firing", "resolved", "cancelled"].includes(status)) return fail(400, "invalid_alert_status", "Alert status filter is invalid.", origin, env, id);
-      return fail(503, "alert_evaluator_unavailable", "Alert rules are stored, but live evaluation requires a real telemetry source that is not configured for this Cloudflare-only runtime.", origin, env, id);
+      const result = await env.DB.prepare(`
+        SELECT id, workspace_id, alert_rule_id, rule_name, service_name, metric, operator, threshold,
+               window_seconds, pending_seconds, severity, status, value, pending_since, fired_at,
+               resolved_at, last_evaluated_at, created_at, updated_at
+        FROM alert_instances
+        WHERE workspace_id = ? AND (? = '' OR status = ?)
+        ORDER BY last_evaluated_at DESC, id DESC
+        LIMIT ?
+      `).bind(workspaceId, status, status, limit).all();
+      return response({ data: (result.results || []).map((row) => ({ ...row, value: Number(row.value) })) }, 200, origin, env, id);
     }
 
     if (suffix === "deployments" && request.method === "GET") {
@@ -1400,7 +1710,101 @@ async function handleApi(request, env, url, origin, id, principal) {
     const sloMatch = suffix.match(/^slos\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/(enabled|budget))?$/i);
     if (sloMatch) {
       const sloId = sloMatch[1];
-      if (sloMatch[2] === "budget" && request.method === "GET") return fail(503, "slo_telemetry_unavailable", "SLO definitions are stored, but error budgets require real request telemetry that is not configured for this Cloudflare-only runtime.", origin, env, id);
+      if (sloMatch[2] === "budget" && request.method === "GET") {
+        const slo = await env.DB.prepare(`
+          SELECT slo.id, slo.workspace_id, slo.service_id, services.name AS service_name, services.environment,
+                 slo.name, slo.route, slo.target, slo.rolling_window_days, slo.enabled, slo.created_at, slo.updated_at
+          FROM service_level_objectives slo
+          JOIN services ON services.id = slo.service_id AND services.workspace_id = slo.workspace_id
+          WHERE slo.id = ? AND slo.workspace_id = ?
+        `).bind(sloId, workspaceId).first();
+        if (!slo) return fail(404, "slo_not_found", "The workspace or SLO was not found.", origin, env, id);
+        if (!slo.enabled) return fail(409, "slo_disabled", "The requested SLO is disabled.", origin, env, id);
+        if (!env.ANALYTICS_SQL || typeof env.ANALYTICS_SQL.query !== "function") {
+          return fail(503, "analytics_sql_not_configured", "The Workers Analytics SQL binding is not configured for this runtime.", origin, env, id);
+        }
+        let workspaceKey;
+        try {
+          workspaceKey = await telemetryIndexKey(workspaceId);
+        } catch {
+          return fail(503, "telemetry_partition_unavailable", "The workspace telemetry partition could not be resolved.", origin, env, id);
+        }
+
+        const windowDays = Number(slo.rolling_window_days) || 1;
+        const windowStart = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString();
+        const windowEnd = new Date().toISOString();
+
+        let metricsResult;
+        try {
+          metricsResult = await env.ANALYTICS_SQL.query({
+            query: `
+              SELECT
+                countIf(double1 >= 200 AND double1 < 400) AS good_events,
+                countIf(double1 < 200 OR double1 >= 400) AS bad_events
+              FROM events.analyticsEngine.orbit_native_requests
+              WHERE index1 = $workspace_key
+                AND blob1 = $service_name
+                AND blob2 = $route
+                AND timestamp >= $start
+            `,
+            params: {
+              workspace_key: workspaceKey,
+              service_name: slo.service_name,
+              route: slo.route,
+              start: windowStart
+            }
+          });
+        } catch {
+          return fail(503, "slo_calculation_unavailable", "Workers Analytics Engine could not calculate the SLO error budget.", origin, env, id);
+        }
+
+        const firstRow = Array.isArray(metricsResult?.data) && metricsResult.data.length > 0 ? metricsResult.data[0] : {};
+        const goodEvents = Number(firstRow.good_events ?? 0);
+        const badEvents = Number(firstRow.bad_events ?? 0);
+        const total = goodEvents + badEvents;
+
+        let budget;
+        if (total === 0) {
+          budget = {
+            status: "insufficient_data",
+            target: slo.target,
+            good_events: 0,
+            bad_events: 0,
+            total_events: 0
+          };
+        } else {
+          const availability = goodEvents / total;
+          const allowedBad = total * (1 - slo.target);
+          const remainingBad = Math.max(0, allowedBad - badEvents);
+          const burnRate = allowedBad > 0 ? (badEvents / allowedBad) : 0;
+          const consumedPercent = burnRate * 100;
+          const remainingPercent = Math.max(0, 100 - consumedPercent);
+          budget = {
+            status: remainingBad > 0 ? "within_budget" : "exhausted",
+            target: slo.target,
+            good_events: goodEvents,
+            bad_events: badEvents,
+            total_events: total,
+            availability,
+            allowed_bad_events: allowedBad,
+            remaining_bad_events: remainingBad,
+            budget_consumed_percent: consumedPercent,
+            budget_remaining_percent: remainingPercent,
+            burn_rate: burnRate
+          };
+        }
+
+        return response({
+          data: {
+            objective: { ...slo, enabled: Boolean(slo.enabled) },
+            sli: "http_request_success_rate",
+            valid_event_policy: "Instrumented HTTP 2xx-3xx requests are good; other responses are bad. Events are queried from Workers Analytics Engine.",
+            window_start: windowStart,
+            window_end: windowEnd,
+            budget
+          }
+        }, 200, origin, env, id);
+      }
       if (sloMatch[2] === "enabled" && request.method === "PATCH") {
         const parsed = await readJson(request);
         if (parsed.error || typeof parsed.value?.enabled !== "boolean") return fail(400, "invalid_slo_state", "enabled must be provided as a boolean.", origin, env, id);
@@ -1493,11 +1897,46 @@ async function handleApi(request, env, url, origin, id, principal) {
       return response({ data: { id: updated.id, workspace_id: updated.workspace_id, name: updated.name, adapter: updated.adapter, enabled: Boolean(updated.enabled), secret_configured: typeof env[updated.secret_ref] === "string" && env[updated.secret_ref].length > 0, created_at: updated.created_at, updated_at: updated.updated_at } }, 200, origin, env, id);
     }
 
-    if (suffix === "alert-notification-deliveries" && request.method === "GET") return fail(503, "alert_delivery_unavailable", "Notification channel settings are stored, but deliveries require live alert evaluation and a configured delivery worker.", origin, env, id);
-    if (/^alert-notification-deliveries\/[0-9a-f-]{36}\/attempts$/i.test(suffix) && request.method === "GET") {
+    if (suffix === "alert-notification-deliveries" && request.method === "GET") {
       const limit = limitFromUrl(url);
       if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
-      return fail(503, "alert_delivery_unavailable", "Delivery attempts are unavailable until the notification delivery worker is configured.", origin, env, id);
+      const channelId = url.searchParams.get("channel_id") || "";
+      const status = url.searchParams.get("status") || "";
+      if (channelId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(channelId)) return fail(400, "invalid_channel_id", "The channel identifier is invalid.", origin, env, id);
+      if (status && !["pending", "processing", "delivered", "dead"].includes(status)) return fail(400, "invalid_delivery_status", "The delivery status filter is invalid.", origin, env, id);
+      const result = await env.DB.prepare(`
+        SELECT d.id, d.workspace_id, d.alert_instance_id, d.alert_instance_event_id, d.channel_id,
+               c.name AS channel_name, d.event_type, d.status, d.attempts, d.next_attempt_at,
+               d.last_attempt_at, d.delivered_at, d.last_error, d.created_at, d.updated_at,
+               i.rule_name, i.service_name, i.metric, i.operator, i.threshold, i.value,
+               i.severity, i.status AS instance_status, i.last_evaluated_at AS occurred_at
+        FROM alert_notification_deliveries d
+        JOIN alert_notification_channels c ON c.id = d.channel_id AND c.workspace_id = d.workspace_id
+        JOIN alert_instances i ON i.id = d.alert_instance_id AND i.workspace_id = d.workspace_id
+        WHERE d.workspace_id = ?
+          AND (? = '' OR d.channel_id = ?)
+          AND (? = '' OR d.status = ?)
+        ORDER BY d.created_at DESC, d.id DESC
+        LIMIT ?
+      `).bind(workspaceId, channelId, channelId, status, status, limit).all();
+      return response({ data: (result.results || []).map((row) => ({ ...row, value: Number(row.value) })) }, 200, origin, env, id);
+    }
+
+    const attemptsMatch = suffix.match(/^alert-notification-deliveries\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/attempts$/i);
+    if (attemptsMatch && request.method === "GET") {
+      const limit = limitFromUrl(url);
+      if (!limit) return fail(400, "invalid_limit", "limit must be 10, 25, 50, or 100.", origin, env, id);
+      const deliveryId = attemptsMatch[1];
+      const delivery = await env.DB.prepare("SELECT id FROM alert_notification_deliveries WHERE id = ? AND workspace_id = ?").bind(deliveryId, workspaceId).first();
+      if (!delivery) return fail(404, "delivery_not_found", "The delivery was not found in this workspace.", origin, env, id);
+      const result = await env.DB.prepare(`
+        SELECT id, delivery_id, attempt_number, outcome, http_status, error_code, attempted_at
+        FROM alert_notification_attempts
+        WHERE delivery_id = ? AND workspace_id = ?
+        ORDER BY attempt_number ASC
+        LIMIT ?
+      `).bind(deliveryId, workspaceId, limit).all();
+      return response({ data: result.results || [] }, 200, origin, env, id);
     }
   }
 
@@ -1590,10 +2029,28 @@ export default {
       await telemetryTask;
     }
     return result;
+  },
+  async scheduled(event, env, ctx) {
+    if (!env.DB) return;
+    const now = new Date().toISOString();
+    try {
+      const enabledRules = await env.DB.prepare(
+        "SELECT id, workspace_id, name, service_name, metric, operator, threshold, window_seconds, pending_seconds, severity FROM alert_rules WHERE enabled = 1 ORDER BY updated_at ASC LIMIT 50"
+      ).all();
+      for (const rule of (enabledRules.results || [])) {
+        try {
+          await evaluateAlertRule(env, rule, now);
+        } catch {}
+      }
+      await dispatchPendingDeliveries(env, now);
+    } catch {}
   }
 };
 
 export {
+  calculateAvailabilityBudget,
+  evaluateAlertRule,
+  dispatchPendingDeliveries,
   incidentTransitionAllowed,
   parseBearer,
   readBoundedResponseBytes,
