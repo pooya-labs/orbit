@@ -17,7 +17,7 @@ require (
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/jackc/pgx/v5 v5.13.0
 	go.opentelemetry.io/proto/otlp v1.11.1
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
