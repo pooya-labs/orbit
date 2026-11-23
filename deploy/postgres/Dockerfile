@@ -21,7 +21,7 @@ RUN set -eux; \
     if [ "$TARGETARCH" = "arm" ] && [ -n "$TARGETVARIANT" ]; then export GOARM="${TARGETVARIANT#v}"; fi; \
     CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/gosu .
 
-FROM postgres:17-alpine
+FROM postgres:19-alpine
 COPY --from=gosu-build /out/gosu /usr/local/bin/gosu
 
 # The official image may predate security updates published in its Alpine branch.
